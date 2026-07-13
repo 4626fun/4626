@@ -36,8 +36,13 @@ This runbook covers the 4626 `Arena` control lane exposed through Hermit command
 ## Active 4626 Arena identity (akitai)
 
 - Control room: `1659`
+- Arena profile: `1213` (`https://degen.virtuals.io/agents/1213`)
 - Arena Agent ID: `019e82af-2e66-7645-af23-69e9f14351f4`
-- Arena V2 wallet: `0x30068c6bccf43e9eb5cdb68fb978f32f744d870c`
+- Live Arena/Hyperliquid wallet: `0x74ab91cd845ff0d2006404440af49c3bc8c1df96`
+- Source of truth for the live wallet: `GET https://degen.virtuals.io/api/agents/1213`
+  (`data.agentAddress`, `data.acpAgent.walletAddress`, and `data.hlAddress` must agree).
+  The previously documented `0x30068c6bccf43e9eb5cdb68fb978f32f744d870c`
+  is retired and must not be used for new payout or execution configuration.
 
 ## Migration (Legacy Agent -> V2 wallet)
 
@@ -57,6 +62,34 @@ If agent is still on legacy wallet:
 - `/arena deposit <usdc>` — **fails with guidance in dgclaw v2**: `scripts/deposit.ts` was removed upstream; deposits are a manual ACP job (`acp client create-job --offering-name perp_deposit` → `acp client fund`, min 6 USDC, ~30 min bridge SLA)
 - `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`
 - `/arena trade close <pair>`
+
+## Multi-room casual market opinions
+
+Casual opinions use a separate, narrower policy from `/arena` commands. Configure:
+
+```bash
+ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS=1484,1660,2,1043,1659
+```
+
+- Rooms `1484`, `1660`, `2`, and `1043`: only the current on-chain
+  `FriendKey.creatorByTokenId(roomId)` address may trigger a trade.
+- Room `1659`: every author, including the room creator, must have at least one
+  room-1659 FriendKey staked in its FriendStake pool.
+- Opinions are inverted and execute through the shared room-1659 InverseAKITA
+  identity (Arena profile `1213`, wallet `0x74ab...df96`). Trigger-room identity
+  mappings cannot redirect this lane.
+- This watch list does not grant `/hermit` or `/arena` access. Keep
+  `ALFACLUB_HERMIT_COMMAND_ROOMS` and `ARENA_ALLOWED_ROOM_IDS` scoped to their
+  existing command rooms.
+- Owner and stake reads fail closed. Invalid senders, RPC failures, unsupported
+  rooms, and unauthorized authors never reach position lookup or trade execution.
+
+Roll out with `ARENA_DRY_RUN=1`. Confirm the Hermit AlfaClub identity can read
+all five rooms, submit one eligible and one ineligible opinion for each policy,
+and inspect `inverse_akita.chat_reaction` plus bridge skip logs. Set
+`ARENA_DRY_RUN=0` only after the shared profile-1213 executor is visible in the
+dry-run path. Immediate freeze remains `ARENA_TRADING_ENABLED=0`,
+`ARENA_ENABLED=0`, or `ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED=0`.
 
 ### dgclaw v2 CLI contract (June 2026)
 
@@ -279,8 +312,8 @@ Create + auto as room default:
 
 After you created on web with your Alfa connected (for true ownership):
 ```
-/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c
-/arena register default 019e82af-... 0x3006...
+/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x74ab91cd845ff0d2006404440af49c3bc8c1df96
+/arena register default 019e82af-... 0x74ab...
 ```
 
 Verify:

@@ -71,6 +71,24 @@ export function createPrivyServerClientFromEnv(): PrivyClient {
   })
 }
 
+async function reloadPrivyUserAfterWalletCreate(
+  client: PrivyClient,
+  userId: string,
+  initial: ProvisionResult,
+): Promise<ProvisionResult> {
+  let latest = initial
+  for (let attempt = 1; attempt <= PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS; attempt += 1) {
+    const reloadedUser = await client.getUserById(userId)
+    const reloadedClassified = classifyLinkedAccounts(reloadedUser as any)
+    latest = { user: reloadedUser, classified: reloadedClassified }
+    if (reloadedClassified.embeddedEoa) return latest
+    if (attempt < PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS))
+    }
+  }
+  return latest
+}
+
 /**
  * Idempotently ensure the verified Privy user has a user-owned Ethereum EOA.
  * This is the shared path for whitelabel OTP surfaces, where createOnLogin does
@@ -106,9 +124,21 @@ export async function ensurePrivyUserEmbeddedWallet(
     if (nextClassified.embeddedEoa) {
       return { user: created, classified: nextClassified }
     }
-    if (nextClassified.allWallets.length > 0) {
-      user = created
-      classified = nextClassified
+    user = created
+    classified = nextClassified
+    try {
+      const reloaded = await reloadPrivyUserAfterWalletCreate(client, userId, { user, classified })
+      user = reloaded.user
+      classified = reloaded.classified
+      if (classified.embeddedEoa) return reloaded
+    } catch (error) {
+      // A successful create followed by an inconclusive read must not trigger
+      // another mutation and risk provisioning a duplicate wallet.
+      logProvision({
+        path: 'createWallets.createEthereumWallet.reload',
+        error: error instanceof Error ? error.message : String(error ?? ''),
+      })
+      return { user, classified }
     }
   } catch (error) {
     logProvision({
@@ -132,9 +162,19 @@ export async function ensurePrivyUserEmbeddedWallet(
       if (nextClassified.embeddedEoa) {
         return { user: created, classified: nextClassified }
       }
-      if (nextClassified.allWallets.length > 0) {
-        user = created
-        classified = nextClassified
+      user = created
+      classified = nextClassified
+      try {
+        const reloaded = await reloadPrivyUserAfterWalletCreate(client, userId, { user, classified })
+        user = reloaded.user
+        classified = reloaded.classified
+        if (classified.embeddedEoa) return reloaded
+      } catch (error) {
+        logProvision({
+          path: 'createWallets.walletsArray.reload',
+          error: error instanceof Error ? error.message : String(error ?? ''),
+        })
+        return { user, classified }
       }
     } catch (error) {
       logProvision({
@@ -174,24 +214,14 @@ export async function ensurePrivyUserEmbeddedWallet(
     }
   }
 
-  for (let attempt = 1; attempt <= PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS; attempt += 1) {
-    const reloadedUser = await client.getUserById(userId)
-    const reloadedClassified = classifyLinkedAccounts(reloadedUser as any)
-    if (reloadedClassified.embeddedEoa) {
-      return { user: reloadedUser, classified: reloadedClassified }
-    }
-    if (reloadedClassified.allWallets.length > 0 && reloadedClassified.allWallets.length > classified.allWallets.length) {
-      user = reloadedUser
-      classified = reloadedClassified
-    }
-    if (attempt < PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS))
-    }
-  }
+  const reloaded = await reloadPrivyUserAfterWalletCreate(client, userId, { user, classified })
+  user = reloaded.user
+  classified = reloaded.classified
+  if (classified.embeddedEoa) return reloaded
 
   logProvision({
     path: 'gave-up',
-    embeddedEoa: classified.embeddedEoa?.address ?? null,
+    embeddedEoa: null,
     walletCount: classified.allWallets.length,
   })
   return { user, classified }

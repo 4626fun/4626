@@ -119,13 +119,7 @@ export const BASE_DEFAULTS = {
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for v1.18.0 target stack.
-  solanaBridgeAdapter: addr('9A61814082A26192DD9Cb201b44058506685Be60'),
-  /**
-   * Base bridge core (`scalars` / route liveness). Distinct from `solanaBridgeAdapter`.
-   * Matches `SolanaBridgeAdapter.BRIDGE`. Prefer resolving via adapter/env at runtime
-   * (`resolveBaseSolanaBridge`) rather than hardcoding this in handlers.
-   */
+  // Base↔Solana bridge core (`scalars` / route liveness). Legacy Twin adapter removed — LZ ShareOFT only.
   baseSolanaBridge: addr('3eff766c76a1be2ce1acf2b69c78bcae257d5188'),
 
   // CREATE2 infra (canonical, chain-agnostic)

@@ -3,6 +3,7 @@ import { ChevronDown, RotateCcw } from 'lucide-react'
 
 import { InfoHint } from '@/components/alfaclub/InfoHint'
 import { DEFAULT_DISTRIBUTION_POLICY } from '@/lib/alfaclub/keyDefense'
+import { proxiedExternalImageUrl } from '@/lib/images/externalImage'
 import { cn } from '@/lib/shared/utils'
 
 export type SunburstHolder = {
@@ -56,16 +57,17 @@ function shortAddress(address: string): string {
 }
 
 function HolderAvatar({ holder }: { holder: SunburstHolder }) {
-  const [failed, setFailed] = useState(false)
+  const imageSrc = proxiedExternalImageUrl(holder.avatarUrl)
+  const [failedSource, setFailedSource] = useState<string | null>(null)
   const initial = (holder.label?.trim()?.[0] ?? holder.address.slice(2, 3)).toUpperCase()
-  if (holder.avatarUrl && !failed) {
+  if (imageSrc && failedSource !== imageSrc) {
     return (
       <img
-        src={holder.avatarUrl}
+        src={imageSrc}
         alt=""
         className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/10"
         loading="lazy"
-        onError={() => setFailed(true)}
+        onError={() => setFailedSource(imageSrc)}
       />
     )
   }

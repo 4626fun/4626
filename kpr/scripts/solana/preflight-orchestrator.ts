@@ -1,6 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Preflight Solana keeper orchestrator config against live Base + Solana RPC.
+ * Preflight Solana keeper orchestrator config against live Solana RPC.
+ *
+ * Twin/SolanaBridgeAdapter Base writes are retired (LayerZero ShareOFT only).
  *
  * Usage: pnpm -C kpr preflight-orchestrator
  */
@@ -16,14 +18,12 @@ async function main() {
     JSON.stringify(
       {
         ok: preflight.blockers.length === 0,
+        transport: 'layerzero_share_oft_only',
+        twinAdapterRetired: true,
         blockers: preflight.blockers,
         warnings: preflight.warnings,
         keeperPubkey: preflight.keeperPubkey,
         keeperBytes32: preflight.keeperBytes32,
-        predictedTwin: preflight.predictedTwin,
-        twinDeployed: preflight.twinDeployed,
-        authorizedEntryKeeper: preflight.authorizedEntryKeeper,
-        authorizedFeeKeeper: preflight.authorizedFeeKeeper,
         lotteryManager: preflight.lotteryManager,
         mintChecks: preflight.mintChecks,
       },

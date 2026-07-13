@@ -124,13 +124,6 @@ const BATCHER_SOLANA_VIEW_ABI = [
       },
     ],
   },
-  {
-    type: 'function',
-    name: 'solanaShareOftPeer',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bytes32' }],
-  },
 ] as const
 
 const WRAPPER_PREVIEW_DEPOSIT_ABI = [
@@ -468,7 +461,7 @@ async function resolveShareOftForLayerZeroQuote(params: {
     message:
       `LayerZero NoPeer(${params.dstEid}): ${params.targetShareOft} is not wired for Solana yet — ` +
       'greenfield finalize calls setPeer during finalizePhase2 before send. ' +
-      'Set batcher/registry solanaShareOftPeer, or configure REFERENCE_WIRED_SHARE_OFT for fee quoting via a wired reference ShareOFT.',
+      'Seed Registry4626.setRemoteOFTPeerBytes32 for this creator token, or configure REFERENCE_WIRED_SHARE_OFT for fee quoting via a wired reference ShareOFT.',
   }
 }
 
@@ -735,34 +728,22 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
   }
 
   const registryAddress = params.registryAddress ?? getAddress(BASE_DEFAULTS.registry as Address)
-  const [registryPeerRaw, batcherDefaultPeerRaw] = await Promise.all([
-    params.publicClient.readContract({
-      address: registryAddress,
-      abi: REGISTRY_4626_REMOTE_PEER_ABI,
-      functionName: 'getRemoteOFTPeerBytes32',
-      args: [decoded.params.creatorToken, runtime.solanaEid],
-    }),
-    params.publicClient.readContract({
-      address: params.batcherAddress,
-      abi: BATCHER_SOLANA_VIEW_ABI,
-      functionName: 'solanaShareOftPeer',
-    }),
-  ])
+  const registryPeerRaw = await params.publicClient.readContract({
+    address: registryAddress,
+    abi: REGISTRY_4626_REMOTE_PEER_ABI,
+    functionName: 'getRemoteOFTPeerBytes32',
+    args: [decoded.params.creatorToken, runtime.solanaEid],
+  })
   const registryPeer =
     typeof registryPeerRaw === 'string' && registryPeerRaw.toLowerCase() !== ZERO_BYTES32.toLowerCase()
       ? (registryPeerRaw as Hex)
       : null
-  const batcherDefaultPeer =
-    typeof batcherDefaultPeerRaw === 'string' &&
-    batcherDefaultPeerRaw.toLowerCase() !== ZERO_BYTES32.toLowerCase()
-      ? (batcherDefaultPeerRaw as Hex)
-      : null
-  if (!registryPeer && !batcherDefaultPeer) {
+  if (!registryPeer) {
     return {
       code: 'oft_peer_not_configured',
       message:
-        `Registry4626 and deployment batcher have no LayerZero remote ShareOFT peer for ${decoded.params.creatorToken} ` +
-        `on Solana EID ${runtime.solanaEid}. Seed registry peer wiring or set batcher solanaShareOftPeer before finalizePhase2.`,
+        `Registry4626 has no LayerZero remote ShareOFT peer for ${decoded.params.creatorToken} ` +
+        `on Solana EID ${runtime.solanaEid}. Seed registry peer wiring before finalizePhase2.`,
     }
   }
 
@@ -777,7 +758,7 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
     oftCmd: '0x' as Hex,
   }
 
-  const effectivePeer = (registryPeer ?? batcherDefaultPeer) as Hex
+  const effectivePeer = registryPeer
   const quoteShareOftResolution = await resolveShareOftForLayerZeroQuote({
     publicClient: params.publicClient,
     targetShareOft: decoded.params.shareOFT,
@@ -841,7 +822,7 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
         message:
           `LayerZero NoPeer(${runtime.solanaEid}): ${decoded.params.shareOFT} is not wired for Solana yet. ` +
           'Greenfield finalize calls setPeer during finalizePhase2; pre-finalize fee quotes use a reference wired ShareOFT when available. ' +
-          'Ensure batcher solanaShareOftPeer / registry peer is set and REFERENCE_WIRED_SHARE_OFT (or AKITA shareOFT) has Solana peer wiring.',
+          'Ensure registry peer is set and REFERENCE_WIRED_SHARE_OFT (or AKITA shareOFT) has Solana peer wiring.',
       }
     }
     return { code: 'quote_failed', message: `LayerZero finalize share bridge quote failed: ${message}` }

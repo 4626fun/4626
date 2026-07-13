@@ -17,8 +17,7 @@ import { Button } from '@/components/ui/Button'
 import { SegmentedTabs } from '@/components/ui/Tabs'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
-import { AKITA, CONTRACTS } from '../config/contracts'
-import { ClaimPrizeToSolana } from '@/components/lottery/ClaimPrizeToSolana'
+import { AKITA } from '../config/contracts'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
@@ -185,24 +184,6 @@ export function Vault() {
 
   const creatorDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
   const shareTokenDecimals = typeof shareDecimals === 'number' ? shareDecimals : 18
-
-  const prizeAmountRaw = useMemo(() => {
-    if (!prizeAmountParam) return 0n
-    const trimmed = prizeAmountParam.trim()
-    if (!trimmed) return 0n
-
-    try {
-      if (trimmed.includes('.')) {
-        return parseUnits(trimmed, shareTokenDecimals ?? 18)
-      }
-      if (/^\d+$/.test(trimmed)) {
-        return BigInt(trimmed)
-      }
-      return 0n
-    } catch {
-      return 0n
-    }
-  }, [prizeAmountParam, shareTokenDecimals])
 
   const prizeAmountDisplay = useMemo(() => {
     if (!prizeAmountParam) return '0'
@@ -802,15 +783,12 @@ export function Vault() {
               <span className="label">Lottery Prize</span>
               <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Claim to Solana</h2>
             </motion.div>
-            <ClaimPrizeToSolana
-              solanaPubkey={solanaPubkeyParam}
-              prizeToken={shareOFTAddress}
-              prizeAmount={prizeAmountDisplay}
-              prizeAmountRaw={prizeAmountRaw}
-              tokenSymbol={shareSymbol ?? 'SHARE'}
-              tokenDecimals={shareTokenDecimals}
-              adapterAddress={CONTRACTS.solanaBridgeAdapter as `0x${string}`}
-            />
+            <Alert variant="info">
+              <span className="font-medium">Solana prize claim via Twin bridge is retired.</span>{' '}
+              LayerZero ShareOFT is the active bridge plane. Claim lottery prizes on Base for now
+              {prizeAmountDisplay !== '0' ? ` (${prizeAmountDisplay} ${shareSymbol ?? 'SHARE'})` : ''}, or bridge
+              ShareOFT to Solana with a standard OFT send once your wallet holds the prize token.
+            </Alert>
           </div>
         </section>
       )}

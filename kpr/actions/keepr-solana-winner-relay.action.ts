@@ -9,7 +9,7 @@
  * Flow:
  *   1. Query Base LotteryManager for recent winner events
  *   2. Filter for winners whose creatorCoin maps to a Solana mint
- *   3. Reverse-map the Twin winner address to a Solana pubkey
+ *   3. Reverse-map historical Twin winner addresses to Solana pubkeys (adapter retired)
  *   4. Call record_winner on Solana hook program
  *
  * Anchor accounts for record_winner:

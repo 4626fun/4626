@@ -95,6 +95,19 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(csp).toContain('https://assets.coingecko.com')
   })
 
+  it('allows AlfaClub room and social avatar image hosts in the app CSP', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{ headers?: Record<string, string> }>
+    }
+    const csp = (parsed.routes ?? [])
+      .map((route) => route.headers?.['content-security-policy'] ?? '')
+      .find((value) => value.includes('img-src'))
+
+    expect(csp).toContain('https://volvarrdooikeahzzvqc.storage.supabase.co')
+    expect(csp).toContain('https://pbs.twimg.com')
+  })
+
   it('allows Pinata gateway images in the app CSP', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {

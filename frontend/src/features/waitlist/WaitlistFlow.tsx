@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   AnimatePresence,
   motion,
@@ -25,8 +26,10 @@ import { cn } from '@/lib/shared/utils'
 import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { readWaitlistAlfaClubReturnPath } from '@/lib/auth/waitlistEntry'
 import { getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
+import { createAlfaClubAuthHandoffTarget } from '@/features/waitlist/waitlistHandoff'
 import {
   establishWaitlistSessionAfterPrivyAuth,
   readAuthSessionAddress,
@@ -38,6 +41,7 @@ import {
 import {
   getWaitlistOtpSubmitHelperText,
   getWaitlistOtpSubmitLabel,
+  resolveWaitlistAppAccepted,
   resolveWaitlistOtpInputStatus,
   resolveWaitlistOtpSubmitPhase,
   shouldAutoSubmitOtpCode,
@@ -83,8 +87,8 @@ import {
   useSafePrivy,
   useSafePrivyAccessToken,
 } from '@/lib/privy/safeHooks'
-import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
+import { fetchWaitlistMe, getWaitlistMeSessionQueryKey } from '@/lib/waitlist/waitlistMeQuery'
 
 const OTP_RESEND_DELAY_MS = 30_000
 const OTP_SUCCESS_HOLD_MS = 320
@@ -605,6 +609,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [emailBusy, setEmailBusy] = useState(false)
   const [codeBusy, setCodeBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
+  const [continueBusy, setContinueBusy] = useState(false)
   const [localSessionAddress, setLocalSessionAddress] = useState<string | null>(null)
   const [serverSessionAddress, setServerSessionAddress] = useState<string | null>(null)
   const [sessionProbeComplete, setSessionProbeComplete] = useState(false)
@@ -647,6 +652,13 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       return false
     }
   }, [])
+  const alfaClubReturnPath = useMemo(
+    () =>
+      typeof window === 'undefined'
+        ? null
+        : readWaitlistAlfaClubReturnPath(window.location.search),
+    [],
+  )
 
   const joinedSessionAddress = useMemo(
     () =>
@@ -891,6 +903,28 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     void fetchWaitlistStats()
   }, [fetchWaitlistStats])
 
+  const handleAlfaClubContinue = useCallback(async () => {
+    if (!alfaClubReturnPath || continueBusy) return
+    setContinueBusy(true)
+    setError(null)
+    try {
+      const target = await createAlfaClubAuthHandoffTarget({
+        returnPath: alfaClubReturnPath,
+      })
+      if (!target) {
+        throw new Error('Could not securely return to AlfaClub. Please try again.')
+      }
+      window.location.replace(target)
+    } catch (continueError) {
+      setError(
+        continueError instanceof Error
+          ? continueError.message
+          : 'Could not securely return to AlfaClub. Please try again.',
+      )
+      setContinueBusy(false)
+    }
+  }, [alfaClubReturnPath, continueBusy])
+
   const handleSignInWithLinkedWallet = useCallback(() => {
     if (signupInFlightRef.current || walletSignInPending) return
     setError(null)
@@ -1039,6 +1073,13 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   const { me: accountMe, loading: accountMeLoading, refresh: refreshAccountMe } = useAccountMe({
     enabled: Boolean(joinedSessionAddress),
+  })
+  const waitlistMeQuery = useQuery({
+    queryKey: getWaitlistMeSessionQueryKey(joinedSessionAddress),
+    enabled: Boolean(joinedSessionAddress),
+    queryFn: fetchWaitlistMe,
+    staleTime: 15_000,
+    retry: 1,
   })
   const [twitterBusy, setTwitterBusy] = useState(false)
   const [twitterError, setTwitterError] = useState<string | null>(null)
@@ -1353,7 +1394,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     onRecovered: refreshAccountMe,
   })
 
-  const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
+  const appAccepted = resolveWaitlistAppAccepted({
+    sessionAppAccessStatus: waitlistMeQuery.data?.appAccessStatus,
+    accountAppAccessStatus: accountMe?.appAccessStatus,
+  })
   const showEmailSignupForm = shouldShowWaitlistEmailSignup({
     joinedSessionAddress,
     walletSignInPending,
@@ -1720,23 +1764,43 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 {appAccepted ? (
                   <div className="w-full pt-2">
                     <MagneticButton>
-                      <Button
-                        variant="primary"
-                        size="lg"
-                        className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
-                        asChild
-                      >
-                        <Link to="/swap">
+                      {alfaClubReturnPath ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="lg"
+                          className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
+                          disabled={continueBusy}
+                          onClick={() => void handleAlfaClubContinue()}
+                        >
                           <ButtonSheen />
                           <span className="relative z-10 inline-flex items-center gap-2.5">
-                            Enter app
+                            {continueBusy ? 'Returning to AlfaClub…' : 'Return to AlfaClub'}
                             <ArrowRight
                               className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
                               aria-hidden="true"
                             />
                           </span>
-                        </Link>
-                      </Button>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
+                          asChild
+                        >
+                          <Link to="/swap">
+                            <ButtonSheen />
+                            <span className="relative z-10 inline-flex items-center gap-2.5">
+                              Enter app
+                              <ArrowRight
+                                className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </Link>
+                        </Button>
+                      )}
                     </MagneticButton>
                   </div>
                 ) : null}

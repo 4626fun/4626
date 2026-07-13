@@ -33,7 +33,6 @@ contracts=(
   "LotteryManager4626"
   "VRFConsumer4626"
   "VaultActivationBatcher"
-  "SolanaBridgeAdapter"
   "UniversalBytecodeStoreV2"
   "UniversalCreate2DeployerFromStore"
   "CreatorOVaultCoreModule"

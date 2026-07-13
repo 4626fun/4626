@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../_handlers/auth/_privy.ts'
+import handler, { resetPrivyAuthDbSyncThrottleForTests } from '../_handlers/auth/_privy.ts'
 import { classifyLinkedAccounts as realClassifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
 import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helpers'
 
@@ -113,6 +113,7 @@ describe('auth privy wallet sync', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetPrivyAuthDbSyncThrottleForTests()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
     verifyAuthTokenMock.mockResolvedValue({ userId: 'did:privy:test-user' })
@@ -244,16 +245,67 @@ describe('auth privy wallet sync', () => {
       linkedAccounts: [{ type: 'smart_wallet', address: '0x00000000000000000000000000000000000000aa' }],
     })
 
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer test-token' },
-    })
+    const makeRequest = () =>
+      createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-token' },
+      })
+    await handler(makeRequest(), createMockRes())
+    syncUserWalletsMock.mockClear()
+
     const res = createMockRes()
-    await handler(req, res)
+    await handler(makeRequest(), res)
 
     expect(res.statusCode).toBe(200)
     expect(syncUserWalletsMock).not.toHaveBeenCalled()
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
+  })
+
+  it('does not throttle one Privy user behind another user in the same process', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      PRIVY_APP_ID: 'test-privy-id',
+      PRIVY_APP_SECRET: 'test-privy-secret',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
+      PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
+    })
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('where p.privy_user_id')) {
+          return {
+            rows: [
+              {
+                canonical_wallet: '0x00000000000000000000000000000000000000aa',
+                csw_address: null,
+                base_sub_account: null,
+                primary_wallet: null,
+                primary_embedded_eoa: null,
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+    verifyAuthTokenMock
+      .mockResolvedValueOnce({ userId: 'did:privy:throttle-user-a' })
+      .mockResolvedValueOnce({ userId: 'did:privy:throttle-user-b' })
+
+    const makeRequest = () =>
+      createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-token' },
+      })
+
+    const firstResponse = createMockRes()
+    const secondResponse = createMockRes()
+    await handler(makeRequest(), firstResponse)
+    await handler(makeRequest(), secondResponse)
+
+    expect(firstResponse.statusCode).toBe(200)
+    expect(secondResponse.statusCode).toBe(200)
+    expect(syncUserWalletsMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not throttle wallet persistence when the profile has no session address', async () => {
@@ -311,7 +363,15 @@ describe('auth privy wallet sync', () => {
       }),
     })
 
-    getUserByIdMock.mockResolvedValueOnce({
+    const makeRequest = () =>
+      createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-token' },
+      })
+    await handler(makeRequest(), createMockRes())
+    syncUserWalletsMock.mockClear()
+
+    getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [{ type: 'smart_wallet', address: '0x0000000000000000000000000000000000000099' }],
     })
@@ -324,12 +384,8 @@ describe('auth privy wallet sync', () => {
       primaryWalletAddress: '0x00000000000000000000000000000000000000cc',
     })
 
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer test-token' },
-    })
     const res = createMockRes()
-    await handler(req, res)
+    await handler(makeRequest(), res)
 
     expect(res.statusCode).toBe(200)
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
@@ -365,7 +421,7 @@ describe('auth privy wallet sync', () => {
       }),
     })
 
-    getUserByIdMock.mockResolvedValueOnce({
+    getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [{ type: 'smart_wallet', address: '0x0000000000000000000000000000000000000099' }],
     })

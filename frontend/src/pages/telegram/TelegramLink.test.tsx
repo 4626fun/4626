@@ -93,6 +93,13 @@ vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: apiFetchMock,
 }))
 
+vi.mock('@/lib/privy/embeddedWallet', () => ({
+  useEnsurePrivyEmbeddedWallet: () => ({
+    embeddedEoaAddress: null,
+    ensureEmbeddedWallet: createWalletMock,
+  }),
+}))
+
 vi.mock('@/lib/telegram/telegramLinkTelemetry', () => ({
   trackTelegramLinkTelemetryEvent: trackTelegramLinkTelemetryEventMock,
   createTelegramLinkFlowId: createTelegramLinkFlowIdMock,

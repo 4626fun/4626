@@ -55,6 +55,7 @@ vi.mock('@/components/layout/AppLoadingOverlay', () => ({
 
 import { AccessStateProvider, RequireAccepted } from './accessRuntime'
 import { useAccessContext } from './accessShared'
+import { WAITLIST_ME_QUERY_KEY } from '@/lib/waitlist/waitlistMeQuery'
 
 function AccessProbe() {
   const s = useAccessContext()
@@ -122,12 +123,22 @@ describe('useResolvedAccessState — waitlist → swap bounce race', () => {
     await act(async () => {
       resolveFetch({
         ok: true,
-        json: async () => ({ success: true, data: { appAccessStatus: 'approved' } }),
+        json: async () => ({
+          success: true,
+          data: {
+            appAccessStatus: 'approved',
+            cswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
+          },
+        }),
       })
       await pending
     })
 
     await waitFor(() => expect(screen.getByTestId('protected-swap')).toBeTruthy())
+    expect(client.getQueryData(WAITLIST_ME_QUERY_KEY)).toMatchObject({
+      appAccessStatus: 'approved',
+      cswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
+    })
     expect(replaceSpy).not.toHaveBeenCalled()
     replaceSpy.mockRestore()
   })

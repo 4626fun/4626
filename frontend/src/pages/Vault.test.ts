@@ -170,10 +170,6 @@ vi.mock('@/wallet/accountContext', () => ({
   }),
 }))
 
-vi.mock('@/components/lottery/ClaimPrizeToSolana', () => ({
-  ClaimPrizeToSolana: () => null,
-}))
-
 vi.mock('@/components/share/ShareVaultButton', () => ({
   ShareVaultButton: ({ label = 'Share', url }: { label?: string; url?: string }) =>
     React.createElement('a', { href: url ?? '#', 'data-testid': 'share-vault-button' }, label),
@@ -187,7 +183,7 @@ vi.mock('../config/contracts', () => ({
     vault: RESOLVED.info.vault,
     ccaLaunchArm: RESOLVED.ccaLaunchArm,
   },
-  CONTRACTS: { solanaBridgeAdapter: '0x6666666666666666666666666666666666666666' },
+  CONTRACTS: {},
 }))
 
 describe('Vault', () => {

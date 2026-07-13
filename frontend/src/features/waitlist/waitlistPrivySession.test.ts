@@ -159,6 +159,42 @@ describe('waitlistPrivySession', () => {
     expect(login).toHaveBeenCalledTimes(1)
   })
 
+  it('starts a fresh wallet login immediately after the prior attempt is aborted', async () => {
+    vi.useFakeTimers()
+    const firstController = new AbortController()
+    const firstLogin = vi.fn()
+    const firstPromise = runWaitlistReturningWalletSignIn({
+      privy: { ...mockPrivy, authenticated: false },
+      login: firstLogin,
+      signal: firstController.signal,
+    })
+    const firstRejection = expect(firstPromise).rejects.toThrow('Sign-in cancelled.')
+    await Promise.resolve()
+
+    firstController.abort()
+    let secondAuthenticated = false
+    const secondLogin = vi.fn(() => {
+      secondAuthenticated = true
+    })
+    const secondPromise = runWaitlistReturningWalletSignIn({
+      privy: {
+        ...mockPrivy,
+        get authenticated() {
+          return secondAuthenticated
+        },
+      },
+      login: secondLogin,
+      signal: new AbortController().signal,
+    })
+
+    await vi.runAllTimersAsync()
+    await firstRejection
+    await expect(secondPromise).resolves.toBe('0xabc1234567890123456789012345678901234567')
+    expect(firstLogin).toHaveBeenCalledTimes(1)
+    expect(secondLogin).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
   it('runWaitlistReturningWalletSignIn does not call getAccessToken while signed out before login', async () => {
     vi.useFakeTimers()
     const login = vi.fn()

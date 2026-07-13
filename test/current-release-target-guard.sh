@@ -53,7 +53,6 @@ load_env_key_if_unset BASE_RPC_URL "$ROOT_DIR/frontend/.env"
 registry="0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0"
 factory="0x70d0D2411D362BA50821389383Fa6B829d736232"
 activation_batcher="0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3"
-solana_adapter="0x9A61814082A26192DD9Cb201b44058506685Be60"
 bytecode_store="0xfa3e3b466635DAff910057f18749B93d56F9DE50"
 create2_from_store="0x54660E61857a652753d805aD2c7b4f759C138bD5"
 batcher="0x02D7abC547F8B1e7E2D7a919D8D1005918361750"
@@ -73,7 +72,6 @@ require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current 
 require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
 require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
 require_rg "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" 'VaultActivationBatcher address'
-require_rg "SolanaBridgeAdapter | \`$solana_adapter\`" "$ADDRESSES_DOC" 'SolanaBridgeAdapter address'
 require_rg "UniversalBytecodeStoreV2 | \`$bytecode_store\`" "$ADDRESSES_DOC" 'UniversalBytecodeStoreV2 address'
 require_rg "UniversalCreate2DeployerFromStore | \`$create2_from_store\`" "$ADDRESSES_DOC" 'UniversalCreate2DeployerFromStore address'
 require_rg "DeploymentBatcher | \`$batcher\`" "$ADDRESSES_DOC" 'DeploymentBatcher address'
@@ -85,7 +83,6 @@ require_rg "DeploymentBatcherShareMeshHelper | \`$share_mesh_helper\`" "$ADDRESS
 require_rg "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherUtilsHelper address'
 
 require_rg '`v1.19.0` bytecode/CREATE2 target for new per-creator vaults.' "$INVENTORY_DOC" 'inventory v1.19.0 scope'
-require_rg "\`solanaBridgeAdapter\` | \`$solana_adapter\`" "$INVENTORY_DOC" 'inventory SolanaBridgeAdapter address'
 require_rg "\`lotteryManager\` | \`$lottery_manager\`" "$INVENTORY_DOC" 'inventory LotteryManager4626 address'
 require_rg "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" 'inventory bytecodeStore address'
 require_rg "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" 'inventory create2DeployerFromStore address'
@@ -97,16 +94,24 @@ require_rg "\`deploymentBatcherShareMeshHelper\` | \`$share_mesh_helper\`" "$INV
 require_rg "\`deploymentBatcherUtilsHelper\` | \`$utils_helper\`" "$INVENTORY_DOC" 'inventory deploymentBatcherUtilsHelper address'
 
 require_rg "SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('${batcher#0x}')" "$DEFAULTS" 'frontend split Phase-1 batcher constant'
-require_rg "solanaBridgeAdapter: addr('${solana_adapter#0x}')," "$DEFAULTS" 'frontend SolanaBridgeAdapter default'
+
+if rg -n 'solanaBridgeAdapter' "$DEFAULTS" >/dev/null; then
+  echo "release target guard failed: frontend contracts.defaults still exports solanaBridgeAdapter (LZ ShareOFT only)" >&2
+  exit 1
+fi
+
+if find "$ROOT_DIR/contracts" -name 'SolanaBridgeAdapter.sol' -print -quit | grep -q .; then
+  echo "release target guard failed: SolanaBridgeAdapter.sol still present under contracts/ (Twin adapter removed)" >&2
+  exit 1
+fi
+
 require_rg "lotteryManager: addr('${lottery_manager#0x}')," "$DEFAULTS" 'frontend LotteryManager4626 default'
 require_rg "universalBytecodeStore: addr('${bytecode_store#0x}')," "$DEFAULTS" 'frontend bytecode store default'
 require_rg "universalCreate2DeployerFromStore: addr('${create2_from_store#0x}')," "$DEFAULTS" 'frontend create2 deployer default'
 require_rg "payoutRouterFactory: addr('0000000000000000000000000000000000000000')," "$DEFAULTS" 'frontend zero payoutRouterFactory default'
 require_rg "deploymentBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcher default'
 require_rg "deploymentBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcherAutoHandoff default'
-require_rg "'$solana_adapter' as const;" "$KPR_SOLANA_CANONICAL" 'KPR canonical SolanaBridgeAdapter'
 require_rg "'$lottery_manager' as const;" "$KPR_SOLANA_CANONICAL" 'KPR canonical LotteryManager4626'
-require_rg '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1' "$KPR_SOLANA_SEED_ENV" 'KPR retired v1.13 SolanaBridgeAdapter migration'
 require_rg '0x5c0115589d7F4930A0dc93417aE409f44186f4E7' "$KPR_SOLANA_SEED_ENV" 'KPR retired v1.13 LotteryManager migration'
 require_rg '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1' "$KPR_SOLANA_SEED_ENV" 'KPR superseded v1.18 LotteryManager migration'
 

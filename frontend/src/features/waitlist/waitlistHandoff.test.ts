@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
+import {
+  bridgePrivySession,
+  createAlfaClubAuthHandoffTarget,
+  createAuthHandoffCode,
+} from './waitlistHandoff'
 
 const apiFetchMock = vi.fn()
 const writeStoredSessionTokenMock = vi.fn()
@@ -116,5 +120,70 @@ describe('waitlist handoff helpers', () => {
   it('returns empty string on handoff create failure', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ success: false, error: 'unauthorized' }, { status: 401 }))
     await expect(createAuthHandoffCode({ privyToken: 'privy-token-123' })).resolves.toBe('')
+  })
+
+  it('creates a one-time AlfaClub continuation from the existing cookie session', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        success: true,
+        data: { code: 'handoff-code-123', expiresAt: '2099-01-01T00:00:00.000Z' },
+      }),
+    )
+
+    await expect(
+      createAlfaClubAuthHandoffTarget({
+        returnPath: '/rooms?roomId=1659&tab=liquidity',
+      }),
+    ).resolves.toBe(
+      'https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=handoff-code-123',
+    )
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/auth/handoff/create',
+      expect.objectContaining({ body: JSON.stringify({ privyToken: null }) }),
+    )
+  })
+
+  it('rejects an unsafe AlfaClub continuation before making auth requests', async () => {
+    await expect(
+      createAlfaClubAuthHandoffTarget({
+        returnPath: 'https://evil.example/rooms',
+      }),
+    ).resolves.toBe('')
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns empty string when cookie-backed handoff creation fails', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({ success: false, error: 'unauthorized' }, { status: 401 }),
+    )
+
+    await expect(
+      createAlfaClubAuthHandoffTarget({
+        returnPath: '/rooms?roomId=1659&tab=liquidity',
+      }),
+    ).resolves.toBe('')
+  })
+
+  it('uses an existing waitlist session cookie without a Privy token', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        success: true,
+        data: { code: 'cookie-handoff', expiresAt: '2099-01-01T00:00:00.000Z' },
+      }),
+    )
+
+    await expect(
+      createAlfaClubAuthHandoffTarget({
+        returnPath: '/rooms?roomId=1659&tab=liquidity',
+      }),
+    ).resolves.toBe(
+      'https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=cookie-handoff',
+    )
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/auth/handoff/create',
+      expect.objectContaining({ body: JSON.stringify({ privyToken: null }) }),
+    )
   })
 })

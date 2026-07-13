@@ -20,10 +20,6 @@ import {
   useAccessContext,
 } from './accessShared'
 
-type WaitlistMeResponse = {
-  appAccessStatus: string | null
-}
-
 function isValidEvmAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -53,11 +49,7 @@ function useResolvedAccessState(): AccessState {
   const acceptedStateQuery = useQuery({
     queryKey: WAITLIST_ME_QUERY_KEY,
     enabled: hasSession && !screenshotMode,
-    queryFn: async (): Promise<WaitlistMeResponse | null> => {
-      const data = await fetchWaitlistMe()
-      if (!data) return null
-      return { appAccessStatus: data.appAccessStatus ?? null }
-    },
+    queryFn: fetchWaitlistMe,
     staleTime: 15_000,
     retry: 0,
   })

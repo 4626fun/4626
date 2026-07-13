@@ -1,4 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
+import { normalizeAlfaClubWaitlistReturnPath } from '@/lib/auth/waitlistEntry'
+import { ALFACLUB_ORIGIN } from '@/lib/env/host'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
@@ -114,4 +116,21 @@ export async function createAuthHandoffCode(params: { privyToken: string | null 
   return handoffRes?.ok && handoffJson?.success && typeof handoffJson.data?.code === 'string'
     ? handoffJson.data.code.trim()
     : ''
+}
+
+export async function createAlfaClubAuthHandoffTarget(params: {
+  returnPath: string
+}): Promise<string> {
+  const returnPath = normalizeAlfaClubWaitlistReturnPath(params.returnPath)
+  if (!returnPath) return ''
+
+  // The accepted waitlist profile is represented by the existing HttpOnly
+  // session. Never replace that principal from ambient Privy state while
+  // constructing a cross-host continuation.
+  const code = await createAuthHandoffCode({ privyToken: null })
+  if (!code) return ''
+
+  const target = new URL(returnPath, ALFACLUB_ORIGIN)
+  target.searchParams.set('cv_handoff', code)
+  return target.toString()
 }

@@ -22,6 +22,25 @@ export type WaitlistStepAccountInput = {
   [key: string]: unknown
 }
 
+/**
+ * Resolve app admission from the cookie-authenticated waitlist profile first.
+ *
+ * `/api/accounts/me` needs a live Privy token and may be unavailable while the
+ * already-established 4626 session remains valid. A concrete session status is
+ * authoritative; the richer account payload is only a fallback while that
+ * cookie-backed read has not settled.
+ */
+export function resolveWaitlistAppAccepted(params: {
+  sessionAppAccessStatus?: string | null
+  accountAppAccessStatus?: string | null
+}): boolean {
+  const status =
+    params.sessionAppAccessStatus !== undefined
+      ? params.sessionAppAccessStatus
+      : params.accountAppAccessStatus
+  return String(status ?? '').trim().toLowerCase() === 'approved'
+}
+
 type WaitlistAccountWithCanonical = {
   accountSignals: UserExecutionAccountSignals
 }

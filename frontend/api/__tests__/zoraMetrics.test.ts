@@ -9,6 +9,7 @@ const { getDbMock, ensureCreatorMetricsSchemaMock } = vi.hoisted(() => ({
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
+  setApplicationName: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({

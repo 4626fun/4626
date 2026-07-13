@@ -126,7 +126,6 @@ export function ShareBridgeFinalizeWiringPanel({
   }
 
   const { status, quote } = wiringQuery.data
-  const batcherPeerSupported = status.batcherDefaultPeer !== null || status.registryPeer !== null
   const ready =
     !status.bridgeRequired || (status.registryPeerConfigured && quote !== null)
 
@@ -147,9 +146,6 @@ export function ShareBridgeFinalizeWiringPanel({
         </div>
         <div className={toneClass(status.registryPeer !== null)}>
           Registry peer: {shortBytes32(status.registryPeer)}
-        </div>
-        <div className={toneClass(batcherPeerSupported)}>
-          Batcher default peer: {shortBytes32(status.batcherDefaultPeer)}
         </div>
         <div className={toneClass(status.shareOftPeerConfigured)}>
           ShareOFT on-chain peer: {shortBytes32(status.shareOftPeer)}

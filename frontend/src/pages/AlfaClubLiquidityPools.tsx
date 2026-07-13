@@ -3,7 +3,7 @@ import { Droplets, RefreshCw, Search } from 'lucide-react'
 import { formatUnits, type Address, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient } from 'wagmi'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { waitlistEntryHref, useOptionalAccessContext } from '@/app/accessShared'
@@ -103,13 +103,16 @@ export function AlfaClubLpWriteConsole(props: {
   initialTokenId?: bigint | null
 }) {
   const access = useOptionalAccessContext()
+  const location = useLocation()
 
   if (!access || access.loading) {
     return <AppLoadingRegistrar label="alfaclub-lp-write-access" />
   }
 
   if (!access.sessionValid || !access.accepted) {
-    const href = waitlistEntryHref(access.marketingUrl)
+    const href = waitlistEntryHref(access.marketingUrl, {
+      alfaClubReturnPath: `${location.pathname}${location.search}`,
+    })
     return (
       <section className="cinematic-section !pt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">

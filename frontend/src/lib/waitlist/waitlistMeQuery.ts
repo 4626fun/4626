@@ -5,6 +5,10 @@ import type { WaitlistMeData } from '@/hooks/canonicalWalletUtils'
 /** Single react-query key for `/api/waitlist/me` — dedupes access + account context. */
 export const WAITLIST_ME_QUERY_KEY = ['waitlist', 'me'] as const
 
+export function getWaitlistMeSessionQueryKey(sessionAddress: string | null | undefined) {
+  return [...WAITLIST_ME_QUERY_KEY, String(sessionAddress ?? '').trim().toLowerCase() || 'anonymous'] as const
+}
+
 export async function fetchWaitlistMe(): Promise<WaitlistMeData | null> {
   const res = await apiFetch('/api/waitlist/me', {
     method: 'GET',

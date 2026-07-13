@@ -356,25 +356,13 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 - Solana CLI 3.x is installed at `~/.local/share/solana/install/active_release/bin/solana`; Anchor CLI 0.31.1 is at `/usr/local/cargo/bin/anchor`.
 - The Anchor IDL is at `programs/creator-share-hook/target/idl/creator_share_hook.json`. Regenerate with `cd programs/creator-share-hook && anchor idl build > target/idl/creator_share_hook.json`.
 
-### Solana bridge on-chain config (Base mainnet)
+### Solana ShareOFT bridging (Base ↔ Solana)
 
-The deployment batcher is configured for Solana bridging:
-
-| Contract                              | Config                | Value                                         |
-| ------------------------------------- | --------------------- | --------------------------------------------- |
-| Batcher (`0x02D7ab…1750`, v1.18.0)   | `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60`  |
-|                                       | `solanaDestination`   | `0x5f38e34e...d4d1`                           |
-| SolanaBridgeAdapter (`0x9A6181…Be60`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
-| Protocol treasury (Safe 1-of-2)       | address               | `0x7d429e...f2d3`                             |
-|                                       | owners                | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
-
-**Key access:** `PRIVATE_KEY` secret is owner of both the adapter and the treasury Safe. To call `setSolanaConfig` on the batcher, execute via the Safe (threshold=1, so single-owner signature suffices). See git history for the `cast send` pattern used.
-
-**Deploy behavior (current):** Solana transfer setup is handled out-of-band. `finalizePhase2` does not require `meteoraAlphaVault`/`solanaIxs`, and deployment flow should pass `bytes32(0)` + empty ixs for those fields.
-
-**Out-of-band Solana path:** Route provisioning, token registration, and Meteora ix payload generation run via the provisioner and `/api/deploy/registerSolanaBridgeToken`, separate from phase-2 finalize.
-
-**Planned model:** treat Solana allocation as strategy-stage orchestration (alongside Charm/Ajna) rather than phase-2 finalize logic.
+- **New deployments use LayerZero ShareOFT only.** The Twin-based `SolanaBridgeAdapter` and `IBaseSolanaBridge` contract surfaces were removed in July 2026; do not restore adapter deployment, authorization, registration, or `wrap-token` requirements to the active deployment plane.
+- **Every creator requires an explicit per-token Solana peer.** Seed `Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer)` before finalize. `DeploymentBatcher` must not use or seed from a global `solanaShareOftPeer` fallback.
+- **The Solana representation has a distinct address.** EVM ShareOFT deployments may share a deterministic EVM address, but Solana uses a unique SPL mint/OFT Store pubkey in a different address namespace; LayerZero peer wiring makes them one omnichain supply.
+- **Phase-2 bridging is direct OFT send.** Keep the configured Solana destination and OVault runtime EID; retired `meteoraAlphaVault`/`solanaIxs` and Twin-adapter parameters are not part of finalize.
+- Canonical provisioning and verification live in `docs/_internal/operations/solana/solana-share-mesh-creator-provisioning.md` and `docs/_internal/operations/solana/solana-share-mesh-budget-paths.md`.
 
 ### Provisioner operations
 
@@ -386,23 +374,23 @@ Operational access details for the Solana route provisioner (hostnames, IPs, SSH
 
 ### Solana integration: per-creator setup
 
-The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the full Solana-side setup via HTTP endpoints:
+Share-mesh creators use **LayerZero ShareOFT** (not Twin `SolanaBridgeAdapter`). Per-creator work:
+
+1. Seed `Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer)` for the creator's Solana OFT store/mint before finalize.
+2. Provision Solana LZ OFT store + share-mesh mint via the share-mesh runbook (`docs/_internal/operations/solana/solana-share-mesh-creator-provisioning.md`).
+3. Create Meteora DLMM pool for the LZ share-mesh mint (not a Twin wrap-token mint).
+
+The Solana route provisioner (`frontend/server/solana-provisioner/`) still exposes optional HTTP helpers for Solana-side setup:
 
 | Endpoint              | Purpose                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `POST /provision`     | Creates bridge route via `wrap-token` CLI (legacy creator SPL adapter lane only) |
-| `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs                           |
-| `POST /create-pool`   | Creates Meteora DLMM pool for the creator's share token                                                    |
-| `POST /meteora-ixs`   | Builds Meteora Alpha Vault deposit instructions                                                            |
+| `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs (lottery hook lane only)  |
+| `POST /create-pool`   | Creates Meteora DLMM pool for the creator's share-mesh mint                                                |
+| `POST /meteora-ixs`   | Builds Meteora Alpha Vault deposit instructions (legacy Alpha Vault lane only)                             |
 
-**Single-token architecture:** Meteora DLMM rejects Token-2022 mints with TransferHook extension (`UnsupportedMintExtension`). The deploy uses only the bridge-wrapped standard SPL token (created by `wrap-token`) for DLMM pools, Alpha Vault deposits, and trading. Transfer Hook functionality (lottery entries, fees) requires a separate Token-2022 mint if needed.
+**Retired:** Twin `POST /provision` / `wrap-token` adapter registration and `SOLANA_AUTO_POOL`. Do not restore them. Share-mesh Meteora pools use the LZ mint runbook in `docs/_internal/operations/solana/solana-share-mesh-budget-paths.md`.
 
-**Legacy adapter registration (optional):** `POST /provision` registers bridge-wrapped creator SPL on `SolanaBridgeAdapter`. **Do not use `SOLANA_AUTO_POOL`** — it is retired. Share-mesh Meteora pools use the LZ mint runbook in `docs/_internal/operations/solana/solana-share-mesh-budget-paths.md`.
-
-1. (Optional) `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
-2. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env (legacy creator-SPL Alpha Vault lane only)
-
-**Meteora vault config** is resolved via `frontend/server/_lib/meteoraAlphaVaultConfig.ts`:
+**Meteora vault config** (legacy creator-SPL Alpha Vault lane only) is resolved via `frontend/server/_lib/meteoraAlphaVaultConfig.ts`:
 
 - Priority 1: DB table `creator_meteora_alpha_vaults` (auto-created on first query)
 - Priority 2: `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env var (JSON map keyed by creator token address)

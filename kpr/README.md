@@ -160,13 +160,14 @@ Required env vars for Solana workflows (see `secrets.example.env`):
 - `SOLANA_KEEPER_PUBKEY`
 - `SOLANA_CREATOR_MINTS`
 - `SOLANA_SHARE_OFT_MAPPING`
-- `SOLANA_BRIDGE_ADAPTER`
 - `LOTTERY_MANAGER`
+
+Bridging uses LayerZero ShareOFT with per-token Registry4626 peers. Twin/SolanaBridgeAdapter is retired.
 
 Optional operational hardening for the winner relay:
 - `SOLANA_WINNER_RELAY_STATE_FILE` to persist Base event checkpoints across process restarts
 - `SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE` for file-backed creatorCoin → Solana mint mappings
-- `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for file-backed Twin → Solana pubkey mappings
+- `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for historical Twin → Solana pubkey mappings (winner relay only)
 - `SOLANA_WINNER_RELAY_FINALITY_DEPTH` to process only blocks at least this deep (default `64`)
 
 The fee-harvest workflow is deliberately harvest-only. It leaves harvested
@@ -235,7 +236,7 @@ Meteora admin **`token_badge`** for Token-2022 hook mints is a separate Meteora 
 
 ## Solana Deployment Scripts
 
-Program + mint setup, PDA initialization, and supply bridging:
+Program + mint setup and PDA initialization. Cross-chain supply uses LayerZero ShareOFT (Twin adapter retired):
 
 ```bash
 # Upgrade Anchor program (uses solana CLI)
@@ -246,9 +247,6 @@ npm run solana:create-token-2022-mint
 
 # Initialize CreatorConfig + PendingEntries + WinnerRecord + ExtraAccountMetaList
 npm run solana:init-creator-pdas
-
-# Bridge initial supply to Solana
-npm run solana:bridge-supply
 ```
 
 ## Architecture

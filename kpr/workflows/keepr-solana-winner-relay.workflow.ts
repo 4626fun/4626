@@ -6,7 +6,7 @@
  *
  * Actions:
  *   1. Poll Base LotteryManager for new LotteryWinnerNotification events
- *   2. Filter for entries that originated from Solana (buyer is a Twin)
+ *   2. Filter for entries that originated from Solana (historical Twin winners)
  *   3. Call record_winner on the Solana hook program
  *   4. Frontend subscribes to WinnerNotified event for "You won!" UX
  *
@@ -18,7 +18,7 @@
  *
  * UX impact: MEDIUM
  *   - Without this, Solana winners won't see "You won!" notification
- *   - Prizes still land at their Twin on Base regardless
+ *   - Prizes still land on Base regardless; Twin adapter transport is retired
  */
 
 import { executeSolanaWinnerRelay } from '../actions/keepr-solana-winner-relay.action.js';

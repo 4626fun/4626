@@ -44,17 +44,15 @@ export async function assertAccountsSessionMatchesPrivyUser(params: {
     FROM profiles p
     LEFT JOIN profile_wallets pw
       ON pw.profile_id = p.id
-     AND (
-       pw.is_primary = TRUE
-       OR pw.is_canonical_smart_wallet = TRUE
-       OR pw.is_embedded_eoa = TRUE
-     )
     WHERE
-      LOWER(COALESCE(p.primary_wallet, '')) = ${address}
-      OR LOWER(COALESCE(p.csw_address, '')) = ${address}
-      OR LOWER(COALESCE(p.primary_embedded_eoa, '')) = ${address}
-      OR LOWER(COALESCE(p.embedded_wallet, '')) = ${address}
-      OR LOWER(COALESCE(pw.address, '')) = ${address}
+      p.merged_into_profile_id IS NULL
+      AND (
+        LOWER(COALESCE(p.primary_wallet, '')) = ${address}
+        OR LOWER(COALESCE(p.csw_address, '')) = ${address}
+        OR LOWER(COALESCE(p.primary_embedded_eoa, '')) = ${address}
+        OR LOWER(COALESCE(p.embedded_wallet, '')) = ${address}
+        OR LOWER(COALESCE(pw.address, '')) = ${address}
+      )
     LIMIT 2;
   `
 

@@ -183,13 +183,29 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
 }
 
 
-// FIX: FINDING-19 — this module-level variable is process-scoped; in serverless,
-// each warm instance has its own counter and concurrent instances don't share state.
-// This means the throttle does not prevent duplicate syncs across instances.
+// Process-local, per-user throttle. Warm instances do not share state, so this
+// reduces repeated work without suppressing one user's sync behind another.
 // For robust deduplication, move throttle to DB (e.g., a `last_synced_at` column
 // on the profile, updated atomically). syncUserWallets uses upsert so duplicates
 // are idempotent, making this a performance concern rather than a correctness bug.
-let lastPrivyAuthDbSyncAtMs = 0
+const MAX_PRIVY_AUTH_SYNC_THROTTLE_ENTRIES = 1_000
+const lastPrivyAuthDbSyncAtMsByUser = new Map<string, number>()
+
+export function resetPrivyAuthDbSyncThrottleForTests(): void {
+  lastPrivyAuthDbSyncAtMsByUser.clear()
+}
+
+function recordPrivyAuthDbSync(privyUserId: string, syncedAtMs: number): void {
+  if (
+    !lastPrivyAuthDbSyncAtMsByUser.has(privyUserId) &&
+    lastPrivyAuthDbSyncAtMsByUser.size >= MAX_PRIVY_AUTH_SYNC_THROTTLE_ENTRIES
+  ) {
+    const oldestUserId = lastPrivyAuthDbSyncAtMsByUser.keys().next().value
+    if (typeof oldestUserId === 'string') lastPrivyAuthDbSyncAtMsByUser.delete(oldestUserId)
+  }
+  lastPrivyAuthDbSyncAtMsByUser.delete(privyUserId)
+  lastPrivyAuthDbSyncAtMsByUser.set(privyUserId, syncedAtMs)
+}
 
 function getPrivyAuthDbSyncMinIntervalMs(): number {
   const raw = String(process.env.PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS ?? '').trim()
@@ -261,9 +277,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const now = Date.now()
         const minInterval = getPrivyAuthDbSyncMinIntervalMs()
+        const lastUserSyncAtMs = lastPrivyAuthDbSyncAtMsByUser.get(claims.userId)
         const shouldSyncNow =
           !persistedSessionAddress ||
-          now - lastPrivyAuthDbSyncAtMs >= minInterval ||
+          lastUserSyncAtMs === undefined ||
+          now - lastUserSyncAtMs >= minInterval ||
           shouldBypassWalletSyncThrottle({
             persistedSessionAddress,
             classifiedSessionAddress,
@@ -278,7 +296,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             syncedPrimaryAddress: syncResult.primaryWalletAddress ?? null,
             syncedActiveOwnerAddress: syncResult.activeOwnerWallet?.address ?? null,
           })
-          lastPrivyAuthDbSyncAtMs = now
+          recordPrivyAuthDbSync(claims.userId, now)
         }
       }
     } catch (dbSyncError) {

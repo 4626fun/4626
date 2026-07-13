@@ -38,7 +38,7 @@ const VIEW_ABI = [
   { type: 'function', name: 'phase3Helper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'shareMeshHelper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'utilsHelper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'solanaShareOftPeer', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+  { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
   {
     type: 'function',
     name: 'getOVaultRuntimeConfig',
@@ -180,7 +180,6 @@ async function main(): Promise<void> {
   const activationBatcher = address(handoff, 'VAULT_ACTIVATION_BATCHER')
   const lotteryManager = address(handoff, 'LOTTERY_MANAGER')
   const vrfConsumer = address(handoff, 'VRF_CONSUMER')
-  const adapter = address(handoff, 'SOLANA_BRIDGE_ADAPTER')
   const batcher = address(handoff, 'DEPLOYMENT_BATCHER')
   const store = address(handoff, 'UNIVERSAL_BYTECODE_STORE')
   const create2Deployer = address(handoff, 'UNIVERSAL_CREATE2_DEPLOYER')
@@ -257,7 +256,7 @@ async function main(): Promise<void> {
   check('batcher_ovault_hub_composer', runtime.hubComposer, address(handoff, 'OVAULT_HUB_COMPOSER'))
   check('batcher_ovault_solana_eid', runtime.solanaEid, Number(handoff.OVAULT_SOLANA_EID))
   check('batcher_ovault_runtime_enabled', runtime.enabled, true)
-  check('batcher_solana_share_oft_peer', await read(batcher, 'solanaShareOftPeer'), handoff.SOLANA_SHARE_OFT_PEER)
+  check('batcher_solana_destination', await read(batcher, 'solanaDestination'), handoff.SOLANA_DESTINATION)
 
   const phase2 = getAddress((await read(batcher, 'phase2Module')) as Address)
   const phase3 = getAddress((await read(batcher, 'phase3Helper')) as Address)
@@ -274,9 +273,6 @@ async function main(): Promise<void> {
     check(`batcher_approved_code_id_${key}`, await read(batcher, 'approvedCodeIds', [codeId]), true)
   }
 
-  check('adapter_registry', await read(adapter, 'registry'), registry)
-  check('adapter_lottery_manager', await read(adapter, 'lotteryManager'), lotteryManager)
-
   check('akita_share_registry_unchanged', await read(AKITA_SHARE_OFT, 'registry'), AKITA_SHARE_REGISTRY)
   check('akita_gauge_lm_unchanged', await read(AKITA_GAUGE, 'lotteryManager'), AKITA_GAUGE_LOTTERY_MANAGER)
 
@@ -289,7 +285,7 @@ async function main(): Promise<void> {
         manifestRelease: manifest.release,
         checksRun: checks.length,
         failures,
-        addresses: { registry, factory, lotteryManager, batcher, adapter },
+        addresses: { registry, factory, lotteryManager, batcher },
       },
       null,
       2,

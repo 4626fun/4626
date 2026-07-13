@@ -1,147 +1,54 @@
 /**
- * Preflight checks for Solana keeper → Base adapter writes.
+ * Preflight checks for Solana keeper orchestrator config.
  *
- * Base-side relay/settle calls must originate from the keeper's deterministic
- * Twin (see SolanaBridgeAdapter.onlyTwin). Direct KPR EOA writes revert with
- * UnauthorizedTwin until a Solana→Base bridge attached-call path is used.
+ * Twin/SolanaBridgeAdapter Base writes are retired — bridging uses LayerZero
+ * ShareOFT with per-token Registry4626 peers. This preflight validates
+ * Solana-side keeper config only and fail-closes any Base adapter write lane.
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import { createPublicClient, http, type Address } from 'viem';
-import { base } from 'viem/chains';
+import type { Address } from 'viem';
 
 import { requireEnv, parseDotenvJsonObject } from '../config.js';
-import {
-  CANONICAL_SOLANA_BRIDGE_ADAPTER,
-  normalizeSolanaBridgeAdapter,
-} from './solanaCanonicalAddresses.js';
+import { normalizeLotteryManager } from './solanaCanonicalAddresses.js';
 import { solanaPubkeyToBytes32 } from './solana.js';
 
-export const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as const;
-
-const bridgeViewAbi = [
-  {
-    type: 'function',
-    name: 'getPredictedTwinAddress',
-    inputs: [{ type: 'bytes32' }],
-    outputs: [{ type: 'address' }],
-    stateMutability: 'view',
-  },
-] as const;
-
-const adapterViewAbi = [
-  {
-    type: 'function',
-    name: 'authorizedEntryKeepers',
-    inputs: [{ type: 'bytes32' }],
-    outputs: [{ type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'authorizedFeeKeepers',
-    inputs: [{ type: 'bytes32' }],
-    outputs: [{ type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'lotteryManager',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'isRegistered',
-    inputs: [{ type: 'address' }],
-    outputs: [{ type: 'bool' }],
-    stateMutability: 'view',
-  },
-] as const;
+export const TWIN_ADAPTER_RETIRED_BLOCKER =
+  'SolanaBridgeAdapter/Twin transport retired (LayerZero ShareOFT only); Base adapter writes unavailable';
 
 export type KeeperBaseWritePreflight = {
   blockers: string[];
   warnings: string[];
   keeperPubkey: string;
   keeperBytes32: `0x${string}`;
-  predictedTwin: Address;
-  twinDeployed: boolean;
-  authorizedEntryKeeper: boolean;
-  authorizedFeeKeeper: boolean;
-  lotteryManager: Address;
+  lotteryManager: Address | null;
   mintChecks: Array<{
     mint: string;
     shareOft: string | null;
-    shareOftRegistered: boolean;
     creatorConfigExists: boolean;
     pendingEntriesExists: boolean;
     pendingCount: number;
   }>;
 };
 
-function basePublicClient() {
-  const rpcUrl = process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
-  return createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) });
-}
-
 export async function collectKeeperBaseWritePreflight(): Promise<KeeperBaseWritePreflight> {
-  const blockers: string[] = [];
+  const blockers: string[] = [TWIN_ADAPTER_RETIRED_BLOCKER];
   const warnings: string[] = [];
 
-  const adapterRaw = requireEnv('SOLANA_BRIDGE_ADAPTER');
-  const adapter = normalizeSolanaBridgeAdapter(adapterRaw) as Address;
-  if (adapterRaw.trim().toLowerCase() !== adapter.toLowerCase()) {
-    warnings.push(
-      `SOLANA_BRIDGE_ADAPTER ${adapterRaw} is deprecated; using canonical ${CANONICAL_SOLANA_BRIDGE_ADAPTER}`,
-    );
-  }
   const keeperPubkey = requireEnv('SOLANA_KEEPER_PUBKEY');
   const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
-  const client = basePublicClient();
 
-  const [entryAuth, feeAuth, lotteryManager, predictedTwin] = await Promise.all([
-    client.readContract({
-      address: adapter,
-      abi: adapterViewAbi,
-      functionName: 'authorizedEntryKeepers',
-      args: [keeperBytes32],
-    }),
-    client.readContract({
-      address: adapter,
-      abi: adapterViewAbi,
-      functionName: 'authorizedFeeKeepers',
-      args: [keeperBytes32],
-    }),
-    client.readContract({
-      address: adapter,
-      abi: adapterViewAbi,
-      functionName: 'lotteryManager',
-    }),
-    client.readContract({
-      address: BASE_SOLANA_BRIDGE,
-      abi: bridgeViewAbi,
-      functionName: 'getPredictedTwinAddress',
-      args: [keeperBytes32],
-    }),
-  ]);
-
-  const twinBytecode = await client.getBytecode({ address: predictedTwin });
-  const twinDeployed = Boolean(twinBytecode && twinBytecode !== '0x');
-
-  if (!entryAuth) blockers.push('authorizedEntryKeepers=false on SolanaBridgeAdapter');
-  if (!feeAuth) blockers.push('authorizedFeeKeepers=false on SolanaBridgeAdapter');
-  if (!lotteryManager || lotteryManager === '0x0000000000000000000000000000000000000000') {
-    blockers.push('lotteryManager unset on SolanaBridgeAdapter');
+  const lotteryManagerRaw = process.env.LOTTERY_MANAGER?.trim();
+  const lotteryManager = lotteryManagerRaw
+    ? (normalizeLotteryManager(lotteryManagerRaw) as Address)
+    : null;
+  if (!lotteryManager) {
+    blockers.push('LOTTERY_MANAGER unset (required for winner-relay reads)');
   }
-  if (!twinDeployed) {
-    warnings.push(
-      `keeper Twin ${predictedTwin} not deployed yet (first Solana→Base bridge message will deploy it)`,
-    );
-  }
-  if (process.env.SOLANA_KEEPER_BASE_WRITES_ENABLED !== '1') {
+
+  if (process.env.SOLANA_KEEPER_BASE_WRITES_ENABLED === '1') {
     blockers.push(
-      'SOLANA_KEEPER_BASE_WRITES_ENABLED!=1 (enable after keeper auth + registered ShareOFT + bridge lane)',
+      'SOLANA_KEEPER_BASE_WRITES_ENABLED=1 but Twin adapter is retired; disable Base write flag',
     );
   }
 
@@ -168,17 +75,9 @@ export async function collectKeeperBaseWritePreflight(): Promise<KeeperBaseWrite
       programId,
     );
 
-    const [pendingInfo, configInfo, registered] = await Promise.all([
+    const [pendingInfo, configInfo] = await Promise.all([
       solConn.getAccountInfo(pendingEntriesPda),
       solConn.getAccountInfo(creatorConfigPda),
-      shareOft
-        ? client.readContract({
-            address: adapter,
-            abi: adapterViewAbi,
-            functionName: 'isRegistered',
-            args: [shareOft as Address],
-          })
-        : Promise.resolve(false),
     ]);
 
     let pendingCount = 0;
@@ -190,16 +89,12 @@ export async function collectKeeperBaseWritePreflight(): Promise<KeeperBaseWrite
     mintChecks.push({
       mint: mintStr,
       shareOft,
-      shareOftRegistered: registered,
       creatorConfigExists: Boolean(configInfo),
       pendingEntriesExists: Boolean(pendingInfo),
       pendingCount,
     });
 
     if (!shareOft) blockers.push(`missing SOLANA_SHARE_OFT_MAPPING for mint ${mintStr}`);
-    else if (!registered) {
-      blockers.push(`ShareOFT ${shareOft} not registered on SolanaBridgeAdapter ${adapter}`);
-    }
     if (!configInfo) {
       warnings.push(`CreatorConfig PDA missing for mint ${mintStr} (hook side not initialized)`);
     }
@@ -210,10 +105,6 @@ export async function collectKeeperBaseWritePreflight(): Promise<KeeperBaseWrite
     warnings,
     keeperPubkey,
     keeperBytes32,
-    predictedTwin,
-    twinDeployed,
-    authorizedEntryKeeper: entryAuth,
-    authorizedFeeKeeper: feeAuth,
     lotteryManager,
     mintChecks,
   };

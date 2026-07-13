@@ -2583,8 +2583,7 @@ function DeployVaultBatcher({
         | 'bytecodeStore'
         | 'protocolTreasury'
         | 'registry'
-        | 'chainlinkEthUsd'
-        | 'solanaBridgeAdapter') => {
+        | 'chainlinkEthUsd') => {
         const raw = await publicClient!
           .readContract({
             address: batcherAddress as Address,
@@ -2595,7 +2594,7 @@ function DeployVaultBatcher({
         return normalizeAddressLike(raw)
       }
 
-      const [phase1Module, phase2Module, phase3Helper, uniV4Helper, utilsHelper, create2Deployer, bytecodeStore, protocolTreasury, registry, chainlinkEthUsd, solanaBridgeAdapter] =
+      const [phase1Module, phase2Module, phase3Helper, uniV4Helper, utilsHelper, create2Deployer, bytecodeStore, protocolTreasury, registry, chainlinkEthUsd] =
         await Promise.all([
           readAddress('phase1Module'),
           readAddress('phase2Module'),
@@ -2607,22 +2606,14 @@ function DeployVaultBatcher({
           readAddress('protocolTreasury'),
           readAddress('registry'),
           readAddress('chainlinkEthUsd'),
-          readAddress('solanaBridgeAdapter'),
         ])
 
-      const [solanaDestinationRaw, solanaShareOftPeerRaw, ovaultRuntimeRaw] = await Promise.all([
+      const [solanaDestinationRaw, ovaultRuntimeRaw] = await Promise.all([
         publicClient!
           .readContract({
             address: batcherAddress as Address,
             abi: BATCHER_SHARED_INFRA_ABI,
             functionName: 'solanaDestination',
-          })
-          .catch(() => null),
-        publicClient!
-          .readContract({
-            address: batcherAddress as Address,
-            abi: BATCHER_SHARED_INFRA_ABI,
-            functionName: 'solanaShareOftPeer',
           })
           .catch(() => null),
         publicClient!
@@ -2655,7 +2646,6 @@ function DeployVaultBatcher({
         typeof ovaultRuntimeSolanaEidRaw === 'bigint' ? ovaultRuntimeSolanaEidRaw : (ovaultRuntimeSolanaEidRaw ?? 0),
       )
       const solanaDestination = normalizeBytes32(solanaDestinationRaw)
-      const solanaShareOftPeer = normalizeBytes32(solanaShareOftPeerRaw)
 
       const deployableContractAddresses = [
         phase1Module,
@@ -2668,7 +2658,6 @@ function DeployVaultBatcher({
         protocolTreasury,
         registry,
         chainlinkEthUsd,
-        solanaBridgeAdapter,
         ovaultHubComposer,
       ].filter(Boolean) as Address[]
       const bytecodes = await Promise.all(
@@ -2693,12 +2682,10 @@ function DeployVaultBatcher({
         protocolTreasury,
         registry,
         chainlinkEthUsd,
-        solanaBridgeAdapter,
         ovaultHubComposer,
         ovaultRuntimeEnabled,
         ovaultRuntimeSolanaEid: Number.isFinite(ovaultRuntimeSolanaEid) ? ovaultRuntimeSolanaEid : 0,
         solanaDestination,
-        solanaShareOftPeer,
         deployed: {
           phase1Module: isDeployed(phase1Module),
           phase2Module: isDeployed(phase2Module),
@@ -2710,7 +2697,6 @@ function DeployVaultBatcher({
           protocolTreasury: isDeployed(protocolTreasury),
           registry: isDeployed(registry),
           chainlinkEthUsd: isDeployed(chainlinkEthUsd),
-          solanaBridgeAdapter: isDeployed(solanaBridgeAdapter),
           ovaultHubComposer: isDeployed(ovaultHubComposer),
         },
       }
@@ -3256,7 +3242,6 @@ function DeployVaultBatcher({
       batcherSharedInfraQuery.data?.phase3Helper,
       batcherSharedInfraQuery.data?.uniV4Helper,
       batcherSharedInfraQuery.data?.utilsHelper,
-      batcherSharedInfraQuery.data?.solanaBridgeAdapter,
       batcherSharedInfraQuery.data?.registry,
       batcherSharedInfraQuery.data?.create2Deployer,
       batcherSharedInfraQuery.data?.bytecodeStore,
@@ -4759,11 +4744,7 @@ function DeployVaultBatcher({
         if (charmWeightBps + ajnaWeightBps + solanaWeightBps > 10_000n) {
           throw new Error('Strategy weights exceed 100%')
         }
-        const configuredSolanaBridge = (CONTRACTS as any).solanaBridgeAdapter
-        if (!configuredSolanaBridge || !isAddress(String(configuredSolanaBridge))) {
-          throw new Error('Solana bridge adapter is not configured.')
-        }
-        const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
+        const solanaBridgeAddress = ZERO_ADDRESS as Address
         const solanaKeeper = expectedProtocolTreasury
         const ajnaKeeper =
           normalizeAddressLike(runtimeConfig?.protocolAjnaKeeper) ??
@@ -6577,7 +6558,6 @@ function DeployVaultBatcher({
   const timelineRemainingText =
     phaseProgressSummary.remaining > 0 ? `${phaseProgressSummary.remaining} remaining` : 'No phases remaining'
   const solanaDestinationPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaDestination)
-  const solanaShareOftPeerPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaShareOftPeer)
   const meteoraAlphaVaultPubkey = bytes32ToSolanaAddress(ovaultMeshStatus?.meteoraAlphaVault ?? null)
   const solanaIxProgramPubkeys = (ovaultMeshStatus?.solanaProgramIds ?? [])
     .map((value) => bytes32ToSolanaAddress(value))
@@ -6838,17 +6818,6 @@ function DeployVaultBatcher({
                         batcherSharedInfraQuery.data?.deployed.ovaultHubComposer ?? null,
                       )}
                     />
-                    <AddressRow
-                      label="Solana bridge adapter"
-                  iconSrc={PROTOCOL_LOGOS.solana}
-                      address={batcherSharedInfraQuery.data?.solanaBridgeAdapter ?? null}
-                      deployed={batcherSharedInfraQuery.data?.deployed.solanaBridgeAdapter ?? null}
-                      variant="shared"
-                      forkOnly={isForkOnlyAddress(
-                        batcherSharedInfraQuery.data?.solanaBridgeAdapter ?? null,
-                        batcherSharedInfraQuery.data?.deployed.solanaBridgeAdapter ?? null,
-                      )}
-                    />
                     <div className="flex items-center justify-between gap-4 py-1.5 text-[11px]">
                       <div className="text-sky-200/80">OVault runtime</div>
                       <div className="font-mono text-zinc-200/90">
@@ -6876,23 +6845,8 @@ function DeployVaultBatcher({
                         raw: {batcherSharedInfraQuery.data?.solanaDestination ?? '—'}
                       </div>
                     </div>
-                    <div className="py-1.5 text-[11px]">
-                      <div className="text-sky-200/80">Share OFT peer</div>
-                      {solanaShareOftPeerPubkey ? (
-                        <a
-                          href={solanaExplorerAddressUrl(solanaShareOftPeerPubkey)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-zinc-200/90 hover:text-white transition-colors break-all"
-                        >
-                          {solanaShareOftPeerPubkey}
-                        </a>
-                      ) : (
-                        <div className="font-mono text-zinc-200/90 break-all">—</div>
-                      )}
-                      <div className="font-mono text-[10px] text-zinc-600 break-all">
-                        raw: {batcherSharedInfraQuery.data?.solanaShareOftPeer ?? '—'}
-                      </div>
+                    <div className="py-1.5 text-[11px] text-zinc-500 leading-relaxed">
+                      Share OFT peers are configured per creator in Registry4626 before finalize — there is no global batcher fallback.
                     </div>
                   </AddressTable>
                   </div>
@@ -7388,11 +7342,11 @@ function DeployVaultBatcher({
                   />
                   <AddressRow
                     label="Share OFT peer (Solana)"
-                    address={solanaShareOftPeerPubkey}
-                    deployed={solanaShareOftPeerPubkey ? (ovaultMeshStatus?.sharePeerSet ? true : false) : null}
-                    explorerHref={solanaShareOftPeerPubkey ? solanaExplorerAddressUrl(solanaShareOftPeerPubkey) : null}
+                    address={phase5ShareMeshMint}
+                    deployed={ovaultMeshStatus?.sharePeerSet ? true : phase5ShareMeshMint ? false : null}
+                    explorerHref={phase5ShareMeshMint ? solanaExplorerAddressUrl(phase5ShareMeshMint) : null}
                     iconSrc={PROTOCOL_LOGOS.layerzero}
-                    tags={ovaultMeshStatus?.sharePeerSet ? ['live'] : solanaShareOftPeerPubkey ? ['pending'] : undefined}
+                    tags={ovaultMeshStatus?.sharePeerSet ? ['live'] : phase5ShareMeshMint ? ['pending'] : undefined}
                   />
                   <div className="text-[10px] text-zinc-600 leading-relaxed pt-1">
                     Finalize peer wiring is configured in{' '}

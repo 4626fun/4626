@@ -58,7 +58,6 @@ describe('keepr Solana fee harvest-only lane', () => {
   const envKeys = [
     'SOLANA_RPC_URL',
     'SOLANA_CREATOR_MINTS',
-    'SOLANA_BRIDGE_ADAPTER',
     'SOLANA_KEEPER_PUBKEY',
     'SOLANA_SHARE_OFT_MAPPING',
   ] as const
@@ -69,7 +68,6 @@ describe('keepr Solana fee harvest-only lane', () => {
     process.env.SOLANA_RPC_URL = 'https://solana.invalid'
     process.env.SOLANA_CREATOR_MINTS =
       '11111111111111111111111111111111,SysvarRent111111111111111111111111111111111'
-    delete process.env.SOLANA_BRIDGE_ADAPTER
     delete process.env.SOLANA_KEEPER_PUBKEY
     delete process.env.SOLANA_SHARE_OFT_MAPPING
     getProgramAccountsMock.mockResolvedValue([

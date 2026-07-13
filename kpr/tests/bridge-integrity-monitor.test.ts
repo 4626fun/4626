@@ -148,7 +148,7 @@ describe('bridge integrity monitor', () => {
       }),
     );
     mockInfraStatusResponse();
-    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(0n);
+    readContractMock.mockResolvedValueOnce(0n);
 
     const result = await executeBridgeIntegrityMonitor();
 
@@ -178,7 +178,7 @@ describe('bridge integrity monitor', () => {
       }),
     );
     mockInfraStatusResponse();
-    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(1000000000n);
+    readContractMock.mockResolvedValueOnce(1000000000n);
 
     const result = await executeBridgeIntegrityMonitor();
 
@@ -211,7 +211,7 @@ describe('bridge integrity monitor', () => {
     expect(headers.Authorization).toBeUndefined();
   });
 
-  it('falls back to register build-only endpoint when status endpoint is session-gated', async () => {
+  it('fails closed when solanaInfraStatus is session-gated (no Twin register fallback)', async () => {
     setEnv(
       'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
       '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -234,37 +234,21 @@ describe('bridge integrity monitor', () => {
       }),
     );
 
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
-          status: 401,
-          headers: { 'content-type': 'application/json' },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              bridgeToken: SAMPLE_BRIDGE_TOKEN,
-              adapter: SAMPLE_ADAPTER,
-              solanaMint: SAMPLE_MINT,
-            },
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      );
-    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(1000000000n);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const result = await executeBridgeIntegrityMonitor();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.status).toBe('critical');
-    expect(result.criticalFindings.join(' ')).toContain('build-only fallback');
-    expect(result.routeChecks).toHaveLength(1);
+    expect(result.criticalFindings.join(' ')).toContain('registerSolanaBridgeToken fallback is retired');
   });
 
-  it('runs direct liveness probe in fallback mode when liveness is enforced', async () => {
+  it('fails closed on auth error even when liveness is enforced', async () => {
     setEnv(
       'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
       '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -291,47 +275,21 @@ describe('bridge integrity monitor', () => {
       }),
     );
 
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
-          status: 401,
-          headers: { 'content-type': 'application/json' },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              bridgeToken: SAMPLE_BRIDGE_TOKEN,
-              adapter: SAMPLE_ADAPTER,
-              solanaMint: SAMPLE_MINT,
-            },
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            payerHealthy: true,
-            now: new Date().toISOString(),
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      );
-    readContractMock.mockResolvedValueOnce(SAMPLE_MAPPED_TOKEN).mockResolvedValueOnce(1000000000n);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const result = await executeBridgeIntegrityMonitor();
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.status).toBe('critical');
-    expect(result.criticalFindings.join(' ')).toContain('build-only fallback');
-    expect(result.criticalFindings.join(' ')).not.toContain('liveness freshness checks are skipped');
+    expect(result.criticalFindings.join(' ')).toContain('registerSolanaBridgeToken fallback is retired');
   });
 
-  it('raises critical in fallback mode when direct liveness probe is unhealthy', async () => {
+  it('fails closed when status auth fails and no Twin fallback exists', async () => {
     setEnv(
       'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
       '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -348,41 +306,17 @@ describe('bridge integrity monitor', () => {
     setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL', 'https://provisioner.test/healthz');
     setEnv('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET', 'provisioner-secret');
 
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
-          status: 401,
-          headers: { 'content-type': 'application/json' },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              bridgeToken: SAMPLE_BRIDGE_TOKEN,
-              adapter: SAMPLE_ADAPTER,
-              solanaMint: SAMPLE_MINT,
-            },
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: false,
-            payerHealthy: false,
-            now: new Date().toISOString(),
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, error: 'Sign in required' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const result = await executeBridgeIntegrityMonitor();
 
     expect(result.status).toBe('critical');
-    expect(result.criticalFindings.join(' ')).toContain('Bridge liveness (fallback direct)');
+    expect(result.criticalFindings.join(' ')).toContain('registerSolanaBridgeToken fallback is retired');
   });
 
   it('skips monitoring when API credentials are missing', async () => {

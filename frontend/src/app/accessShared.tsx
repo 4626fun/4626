@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-import { buildWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
+import { buildWaitlistEntryUrl, type WaitlistEntryOptions } from '@/lib/auth/waitlistEntry'
 import { APP_ORIGIN } from '@/lib/env/host'
 export {
   getInitialTelegramMiniAppEntryResolution,
@@ -38,8 +38,8 @@ export function computeAcceptedFromAppAccessStatus(appAccessStatus: string | nul
   return String(appAccessStatus ?? '').trim().toLowerCase() === 'approved'
 }
 
-export function waitlistEntryHref(marketingUrl: string): string {
-  return buildWaitlistEntryUrl(marketingUrl)
+export function waitlistEntryHref(marketingUrl: string, options?: WaitlistEntryOptions): string {
+  return buildWaitlistEntryUrl(marketingUrl, options)
 }
 
 export function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {

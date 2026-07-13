@@ -58,6 +58,32 @@ describe('ensurePrivyUserEmbeddedWallet', () => {
     expect(result.classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
+  it('waits for a successful create to hydrate before invoking another mutation', async () => {
+    getUserByIdMock
+      .mockResolvedValueOnce({
+        id: 'did:privy:user',
+        linkedAccounts: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'did:privy:user',
+        linkedAccounts: [
+          {
+            type: 'wallet',
+            address: '0x00000000000000000000000000000000000000cc',
+            walletClientType: 'privy',
+            chainType: 'ethereum',
+          },
+        ],
+      })
+
+    const client = new PrivyClient('app', 'secret') as any
+    const result = await ensurePrivyUserEmbeddedWallet(client, 'did:privy:user')
+
+    expect(createWalletsMock).toHaveBeenCalledTimes(1)
+    expect(walletApiCreateMock).not.toHaveBeenCalled()
+    expect(result.classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000cc')
+  })
+
   it('synthesizes a linked account when walletApi.create returns an address', async () => {
     walletApiCreateMock.mockResolvedValue({
       id: 'wallet-1',

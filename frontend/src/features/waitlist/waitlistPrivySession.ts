@@ -189,11 +189,13 @@ async function waitForPrivyAuthenticated(params: {
   isAuthenticated: () => boolean
   attempts?: number
   retryDelayMs?: number
+  signal?: AbortSignal
 }): Promise<boolean> {
   const attempts = Math.max(1, Number(params.attempts ?? WALLET_LOGIN_AUTH_POLL_ATTEMPTS))
   const retryDelayMs = Math.max(0, Number(params.retryDelayMs ?? WALLET_LOGIN_AUTH_POLL_DELAY_MS))
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (params.signal?.aborted) throw new Error('Sign-in cancelled.')
     if (params.isAuthenticated()) return true
     if (attempt < attempts - 1 && retryDelayMs > 0) {
       await sleep(retryDelayMs)
@@ -230,7 +232,12 @@ async function prepareExplicitWalletPrivyLogin(privy: SafePrivyClient): Promise<
   })
 }
 
-let returningWalletSignInFlight: Promise<string> | null = null
+type ReturningWalletSignInFlight = {
+  promise: Promise<string>
+  signal?: AbortSignal
+}
+
+let returningWalletSignInFlight: ReturningWalletSignInFlight | null = null
 
 /** Test-only reset for module-level wallet sign-in dedupe state. */
 export function resetWaitlistReturningWalletSignInForTests(): void {
@@ -240,15 +247,22 @@ export function resetWaitlistReturningWalletSignInForTests(): void {
 export async function runWaitlistReturningWalletSignIn(params: {
   privy: SafePrivyClient
   login: PrivyWalletLoginFn
+  signal?: AbortSignal
 }): Promise<string> {
-  if (returningWalletSignInFlight) {
-    return returningWalletSignInFlight
+  if (
+    returningWalletSignInFlight &&
+    !returningWalletSignInFlight.signal?.aborted &&
+    returningWalletSignInFlight.signal === params.signal
+  ) {
+    return returningWalletSignInFlight.promise
   }
 
-  returningWalletSignInFlight = (async () => {
-    const { privy, login } = params
+  const promise = (async () => {
+    const { privy, login, signal } = params
+    if (signal?.aborted) throw new Error('Sign-in cancelled.')
 
     await prepareExplicitWalletPrivyLogin(privy)
+    if (signal?.aborted) throw new Error('Sign-in cancelled.')
 
     try {
       if (isLocalDevPrivySessionMarkerMode()) {
@@ -269,6 +283,7 @@ export async function runWaitlistReturningWalletSignIn(params: {
 
     const authenticated = await waitForPrivyAuthenticated({
       isAuthenticated: () => privy.authenticated === true,
+      signal,
     })
     if (!authenticated) {
       throw new Error('Sign-in cancelled.')
@@ -286,6 +301,7 @@ export async function runWaitlistReturningWalletSignIn(params: {
         'Wallet sign-in completed but Privy access token is missing. Refresh the page and try again.',
       )
     }
+    if (signal?.aborted) throw new Error('Sign-in cancelled.')
 
     if (!isLocalDevPrivySessionMarkerMode()) {
       assertPrivySessionMarkerCookie()
@@ -311,11 +327,18 @@ export async function runWaitlistReturningWalletSignIn(params: {
       throw error
     }
   })()
+  const flight: ReturningWalletSignInFlight = { promise, signal: params.signal }
+  returningWalletSignInFlight = flight
+  const clearFlight = () => {
+    if (returningWalletSignInFlight === flight) returningWalletSignInFlight = null
+  }
+  params.signal?.addEventListener('abort', clearFlight, { once: true })
 
   try {
-    return await returningWalletSignInFlight
+    return await promise
   } finally {
-    returningWalletSignInFlight = null
+    params.signal?.removeEventListener('abort', clearFlight)
+    clearFlight()
   }
 }
 

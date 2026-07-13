@@ -349,9 +349,7 @@ export const BATCHER_SHARED_INFRA_ABI = [
   { type: 'function', name: 'protocolTreasury', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'chainlinkEthUsd', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'solanaBridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
-  { type: 'function', name: 'solanaShareOftPeer', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
   {
     type: 'function',
     name: 'getOVaultRuntimeConfig',

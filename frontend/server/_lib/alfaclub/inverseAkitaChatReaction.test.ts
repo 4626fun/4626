@@ -16,13 +16,13 @@ vi.mock('../arena/arenaIdentityMappingStore.js', () => ({
   resolveRoomDefaultArenaIdentity: vi.fn(),
 }))
 
-vi.mock('./inverseAkitaStakerPilot.js', async () => {
-  const actual = await vi.importActual<typeof import('./inverseAkitaStakerPilot.js')>(
-    './inverseAkitaStakerPilot.js',
+vi.mock('./inverseAkitaChatReactionPolicy.js', async () => {
+  const actual = await vi.importActual<typeof import('./inverseAkitaChatReactionPolicy.js')>(
+    './inverseAkitaChatReactionPolicy.js',
   )
   return {
     ...actual,
-    resolveInverseAkitaStakerPilotAccess: vi.fn(),
+    resolveInverseAkitaChatAuthorAccess: vi.fn(),
   }
 })
 
@@ -32,7 +32,7 @@ vi.mock('./hyperliquid.js', () => ({
 
 import { runArenaOpenPositions, runArenaTrade } from '../arena/arenaClient.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
-import { resolveInverseAkitaStakerPilotAccess } from './inverseAkitaStakerPilot.js'
+import { resolveInverseAkitaChatAuthorAccess } from './inverseAkitaChatReactionPolicy.js'
 import { getPerpMarkets } from './hyperliquid.js'
 import {
   __resetInverseAkitaBotOutboundTextRegistryForTests,
@@ -59,7 +59,7 @@ import {
 const mockRunArenaTrade = vi.mocked(runArenaTrade)
 const mockRunArenaOpenPositions = vi.mocked(runArenaOpenPositions)
 const mockResolveRoomDefaultArenaIdentity = vi.mocked(resolveRoomDefaultArenaIdentity)
-const mockResolveInverseAkitaStakerPilotAccess = vi.mocked(resolveInverseAkitaStakerPilotAccess)
+const mockResolveInverseAkitaChatAuthorAccess = vi.mocked(resolveInverseAkitaChatAuthorAccess)
 const mockGetPerpMarkets = vi.mocked(getPerpMarkets)
 
 describe('inverseAkitaChatReaction', () => {
@@ -83,7 +83,7 @@ describe('inverseAkitaChatReaction', () => {
       agentWalletAddress: '0xagentwallet',
       hlApiWalletAddress: '0xhlwallet',
     })
-    mockResolveInverseAkitaStakerPilotAccess.mockResolvedValue({
+    mockResolveInverseAkitaChatAuthorAccess.mockResolvedValue({
       eligible: true,
       stakedKeys: 1,
       reason: 'staker',
@@ -200,6 +200,37 @@ describe('inverseAkitaChatReaction', () => {
     expect(intents).toHaveLength(2)
     expect(intents[0]?.pair).toBe('BTC')
     expect(intents[1]?.pair).toBe('ETH')
+  })
+
+  it('collects configured owner-room opinions but ignores unsupported rooms', () => {
+    vi.stubEnv(
+      'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
+      '1484,1660,2,1043,1659',
+    )
+    expect(
+      collectInverseAkitaChatTradeIntents({
+        roomId: '1484',
+        messages: [
+          {
+            id: 'owner-opinion',
+            sender: '0x1111111111111111111111111111111111111111',
+            text: 'btc looks bullish',
+          },
+        ],
+      }),
+    ).toHaveLength(1)
+    expect(
+      collectInverseAkitaChatTradeIntents({
+        roomId: '9999',
+        messages: [
+          {
+            id: 'unsupported',
+            sender: '0x1111111111111111111111111111111111111111',
+            text: 'btc looks bullish',
+          },
+        ],
+      }),
+    ).toEqual([])
   })
 
   it('ignores InverseAKITA outbound copy and quote-reply sentiment loops', () => {
@@ -470,15 +501,14 @@ describe('inverseAkitaChatReaction', () => {
     )
     expect(result.replyText).toMatch(/short/i)
     expect(result.replyText).toContain('50 @ 27x')
-    expect(mockResolveInverseAkitaStakerPilotAccess).toHaveBeenCalledWith({
+    expect(mockResolveInverseAkitaChatAuthorAccess).toHaveBeenCalledWith({
       senderAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
       roomId: '1659',
-      isTrustedOperator: false,
     })
   })
 
   it('replies with the staker gate when the sender has no staked keys in room 1659', async () => {
-    mockResolveInverseAkitaStakerPilotAccess.mockResolvedValueOnce({
+    mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
       eligible: false,
       stakedKeys: 0,
       reason: 'insufficient_stake',
@@ -499,6 +529,68 @@ describe('inverseAkitaChatReaction', () => {
     expect(result.skipped).toBe(true)
     expect(result.skipReason).toBe('insufficient_stake')
     expect(result.replyText).toMatch(/stake/i)
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('uses the shared room-1659 executor for an eligible owner-room opinion', async () => {
+    vi.stubEnv(
+      'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
+      '1484,1660,2,1043,1659',
+    )
+    mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
+      eligible: true,
+      stakedKeys: null,
+      reason: 'owner',
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1484',
+      intent: {
+        id: 'owner-room-trade',
+        date: Date.now(),
+        sender: '0x1111111111111111111111111111111111111111',
+        text: 'btc looks bullish',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockResolveRoomDefaultArenaIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ roomId: '1659' }),
+    )
+    expect(mockRunArenaTrade).toHaveBeenCalledWith(
+      expect.objectContaining({ side: 'short' }),
+      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+    )
+  })
+
+  it('does not touch the executor when an owner-room author is unauthorized', async () => {
+    vi.stubEnv(
+      'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
+      '1484,1660,2,1043,1659',
+    )
+    mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
+      eligible: false,
+      stakedKeys: null,
+      reason: 'not_room_owner',
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1484',
+      intent: {
+        id: 'non-owner-room-trade',
+        date: Date.now(),
+        sender: '0x2222222222222222222222222222222222222222',
+        text: 'btc looks bullish',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+
+    expect(result).toMatchObject({ skipped: true, skipReason: 'not_room_owner' })
+    expect(mockResolveRoomDefaultArenaIdentity).not.toHaveBeenCalled()
+    expect(mockRunArenaOpenPositions).not.toHaveBeenCalled()
     expect(mockRunArenaTrade).not.toHaveBeenCalled()
   })
 

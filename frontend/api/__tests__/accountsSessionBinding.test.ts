@@ -37,6 +37,31 @@ describe('accounts session binding', () => {
     ).resolves.toEqual({ profileId: 42 })
   })
 
+  it('accepts a session address attached as a non-primary profile wallet', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ')
+        if (
+          query.includes("LOWER(COALESCE(pw.address, ''))") &&
+          !query.includes('pw.is_primary') &&
+          !query.includes('pw.is_canonical_smart_wallet') &&
+          !query.includes('pw.is_embedded_eoa')
+        ) {
+          return { rows: [{ id: 42, privy_user_id: 'did:privy:user-a' }] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    await expect(
+      assertAccountsSessionMatchesPrivyUser({
+        db,
+        req: {} as any,
+        privyUserId: 'did:privy:user-a',
+      }),
+    ).resolves.toEqual({ profileId: 42 })
+  })
+
   it('rejects a restored Privy identity before any account mutation', async () => {
     const db = {
       sql: vi.fn(async () => ({
@@ -51,5 +76,25 @@ describe('accounts session binding', () => {
     }).catch((caught) => caught)
 
     expect(isAccountsSessionBindingError(error)).toBe(true)
+  })
+
+  it('rejects an address attached to multiple active profiles', async () => {
+    const db = {
+      sql: vi.fn(async () => ({
+        rows: [
+          { id: 42, privy_user_id: 'did:privy:user-a' },
+          { id: 84, privy_user_id: 'did:privy:user-a' },
+        ],
+      })),
+    }
+
+    const error = await assertAccountsSessionMatchesPrivyUser({
+      db,
+      req: {} as any,
+      privyUserId: 'did:privy:user-a',
+    }).catch((caught) => caught)
+
+    expect(isAccountsSessionBindingError(error)).toBe(true)
+    expect(error.message).toContain('multiple 4626 accounts')
   })
 })

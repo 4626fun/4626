@@ -72,7 +72,7 @@ const {
     }),
   ),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
-  ensureShareMeshOvaultPreflightMock: vi.fn(async () => ({
+  ensureShareMeshOvaultPreflightMock: vi.fn(async (_params?: unknown) => ({
     existingMintCompatible: true,
     redeemEligible: true,
     sharePeerSet: true,
@@ -1561,7 +1561,7 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
-  it('status uses canonical Solana preflight payload before phase3 strategies', async () => {
+  it('status runs ShareOFT mesh preflight before phase3 strategies', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1569,73 +1569,24 @@ describe('deploy session optimistic concurrency', () => {
         phase3Calls: makeGenericPhase3Calls(),
       }),
     }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
+    transitionDeploySessionMock.mockResolvedValue(true)
 
-    try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
 
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalled()
-      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { body?: string }]
-      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
-      const payload = JSON.parse(String(init?.body ?? '{}'))
-      expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-      expect(payload.buildOnly).toBe(true)
-      expect(String(payload.creatorToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-      expect(payload.expectedSolanaAmount).toBe('1500000000000000000000000')
-      expect(payload.assetMintOrigin).toBe('existing')
-      expect(payload.enforceCompatibility).toBe(true)
-      expect(String(url).startsWith('https://app.4626.fun/')).toBe(true)
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    expect(res.statusCode).toBe(200)
+    expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+    expect(ensureShareMeshOvaultPreflightMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ ovaultRequested: false }),
+    )
+    expect(sendUserOperationMock).toHaveBeenCalled()
   })
 
-  it('status ignores request host when choosing Solana preflight origin', async () => {
+  it('status runs ShareOFT mesh preflight regardless of request host', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1644,45 +1595,10 @@ describe('deploy session optimistic concurrency', () => {
       }),
     }
     const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
+    const fetchMock = vi.fn() as any
 
     try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return true
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
         .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
@@ -1701,16 +1617,14 @@ describe('deploy session optimistic concurrency', () => {
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalled()
-      const [url] = (fetchMock.mock.calls as any[])[0] as [string]
-      expect(String(url)).toContain('https://app.4626.fun/api/deploy/registerSolanaBridgeToken')
-      expect(String(url)).not.toContain('attacker.example')
+      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
   })
 
-  it('status skips Meteora payload fields for already-registered Solana bridge token', async () => {
+  it('status blocks phase3 when ShareOFT mesh preflight fails', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1719,109 +1633,13 @@ describe('deploy session optimistic concurrency', () => {
       }),
     }
     const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
+    const fetchMock = vi.fn() as any
+    ensureShareMeshOvaultPreflightMock.mockRejectedValueOnce(
+      new Error('Solana preflight failed: OVault runtime config is not enabled on deployment batcher.'),
+    )
 
     try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return true
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalled()
-      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { body?: string }]
-      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
-      const payload = JSON.parse(String(init?.body ?? '{}'))
-      expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-      expect(payload.buildOnly).toBe(true)
-      expect(payload.creatorToken).toBeUndefined()
-      expect(payload.expectedSolanaAmount).toBeUndefined()
-      expect(payload.assetMintOrigin).toBe('existing')
-      expect(payload.enforceCompatibility).toBe(true)
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status fails preflight without retrying legacy route when OVault mesh route is unavailable', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: makeGenericPhase3Calls(),
-      }),
-    }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      text: async () => JSON.stringify({ success: false, error: 'Not found' }),
-    }) as any
-
-    try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return true
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
         .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight failed' })
@@ -1832,16 +1650,16 @@ describe('deploy session optimistic concurrency', () => {
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(sendUserOperationMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
   })
 
-  it('status uses only the internal Solana registration secret when preparing phase3', async () => {
+  it('status does not call registerSolanaBridgeToken during share-mesh preflight', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1849,48 +1667,11 @@ describe('deploy session optimistic concurrency', () => {
         phase3Calls: makeGenericPhase3Calls(),
       }),
     }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
+    const fetchMock = vi.fn() as any
 
     try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
         .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
@@ -1908,78 +1689,14 @@ describe('deploy session optimistic concurrency', () => {
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
-      const init = (fetchMock.mock.calls as any[])[0]?.[1] as { headers?: Record<string, string> } | undefined
-      expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
-      expect(init?.headers?.['X-SIWA-Receipt']).toBeUndefined()
-      expect(init?.headers?.['X-Privy-Token']).toBeUndefined()
-      expect(init?.headers?.Authorization).toBeUndefined()
-      expect(init?.headers?.Cookie).toBeUndefined()
-    } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status blocks phase3 advancement when Solana preflight fails', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: makeGenericPhase3Calls(),
-      }),
-    }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      text: async () => JSON.stringify({ success: false, error: 'Not found' }),
-    }) as any
-
-    try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight failed' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(fetchMock.mock.calls.length).toBeGreaterThan(0)
-      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
-      expect(updateDeploySessionMock).toHaveBeenCalled()
+      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
   })
 
-  it('status fails closed when the internal Solana registration secret is missing', async () => {
+  it('status advances to phase3 without registration secret on share-mesh path', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
@@ -1991,103 +1708,9 @@ describe('deploy session optimistic concurrency', () => {
     delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
 
     try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight failed' })
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(updateDeploySessionMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'sess_1',
-          lastError: expect.stringContaining('DEPLOY_SOLANA_REGISTRATION_SECRET is required'),
-        }),
-      )
-    } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
-    }
-  })
-
-  it('status blocks phase3 advancement when OVault eligibility is false', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: makeGenericPhase3Calls(),
-      }),
-    }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: false,
-            depositEligible: false,
-            redeemEligible: true,
-            mintCompatibility: {
-              blockers: ['tokenProgram hint is required for existing mint flow.'],
-            },
-          },
-        }),
-    }) as any
-
-    try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      ;(globalThis as any).fetch = fetchMock
-      const viem = await import('viem')
-      ;(viem.createPublicClient as any).mockReturnValue({
-        readContract: vi.fn(async ({ functionName }: any) => {
-          switch (functionName) {
-            case 'ownerCount':
-              return 1n
-            case 'nextOwnerIndex':
-              return 1n
-            case 'ownerAtIndex':
-              return '0xownerbytes'
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
-            case 'solanaDestination':
-              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
-            case 'isRegistered':
-              return false
-            default:
-              return '0xownerbytes'
-          }
-        }),
-      })
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'ovault eligibility failed' })
+        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
       transitionDeploySessionMock.mockResolvedValue(true)
 
       const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -2095,16 +1718,39 @@ describe('deploy session optimistic concurrency', () => {
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(fetchMock.mock.calls.length).toBeGreaterThan(0)
-      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
-      expect(updateDeploySessionMock).toHaveBeenCalled()
-      const sawOvaultEligibilityFailure = (updateDeploySessionMock.mock.calls as any[]).some((call) =>
-        String(call?.[0]?.lastError ?? '').includes('depositEligible=false'),
-      )
-      expect(sawOvaultEligibilityFailure).toBe(true)
+      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+      expect(sendUserOperationMock).toHaveBeenCalled()
     } finally {
-      ;(globalThis as any).fetch = originalFetch
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
     }
+  })
+
+  it('status blocks phase3 when ShareOFT wiring check fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
+        phase3Calls: makeGenericPhase3Calls(),
+      }),
+    }
+    ensureShareMeshOvaultPreflightMock.mockRejectedValueOnce(
+      new Error('Solana preflight failed: share OFT peer not configured for finalize.'),
+    )
+
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'share OFT peer not configured' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('status blocks phase3_sent completion when strategy post-check fails', async () => {
@@ -3493,7 +3139,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
-  it('continue uses only the internal registration secret during OVault mesh preflight', async () => {
+  it('continue uses ShareOFT mesh preflight without registerSolanaBridgeToken', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
@@ -3503,26 +3149,10 @@ describe('deploy session optimistic concurrency', () => {
         solanaOvault: { enabled: true },
       },
     }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          success: true,
-          data: {
-            registered: true,
-            existingMintCompatible: true,
-            depositEligible: true,
-            redeemEligible: true,
-          },
-        }),
-    })) as any
+    const fetchMock = vi.fn() as any
 
     try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
       ;(globalThis as any).fetch = fetchMock
       getDeploySessionByIdMock.mockResolvedValue(rec)
       transitionDeploySessionMock.mockResolvedValue(true)
@@ -3540,22 +3170,14 @@ describe('deploy session optimistic concurrency', () => {
 
       expect(res.statusCode).toBe(200)
       expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-      expect(fetchMock).toHaveBeenCalled()
-      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { headers?: Record<string, string> }]
-      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
-      expect(init?.headers?.['X-SIWA-Receipt']).toBeUndefined()
-      expect(init?.headers?.['X-Privy-Token']).toBeUndefined()
-      expect(init?.headers?.Authorization).toBeUndefined()
-      expect(init?.headers?.Cookie).toBeUndefined()
+      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
       ;(globalThis as any).fetch = originalFetch
     }
   })
 
-  it('continue fails closed when internal Solana registration secret is missing', async () => {
+  it('continue blocks ovault mesh gate when ShareOFT preflight fails', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
@@ -3565,25 +3187,20 @@ describe('deploy session optimistic concurrency', () => {
         solanaOvault: { enabled: true },
       },
     }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    ensureShareMeshOvaultPreflightMock.mockRejectedValueOnce(
+      new Error('Solana preflight failed: OVault runtime config is not enabled on deployment batcher.'),
+    )
 
-    try {
-      process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-      getDeploySessionByIdMock.mockResolvedValue(rec)
-      transitionDeploySessionMock.mockResolvedValue(true)
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
 
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await continueHandler(req, res)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
 
-      expect(res.statusCode).toBe(500)
-      expect(String(res.body?.error ?? '')).toContain('Internal server error')
-    } finally {
-      delete process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
-    }
+    expect(res.statusCode).toBe(500)
+    expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
+    expect(String(res.body?.error ?? '')).toContain('Internal server error')
   })
 
   it('continue preserves deployToStrategies in stored phase3 calls', async () => {

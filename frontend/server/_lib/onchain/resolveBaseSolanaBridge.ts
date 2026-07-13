@@ -1,16 +1,12 @@
 /**
- * M2-05 — resolve the Base↔Solana bridge core (scalars / bridgeToken routes)
- * from env or the live SolanaBridgeAdapter.BRIDGE() constant instead of a
- * hand-copied address in every deploy/provisioner handler.
- *
- * Adapter (mint registry) and bridge core (route scalars) are distinct:
- * - solanaBridgeAdapter: 4626 SolanaBridgeAdapter on the batcher
- * - baseSolanaBridge:    Base bridge core with `scalars(local, remote)`
+ * Resolve the Base↔Solana bridge core (scalars / bridgeToken routes) from env
+ * or the repo default. Twin SolanaBridgeAdapter lookup is retired — LayerZero
+ * ShareOFT is the active share-mesh plane.
  */
 
 import { getAddress, isAddress, type Address } from 'viem'
 
-/** Matches `SolanaBridgeAdapter.BRIDGE` on Base mainnet. */
+/** Base Solana bridge core on mainnet (`scalars` / route liveness). */
 export const DEFAULT_BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 
 export const BASE_SOLANA_BRIDGE_SCALARS_ABI = [
@@ -23,16 +19,6 @@ export const BASE_SOLANA_BRIDGE_SCALARS_ABI = [
       { name: 'remoteToken', type: 'bytes32' },
     ],
     outputs: [{ type: 'uint256' }],
-  },
-] as const
-
-export const SOLANA_BRIDGE_ADAPTER_BRIDGE_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'BRIDGE',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
   },
 ] as const
 
@@ -56,7 +42,7 @@ function normalizeAddress(value: unknown): Address | null {
 
 /**
  * Env override keys (first match wins). Useful when the bridge core moves
- * ahead of an adapter redeploy or for fork tests.
+ * or for fork tests.
  */
 export function readBaseSolanaBridgeFromEnv(env: EnvLike = process.env): Address | null {
   const keys = ['BASE_SOLANA_BRIDGE', 'SOLANA_BRIDGE_CORE', 'SOLANA_BASE_BRIDGE'] as const
@@ -67,28 +53,9 @@ export function readBaseSolanaBridgeFromEnv(env: EnvLike = process.env): Address
   return null
 }
 
-/**
- * Read `BRIDGE` from a SolanaBridgeAdapter instance (public constant getter).
- */
-export async function readBridgeCoreFromAdapter(params: {
-  publicClient: ReaderClient
-  adapterAddress: Address
-}): Promise<Address | null> {
-  try {
-    const raw = await params.publicClient.readContract({
-      address: params.adapterAddress,
-      abi: SOLANA_BRIDGE_ADAPTER_BRIDGE_VIEW_ABI,
-      functionName: 'BRIDGE',
-    })
-    return normalizeAddress(raw)
-  } catch {
-    return null
-  }
-}
-
 export type ResolveBaseSolanaBridgeResult = {
   address: Address
-  source: 'env' | 'adapter' | 'default'
+  source: 'env' | 'default'
 }
 
 /**
@@ -96,29 +63,19 @@ export type ResolveBaseSolanaBridgeResult = {
  *
  * Priority:
  * 1. Env (`BASE_SOLANA_BRIDGE` / `SOLANA_BRIDGE_CORE` / `SOLANA_BASE_BRIDGE`)
- * 2. On-chain `adapter.BRIDGE()` when `adapterAddress` + `publicClient` given
- * 3. Repo default matching `SolanaBridgeAdapter.sol`
+ * 2. Repo default
  */
 export async function resolveBaseSolanaBridge(params?: {
   publicClient?: ReaderClient
   adapterAddress?: Address | null
   env?: EnvLike
 }): Promise<ResolveBaseSolanaBridgeResult> {
+  void params?.publicClient
+  void params?.adapterAddress
   const env = params?.env ?? process.env
   const fromEnv = readBaseSolanaBridgeFromEnv(env)
   if (fromEnv) {
     return { address: fromEnv, source: 'env' }
-  }
-
-  const adapter = normalizeAddress(params?.adapterAddress)
-  if (adapter && params?.publicClient) {
-    const fromAdapter = await readBridgeCoreFromAdapter({
-      publicClient: params.publicClient,
-      adapterAddress: adapter,
-    })
-    if (fromAdapter) {
-      return { address: fromAdapter, source: 'adapter' }
-    }
   }
 
   return { address: DEFAULT_BASE_SOLANA_BRIDGE, source: 'default' }

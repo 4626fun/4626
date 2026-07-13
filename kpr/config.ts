@@ -393,10 +393,6 @@ export const DEPLOYMENT_BATCHER_SHARE_MESH_ABI = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Solana timing constants
 // ---------------------------------------------------------------------------
 
@@ -414,43 +410,6 @@ export const SOLANA_PRICE_DEVIATION_RECENTER_BPS = 2000; // 20%
 
 /** Price deviation threshold for halt (bps) */
 export const SOLANA_PRICE_DEVIATION_HALT_BPS = 5000; // 50%
-
-// ---------------------------------------------------------------------------
-// Solana ABI fragments (Base-side contracts for Keepr relay)
-// ---------------------------------------------------------------------------
-
-export const SOLANA_BRIDGE_ADAPTER_ABI = [
-  {
-    type: 'function',
-    name: 'receiveFeeFromSolana',
-    inputs: [
-      { name: 'keeperPubkey', type: 'bytes32' },
-      { name: 'shareOFT', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    name: 'processLotteryEntryFromSolana',
-    inputs: [
-      { name: 'keeperPubkey', type: 'bytes32' },
-      {
-        name: 'entries',
-        type: 'tuple[]',
-        components: [
-          { name: 'buyerSolanaPubkey', type: 'bytes32' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'amountSolanaUnits', type: 'uint256' },
-          { name: 'solanaTxSig', type: 'bytes32' },
-        ],
-      },
-    ],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers

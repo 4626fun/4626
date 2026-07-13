@@ -27,7 +27,6 @@ vi.mock('../../server/auth/_shared.js', () => ({
 vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
-    solanaRouteProvision: { windowMs: 60_000, maxRequests: 20 },
     solanaSetCanonical: { windowMs: 60_000, maxRequests: 30 },
     solanaSweepEnqueue: { windowMs: 60_000, maxRequests: 20 },
     solanaSweepProcess: { windowMs: 60_000, maxRequests: 30 },
@@ -54,40 +53,6 @@ describe('solana/deploy endpoint hardening', () => {
     getClientIpMock.mockReturnValue('203.0.113.42')
     readRequestPrincipalAddressMock.mockReturnValue('0x0000000000000000000000000000000000000001')
     getDbMock.mockResolvedValue(null)
-  })
-
-  it('rate-limits provisionSolanaRoute after machine auth', async () => {
-    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET = 'secret'
-    const { default: handler } = await import('../_handlers/deploy/_provisionSolanaRoute.ts')
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer secret' },
-      body: { bridgeToken: '0x0000000000000000000000000000000000000001' },
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(429)
-    expect(String(res.body?.error ?? '')).toContain('Too many provision requests')
-    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
-  })
-
-  it('passes explicit max body bytes for provisionSolanaRoute parsing', async () => {
-    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET = 'secret'
-    checkRateLimitMock.mockReturnValueOnce({ allowed: true, resetAt: Date.now() + 60_000 })
-    const { default: handler } = await import('../_handlers/deploy/_provisionSolanaRoute.ts')
-    const req = createMockReq({
-      method: 'POST',
-      headers: { authorization: 'Bearer secret' },
-      body: {},
-    })
-    const res = createMockRes()
-
-    await handler(req, res)
-
-    expect(readJsonBodyMock).toHaveBeenCalledWith(req, { maxBytes: 16_384 })
-    expect(res.statusCode).toBe(400)
   })
 
   it('rate-limits solana canonical wallet mutation', async () => {

@@ -9,15 +9,13 @@ import { validateArenaPair } from '../arena/arenaPairPolicy.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { logger } from '../infra/logger.js'
 import { deriveCounterSide, type CounterTradeSide } from './counterTradeConfig.js'
-import {
-  formatInverseAkitaStakerPilotGateReply,
-  resolveInverseAkitaStakerPilotAccess,
-} from './inverseAkitaStakerPilot.js'
+import { formatInverseAkitaStakerPilotGateReply } from './inverseAkitaStakerPilot.js'
 import { getPerpMarkets, type HyperliquidPerpMarket } from './hyperliquid.js'
 import {
-  INVERSE_AKITA_ROOM_ID,
-  isInverseAkitaPilotRoom,
-} from './inverseAkitaStakerPilot.js'
+  INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
+  isInverseAkitaChatReactionRoom,
+  resolveInverseAkitaChatAuthorAccess,
+} from './inverseAkitaChatReactionPolicy.js'
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -607,13 +605,13 @@ function isCommandLikeChatText(text: string): boolean {
   return false
 }
 
-/** Collect casual trade-intent chat lines like "long btc" for room 1659 inverse reactions. */
+/** Collect casual trade-intent chat lines like "long btc" from configured inverse-reaction rooms. */
 export function collectInverseAkitaChatTradeIntents(params: {
   roomId: string
   messages: InverseAkitaChatHistoryMessage[]
   selfAddress?: string
 }): InverseAkitaChatTradeIntentMessage[] {
-  if (!isInverseAkitaPilotRoom(params.roomId)) return []
+  if (!isInverseAkitaChatReactionRoom(params.roomId)) return []
   if (!isInverseAkitaChatReactionEnabledByEnv()) return []
 
   const self = String(params.selfAddress ?? '').trim().toLowerCase()
@@ -851,7 +849,7 @@ export async function executeInverseAkitaChatReaction(params: {
   intent: InverseAkitaChatTradeIntentMessage
 }): Promise<InverseAkitaChatReactionResult> {
   const roomId = String(params.roomId ?? '').trim()
-  if (!isInverseAkitaPilotRoom(roomId)) {
+  if (!isInverseAkitaChatReactionRoom(roomId)) {
     return {
       ok: false,
       skipped: true,
@@ -873,7 +871,7 @@ export async function executeInverseAkitaChatReaction(params: {
       pair: params.intent.pair,
     }
   }
-  if (!arenaCommandAllowedForRoom(roomId)) {
+  if (!arenaCommandAllowedForRoom(INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID)) {
     return withInverseSkipReply(
       {
         ok: false,
@@ -897,16 +895,12 @@ export async function executeInverseAkitaChatReaction(params: {
     }
   }
 
-  const pilotAccess = await resolveInverseAkitaStakerPilotAccess({
+  const authorAccess = await resolveInverseAkitaChatAuthorAccess({
     senderAddress: params.intent.sender,
     roomId,
-    isTrustedOperator: false,
   })
-  if (!pilotAccess.eligible) {
-    const skipReason =
-      pilotAccess.reason === 'insufficient_stake' || pilotAccess.reason === 'stake_read_failed'
-        ? pilotAccess.reason
-        : 'staker_gate'
+  if (!authorAccess.eligible) {
+    const skipReason = authorAccess.reason
     return withInverseSkipReply(
       {
         ok: false,
@@ -947,7 +941,10 @@ export async function executeInverseAkitaChatReaction(params: {
     )
   }
 
-  const identity = await resolveRoomDefaultArenaIdentity({ roomId, baseConfig })
+  const identity = await resolveRoomDefaultArenaIdentity({
+    roomId: INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
+    baseConfig,
+  })
   const counterSide = deriveCounterSide(params.intent.userSide)
   const sizeUsd = readInverseAkitaChatReactionSizeUsd()
   const leverage = await resolveInverseAkitaChatReactionLeverage(pairCheck.normalizedPair)
@@ -1039,6 +1036,7 @@ export async function executeInverseAkitaChatReaction(params: {
     roomId,
     messageId: params.intent.id,
     sender: params.intent.sender,
+    authorAccessReason: authorAccess.reason,
     userSide: params.intent.userSide,
     counterSide,
     pair: pairCheck.normalizedPair,

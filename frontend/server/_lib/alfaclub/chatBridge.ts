@@ -61,7 +61,10 @@ import {
   type InverseAkitaChatHistoryMessage,
   type InverseAkitaChatTradeIntentMessage,
 } from './inverseAkitaChatReaction.js'
-import { INVERSE_AKITA_ROOM_ID } from './inverseAkitaStakerPilot.js'
+import {
+  isInverseAkitaChatReactionRoom,
+  readInverseAkitaChatReactionRoomIds,
+} from './inverseAkitaChatReactionPolicy.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
@@ -178,6 +181,8 @@ export type AlfaClubChatBridgeFlags = {
    * Populated from ALFACLUB_HERMIT_COMMAND_ROOMS (comma list) or legacy single ALFACLUB_CHAT_ROOM_ID.
    */
   hermitCommandRoomIds: string[]
+  /** Rooms watched for casual market opinions; does not grant slash-command access. */
+  inverseAkitaChatReactionRoomIds: string[]
   jwt: string | null
   ingestJwt: string | null
   readBotToken: string | null
@@ -416,6 +421,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => /^\d+$/.test(s))
+  const inverseAkitaChatReactionRoomIds = readInverseAkitaChatReactionRoomIds()
 
   const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
   const authFlags = readAlfaClubApiAuthFlags()
@@ -446,6 +452,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
     hermitCommandRoomIds,
+    inverseAkitaChatReactionRoomIds,
     jwt: authFlags.jwt,
     ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
     readBotToken,
@@ -509,21 +516,35 @@ export function readAlfaClubCronSkipLiveWebSocket(): boolean {
 export function isHermitCommandRoom(roomId: string | null | undefined): boolean {
   if (!roomId) return false
   const flags = readAlfaClubChatBridgeFlags()
+  return canBridgeExecuteCommandsInRoom(flags, roomId)
+}
+
+export function canBridgeExecuteCommandsInRoom(
+  flags: Pick<AlfaClubChatBridgeFlags, 'hermitCommandRoomIds'>,
+  roomId: string,
+): boolean {
   return flags.hermitCommandRoomIds.includes(roomId)
 }
 
-/** Rooms the Vercel/cron bridge polls each tick (primary + Hermit command surfaces). */
+/** Rooms the bridge polls each tick (primary, command, and opinion surfaces). */
 export function resolveAlfaClubBridgePollRoomIds(
-  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+  flags: Pick<
+    AlfaClubChatBridgeFlags,
+    'roomId' | 'hermitCommandRoomIds' | 'inverseAkitaChatReactionRoomIds'
+  >,
 ): string[] {
   const ids = new Set<string>()
   if (flags.roomId) ids.add(flags.roomId)
   for (const roomId of flags.hermitCommandRoomIds) ids.add(roomId)
+  for (const roomId of flags.inverseAkitaChatReactionRoomIds) ids.add(roomId)
   return [...ids]
 }
 
 export function canBridgeReplyInRoom(
-  flags: Pick<AlfaClubChatBridgeFlags, 'roomId' | 'hermitCommandRoomIds'>,
+  flags: Pick<
+    AlfaClubChatBridgeFlags,
+    'roomId' | 'hermitCommandRoomIds' | 'inverseAkitaChatReactionRoomIds'
+  >,
   roomId: string,
 ): boolean {
   return resolveAlfaClubBridgePollRoomIds(flags).includes(roomId)
@@ -3014,7 +3035,14 @@ function ensureLiveCommandSocket(params: {
       ? resolveAlfaClubBridgePollRoomIds(params.flags)
       : [params.roomId]
     for (const targetRoomId of pollRoomIds) {
-      if (targetRoomId !== INVERSE_AKITA_ROOM_ID) continue
+      if (
+        !isInverseAkitaChatReactionRoom(
+          targetRoomId,
+          params.flags.inverseAkitaChatReactionRoomIds,
+        )
+      ) {
+        continue
+      }
       const roomMessages = inboundMessages
         .filter((message) => message.roomId === targetRoomId)
         .map((message): AlfaClubRoomHistoryMessage => ({
@@ -3044,9 +3072,9 @@ function ensureLiveCommandSocket(params: {
         })
       }
     }
-    const pollRoomIdSet = new Set(pollRoomIds)
+    const commandRoomIdSet = new Set(params.flags.hermitCommandRoomIds)
     const roomMessages = inboundMessages
-      .filter((message) => pollRoomIdSet.has(message.roomId))
+      .filter((message) => commandRoomIdSet.has(message.roomId))
       .map((message): AlfaClubRoomHistoryMessage => ({
         id: message.id,
         date: message.date,
@@ -3185,7 +3213,14 @@ async function executeInverseAkitaChatReactionBatch(params: {
   roomId: string
   jwt: string
 }): Promise<{ processed: number; reacted: number }> {
-  if (params.roomId !== INVERSE_AKITA_ROOM_ID) return { processed: 0, reacted: 0 }
+  if (
+    !isInverseAkitaChatReactionRoom(
+      params.roomId,
+      params.flags.inverseAkitaChatReactionRoomIds,
+    )
+  ) {
+    return { processed: 0, reacted: 0 }
+  }
   if (!canBridgeReplyInRoom(params.flags, params.roomId)) return { processed: 0, reacted: 0 }
   if (params.intents.length === 0) return { processed: 0, reacted: 0 }
 
@@ -3297,8 +3332,8 @@ async function executeCommandBatch(params: {
   roomId: string
   jwt: string
 }): Promise<{ processed: number; replied: number; errors: Array<{ messageId: string; error: string }> }> {
-  // Safety invariant: only reply inside configured bridge/Hermit command rooms.
-  if (!canBridgeReplyInRoom(params.flags, params.roomId)) {
+  // Safety invariant: polling an opinion-only room must not grant slash-command authority.
+  if (!canBridgeExecuteCommandsInRoom(params.flags, params.roomId)) {
     return { processed: 0, replied: 0, errors: [] }
   }
   const unrepliedIds = await filterUnrepliedCommandMessageIds({
@@ -3961,11 +3996,13 @@ async function runBridgeTick(
         const date = Number(message.date)
         return Number.isFinite(date) && date >= recentCutoffMs
       })
-      const recentCommands = collectAlfaClubCommandMessages({
-        messages: recentMessages,
-        seenMessageIds: new Set<string>(),
-        selfAddress: CANONICAL_CSW_ADDRESS,
-      })
+      const recentCommands = canBridgeExecuteCommandsInRoom(flags, roomId)
+        ? collectAlfaClubCommandMessages({
+            messages: recentMessages,
+            seenMessageIds: new Set<string>(),
+            selfAddress: CANONICAL_CSW_ADDRESS,
+          })
+        : []
       const recentBatch =
         recentCommands.length > 0
           ? await executeCommandBatch({
@@ -3975,14 +4012,16 @@ async function runBridgeTick(
               jwt,
             })
           : { processed: 0, replied: 0, errors: [] as Array<{ messageId: string; error: string }> }
-      const recentInverseIntents =
-        roomId === INVERSE_AKITA_ROOM_ID
-          ? collectInverseAkitaChatTradeIntents({
-              roomId,
-              messages: recentMessages as InverseAkitaChatHistoryMessage[],
-              selfAddress: CANONICAL_CSW_ADDRESS,
-            })
-          : []
+      const recentInverseIntents = isInverseAkitaChatReactionRoom(
+        roomId,
+        flags.inverseAkitaChatReactionRoomIds,
+      )
+        ? collectInverseAkitaChatTradeIntents({
+            roomId,
+            messages: recentMessages as InverseAkitaChatHistoryMessage[],
+            selfAddress: CANONICAL_CSW_ADDRESS,
+          })
+        : []
       const recentInverseBatch =
         recentInverseIntents.length > 0
           ? await executeInverseAkitaChatReactionBatch({
@@ -4017,11 +4056,13 @@ async function runBridgeTick(
           newlyIngestedHistoryIds.has(String(message.id ?? '').trim()),
         )
 
-  const commands = collectAlfaClubCommandMessages({
-    messages: commandSourceMessages,
-    seenMessageIds: new Set<string>(),
-    selfAddress: CANONICAL_CSW_ADDRESS,
-  })
+  const commands = canBridgeExecuteCommandsInRoom(flags, roomId)
+    ? collectAlfaClubCommandMessages({
+        messages: commandSourceMessages,
+        seenMessageIds: new Set<string>(),
+        selfAddress: CANONICAL_CSW_ADDRESS,
+      })
+    : []
   if (commands.length > 0) {
     logger.info('[alfaclub-chat] command_batch_detected', {
       roomId,

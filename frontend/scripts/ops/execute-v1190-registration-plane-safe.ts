@@ -72,12 +72,9 @@ const BATCHER_ADMIN_ABI = [
   },
   {
     type: 'function',
-    name: 'setSolanaConfig',
+    name: 'setSolanaDestination',
     stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'adapter', type: 'address' },
-      { name: 'destination', type: 'bytes32' },
-    ],
+    inputs: [{ name: 'destination', type: 'bytes32' }],
     outputs: [],
   },
   {
@@ -89,13 +86,6 @@ const BATCHER_ADMIN_ABI = [
       { name: 'solanaEid', type: 'uint32' },
       { name: 'enabled', type: 'bool' },
     ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'setSolanaShareOftPeer',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'peer', type: 'bytes32' }],
     outputs: [],
   },
 ] as const
@@ -155,7 +145,6 @@ async function main(): Promise<void> {
   const batcher = handoffAddress(handoff, 'DEPLOYMENT_BATCHER')
   const safeAddress = handoffAddress(handoff, 'PROTOCOL_TREASURY')
   const factory = handoffAddress(handoff, 'OVAULT_FACTORY')
-  const adapter = handoffAddress(handoff, 'SOLANA_BRIDGE_ADAPTER')
   const moduleKeys = [
     'DEPLOYMENT_BATCHER_PHASE1_MODULE',
     'DEPLOYMENT_BATCHER_PHASE2_MODULE',
@@ -173,10 +162,6 @@ async function main(): Promise<void> {
   const solanaEid = Number(handoff.OVAULT_SOLANA_EID)
   if (!Number.isInteger(solanaEid) || solanaEid <= 0) {
     throw new Error('Missing or invalid OVAULT_SOLANA_EID in handoff')
-  }
-  const shareOftPeer = handoff.SOLANA_SHARE_OFT_PEER as Hex
-  if (!/^0x[0-9a-fA-F]{64}$/.test(shareOftPeer)) {
-    throw new Error('Missing or invalid SOLANA_SHARE_OFT_PEER in handoff')
   }
 
   const client = createPublicClient({ chain: base, transport: http(rpc) })
@@ -253,14 +238,14 @@ async function main(): Promise<void> {
       }),
     },
     {
-      label: 'set_solana_config',
+      label: 'set_solana_destination',
       to: batcher,
       value: '0',
       operation: OperationType.Call,
       data: encodeFunctionData({
         abi: BATCHER_ADMIN_ABI,
-        functionName: 'setSolanaConfig',
-        args: [adapter, destination],
+        functionName: 'setSolanaDestination',
+        args: [destination],
       }),
     },
     {
@@ -272,17 +257,6 @@ async function main(): Promise<void> {
         abi: BATCHER_ADMIN_ABI,
         functionName: 'setOVaultRuntimeConfig',
         args: [hubComposer, solanaEid, true],
-      }),
-    },
-    {
-      label: 'set_solana_share_oft_peer',
-      to: batcher,
-      value: '0',
-      operation: OperationType.Call,
-      data: encodeFunctionData({
-        abi: BATCHER_ADMIN_ABI,
-        functionName: 'setSolanaShareOftPeer',
-        args: [shareOftPeer],
       }),
     },
   ]

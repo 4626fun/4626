@@ -1,9 +1,9 @@
 /**
  * Keepr Solana Relay Entries Action — intentionally fail-closed.
  *
- * The Base adapter accepts this call only from the keeper's predicted Twin.
- * No repository-native Solana→Base attached-call transport currently exists,
- * so this action must never fall back to a direct Base EOA write.
+ * Twin/SolanaBridgeAdapter transport is retired (LayerZero ShareOFT only).
+ * No repository-native Solana→Base attached-call transport exists, so this
+ * action must never fall back to a direct Base EOA write.
  */
 import { alertCritical, alertWarning } from '../utils/alerts.js';
 
@@ -52,7 +52,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
   await alertCritical(
     WORKFLOW_NAME,
-    'Relay blocked: Solana→Base attached-call transport is not implemented; no Base write or Solana buffer clear attempted',
+    'Relay blocked: Twin/SolanaBridgeAdapter retired (LZ ShareOFT only); Solana→Base attached-call transport not implemented — no Base write or Solana buffer clear attempted',
   );
   throw new Error(SOLANA_TO_BASE_TRANSPORT_UNAVAILABLE);
 }

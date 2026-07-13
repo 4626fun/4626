@@ -125,7 +125,6 @@ load_shared_global_artifact() {
   export_json_field LOTTERY_MANAGER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".lotteryManager"
   export_json_field VRF_CONSUMER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".vrfConsumer"
   export_json_field VAULT_ACTIVATION_BATCHER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".vaultActivationBatcher"
-  export_json_field SOLANA_BRIDGE_ADAPTER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".solanaBridgeAdapter"
 }
 
 configure_infra_salts() {
@@ -286,7 +285,6 @@ recover_v2_handoff_from_deployer_log_fallback() {
 is_known_deployment_batcher_verify_mismatch() {
   local log_path="$1"
   local saw_onchain_success=0
-omgg
   local saw_deployment_batcher_verify=0
   local saw_phase2_module_verify=0
   local saw_mismatch=0
@@ -330,7 +328,6 @@ print_infra_configuration() {
   echo "  REGISTRY=${REGISTRY:-[DeployBaseMainnetDeployer default]}"
   echo "  LOTTERY_MANAGER=${LOTTERY_MANAGER:-[DeployBaseMainnetDeployer default]}"
   echo "  VAULT_ACTIVATION_BATCHER=${VAULT_ACTIVATION_BATCHER:-[DeployBaseMainnetDeployer default]}"
-  echo "  SOLANA_BRIDGE_ADAPTER=${SOLANA_BRIDGE_ADAPTER:-[optional]}"
   echo "  UNIVERSAL_BYTECODE_STORE=${UNIVERSAL_BYTECODE_STORE:-[set by deployer handoff or existing env]}"
   echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
   echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-[not set]}"
@@ -352,7 +349,7 @@ main() {
     unset UNIVERSAL_BYTECODE_STORE UNIVERSAL_CREATE2_DEPLOYER UNIVERSAL_CREATE2_FROM_STORE \
       DEPLOYMENT_BATCHER DEPLOYMENT_BATCHER_AUTO_HANDOFF \
       REGISTRY REGISTRY_4626 OVAULT_FACTORY LOTTERY_MANAGER VRF_CONSUMER \
-      VAULT_ACTIVATION_BATCHER SOLANA_BRIDGE_ADAPTER \
+      VAULT_ACTIVATION_BATCHER \
       2>/dev/null || true
   fi
   load_handoff_env_file
@@ -410,7 +407,6 @@ main() {
   load_env_file "$BASE_RELEASE_HANDOFF_ENV_PATH"
 
   if [ "${RUN_TREASURY_SOLANA_CONFIG:-0}" = "1" ]; then
-    require_env SOLANA_BRIDGE_ADAPTER || exit 1
     require_env SOLANA_DESTINATION || exit 1
     echo "Configuring deployment batcher (DeploymentBatcher) Solana routing..."
     forge script script/ConfigureDeploymentBatcherSolana.s.sol:ConfigureDeploymentBatcherSolana \

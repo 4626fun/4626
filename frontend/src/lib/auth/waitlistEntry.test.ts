@@ -17,7 +17,9 @@ import {
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
   isWaitlistStartAuthSearchParam,
+  normalizeAlfaClubWaitlistReturnPath,
   normalizeWaitlistReferralCode,
+  readWaitlistAlfaClubReturnPath,
   readStoredWaitlistReferralCode,
   readWaitlistEntryReferralCode,
   storeWaitlistReferralCode,
@@ -45,6 +47,34 @@ describe('waitlistEntry', () => {
   it('builds waitlist entry URLs against the provided base origin', () => {
     expect(buildWaitlistEntryUrl('https://4626.fun')).toBe('https://4626.fun/waitlist')
     expect(buildWaitlistEntryUrl('https://app.4626.fun/')).toBe('https://app.4626.fun/waitlist')
+  })
+
+  it('round-trips a validated AlfaClub room continuation', () => {
+    const url = buildWaitlistEntryUrl('https://4626.fun', {
+      alfaClubReturnPath: '/rooms?roomId=1659&tab=liquidity&pool=0x1000000000000000000000000000000000000000',
+    })
+    const parsed = new URL(url)
+
+    expect(parsed.origin).toBe('https://4626.fun')
+    expect(parsed.pathname).toBe('/waitlist')
+    expect(readWaitlistAlfaClubReturnPath(parsed.search)).toBe(
+      '/rooms?roomId=1659&tab=liquidity&pool=0x1000000000000000000000000000000000000000',
+    )
+  })
+
+  it('rejects arbitrary AlfaClub continuation paths and handoff injection', () => {
+    expect(normalizeAlfaClubWaitlistReturnPath('https://evil.example/rooms')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('//evil.example/rooms')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('/admin')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('/rooms?roomId=not-a-room')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('/rooms?tab=admin')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('/rooms?cv_handoff=attacker')).toBeNull()
+    expect(normalizeAlfaClubWaitlistReturnPath('/rooms?redirect=https://evil.example')).toBeNull()
+    expect(
+      buildWaitlistEntryUrl('https://4626.fun', {
+        alfaClubReturnPath: 'https://evil.example/rooms',
+      }),
+    ).toBe('https://4626.fun/waitlist')
   })
 
   it('builds the canonical marketing waitlist path and URL', () => {

@@ -43,7 +43,6 @@ export type ShareBridgeOftWiringStatus = {
   solanaEid: number
   destination: Hex
   registryPeer: Hex | null
-  batcherDefaultPeer: Hex | null
   effectivePeer: Hex | null
   shareOftPeer: Hex | null
   registryPeerConfigured: boolean
@@ -92,33 +91,16 @@ export async function readShareBridgeOftWiringStatus(params: {
   const decoded = decodeFinalizePhase2Call(params.finalizeCallData)
   const registryAddress = params.registryAddress ?? getAddress(BASE_DEFAULTS.registry as Address)
   let registryPeer: Hex | null = null
-  let batcherDefaultPeer: Hex | null = null
   let shareOftPeer: Hex | null = null
 
   if (quote.required && decoded) {
-    const [registryPeerRaw, batcherDefaultPeerRaw] = await Promise.all([
-      params.publicClient.readContract({
-        address: registryAddress,
-        abi: REGISTRY_4626_REMOTE_PEER_ABI,
-        functionName: 'getRemoteOFTPeerBytes32',
-        args: [decoded.params.creatorToken, quote.dstEid],
-      }),
-      params.publicClient.readContract({
-        address: params.batcherAddress,
-        abi: [
-          {
-            type: 'function',
-            name: 'solanaShareOftPeer',
-            stateMutability: 'view',
-            inputs: [],
-            outputs: [{ type: 'bytes32' }],
-          },
-        ] as const,
-        functionName: 'solanaShareOftPeer',
-      }),
-    ])
+    const registryPeerRaw = await params.publicClient.readContract({
+      address: registryAddress,
+      abi: REGISTRY_4626_REMOTE_PEER_ABI,
+      functionName: 'getRemoteOFTPeerBytes32',
+      args: [decoded.params.creatorToken, quote.dstEid],
+    })
     registryPeer = normalizeBytes32(registryPeerRaw)
-    batcherDefaultPeer = normalizeBytes32(batcherDefaultPeerRaw)
 
     try {
       shareOftPeer = normalizeBytes32(
@@ -134,14 +116,13 @@ export async function readShareBridgeOftWiringStatus(params: {
     }
   }
 
-  const effectivePeer = registryPeer ?? batcherDefaultPeer
+  const effectivePeer = registryPeer
 
   return {
     bridgeRequired: quote.required,
     solanaEid: quote.dstEid,
     destination: quote.destination,
     registryPeer,
-    batcherDefaultPeer,
     effectivePeer,
     shareOftPeer,
     registryPeerConfigured: effectivePeer !== null,

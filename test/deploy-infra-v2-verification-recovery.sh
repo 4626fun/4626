@@ -27,8 +27,7 @@ cat > "$SHARED_GLOBAL_JSON" <<'EOF'
   "ovaultFactory": "0x1000000000000000000000000000000000000002",
   "lotteryManager": "0x1000000000000000000000000000000000000003",
   "vrfConsumer": "0x1000000000000000000000000000000000000004",
-  "vaultActivationBatcher": "0x1000000000000000000000000000000000000005",
-  "solanaBridgeAdapter": "0x1000000000000000000000000000000000000006"
+  "vaultActivationBatcher": "0x1000000000000000000000000000000000000005"
 }
 EOF
 
@@ -46,7 +45,6 @@ if [[ "$*" == *"DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer"* ]]; 
     echo "REGISTRY=${REGISTRY:-}"
     echo "VAULT_ACTIVATION_BATCHER=${VAULT_ACTIVATION_BATCHER:-}"
     echo "LOTTERY_MANAGER=${LOTTERY_MANAGER:-}"
-    echo "SOLANA_BRIDGE_ADAPTER=${SOLANA_BRIDGE_ADAPTER:-}"
     echo "CONFIGURE_SOLANA=${CONFIGURE_SOLANA:-}"
     echo "CONFIGURE_OVAULT_RUNTIME=${CONFIGURE_OVAULT_RUNTIME:-}"
   } >> "$DEPLOYER_ENV_LOG"
@@ -56,7 +54,7 @@ if [[ "$*" == *"DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer"* ]]; 
   UniversalCreate2DeployerFromStoreV2 (predicted): 0x2000000000000000000000000000000000000002
   DeploymentBatcher (predicted): 0x2000000000000000000000000000000000000003
   DeploymentBatcher: 0x2000000000000000000000000000000000000003
-  CONFIGURE_SOLANA=0 (skipped setSolanaConfig)
+  CONFIGURE_SOLANA=0 (skipped setSolanaDestination)
   CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)
 
 ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
@@ -99,6 +97,7 @@ PATH="$FAKE_BIN:$PATH" \
 PRIVATE_KEY="0xabc123" \
 BASE_RPC_URL="https://base.invalid" \
 BASE_FULL_RELEASE_MODE="1" \
+DEPLOYMENT_EPOCH_TAG="v1.8.3" \
 CONFIGURE_SOLANA="1" \
 CONFIGURE_OVAULT_RUNTIME="1" \
 BASE_SHARED_GLOBAL_OUTPUT_PATH="$SHARED_GLOBAL_JSON" \
@@ -109,7 +108,6 @@ rg '^DEPLOYMENT_EPOCH_TAG=v1\.8\.3$' "$DEPLOYER_ENV_LOG" >/dev/null
 rg '^REGISTRY=0x1000000000000000000000000000000000000001$' "$DEPLOYER_ENV_LOG" >/dev/null
 rg '^LOTTERY_MANAGER=0x1000000000000000000000000000000000000003$' "$DEPLOYER_ENV_LOG" >/dev/null
 rg '^VAULT_ACTIVATION_BATCHER=0x1000000000000000000000000000000000000005$' "$DEPLOYER_ENV_LOG" >/dev/null
-rg '^SOLANA_BRIDGE_ADAPTER=0x1000000000000000000000000000000000000006$' "$DEPLOYER_ENV_LOG" >/dev/null
 rg '^CONFIGURE_SOLANA=0$' "$DEPLOYER_ENV_LOG" >/dev/null
 rg '^CONFIGURE_OVAULT_RUNTIME=0$' "$DEPLOYER_ENV_LOG" >/dev/null
 
@@ -124,7 +122,7 @@ rg '^UNIVERSAL_BYTECODE_STORE=0x2000000000000000000000000000000000000001$' "$SEE
 rg '^DEPLOYMENT_BATCHER=0x2000000000000000000000000000000000000003$' "$SEED_ENV_LOG" >/dev/null
 
 rg 'Continuing despite known DeploymentBatcher verification mismatch after successful onchain deployment\.' "$RUN_LOG" >/dev/null
-rg 'Recovered v2 handoff values from deployer log fallback\.' "$RUN_LOG" >/dev/null
+rg 'Recovered phased-infra handoff values from deployer log fallback\.' "$RUN_LOG" >/dev/null
 
 if rg 'ConfigureDeploymentBatcherSolana\.s\.sol:ConfigureDeploymentBatcherSolana' "$CALLS_LOG" >/dev/null; then
   echo "Expected treasury-only Solana batcher config to remain opt-in" >&2

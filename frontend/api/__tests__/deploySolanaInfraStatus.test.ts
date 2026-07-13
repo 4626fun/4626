@@ -39,6 +39,12 @@ vi.mock('viem', async () => {
   }
 })
 
+const ENABLED_OVAULT_RUNTIME = {
+  hubComposer: '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1',
+  solanaEid: 30168,
+  enabled: true,
+} as const
+
 describe('deploy solana infra status handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -94,8 +100,8 @@ describe('deploy solana infra status handler', () => {
       const mockPublicClient = {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
+            case 'getOVaultRuntimeConfig':
+              return ENABLED_OVAULT_RUNTIME
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -142,8 +148,8 @@ describe('deploy solana infra status handler', () => {
       const mockPublicClient = {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
+            case 'getOVaultRuntimeConfig':
+              return ENABLED_OVAULT_RUNTIME
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -165,12 +171,10 @@ describe('deploy solana infra status handler', () => {
       expect(res.body?.data?.dynamicProvisioningMode).toBe('misconfigured')
       expect(res.body?.data?.signerConfigured).toBe(false)
       expect(res.body?.data?.readyForAutoRegistration).toBe(false)
-      expect(res.body?.data?.existingMintCompatible).toBe(false)
       // Compose-deposit lane is dormant: depositEligible must not exist in the payload.
       expect(res.body?.data?.depositEligible).toBeUndefined()
       expect(typeof res.body?.data?.redeemEligible).toBe('boolean')
       expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('No usable dynamic route runner')
-      expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('missing or invalid')
     } finally {
       restoreEnv()
     }
@@ -199,8 +203,8 @@ describe('deploy solana infra status handler', () => {
       const mockPublicClient = {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
+            case 'getOVaultRuntimeConfig':
+              return ENABLED_OVAULT_RUNTIME
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -261,8 +265,8 @@ describe('deploy solana infra status handler', () => {
       const mockPublicClient = {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
-            case 'solanaBridgeAdapter':
-              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
+            case 'getOVaultRuntimeConfig':
+              return ENABLED_OVAULT_RUNTIME
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':

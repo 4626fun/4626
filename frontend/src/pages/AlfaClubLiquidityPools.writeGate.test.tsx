@@ -63,7 +63,7 @@ describe('AlfaClubLiquidityPools write gate', () => {
     }
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/rooms?roomId=1659&tab=liquidity']}>
         <AccessContext.Provider value={access}>
           <AlfaClubLiquidityPools />
         </AccessContext.Provider>
@@ -72,7 +72,9 @@ describe('AlfaClubLiquidityPools write gate', () => {
 
     expect(screen.getByText('Liquidity pools')).toBeTruthy()
     expect(screen.getByText(/Liquidity writes require access/i)).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Sign in to manage liquidity/i })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Sign in to manage liquidity/i }).getAttribute('href')).toBe(
+      'https://4626.fun/waitlist?continue=alfaclub&returnPath=%2Frooms%3FroomId%3D1659%26tab%3Dliquidity',
+    )
     expect(screen.queryByTestId('lp-console')).toBeNull()
   })
 

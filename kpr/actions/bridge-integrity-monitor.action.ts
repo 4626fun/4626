@@ -24,16 +24,6 @@ if (!process.env.BASE_SOLANA_BRIDGE_ADDRESS) {
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const BYTES32_RE = /^0x[a-fA-F0-9]{64}$/;
 
-const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'solanaMintToToken',
-    stateMutability: 'view',
-    inputs: [{ name: 'mint', type: 'bytes32' }],
-    outputs: [{ type: 'address' }],
-  },
-] as const;
-
 const BASE_SOLANA_BRIDGE_VIEW_ABI = [
   {
     type: 'function',
@@ -115,17 +105,7 @@ type SolanaInfraStatusResponse = {
   error?: string;
 };
 
-type RegisterSolanaBridgeBuildOnlyResponse = {
-  success: boolean;
-  data?: {
-    bridgeToken?: string | null;
-    adapter?: string | null;
-    solanaMint?: string | null;
-  };
-  error?: string;
-};
-
-type InfraFetchMode = 'infra-status' | 'register-build-fallback';
+type InfraFetchMode = 'infra-status';
 
 type ProvisionerHealthProbe = {
   reachable: boolean;
@@ -423,48 +403,10 @@ async function fetchSolanaInfraStatusWithFallback(params: {
     throw new Error(`deploy/solanaInfraStatus failed: ${statusDetail}`);
   }
 
-  if (!params.fallbackBridgeToken) {
-    const statusDetail = statusPayload?.error ? String(statusPayload.error) : `HTTP ${statusResponse.status}`;
-    throw new Error(`deploy/solanaInfraStatus failed: ${statusDetail} (no fallback bridge token configured)`);
-  }
-
-  const registerResponse = await fetch(`${apiBaseUrl}/deploy/registerSolanaBridgeToken`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      buildOnly: true,
-      bridgeToken: params.fallbackBridgeToken,
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const registerPayload = (await registerResponse
-    .json()
-    .catch(() => null)) as RegisterSolanaBridgeBuildOnlyResponse | null;
-  if (!registerResponse.ok || !registerPayload?.success || !registerPayload.data) {
-    const statusDetail = statusPayload?.error ? String(statusPayload.error) : `HTTP ${statusResponse.status}`;
-    const registerDetail = registerPayload?.error
-      ? String(registerPayload.error)
-      : `HTTP ${registerResponse.status}`;
-    throw new Error(
-      `deploy/solanaInfraStatus failed (${statusDetail}) and registerSolanaBridgeToken fallback failed (${registerDetail}).`,
-    );
-  }
-
-  const fallbackBridgeToken =
-    normalizeAddress(registerPayload.data.bridgeToken) ?? params.fallbackBridgeToken;
-  const fallbackAdapter = normalizeAddress(registerPayload.data.adapter);
-  const fallbackMint = normalizeBytes32(registerPayload.data.solanaMint);
-  return {
-    mode: 'register-build-fallback',
-    infra: {
-      batcherAdapter: fallbackAdapter,
-      defaultRouteBridgeToken: fallbackBridgeToken,
-      defaultMintConfigured: !!fallbackMint,
-      defaultMintBytes32: fallbackMint,
-      defaultRouteBridgeTokenAllowlisted: null,
-      defaultMintRouteScalar: null,
-    },
-  };
+  const statusDetail = statusPayload?.error ? String(statusPayload.error) : `HTTP ${statusResponse.status}`;
+  throw new Error(
+    `deploy/solanaInfraStatus failed: ${statusDetail}. Twin registerSolanaBridgeToken fallback is retired — use LayerZero ShareOFT infra status only.`,
+  );
 }
 
 async function probeProvisionerHealthDirect(params: {
@@ -557,31 +499,16 @@ async function evaluateRouteChecks(params: {
   const warnings: string[] = [];
   const details: RouteCheckDetail[] = [];
 
-  const adapter = normalizeAddress(params.infra.batcherAdapter);
-  if (!adapter) {
-    warnings.push('Bridge adapter is not configured; route drift checks skipped.');
-    return { critical, warnings, details };
-  }
+  // Twin SolanaBridgeAdapter mint maps are retired. Route drift checks use
+  // Base bridge scalars only (LayerZero ShareOFT peers live in Registry4626).
+  void normalizeAddress(params.infra.batcherAdapter);
 
   const baseSolanaBridge =
     normalizeAddress(process.env.BASE_SOLANA_BRIDGE_ADDRESS) ?? DEFAULT_BASE_SOLANA_BRIDGE;
 
   for (const route of params.expectations) {
-    let actualMappedToken: `0x${string}` | null = null;
+    const actualMappedToken: `0x${string}` | null = null;
     let scalarRaw: bigint | null = null;
-
-    try {
-      const mapped = await readContract<string>({
-        address: adapter,
-        abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
-        functionName: 'solanaMintToToken',
-        args: [route.mint],
-      });
-      actualMappedToken = normalizeAddress(mapped);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      critical.push(`Failed to read adapter mapping for mint ${route.mint}: ${message}`);
-    }
 
     try {
       const scalar = await readContract<bigint>({
@@ -612,17 +539,7 @@ async function evaluateRouteChecks(params: {
       );
     }
 
-    if (!actualMappedToken || actualMappedToken === ZERO_ADDRESS) {
-      if (route.mappedToken) {
-        critical.push(`Mint ${route.mint} is not mapped to expected token ${route.mappedToken} on adapter.`);
-      } else {
-        warnings.push(`Mint ${route.mint} has no mapped token on adapter.`);
-      }
-    } else if (route.mappedToken && actualMappedToken !== route.mappedToken) {
-      critical.push(
-        `Mint ${route.mint} mapped token drift: expected ${route.mappedToken}, got ${actualMappedToken}.`,
-      );
-    }
+    // Twin adapter mint maps are retired; do not fail on missing adapter mappings.
 
     if (scalarRaw == null) {
       continue;
@@ -695,12 +612,6 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
     const infraFetch = await fetchSolanaInfraStatusWithFallback({ fallbackBridgeToken });
     const infra = infraFetch.infra;
     checksRun += 1;
-    if (infraFetch.mode === 'register-build-fallback') {
-      // FIX: HGH-07 — Log CRITICAL alert (not just warning) when auth failure degrades monitor
-      criticalFindings.push(
-        'deploy/solanaInfraStatus auth failed (401/403) — degraded to registerSolanaBridgeToken build-only fallback with reduced liveness and allowlist checks.',
-      );
-    }
 
     const canonicalAllowlistRequired = parseEnvBool(
       process.env.SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST_REQUIRED,
@@ -727,7 +638,7 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
       }
     }
 
-    if (infraFetch.mode === 'infra-status' && infra.bridgeLivenessEnforced) {
+    if (infra.bridgeLivenessEnforced) {
       if (infra.bridgeLivenessHealthy === false) {
         const blockers = Array.isArray(infra.bridgeLivenessBlockers)
           ? infra.bridgeLivenessBlockers.join(' ')
@@ -743,32 +654,6 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
         criticalFindings.push(
           `Bridge health payload is stale for monitor policy (${infra.bridgeLivenessHealthAgeSeconds}s > ${monitorMaxAge}s).`,
         );
-      }
-    } else if (infraFetch.mode === 'register-build-fallback') {
-      const livenessEnforced = parseEnvBool(process.env.SOLANA_BRIDGE_LIVENESS_ENFORCED);
-      if (livenessEnforced) {
-        const maxHealthAgeSeconds =
-          parsePositiveInt(process.env.SOLANA_BRIDGE_LIVENESS_MAX_HEALTH_AGE_SECONDS) ?? 180;
-        const healthUrl = String(
-          process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL ??
-            process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL ??
-            '',
-        ).trim();
-        const provisionerSecret = String(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET ?? '').trim();
-        const probe = await probeProvisionerHealthDirect({
-          healthUrl: healthUrl || null,
-          secret: provisionerSecret || null,
-        });
-        const directLiveness = evaluateProvisionerLivenessDirect({
-          enforced: true,
-          maxHealthAgeSeconds,
-          probe,
-        });
-        if (!directLiveness.healthy) {
-          for (const blocker of directLiveness.blockers) {
-            criticalFindings.push(`Bridge liveness (fallback direct): ${blocker}`);
-          }
-        }
       }
     }
 

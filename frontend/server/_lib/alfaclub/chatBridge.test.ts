@@ -97,6 +97,7 @@ import {
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaWebSocketForTests,
   buildAlfaClubOutboundFrame,
+  canBridgeExecuteCommandsInRoom,
   canBridgeReplyInRoom,
   isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
@@ -152,7 +153,8 @@ function makeFlags(overrides: Partial<AlfaClubChatBridgeFlags> = {}): AlfaClubCh
     killSwitch: false,
     enabled: true,
     roomId: '1043',
-    hermitCommandRoomIds: [],
+    hermitCommandRoomIds: ['1043'],
+    inverseAkitaChatReactionRoomIds: ['1659'],
     jwt: 'jwt-current',
     ingestJwt: null,
     readBotToken: null,
@@ -951,6 +953,40 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(historyRoomId).toBe('1659')
   })
 
+  it('does not execute slash commands from an opinion-only room', async () => {
+    mockHistoryMessages([
+      {
+        id: 'opinion-room-command',
+        date: Date.now() - 1_000,
+        sender: '0x1111111111111111111111111111111111111111',
+        text: '/gmeow',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([
+      {
+        roomId: '1484',
+        messageId: 'opinion-room-command',
+        senderAddress: '0x1111111111111111111111111111111111111111',
+        text: '/gmeow',
+        dateMs: Date.now() - 1_000,
+      },
+    ])
+
+    await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({
+        roomId: '1043',
+        hermitCommandRoomIds: ['1043', '1659'],
+        inverseAkitaChatReactionRoomIds: ['1484', '1659'],
+      }),
+      {
+        seedHistoryOnlyOnFirstTick: false,
+        pollRoomId: '1484',
+      },
+    )
+
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+  })
+
   it('uses read bot token endpoint for room history when configured', async () => {
     let calledUrl = ''
     let authHeader = ''
@@ -1002,13 +1038,23 @@ describe('AlfaClub chat bridge cron helpers', () => {
     expect(readAlfaClubChatBridgeFlagsForCronTick().historyLimit).toBe(8)
   })
 
-  it('resolveAlfaClubBridgePollRoomIds unions primary room and Hermit command rooms', () => {
+  it('unions command and opinion rooms without widening command authority', () => {
     const flags = makeFlags({
       roomId: '1043',
       hermitCommandRoomIds: ['1043', '1659'],
+      inverseAkitaChatReactionRoomIds: ['1484', '1660', '2', '1043', '1659'],
     })
-    expect(resolveAlfaClubBridgePollRoomIds(flags)).toEqual(['1043', '1659'])
+    expect(resolveAlfaClubBridgePollRoomIds(flags)).toEqual([
+      '1043',
+      '1659',
+      '1484',
+      '1660',
+      '2',
+    ])
     expect(canBridgeReplyInRoom(flags, '1659')).toBe(true)
+    expect(canBridgeReplyInRoom(flags, '1484')).toBe(true)
+    expect(canBridgeExecuteCommandsInRoom(flags, '1043')).toBe(true)
+    expect(canBridgeExecuteCommandsInRoom(flags, '1484')).toBe(false)
     expect(canBridgeReplyInRoom(flags, '9999')).toBe(false)
   })
 

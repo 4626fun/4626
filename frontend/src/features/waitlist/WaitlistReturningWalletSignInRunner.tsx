@@ -46,14 +46,18 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
     let readyPollId = 0
     let timeoutId = 0
     let disposed = false
+    let settled = false
+    const abortController = new AbortController()
 
-    const isActiveAttempt = () => !disposed && activeAttemptRef.current === attempt
+    const isActiveAttempt = () => !disposed && !settled && activeAttemptRef.current === attempt
 
     const isPrivyRuntimeReady = () =>
       privyClientStatusRef.current === 'ready' || privyRef.current.ready === true
 
     const failAttempt = (message: string | null) => {
       if (!isActiveAttempt()) return
+      settled = true
+      abortController.abort()
       window.clearTimeout(timeoutId)
       if (isLocalDevPrivySessionMarkerMode()) {
         clearPrivySessionMarkerCookie()
@@ -63,6 +67,7 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
 
     const succeedAttempt = (address: string) => {
       if (!isActiveAttempt()) return
+      settled = true
       window.clearTimeout(timeoutId)
       onSuccessRef.current(address)
     }
@@ -86,6 +91,7 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
           const address = await runWaitlistReturningWalletSignIn({
             privy: createLivePrivyClientView(privyRef),
             login: (input) => loginRef.current(input),
+            signal: abortController.signal,
           })
           succeedAttempt(address)
         } catch (signInError) {
@@ -119,6 +125,7 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
 
     return () => {
       disposed = true
+      abortController.abort()
       window.clearTimeout(readyPollId)
       window.clearTimeout(timeoutId)
     }

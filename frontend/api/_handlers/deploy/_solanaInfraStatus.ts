@@ -43,13 +43,6 @@ const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
   {
     type: 'function',
-    name: 'solanaBridgeAdapter',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
     name: 'solanaDestination',
     stateMutability: 'view',
     inputs: [],
@@ -70,23 +63,6 @@ const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
         ],
       },
     ],
-  },
-] as const
-
-const SOLANA_BRIDGE_ADAPTER_ABI = [
-  {
-    type: 'function',
-    name: 'owner',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'solanaMintToToken',
-    stateMutability: 'view',
-    inputs: [{ name: 'mint', type: 'bytes32' }],
-    outputs: [{ type: 'address' }],
   },
 ] as const
 
@@ -300,23 +276,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const signerConfigured = !!signerPk
   const signerAddress = signerPk ? getAddress(privateKeyToAccount(signerPk).address) : null
 
-  let batcherAdapter: Address | null = null
   let batcherDestination: Hex | null = null
   let solanaEnabledOnBatcher = false
   let ovaultComposerConfigured = false
-  let adapterHasCode: boolean | null = null
-  let adapterOwner: Address | null = null
-  let signerMatchesAdapterOwner: boolean | null = null
 
   if (batcherAddress) {
-    const [adapterRaw, destinationRaw, ovaultRuntimeRaw] = await Promise.all([
-      publicClient
-        .readContract({
-          address: batcherAddress,
-          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
-          functionName: 'solanaBridgeAdapter',
-        })
-        .catch(() => ZERO_ADDRESS as Address),
+    const [destinationRaw, ovaultRuntimeRaw] = await Promise.all([
       publicClient
         .readContract({
           address: batcherAddress,
@@ -333,11 +298,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .catch(() => null),
     ])
 
-    batcherAdapter = getAddress((adapterRaw as Address) || ZERO_ADDRESS)
     batcherDestination = ((destinationRaw as Hex) || ZERO_BYTES32) as Hex
-    solanaEnabledOnBatcher =
-      batcherAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-      batcherDestination.toLowerCase() !== ZERO_BYTES32.toLowerCase()
     const runtimeTuple = Array.isArray(ovaultRuntimeRaw) ? ovaultRuntimeRaw : null
     const runtimeObj = ovaultRuntimeRaw && typeof ovaultRuntimeRaw === 'object'
       ? (ovaultRuntimeRaw as Record<string, unknown>)
@@ -370,25 +331,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       isAddress(runtimeHubComposer) &&
       getAddress(runtimeHubComposer).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
       Number(runtimeSolanaEid) > 0
-
-    if (solanaEnabledOnBatcher) {
-      const code = await publicClient.getBytecode({ address: batcherAdapter }).catch(() => null)
-      adapterHasCode = !!code && code !== '0x'
-      if (adapterHasCode) {
-        const ownerRaw = await publicClient
-          .readContract({
-            address: batcherAdapter,
-            abi: SOLANA_BRIDGE_ADAPTER_ABI,
-            functionName: 'owner',
-          })
-          .catch(() => null)
-        adapterOwner = ownerRaw && isAddress(String(ownerRaw)) ? getAddress(String(ownerRaw) as Address) : null
-      }
-    }
-  }
-
-  if (adapterOwner && signerAddress) {
-    signerMatchesAdapterOwner = signerAddress.toLowerCase() === adapterOwner.toLowerCase()
+    solanaEnabledOnBatcher =
+      batcherDestination.toLowerCase() !== ZERO_BYTES32.toLowerCase() && ovaultComposerConfigured
   }
 
   const defaultMintBytes32 = readSolanaMintFromEnv()
@@ -398,33 +342,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let defaultMintRouteScalar: string | null = null
   let defaultMintRouteReady: boolean | null = null
 
-  if (defaultMintBytes32 && batcherAdapter && solanaEnabledOnBatcher && adapterHasCode) {
-    defaultMintMappedToken = await publicClient
+  if (defaultMintBytes32 && defaultRouteBridgeToken && solanaEnabledOnBatcher) {
+    const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
+    const scalar = await publicClient
       .readContract({
-        address: batcherAdapter,
-        abi: SOLANA_BRIDGE_ADAPTER_ABI,
-        functionName: 'solanaMintToToken',
-        args: [defaultMintBytes32],
+        address: baseSolanaBridge,
+        abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
+        functionName: 'scalars',
+        args: [defaultRouteBridgeToken, defaultMintBytes32],
       })
-      .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
-      .catch(() => ZERO_ADDRESS)
-    if (defaultRouteBridgeToken) {
-      const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({
-        publicClient,
-        adapterAddress: batcherAdapter,
-      })
-      const scalar = await publicClient
-        .readContract({
-          address: baseSolanaBridge,
-          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
-          functionName: 'scalars',
-          args: [defaultRouteBridgeToken, defaultMintBytes32],
-        })
-        .then((v) => BigInt(v as bigint))
-        .catch(() => null)
-      defaultMintRouteScalar = scalar === null ? null : scalar.toString()
-      defaultMintRouteReady = scalar === null ? null : scalar > 0n
-    }
+      .then((v) => BigInt(v as bigint))
+      .catch(() => null)
+    defaultMintRouteScalar = scalar === null ? null : scalar.toString()
+    defaultMintRouteReady = scalar === null ? null : scalar > 0n
   }
 
   const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
@@ -503,14 +433,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!batcherAddress) {
     blockers.push('Deployment batcher (DeploymentBatcher) is not configured on server.')
   }
-  if (solanaEnabledOnBatcher && adapterHasCode === false) {
-    blockers.push('Batcher Solana adapter has no bytecode on Base.')
-  }
-  if (solanaEnabledOnBatcher && !signerConfigured) {
-    blockers.push('Server signer is missing or invalid. Configure SOLANA_ADAPTER_OWNER_PRIVATE_KEY as 0x + 64 hex.')
-  }
-  if (solanaEnabledOnBatcher && signerMatchesAdapterOwner === false) {
-    blockers.push('Server signer does not match Solana adapter owner.')
+  if (solanaEnabledOnBatcher === false && batcherAddress) {
+    blockers.push('Batcher Solana destination or OVault runtime is not configured for LayerZero share mesh.')
   }
   if (dynamicProvisioningMode === 'misconfigured') {
     blockers.push(
@@ -580,14 +504,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       remoteProvisionerPayerHealthy !== false)
   const bridgeLivenessReady = !bridgeLivenessApplies || bridgeLivenessEvaluation.healthy
   const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
-  const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
+  const signerReady = signerConfigured
   // Deposit eligibility (dormant compose-deposit lane) intentionally excluded.
   const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && redeemEligible)
   const readyForAutoRegistration =
     !!batcherAddress &&
     (!solanaEnabledOnBatcher ||
-      (adapterHasCode !== false &&
-        signerReady &&
+      (signerReady &&
         ovaultEligibilityReady &&
         hasRouteSource &&
         remoteProvisionerReady &&
@@ -599,13 +522,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     admin: admin && isAddress(admin) ? getAddress(admin as Address) : ZERO_ADDRESS,
     deploymentBatcher: batcherAddress,
     solanaEnabledOnBatcher,
-    batcherAdapter,
+    batcherAdapter: null,
     batcherDestination,
-    adapterHasCode,
-    adapterOwner,
+    adapterHasCode: null,
+    adapterOwner: null,
     signerConfigured,
     signerAddress,
-    signerMatchesAdapterOwner,
+    signerMatchesAdapterOwner: null,
     defaultMintConfigured,
     defaultMintBytes32,
     defaultRouteBridgeToken,

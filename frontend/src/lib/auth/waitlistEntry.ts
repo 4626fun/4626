@@ -3,12 +3,23 @@ import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/env/host'
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
 export const WAITLIST_START_AUTH_QUERY_KEY = 'start'
+export const WAITLIST_CONTINUE_QUERY_KEY = 'continue'
+export const WAITLIST_RETURN_PATH_QUERY_KEY = 'returnPath'
+
+const ALFACLUB_CONTINUE_VALUE = 'alfaclub'
+const ALFACLUB_ROOMS_PATH = '/rooms'
+const ALFACLUB_ROOM_TABS = new Set(['overview', 'safety', 'liquidity', 'inverse'])
+const ALFACLUB_RETURN_QUERY_KEYS = new Set(['roomId', 'tab', 'pool'])
 
 export const WAITLIST_REFERRAL_CODE_STORAGE_KEY = 'cv:waitlist:referral_code'
 export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_session'
 
 type WaitlistEntryLocation = {
   pathname?: string | null
+}
+
+export type WaitlistEntryOptions = {
+  alfaClubReturnPath?: string | null
 }
 
 export function getCanonicalMarketingWaitlistPath(): string {
@@ -84,9 +95,51 @@ export function buildWaitlistStartAuthUrl(baseUrl: string): string {
   return `${base}${buildWaitlistStartAuthPath()}`
 }
 
-export function buildWaitlistEntryUrl(baseUrl: string): string {
+export function normalizeAlfaClubWaitlistReturnPath(value: string | null | undefined): string | null {
+  const candidate = String(value ?? '').trim()
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) return null
+
+  try {
+    const parsed = new URL(candidate, 'https://alfaclub.4626.fun')
+    if (parsed.origin !== 'https://alfaclub.4626.fun' || parsed.pathname !== ALFACLUB_ROOMS_PATH) {
+      return null
+    }
+    if (parsed.hash || parsed.searchParams.has('cv_handoff')) return null
+    if ([...parsed.searchParams.keys()].some((key) => !ALFACLUB_RETURN_QUERY_KEYS.has(key))) {
+      return null
+    }
+
+    const roomId = parsed.searchParams.get('roomId')
+    if (roomId !== null && !/^\d+$/.test(roomId)) return null
+
+    const tab = parsed.searchParams.get('tab')
+    if (tab !== null && !ALFACLUB_ROOM_TABS.has(tab)) return null
+
+    const pool = parsed.searchParams.get('pool')
+    if (pool !== null && !/^0x[a-fA-F0-9]{40}$/.test(pool)) return null
+
+    return `${parsed.pathname}${parsed.search}`
+  } catch {
+    return null
+  }
+}
+
+export function readWaitlistAlfaClubReturnPath(search: string | null | undefined): string | null {
+  const params = new URLSearchParams(String(search ?? '').replace(/^\?/, ''))
+  if (params.get(WAITLIST_CONTINUE_QUERY_KEY) !== ALFACLUB_CONTINUE_VALUE) return null
+  return normalizeAlfaClubWaitlistReturnPath(params.get(WAITLIST_RETURN_PATH_QUERY_KEY))
+}
+
+export function buildWaitlistEntryUrl(baseUrl: string, options?: WaitlistEntryOptions): string {
   const base = String(baseUrl ?? '').replace(/\/+$/, '')
-  return `${base}${buildWaitlistEntryPath()}`
+  const entryUrl = `${base}${buildWaitlistEntryPath()}`
+  const returnPath = normalizeAlfaClubWaitlistReturnPath(options?.alfaClubReturnPath)
+  if (!returnPath) return entryUrl
+
+  const params = new URLSearchParams()
+  params.set(WAITLIST_CONTINUE_QUERY_KEY, ALFACLUB_CONTINUE_VALUE)
+  params.set(WAITLIST_RETURN_PATH_QUERY_KEY, returnPath)
+  return `${entryUrl}?${params.toString()}`
 }
 
 export function getPrivyCapableWaitlistEntryUrl(): string {

@@ -8,35 +8,28 @@ import {
 } from './resolveBaseSolanaBridge.ts'
 
 describe('resolveBaseSolanaBridge', () => {
-  it('prefers env override over adapter and default', async () => {
+  it('prefers env override over default', async () => {
     const envBridge = '0x1111111111111111111111111111111111111111'
-    const adapterBridge = '0x2222222222222222222222222222222222222222'
     const result = await resolveBaseSolanaBridge({
       env: { BASE_SOLANA_BRIDGE: envBridge },
-      adapterAddress: '0x3333333333333333333333333333333333333333',
-      publicClient: {
-        readContract: async () => adapterBridge,
-      },
     })
     expect(result).toEqual({ address: envBridge, source: 'env' })
   })
 
-  it('reads BRIDGE from the SolanaBridgeAdapter when env is unset', async () => {
-    const adapterBridge = '0x2222222222222222222222222222222222222222'
+  it('ignores retired adapterAddress lookups and uses default when env unset', async () => {
     const result = await resolveBaseSolanaBridge({
       env: {},
       adapterAddress: '0x3333333333333333333333333333333333333333',
       publicClient: {
-        readContract: async ({ functionName }) => {
-          if (functionName === 'BRIDGE') return adapterBridge
-          throw new Error(`unexpected ${String(functionName)}`)
+        readContract: async () => {
+          throw new Error('adapter BRIDGE() must not be called')
         },
       },
     })
-    expect(result).toEqual({ address: adapterBridge, source: 'adapter' })
+    expect(result).toEqual({ address: DEFAULT_BASE_SOLANA_BRIDGE, source: 'default' })
   })
 
-  it('falls back to the SolanaBridgeAdapter.sol default constant', async () => {
+  it('falls back to the Base Solana bridge default constant', async () => {
     const result = await resolveBaseSolanaBridge({ env: {} })
     expect(result).toEqual({ address: DEFAULT_BASE_SOLANA_BRIDGE, source: 'default' })
   })

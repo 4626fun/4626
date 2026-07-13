@@ -5,6 +5,7 @@ import {
   getWaitlistOtpSubmitLabel,
   isWaitlistMessagingSigningReady,
   isWaitlistStepTwoSigningComplete,
+  resolveWaitlistAppAccepted,
   resolveWaitlistConnectTrack,
   resolveWaitlistOtpInputStatus,
   resolveWaitlistOtpSubmitPhase,
@@ -16,6 +17,44 @@ import {
 
 const CSW = '0xAb6d5C10b03300326cd7fab7267ae192842967b5'
 const EOA = '0x1111111111111111111111111111111111111111'
+
+describe('resolveWaitlistAppAccepted', () => {
+  it('admits an approved cookie-backed session when Privy account data is unavailable', () => {
+    expect(
+      resolveWaitlistAppAccepted({
+        sessionAppAccessStatus: 'approved',
+        accountAppAccessStatus: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('falls back to Privy account data before the session status settles', () => {
+    expect(
+      resolveWaitlistAppAccepted({
+        sessionAppAccessStatus: undefined,
+        accountAppAccessStatus: 'APPROVED',
+      }),
+    ).toBe(true)
+  })
+
+  it('fails closed when the cookie-backed profile is not approved', () => {
+    expect(
+      resolveWaitlistAppAccepted({
+        sessionAppAccessStatus: 'pending',
+        accountAppAccessStatus: 'approved',
+      }),
+    ).toBe(false)
+  })
+
+  it('treats a settled null cookie-backed status as unapproved', () => {
+    expect(
+      resolveWaitlistAppAccepted({
+        sessionAppAccessStatus: null,
+        accountAppAccessStatus: 'approved',
+      }),
+    ).toBe(false)
+  })
+})
 
 describe('shouldFocusBaseAppWalletSetup', () => {
   it('focuses wallet setup in Base App when wallet is not linked', () => {

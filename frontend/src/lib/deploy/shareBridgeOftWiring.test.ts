@@ -16,7 +16,6 @@ const BATCHER = '0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8' as Address
 const REGISTRY = '0x3f64087dc361Ad52300409E5873b26941D6418B6' as Address
 const DESTINATION = `0x${'ab'.repeat(32)}` as Hex
 const REGISTRY_PEER = `0x${'cd'.repeat(32)}` as Hex
-const BATCHER_DEFAULT_PEER = `0x${'ef'.repeat(32)}` as Hex
 
 const FINALIZE_PARAMS = {
   creatorToken: '0x1111111111111111111111111111111111111111',
@@ -83,7 +82,6 @@ type WiringMockConfig = {
   previewShares?: bigint
   nativeFee?: bigint
   registryPeer?: Hex | null
-  batcherDefaultPeer?: Hex | null
   shareOftPeer?: Hex | null
   previewThrows?: boolean
   quoteOftThrows?: boolean
@@ -105,7 +103,6 @@ function createWiringMockClient(config: WiringMockConfig = {}) {
     previewShares = 30_000_000n * 10n ** 18n,
     nativeFee = 1_500_000_000_000_000n,
     registryPeer = REGISTRY_PEER,
-    batcherDefaultPeer = null,
     shareOftPeer = null,
     previewThrows = false,
     quoteOftThrows = false,
@@ -123,9 +120,6 @@ function createWiringMockClient(config: WiringMockConfig = {}) {
       }
       if (req.functionName === 'getRemoteOFTPeerBytes32') {
         return registryPeer ?? ZERO_BYTES32
-      }
-      if (req.functionName === 'solanaShareOftPeer') {
-        return batcherDefaultPeer ?? ZERO_BYTES32
       }
       if (req.functionName === 'peers') {
         return shareOftPeer ?? ZERO_BYTES32
@@ -165,8 +159,8 @@ describe('shareBridgeOftWiring', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('throws when registry and batcher default peers are missing', async () => {
-    const client = createWiringMockClient({ registryPeer: null, batcherDefaultPeer: null })
+  it('throws when registry peer is missing', async () => {
+    const client = createWiringMockClient({ registryPeer: null })
     await expect(
       assertShareBridgeOftWiringForFinalize({
         publicClient: client,
@@ -177,18 +171,6 @@ describe('shareBridgeOftWiring', () => {
     ).rejects.toMatchObject({
       code: 'oft_peer_not_configured',
     } satisfies Partial<ShareBridgeOftWiringError>)
-  })
-
-  it('passes when batcher default peer is configured', async () => {
-    const client = createWiringMockClient({ registryPeer: null, batcherDefaultPeer: BATCHER_DEFAULT_PEER })
-    await expect(
-      assertShareBridgeOftWiringForFinalize({
-        publicClient: client,
-        batcherAddress: BATCHER,
-        finalizeCallData: buildFinalizeCalldata(),
-        registryAddress: REGISTRY,
-      }),
-    ).resolves.toBeUndefined()
   })
 
   it('reports ready wiring when registry peer exists', async () => {
@@ -212,16 +194,14 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
     let iteration = 0
     for (const enabled of [true, false] as const) {
       for (const registryPeer of [null, REGISTRY_PEER] as const) {
-        for (const batcherDefaultPeer of [null, BATCHER_DEFAULT_PEER] as const) {
-          for (const previewShares of [0n, 3n, 4n, 1_000_000n * 10n ** 18n]) {
-            iteration += 1
-            const client = createWiringMockClient({
-              enabled,
-              registryPeer,
-              batcherDefaultPeer,
-              previewShares,
-              nativeFee: 1_000_000_000_000n + BigInt(iteration),
-            })
+        for (const previewShares of [0n, 3n, 4n, 1_000_000n * 10n ** 18n]) {
+          iteration += 1
+          const client = createWiringMockClient({
+            enabled,
+            registryPeer,
+            previewShares,
+            nativeFee: 1_000_000_000_000n + BigInt(iteration),
+          })
             const callData = buildFinalizeCalldata()
             const quote = await quoteFinalizeShareBridgeNativeFee({
               publicClient: client,
@@ -232,7 +212,7 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
 
             const bridgeConfigured = enabled && DESTINATION !== ZERO_BYTES32
             const solanaAmount = bridgeConfigured ? (previewShares * 30n) / 100n : 0n
-            const peerConfigured = registryPeer !== null || batcherDefaultPeer !== null
+            const peerConfigured = registryPeer !== null
 
             if (!bridgeConfigured || solanaAmount <= 0n) {
               if ('code' in quote) {
@@ -278,18 +258,15 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
           }
         }
       }
-    }
-    expect(iteration).toBe(32)
+    expect(iteration).toBe(16)
   })
 
   it('attach + preflight stay aligned across 300 mixed finalize batches', async () => {
     for (let i = 0; i < 300; i += 1) {
-      const useRegistryPeer = i % 3 !== 0
-      const useDefaultPeer = !useRegistryPeer && i % 2 === 0
+      const useRegistryPeer = i % 2 === 0
       const nativeFee = 800_000_000_000_000n + BigInt(i)
       const client = createWiringMockClient({
         registryPeer: useRegistryPeer ? REGISTRY_PEER : null,
-        batcherDefaultPeer: useDefaultPeer ? BATCHER_DEFAULT_PEER : null,
         nativeFee,
       })
       const callData = buildFinalizeCalldata()
@@ -300,7 +277,7 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
         registryAddress: REGISTRY,
       })
 
-      if (!useRegistryPeer && !useDefaultPeer) {
+      if (!useRegistryPeer) {
         expect('code' in quote && quote.code).toBe('oft_peer_not_configured')
         continue
       }
@@ -329,12 +306,10 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
     for (let i = 0; i < 370; i += 1) {
       const enabled = i % 4 !== 0
       const registryPeer = rng() > 0.45 ? REGISTRY_PEER : null
-      const batcherDefaultPeer = registryPeer ? null : rng() > 0.5 ? BATCHER_DEFAULT_PEER : null
       const previewShares = BigInt(Math.floor(rng() * 1_000_000)) * 10n ** 18n
       const client = createWiringMockClient({
         enabled,
         registryPeer,
-        batcherDefaultPeer,
         previewShares,
       })
       const status = await readShareBridgeOftWiringStatus({
@@ -346,13 +321,11 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
       if ('code' in status) {
         if (status.code === 'oft_peer_not_configured') {
           expect(registryPeer).toBeNull()
-          expect(batcherDefaultPeer).toBeNull()
         }
         continue
       }
-      const expectedEffective = registryPeer ?? batcherDefaultPeer
       if (status.bridgeRequired) {
-        expect(status.effectivePeer).toBe(expectedEffective)
+        expect(status.effectivePeer).toBe(registryPeer)
       } else {
         expect(status.effectivePeer).toBeNull()
       }
@@ -363,7 +336,6 @@ describe('shareBridgeOftWiring stress (1000+ iterations)', () => {
     for (let i = 0; i < 300; i += 1) {
       const client = createWiringMockClient({
         registryPeer: null,
-        batcherDefaultPeer: null,
         nativeFee: 500_000_000_000n + BigInt(i),
       })
       await expect(

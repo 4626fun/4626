@@ -4,8 +4,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Connection, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
-import { createPublicClient, http, type Address } from 'viem';
-import { base } from 'viem/chains';
+import type { Address } from 'viem';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, '../../.env') });
@@ -54,38 +53,6 @@ async function fetchCreatorConfigs() {
   return configs;
 }
 
-async function fetchTwinMappings() {
-  const baseRpc = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim();
-  const solanaBridgeAdapter = requireEnv('SOLANA_BRIDGE_ADAPTER') as Address;
-  const client = createPublicClient({ chain: base, transport: http(baseRpc, { timeout: 20_000 }) });
-
-  const event = {
-    type: 'event',
-    name: 'TwinMapped',
-    inputs: [
-      { name: 'solanaAddress', type: 'bytes32', indexed: true },
-      { name: 'twinAddress', type: 'address', indexed: true },
-    ],
-  } as const;
-
-  const logs = await client.getLogs({
-    address: solanaBridgeAdapter,
-    event,
-    fromBlock: 0n,
-    toBlock: 'latest',
-  });
-
-  const mapping: Record<string, string> = {};
-  for (const log of logs) {
-    const { solanaAddress, twinAddress } = log.args as any;
-    if (!solanaAddress || !twinAddress) continue;
-    const twin = String(twinAddress).toLowerCase();
-    const solanaPubkey = bs58.encode(Buffer.from(String(solanaAddress).replace(/^0x/, ''), 'hex'));
-    mapping[twin] = solanaPubkey;
-  }
-  return mapping;
-}
-
 async function main() {
   const configs = await fetchCreatorConfigs();
   if (configs.length === 0) {
@@ -106,22 +73,11 @@ async function main() {
     }
   }
 
-  let twinToPubkey: Record<string, string> = {};
-  try {
-    twinToPubkey = await fetchTwinMappings();
-  } catch (err) {
-    console.warn('Twin mapping lookup failed (continuing without it):', err instanceof Error ? err.message : err);
-  }
-
-  console.log('\n# === Suggested env values ===');
+  console.log('\n# === Suggested env values (LayerZero ShareOFT only) ===');
   console.log(`SOLANA_CREATOR_MINTS=${creatorMints.join(',')}`);
   console.log(`SOLANA_SHARE_OFT_MAPPING=${JSON.stringify(shareOftMapping)}`);
   console.log(`SOLANA_CREATOR_COIN_TO_MINT_MAPPING=${JSON.stringify(creatorCoinToMint)}`);
-  if (Object.keys(twinToPubkey).length > 0) {
-    console.log(`SOLANA_TWIN_TO_PUBKEY_MAPPING=${JSON.stringify(twinToPubkey)}`);
-  } else {
-    console.log('SOLANA_TWIN_TO_PUBKEY_MAPPING={}');
-  }
+  console.log('# Twin/SolanaBridgeAdapter mapping retired — use Registry4626 per-token LZ peers');
 }
 
 main().catch((err) => {

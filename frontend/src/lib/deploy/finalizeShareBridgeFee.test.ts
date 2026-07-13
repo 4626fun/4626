@@ -413,16 +413,13 @@ describe('finalizeShareBridgeFee quote paths', () => {
     expect('code' in quote && quote.code).toBe('oft_peer_not_configured')
   })
 
-  it('quotes when batcher default peer is set but registry peer is missing', async () => {
-    const defaultPeer = `0x${'ef'.repeat(32)}` as Hex
+  it('fails closed when batcher default peer fallback is unavailable', async () => {
     const quote = await quoteFinalizeShareBridgeNativeFee({
-      publicClient: createMockPublicClient({ registryPeer: null, solanaShareOftPeer: defaultPeer }),
+      publicClient: createMockPublicClient({ registryPeer: null }),
       batcherAddress: BATCHER,
       finalizeCallData: encodeFinalize(),
     })
-    expect('code' in quote).toBe(false)
-    if ('code' in quote) return
-    expect(quote.required).toBe(true)
+    expect('code' in quote && quote.code).toBe('oft_peer_not_configured')
   })
 
   it('fails closed on zero depositAmount', async () => {
