@@ -26,6 +26,7 @@ import {
   TIER_DOT_CLASSNAME,
   type RoomDiscoveryFilters,
 } from '@/components/alfaclub/RoomDiscoveryTray'
+import { RoomTradingActivity } from '@/components/alfaclub/RoomTradingActivity'
 import { Modal } from '@/components/ui/Modal'
 import { PageMeta } from '@/components/seo/PageMeta'
 import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
@@ -38,6 +39,7 @@ import {
 } from '@/lib/alfaclub/roomDirectory'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { cn } from '@/lib/shared/utils'
 
 import {
@@ -169,6 +171,7 @@ async function fetchSafetySummary(
 }
 
 export function AlfaClubTradingRooms() {
+  const { authAddress, hasSession, sessionHydrated } = useSiweAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedRoomId = /^\d+$/.test(searchParams.get('roomId')?.trim() ?? '')
     ? searchParams.get('roomId')!.trim()
@@ -187,8 +190,18 @@ export function AlfaClubTradingRooms() {
   const [recentRoomIds, setRecentRoomIds] = useState<string[]>(() =>
     readRecentRoomIds(typeof window === 'undefined' ? null : window.localStorage),
   )
-  const [myRoomIds, setMyRoomIds] = useState<string[]>([])
-  const [myRoomsLoading, setMyRoomsLoading] = useState(true)
+  const [myRoomsState, setMyRoomsState] = useState<{
+    authAddress: string
+    roomIds: string[]
+  }>({ authAddress: '', roomIds: [] })
+  const normalizedAuthAddress = authAddress?.trim().toLowerCase() ?? ''
+  const myRoomIds =
+    hasSession && normalizedAuthAddress === myRoomsState.authAddress
+      ? myRoomsState.roomIds
+      : []
+  const myRoomsLoading =
+    !sessionHydrated ||
+    (hasSession && normalizedAuthAddress !== myRoomsState.authAddress)
   const [safetyState, setSafetyState] = useState<{
     roomId: string
     summary: AlfaClubKeySafetySummary
@@ -225,16 +238,19 @@ export function AlfaClubTradingRooms() {
   }, [reloadKey])
 
   useEffect(() => {
+    if (!sessionHydrated) return
+    if (!hasSession || !normalizedAuthAddress) return
+
     const controller = new AbortController()
     void fetchMyRoomIds(controller.signal)
+      .catch(() => [])
       .then((roomIds) => {
-        if (!controller.signal.aborted) setMyRoomIds(roomIds)
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setMyRoomsLoading(false)
+        if (!controller.signal.aborted) {
+          setMyRoomsState({ authAddress: normalizedAuthAddress, roomIds })
+        }
       })
     return () => controller.abort()
-  }, [])
+  }, [hasSession, normalizedAuthAddress, sessionHydrated])
 
   useEffect(() => {
     if (!selectedRoomId || activeTab === 'overview') return
@@ -467,7 +483,7 @@ export function AlfaClubTradingRooms() {
       </Modal>
 
       <main className="w-auto px-4 py-5 transition-[margin] duration-200 motion-reduce:transition-none sm:px-6 lg:ml-[var(--alfaclub-room-tray-width)]">
-        <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto w-full max-w-7xl">
           {!selectedRoomId ? (
             <DiscoveryLanding rooms={rooms} loading={loading} onSelect={selectRoom} />
           ) : (
@@ -811,30 +827,54 @@ function OverviewPanel({
   roomId: string
   room: AlfaClubRoomDirectoryItem | null
 }) {
+  // Only trading rooms have a Hyperliquid trading wallet to report on. Social rooms have no
+  // host trading activity, so rendering the widget there would either sit empty or, worse,
+  // attribute an unrelated chat participant's personal trades to the room (see
+  // resolveRoomHostAddress's most-active-sender fallback for non-1659 rooms).
+  const isTradingRoom = room?.roomType === 'trading'
   return (
-    <section>
-      <h2 className="text-base font-semibold text-zinc-100">Room overview</h2>
-      {room?.description ? (
-        <p className="mt-2 text-sm leading-relaxed text-zinc-400">{room.description}</p>
-      ) : null}
-      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
-        <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
-        <HeaderStat label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
-        <HeaderStat label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
-        <HeaderStat label="Curve" value={room?.tier ?? '—'} />
-        <HeaderStat label="Updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
-      </dl>
-      <a
-        href={`https://alfaclub.app/rooms/${roomId}/`}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400"
-      >
-        Open on AlfaClub
-        <ExternalLink className="size-3.5" aria-hidden />
-      </a>
+    <section
+      className={cn(
+        'grid gap-5 lg:items-start',
+        isTradingRoom
+          ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]'
+          : 'lg:grid-cols-1',
+      )}
+    >
+      <div className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06] sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-base font-semibold text-zinc-100">Room overview</h2>
+          <a
+            href={`https://alfaclub.app/rooms/${roomId}/`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-sky-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-400"
+          >
+            Open on AlfaClub
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        </div>
+        {room?.description ? (
+          <p className="mt-3 text-sm leading-relaxed text-zinc-400">{room.description}</p>
+        ) : null}
+        <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-2">
+          <FactCard label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
+          <FactCard label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
+          <FactCard label="Bonding curve" value={room?.tier ?? '—'} />
+          <FactCard label="Last updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
+        </dl>
+      </div>
+      {isTradingRoom ? <RoomTradingActivity key={roomId} roomId={roomId} /> : null}
     </section>
+  )
+}
+
+function FactCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-black/30 px-3 py-2.5">
+      <dt className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 truncate text-base font-medium capitalize text-zinc-100">{value}</dd>
+    </div>
   )
 }
 

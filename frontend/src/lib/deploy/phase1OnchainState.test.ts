@@ -1,4 +1,4 @@
-import { getAddress, type Hex } from 'viem'
+import { getAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { mergePipeAFinalizeParams, parsePhase1SplitState } from './phase1OnchainState'
@@ -22,8 +22,6 @@ function baseParams(overrides: Partial<FinalizePhase2Params> = {}): FinalizePhas
     requiredRaise: 100_000_000_000_000_000n,
     floorPriceQ96: 1n,
     auctionSteps: '0x',
-    meteoraAlphaVault: `0x${'00'.repeat(32)}` as Hex,
-    solanaIxs: [],
     ...overrides,
   }
 }

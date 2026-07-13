@@ -4,7 +4,10 @@ import { getDb } from '../db/postgres.js'
 import { getKeeprBaseRpcUrls } from '../keepr/keeprGating.js'
 import { getAlfaClubPublicClient } from '../wallet/alfaclub.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
-import { syncRoom1659XmtpBridgeMembership } from './room1659XmtpBridge.js'
+import {
+  backfillActiveRoomChannelBridgeMembers,
+  syncRoomChannelBridgeMembership,
+} from './roomChannelBridge.js'
 
 const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
   'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
@@ -404,8 +407,7 @@ export async function joinAlfaClubRoomAccess(params: {
   })
 
   if (eligibility.canEnter) {
-    // No-ops for rooms other than the room-1659 XMTP bridge (or when disabled).
-    await syncRoom1659XmtpBridgeMembership({
+    await syncRoomChannelBridgeMembership({
       roomId: policy.roomId,
       walletAddress: params.walletAddress,
       action: 'add',
@@ -473,7 +475,7 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       })
       if (!wasActive) {
         autoEntered += 1
-        await syncRoom1659XmtpBridgeMembership({
+        await syncRoomChannelBridgeMembership({
           roomId: policy.roomId,
           walletAddress: membership.walletAddress,
           action: 'add',
@@ -517,7 +519,7 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       failureReason: eligibility.reason,
     })
     removed += 1
-    await syncRoom1659XmtpBridgeMembership({
+    await syncRoomChannelBridgeMembership({
       roomId: policy.roomId,
       walletAddress: membership.walletAddress,
       action: 'remove',
@@ -525,6 +527,13 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
   }
 
   return { checked, autoEntered, removed, stale }
+}
+
+export async function backfillActiveAlfaClubRoomAccessMembersToXmtp(params?: {
+  roomId?: string
+  limit?: number
+}): Promise<{ rooms: number; enqueued: number; skipped: number }> {
+  return backfillActiveRoomChannelBridgeMembers(params)
 }
 
 export async function preloadAlfaClubRoomAccessPolicyPoolAddress(params: {

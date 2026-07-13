@@ -1,6 +1,6 @@
-name: AlfaClub Preflight (manual)
+name: AlfaClub Preflight
 
-# Manual-only preflight for the AlfaClub LP launcher.
+# Path-scoped preflight for the AlfaClub LP launcher.
 #
 # Purpose: provide a safe remote `forge build` + focused `forge test` run for
 # `test/integrations/alfaclub/**` so contributors whose local machines cannot compile (e.g.
@@ -8,11 +8,32 @@ name: AlfaClub Preflight (manual)
 # proposing a deployment.
 #
 # Safety:
-# - workflow_dispatch only — never runs on push/PR automatically
-# - no secrets, no RPC URLs, no private keys
+# - no secrets or private keys; the fork test uses a public read-only Base RPC
 # - no `forge script` and no `--broadcast`; build + tests only
 
 on:
+  pull_request:
+    paths:
+      - 'contracts/other/alfaclub/**'
+      - 'test/integrations/alfaclub/**'
+      - 'frontend/src/pages/AlfaClubLiquidity.tsx'
+      - 'frontend/src/pages/AlfaClubLiquidityPools.tsx'
+      - 'frontend/src/lib/alfaclub/**'
+      - 'frontend/server/_lib/paymaster/alfaclubLpPolicy.ts'
+      - 'frontend/api/_handlers/paymaster/_paymaster.ts'
+      - '.github/workflows/alfaclub-preflight.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'contracts/other/alfaclub/**'
+      - 'test/integrations/alfaclub/**'
+      - 'frontend/src/pages/AlfaClubLiquidity.tsx'
+      - 'frontend/src/pages/AlfaClubLiquidityPools.tsx'
+      - 'frontend/src/lib/alfaclub/**'
+      - 'frontend/server/_lib/paymaster/alfaclubLpPolicy.ts'
+      - 'frontend/api/_handlers/paymaster/_paymaster.ts'
+      - '.github/workflows/alfaclub-preflight.yml'
   workflow_dispatch:
     inputs:
       ref:
@@ -22,6 +43,7 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  BASE_RPC_URL: https://base-rpc.publicnode.com
 
 jobs:
   alfaclub-preflight:
@@ -33,7 +55,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
           submodules: recursive
           fetch-depth: 0
 

@@ -3,21 +3,25 @@ title: Current release (v1.19.0)
 sidebar_position: 1
 ---
 
-# Current release — v1.19.0 partial refresh
+# Current release — v1.19.0
 
 **Status:** release artifacts generated; bounded Base change window and staged traffic sign-off in progress.
 
 This is the published release note for **new vault launches** on Base mainnet (`8453`). Live addresses and inventory live in [Contract addresses](/reference/addresses) — when anything disagrees, **that page wins**.
 
-Release packet: `docs/_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md`
+Historical release packet: [`v1.19.0-partial-refresh.md`](../../../../deployment-releases-legacy/v1.19.0-partial-refresh.md)
 
 ## What v1.19.0 is
 
-v1.19.0 is a fresh per-creator bytecode and CREATE2 epoch on the existing
+v1.19.0 is the active per-creator bytecode and CREATE2 epoch on the existing
 v1.18.0 shared infrastructure. Registry, factory, batcher shell, Phase1/Phase3
-helpers, store, CREATE2 deployer, VRF, and Solana adapter addresses are reused.
-The replaceable Phase2 module is rotated so new gauges use remediation
-LotteryManager `0xB68F359e…`.
+helpers, store, CREATE2 deployer, and VRF addresses are reused. The replaceable
+Phase2 module is rotated so new gauges use remediation LotteryManager
+`0xB68F359e…`.
+
+The active deployment plane is LayerZero ShareOFT. Twin
+`SolanaBridgeAdapter` registration and a batcher-global Solana peer are legacy
+grain and are not part of a new-vault launch.
 
 | Role | Address |
 |------|---------|
@@ -30,7 +34,6 @@ LotteryManager `0xB68F359e…`.
 | ShareMeshHelper | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
 | Bytecode store | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
 | CREATE2 deployer | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
-| SolanaBridgeAdapter | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 
 The immutable `DeploymentBatcher.lotteryManager()` shell getter remains
@@ -66,21 +69,32 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
   --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
 ```
 
+The batcher shell is configured with the Solana destination and OVault runtime
+only. Before each creator is finalized, provision that creator's LayerZero OFT
+store/mint and seed
+`Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)`.
+
 ## Bounded change window
 
 1. Seed and approve v1.19 deploy-consumed codeIds on the existing store.
 2. Deploy the replacement Phase2 module with explicit LM `0xB68F359e…`.
 3. In one Safe transaction, approve its runtime codehash and set it active.
-4. Set `SolanaBridgeAdapter.lotteryManager(0xB68F359e…)`.
-5. Verify pointers and deploy with `VITE_DEPLOYMENT_VERSION=v1.19.0`.
-6. Run AKITA base-odds soak, then a separate v1.19 greenfield lifecycle.
+4. Regenerate the unsigned 11-operation registration Safe packet from the
+   current handoff and manifest. Never reuse a packet containing adapter or
+   batcher-global-peer operations.
+5. Verify destination + OVault runtime pointers and deploy with
+   `VITE_DEPLOYMENT_VERSION=v1.19.0`.
+6. For each Solana-enabled creator, provision the LZ OFT store/mint and seed
+   the explicit registry peer before finalize.
+7. Run AKITA base-odds soak, then a separate v1.19 greenfield lifecycle.
 
 ## Related runbooks
 
 - [Greenfield launch readiness](/operations/vault/greenfield-launch-readiness)
 - [Infra epoch redeploy](/operations/deployment/infra-epoch-redeploy)
-- [v1.19.0 partial-refresh packet](../../deployment-releases-legacy/v1.19.0-partial-refresh.md)
-- [v1.18.0 greenfield packet](../../deployment-releases-legacy/v1.18.0-greenfield.md)
+- [v1.19.0 registration-plane cutover packet](/operations/deployment/releases/v1.19.0-registration-plane-cutover-packet)
+- [v1.19.0 partial-refresh packet](../../../../deployment-releases-legacy/v1.19.0-partial-refresh.md)
+- [v1.18.0 greenfield packet](../../../../deployment-releases-legacy/v1.18.0-greenfield.md)
 
 ## Historical release packets
 

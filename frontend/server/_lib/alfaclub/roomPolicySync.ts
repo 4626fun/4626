@@ -7,6 +7,7 @@ declare const process: { env: Record<string, string | undefined> }
 
 const ZERO_POOL = '0x0000000000000000000000000000000000000001'
 const DEFAULT_SYNC_LIMIT = 500
+const ROOM_1659_CREATOR_COIN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
 export type SyncCreatorRoomPoliciesResult = {
   ok: boolean
@@ -25,9 +26,36 @@ export function readAutoSyncRoomPoliciesEnabled(): boolean {
   return parseBool(process.env.ALFACLUB_AUTO_SYNC_ROOM_POLICIES, true)
 }
 
+export function readRoomCreatorCoinMap(): ReadonlyMap<string, `0x${string}`> {
+  const map = new Map<string, `0x${string}`>([['1659', ROOM_1659_CREATOR_COIN]])
+  const raw = String(process.env.ALFACLUB_ROOM_CREATOR_COIN_MAP_JSON ?? '').trim()
+  if (!raw) return map
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('alfaclub_room_creator_coin_map_invalid_json')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('alfaclub_room_creator_coin_map_invalid')
+  }
+  for (const [roomId, value] of Object.entries(parsed)) {
+    const normalizedRoomId = roomId.trim()
+    const normalizedAddress = typeof value === 'string' ? value.trim().toLowerCase() : ''
+    if (!/^\d+$/.test(normalizedRoomId) || !/^0x[a-f0-9]{40}$/.test(normalizedAddress)) {
+      throw new Error(`alfaclub_room_creator_coin_map_entry_invalid:${roomId}`)
+    }
+    map.set(normalizedRoomId, normalizedAddress as `0x${string}`)
+  }
+  return map
+}
+
 /**
  * Upsert alfaclub.room_access_policies from snapshot + creators (enabled=false).
  * Prefer room_id when it matches FriendKey token_id, else highest volume row.
+ * Creator Coin addresses come from the explicit room mapping. A room creator
+ * wallet is an identity, not an ERC-20, and must never be written as the coin.
  */
 export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
   limit?: number
@@ -44,6 +72,7 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
   const poolAddress = (params?.poolAddress ??
     (process.env.ALFACLUB_DEFAULT_POOL_ADDRESS ?? ZERO_POOL).trim()) as `0x${string}`
   const operational = readOperationalAlfaClubRoomIds()
+  const creatorCoins = readRoomCreatorCoinMap()
 
   await ensureAlfaClubVigilanteSchema()
 
@@ -77,6 +106,7 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
     const address = String(row.creator_address ?? '').trim().toLowerCase()
     if (!roomId || !tokenId || !/^0x[a-f0-9]{40}$/.test(address)) return false
     if (operational.has(roomId)) return false
+    if (!creatorCoins.has(roomId)) return false
     return true
   })
 
@@ -88,11 +118,12 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
   for (const row of candidates) {
     const roomId = String(row.room_id).trim()
     const tokenId = String(row.token_id).trim()
-    const creatorAddress = String(row.creator_address).trim().toLowerCase() as `0x${string}`
+    const creatorCoinAddress = creatorCoins.get(roomId)
+    if (!creatorCoinAddress) continue
     await upsertAlfaClubRoomAccessPolicy({
       roomId,
       tokenId,
-      creatorCoinAddress: creatorAddress,
+      creatorCoinAddress,
       poolAddress,
       enabled: false,
       actorAddress: null,

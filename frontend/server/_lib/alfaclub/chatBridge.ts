@@ -53,7 +53,8 @@ import {
   recordChatBridgeMessageOrigin,
   type ChatBridgeMessageOrigin,
 } from './chatBridgeMessageOrigin.js'
-import { relayNewRoom1659MessagesToXmtpBridge } from './room1659XmtpBridge.js'
+import { relayRoomMessagesToXmtp } from './roomChannelBridge.js'
+import { lookupEnabledAlfaClubRoomChannelBindingByRoom } from './roomChannelBindings.js'
 import {
   collectInverseAkitaChatTradeIntents,
   executeInverseAkitaChatReaction,
@@ -1951,73 +1952,10 @@ async function sendCommandReplyToRoom(params: {
   replyToMessageDate?: number | null
   commandMessageId: string
 }): Promise<string> {
-  const idempotencyKey = buildBotMessageIdempotencyKey({
-    roomId: params.roomId,
-    messageId: params.commandMessageId,
-  })
-  const hasAttachments = params.attachments.length > 0
   const replyToMessageDate =
     typeof params.replyToMessageDate === 'number' && Number.isFinite(params.replyToMessageDate)
       ? params.replyToMessageDate
       : undefined
-
-  if (hasAttachments || replyToMessageDate !== undefined) {
-    try {
-      const lane = await sendRoomMessageViaWebSocket({
-        websocketUrl: params.flags.websocketUrl,
-        wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
-        wsProxySecret: (params.flags as any).wsProxySecret,
-        jwt: params.jwt,
-        roomId: params.roomId,
-        text: params.text,
-        attachments: params.attachments,
-        replyToMessageId: params.replyToMessageId,
-        replyToMessageDate,
-        timeoutMs: params.flags.sendTimeoutMs,
-      })
-      return lane === 'ws_proxy_http' ? 'ws_proxy_http_with_reply_id' : 'websocket_with_reply_id'
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      logger.warn('[alfaclub-chat] ws_reply_with_reply_context_failed', {
-        roomId: params.roomId,
-        messageId: params.commandMessageId,
-        hasAttachments,
-        error: detail.slice(0, 180),
-      })
-    }
-  }
-
-  if (params.flags.botToken) {
-    try {
-      const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
-        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-        directApiBaseUrl: params.flags.apiBaseUrl,
-        botToken: params.flags.botToken,
-        roomId: params.roomId,
-        text: params.text,
-        replyToMessageId: params.replyToMessageId,
-        proxySecret: resolveAlfaClubProxySecret(params.flags),
-        idempotencyKey,
-        timeoutMs: params.flags.sendTimeoutMs,
-      })
-      if (!hasAttachments) {
-        return 'bot_token_with_reply_id'
-      }
-      logger.warn('[alfaclub-chat] bot_reply_text_only_attachments_dropped', {
-        roomId: params.roomId,
-        messageId: params.commandMessageId,
-        sendResult,
-      })
-      return 'bot_token_text_only_attachments_dropped'
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
-        roomId: params.roomId,
-        messageId: params.commandMessageId,
-        error: detail.slice(0, 180),
-      })
-    }
-  }
 
   const lane = await sendRoomMessageViaWebSocket({
     websocketUrl: params.flags.websocketUrl,
@@ -2031,7 +1969,10 @@ async function sendCommandReplyToRoom(params: {
     replyToMessageDate,
     timeoutMs: params.flags.sendTimeoutMs,
   })
-  return lane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback'
+  const replySuffix = replyToMessageDate === undefined ? '' : '_with_reply_id'
+  return lane === 'ws_proxy_http'
+    ? `ws_proxy_http${replySuffix}`
+    : `websocket${replySuffix}`
 }
 
 type BridgeState = {
@@ -2841,6 +2782,83 @@ async function sendTelegramRelayMessage(params: {
   }
 }
 
+async function fanOutInsertedRoomMessages(
+  inserted: Array<{
+    roomId: string
+    messageId: string
+    senderAddress: string
+    text: string
+    dateMs: number | null
+    rawPayloadText?: string | null
+  }>,
+  flags: AlfaClubChatBridgeFlags,
+): Promise<void> {
+  if (inserted.length === 0) return
+  const originsByRoom = new Map<string, Map<string, ChatBridgeMessageOrigin>>()
+  const bindingsByRoom = new Map<string, Awaited<ReturnType<typeof lookupEnabledAlfaClubRoomChannelBindingByRoom>>>()
+  for (const roomId of new Set(inserted.map((message) => message.roomId))) {
+    const messageIds = inserted.filter((message) => message.roomId === roomId).map((message) => message.messageId)
+    const [origins, binding] = await Promise.all([
+      getChatBridgeMessageOrigins({ roomId, messageIds }),
+      lookupEnabledAlfaClubRoomChannelBindingByRoom(roomId),
+    ])
+    originsByRoom.set(roomId, origins)
+    bindingsByRoom.set(roomId, binding)
+  }
+
+  const xmtpRelay = await relayRoomMessagesToXmtp(
+    inserted.map((message) => ({
+      roomId: message.roomId,
+      messageId: message.messageId,
+      text: message.text,
+      ...(originsByRoom.get(message.roomId)?.get(message.messageId)
+        ? { origin: originsByRoom.get(message.roomId)?.get(message.messageId) }
+        : {}),
+    })),
+  )
+  if (xmtpRelay.enqueued > 0) {
+    logger.info('[alfaclub-chat] xmtp_bridge_relay_enqueued', xmtpRelay)
+  }
+
+  if (!flags.telegramRelayBotToken) return
+  for (const message of inserted) {
+    const binding = bindingsByRoom.get(message.roomId)?.binding
+    if (!binding?.telegram.enabled || !binding.telegram.chatId) continue
+    if (originsByRoom.get(message.roomId)?.get(message.messageId) === 'telegram') continue
+    const parsedThreadId = binding.telegram.threadId == null
+      ? null
+      : Number.parseInt(binding.telegram.threadId, 10)
+    const relay = await sendTelegramRelayMessage({
+      botToken: flags.telegramRelayBotToken,
+      chatId: binding.telegram.chatId,
+      messageThreadId:
+        typeof parsedThreadId === 'number' && Number.isFinite(parsedThreadId) && parsedThreadId > 0
+          ? parsedThreadId
+          : null,
+      text: buildTelegramRelayText({
+        roomId: message.roomId,
+        id: message.messageId,
+        date: message.dateMs ?? Date.now(),
+        sender: message.senderAddress,
+        text: message.text,
+        attachments: [],
+        replyAttachments: [],
+        rawPayloadText: message.rawPayloadText ?? null,
+      }),
+      timeoutMs: flags.sendTimeoutMs,
+    })
+    const payload = {
+      roomId: message.roomId,
+      messageId: message.messageId,
+      chatId: binding.telegram.chatId,
+      status: relay.status ?? null,
+      error: relay.error ?? null,
+    }
+    if (relay.sent) logger.info('[alfaclub-chat] telegram_relay_sent', payload)
+    else logger.warn('[alfaclub-chat] telegram_relay_failed', payload)
+  }
+}
+
 async function ingestLiveMessages(
   messages: AlfaClubLiveInboundMessage[],
   flags: AlfaClubChatBridgeFlags,
@@ -2875,67 +2893,7 @@ async function ingestLiveMessages(
       roomIds,
     })
   }
-  // Cross-channel loop prevention: a message tagged 'xmtp' was just mirrored in
-  // by the XMTP bridge inbound handler, and one tagged 'telegram' was just
-  // mirrored in by telegramToAlfaclubRelay.ts — each must not echo back to the
-  // channel it came from, but native/Hermit and cross-channel messages still
-  // propagate normally (hub-and-spoke sync).
-  const bridgedRoomIds = Array.from(new Set(inserted.map((message) => message.roomId)))
-  const originsByRoom = new Map<string, Map<string, ChatBridgeMessageOrigin>>()
-  for (const roomId of bridgedRoomIds) {
-    const messageIds = inserted.filter((m) => m.roomId === roomId).map((m) => m.messageId)
-    originsByRoom.set(roomId, await getChatBridgeMessageOrigins({ roomId, messageIds }))
-  }
-
-  const xmtpRelay = await relayNewRoom1659MessagesToXmtpBridge(
-    inserted
-      .filter((message) => originsByRoom.get(message.roomId)?.get(message.messageId) !== 'xmtp')
-      .map((message) => ({ roomId: message.roomId, messageId: message.messageId, text: message.text })),
-  )
-  if (xmtpRelay.enqueued > 0) {
-    logger.info('[alfaclub-chat] xmtp_bridge_relay_enqueued', {
-      enqueued: xmtpRelay.enqueued,
-      skipped: xmtpRelay.skipped,
-    })
-  }
-
-  if (!flags.telegramRelayEnabled) return
-  if (!flags.telegramRelayBotToken || !flags.telegramRelayChatId) return
-
-  for (const message of inserted) {
-    if (originsByRoom.get(message.roomId)?.get(message.messageId) === 'telegram') continue
-    const relay = await sendTelegramRelayMessage({
-      botToken: flags.telegramRelayBotToken,
-      chatId: flags.telegramRelayChatId,
-      messageThreadId: flags.telegramRelayThreadId,
-      text: buildTelegramRelayText({
-        roomId: message.roomId,
-        id: message.messageId,
-        date: message.dateMs ?? Date.now(),
-        sender: message.senderAddress,
-        text: message.text,
-        attachments: [],
-        replyAttachments: [],
-        rawPayloadText: message.rawPayloadText ?? null,
-      }),
-      timeoutMs: flags.sendTimeoutMs,
-    })
-    if (relay.sent) {
-      logger.info('[alfaclub-chat] telegram_relay_sent', {
-        roomId: message.roomId,
-        messageId: message.messageId,
-        chatId: flags.telegramRelayChatId,
-      })
-    } else {
-      logger.warn('[alfaclub-chat] telegram_relay_failed', {
-        roomId: message.roomId,
-        messageId: message.messageId,
-        chatId: flags.telegramRelayChatId,
-        status: relay.status ?? null,
-        error: relay.error ?? null,
-      })
-    }
-  }
+  await fanOutInsertedRoomMessages(inserted, flags)
 }
 
 function ensureLiveCommandSocket(params: {
@@ -3944,6 +3902,7 @@ async function runBridgeTick(
       historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
+    await fanOutInsertedRoomMessages(inserted, flags)
   } catch {
     newlyIngestedHistoryIds = null
   }
@@ -4372,6 +4331,19 @@ export async function _sendRoomMessageViaWebSocketForTests(params: {
   return sendRoomMessageViaWebSocket(params)
 }
 
+export async function _sendCommandReplyToRoomForTests(params: {
+  flags: AlfaClubChatBridgeFlags
+  jwt: string
+  roomId: string
+  text: string
+  attachments: AlfaClubMessageAttachment[]
+  replyToMessageId: string
+  replyToMessageDate?: number | null
+  commandMessageId: string
+}): Promise<string> {
+  return sendCommandReplyToRoom(params)
+}
+
 export type AlfaClubRoomSendResult = {
   lane: string
   messageId: string | null
@@ -4548,6 +4520,7 @@ export async function sendAlfaClubRoomText(params: {
 }
 
 export const _ingestLiveMessagesForTests = ingestLiveMessages
+export const _fanOutInsertedRoomMessagesForTests = fanOutInsertedRoomMessages
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {
   if (activeHandle !== null) clearInterval(activeHandle)

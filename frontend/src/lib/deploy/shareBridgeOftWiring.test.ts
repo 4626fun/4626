@@ -4,6 +4,8 @@ import { encodeFunctionData, type Address, type Hex } from 'viem'
 import {
   attachFinalizeShareBridgeValueToCalls,
   quoteFinalizeShareBridgeNativeFee,
+  SELECTOR_BATCHER_FINALIZE_PHASE2,
+  isFinalizePhase2CallSelector,
 } from './finalizeShareBridgeFee'
 import {
   assertShareBridgeOftWiringForFinalize,
@@ -31,8 +33,6 @@ const FINALIZE_PARAMS = {
   requiredRaise: 100_000_000_000_000_000n,
   floorPriceQ96: 1n,
   auctionSteps: '0x' as Hex,
-  meteoraAlphaVault: ZERO_BYTES32,
-  solanaIxs: [],
 } as const
 
 const FINALIZE_ABI = [
@@ -58,16 +58,6 @@ const FINALIZE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -147,6 +137,13 @@ function mulberry32(seed: number): () => number {
 }
 
 describe('shareBridgeOftWiring', () => {
+  it('recognizes trimmed finalizePhase2 selector for attach/decode paths', () => {
+    const data = buildFinalizeCalldata()
+    expect(data.slice(0, 10).toLowerCase()).toBe(SELECTOR_BATCHER_FINALIZE_PHASE2)
+    expect(SELECTOR_BATCHER_FINALIZE_PHASE2).toBe('0xcafc9348')
+    expect(isFinalizePhase2CallSelector(SELECTOR_BATCHER_FINALIZE_PHASE2)).toBe(true)
+  })
+
   it('passes when bridge is not required', async () => {
     const client = createWiringMockClient({ enabled: false, destination: ZERO_BYTES32 })
     await expect(

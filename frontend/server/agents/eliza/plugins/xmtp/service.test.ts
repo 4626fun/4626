@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AlfaClubRoomChannelBinding } from '../../../../_lib/alfaclub/roomChannelBindings.js'
 
 const {
   AgentCreateMock,
@@ -6,12 +7,23 @@ const {
   createSignerMock,
   filterFromSelfMock,
   getInstallationInfoMock,
+  lookupRoomBindingByXmtpGroupMock,
+  relayXmtpMessageToAlfaClubRoomMock,
+  sendAlfaClubRoomTextMock,
 } = vi.hoisted(() => ({
   AgentCreateMock: vi.fn(),
   createUserMock: vi.fn(() => ({ id: 'user' })),
   createSignerMock: vi.fn(() => ({ id: 'signer' })),
   filterFromSelfMock: vi.fn(() => false),
   getInstallationInfoMock: vi.fn(async () => ({ totalInstallations: 1 })),
+  lookupRoomBindingByXmtpGroupMock: vi.fn(
+    async (): Promise<{ available: boolean; binding: AlfaClubRoomChannelBinding | null }> => ({
+      available: true,
+      binding: null,
+    }),
+  ),
+  relayXmtpMessageToAlfaClubRoomMock: vi.fn(async () => true),
+  sendAlfaClubRoomTextMock: vi.fn(async () => ({ lane: 'bot', messageId: 'room-message' })),
 }))
 
 vi.mock('@xmtp/agent-sdk', () => ({
@@ -26,9 +38,23 @@ vi.mock('@xmtp/agent-sdk', () => ({
   getInstallationInfo: getInstallationInfoMock,
 }))
 
+vi.mock('../../../../_lib/alfaclub/roomChannelBindings.js', () => ({
+  lookupEnabledAlfaClubRoomChannelBindingByXmtpGroup: lookupRoomBindingByXmtpGroupMock,
+}))
+
+vi.mock('../../../../_lib/alfaclub/roomChannelBridge.js', () => ({
+  relayXmtpMessageToAlfaClubRoom: relayXmtpMessageToAlfaClubRoomMock,
+}))
+
+vi.mock('../../../../_lib/alfaclub/chatBridge.js', () => ({
+  sendAlfaClubRoomText: sendAlfaClubRoomTextMock,
+}))
+
 describe('xmtp service lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    lookupRoomBindingByXmtpGroupMock.mockResolvedValue({ available: true, binding: null })
+    relayXmtpMessageToAlfaClubRoomMock.mockResolvedValue(true)
     delete process.env.ELIZA_XMTP_START_MAX_RETRIES
     delete process.env.ELIZA_XMTP_START_RETRY_BASE_MS
     delete process.env.XMTP_DB_ENCRYPTION_KEY
@@ -303,6 +329,87 @@ describe('xmtp service lifecycle', () => {
     expect(sendTextMock).toHaveBeenCalledTimes(1)
     expect(sendTextMock).toHaveBeenCalledWith('retry succeeded')
 
+    await service.stop()
+  })
+
+  it('routes a configured bridge group with resolved sender metadata and no AI reply', async () => {
+    let textHandler: ((ctx: any) => Promise<void>) | null = null
+    const senderAddress = '0x4444444444444444444444444444444444444444'
+    const fetchInboxStatesMock = vi.fn(async () => [] as Array<{ identifiers: unknown[] }>)
+    const agent = {
+      address: '0x3333333333333333333333333333333333333333',
+      client: {
+        revokeAllOtherInstallations: vi.fn(async () => {}),
+        preferences: {
+          fetchInboxStates: fetchInboxStatesMock,
+        },
+      },
+      on: vi.fn((event: string, handler: (ctx: any) => Promise<void>) => {
+        if (event === 'text') textHandler = handler
+      }),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    }
+    AgentCreateMock.mockResolvedValue(agent as any)
+    lookupRoomBindingByXmtpGroupMock.mockResolvedValue({
+      available: true,
+      binding: {
+        roomId: '202',
+        enabled: true,
+        rolloutStatus: 'enabled',
+        telegram: { enabled: false, chatId: null, threadId: null },
+        xmtp: {
+          enabled: true,
+          groupId: 'group-202',
+          syntheticKeeprVaultAddress: '0x0000000000000000000000000000000000000202',
+        },
+        createdAt: '2026-07-12T00:00:00.000Z',
+        updatedAt: '2026-07-12T00:00:00.000Z',
+      },
+    })
+
+    const { XmtpService } = await import('./service.ts')
+    const service = new XmtpService({ signer: { id: 'mock-signer' }, dbPath: null })
+    const aiHandler = vi.fn()
+    service.setMessageHandler(aiHandler)
+    await service.start()
+
+    if (!textHandler) throw new Error('text_handler_missing')
+    const bridgeContext = {
+      message: {
+        id: 'xmtp-message-202',
+        content: 'bridge text',
+        senderInboxId: 'inbox-202',
+        sentAt: new Date('2026-07-12T12:00:00.000Z'),
+      },
+      conversation: { id: 'group-202', sendText: vi.fn() },
+      isDm: () => false,
+      client: {},
+    }
+    await (textHandler as (ctx: any) => Promise<void>)(bridgeContext)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(relayXmtpMessageToAlfaClubRoomMock).not.toHaveBeenCalled()
+
+    fetchInboxStatesMock.mockResolvedValue([{
+      identifiers: [{ identifierKind: 0, identifier: senderAddress }],
+    }])
+    await (textHandler as (ctx: any) => Promise<void>)({
+      ...bridgeContext,
+      message: { ...bridgeContext.message, id: 'xmtp-message-203' },
+    })
+
+    await vi.waitFor(() => {
+      expect(relayXmtpMessageToAlfaClubRoomMock).toHaveBeenCalledTimes(1)
+    })
+    expect(relayXmtpMessageToAlfaClubRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'group-202',
+        messageId: 'xmtp-message-203',
+        senderInboxId: 'inbox-202',
+        senderAddress,
+      }),
+    )
+    expect(aiHandler).not.toHaveBeenCalled()
     await service.stop()
   })
 })

@@ -11,7 +11,7 @@
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubRoomXmtpBridgeSchema } from '../db/schemaBootstrap.js'
 
-export type ChatBridgeMessageOrigin = 'telegram' | 'xmtp'
+export type ChatBridgeMessageOrigin = 'telegram' | 'xmtp' | 'web4626'
 
 function normalizeRoomId(value: string): string {
   return String(value ?? '').trim()
@@ -72,7 +72,7 @@ export async function getChatBridgeMessageOrigins(params: {
         AND message_id = ANY(${messageIds}::text[]);
     `
     for (const row of (result.rows ?? []) as Array<{ message_id: string; origin: string }>) {
-      if (row.origin === 'telegram' || row.origin === 'xmtp') {
+      if (row.origin === 'telegram' || row.origin === 'xmtp' || row.origin === 'web4626') {
         out.set(String(row.message_id), row.origin)
       }
     }

@@ -20,12 +20,46 @@ export const FINALIZE_SHARE_BRIDGE_GAS_LIMIT = 200_000n
 /** Paymaster allows surplus above live quoteSend fee (contract refunds to owner). */
 export const FINALIZE_SHARE_BRIDGE_MAX_SURPLUS_WEI = 500_000_000_000_000n // 0.0005 ETH
 
-export const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
-export const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
+/** Trimmed DeploymentBatcher.Phase2FinalizeParams (no meteoraAlphaVault / solanaIxs). */
+export const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
+export const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0x8e782ae1'
+/** Legacy extended tuple (meteoraAlphaVault + solanaIxs) — decode-only compatibility. */
+export const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xbd4583fb'
+export const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY = '0xab56c176'
 /** LayerZero OFT `NoPeer(uint32)` — greenfield ShareOFT peer is set inside finalizePhase2. */
 export const LZ_NO_PEER_SELECTOR = '0xf6ff4fb7'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+
+const PHASE2_FINALIZE_PARAMS_COMPONENTS_TRIMMED = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vault', type: 'address' },
+  { name: 'wrapper', type: 'address' },
+  { name: 'shareOFT', type: 'address' },
+  { name: 'gaugeController', type: 'address' },
+  { name: 'ccaLaunchArm', type: 'address' },
+  { name: 'oracle', type: 'address' },
+  { name: 'version', type: 'string' },
+  { name: 'depositAmount', type: 'uint256' },
+  { name: 'requiredRaise', type: 'uint128' },
+  { name: 'floorPriceQ96', type: 'uint256' },
+  { name: 'auctionSteps', type: 'bytes' },
+] as const
+
+const PHASE2_FINALIZE_PARAMS_COMPONENTS_LEGACY_EXTENDED = [
+  ...PHASE2_FINALIZE_PARAMS_COMPONENTS_TRIMMED,
+  { name: 'meteoraAlphaVault', type: 'bytes32' },
+  {
+    name: 'solanaIxs',
+    type: 'tuple[]',
+    components: [
+      { name: 'programId', type: 'bytes32' },
+      { name: 'serializedAccounts', type: 'bytes[]' },
+      { name: 'data', type: 'bytes' },
+    ],
+  },
+] as const
 
 const FINALIZE_PHASE2_ABI = [
   {
@@ -36,31 +70,7 @@ const FINALIZE_PHASE2_ABI = [
       {
         name: 'params',
         type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
+        components: PHASE2_FINALIZE_PARAMS_COMPONENTS_TRIMMED,
       },
     ],
     outputs: [],
@@ -76,7 +86,57 @@ const FINALIZE_PHASE2_WITH_PERMIT2_ABI = [
       {
         name: 'params',
         type: 'tuple',
-        components: FINALIZE_PHASE2_ABI[0].inputs[0].components,
+        components: PHASE2_FINALIZE_PARAMS_COMPONENTS_TRIMMED,
+      },
+      {
+        name: 'permit',
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+] as const
+
+/** Decode-only: live/old calldata that still carries retired Solana ix fields. */
+const FINALIZE_PHASE2_LEGACY_EXTENDED_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: PHASE2_FINALIZE_PARAMS_COMPONENTS_LEGACY_EXTENDED,
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const FINALIZE_PHASE2_WITH_PERMIT2_LEGACY_EXTENDED_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2WithPermit2',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: PHASE2_FINALIZE_PARAMS_COMPONENTS_LEGACY_EXTENDED,
       },
       {
         name: 'permit',
@@ -239,12 +299,6 @@ const SHARE_OFT_PEER_ABI = [
   },
 ] as const
 
-export type FinalizePhase2SolanaIx = {
-  programId: Address
-  serializedAccounts: readonly Address[]
-  data: Hex
-}
-
 export type FinalizePhase2Params = {
   creatorToken: Address
   owner: Address
@@ -259,8 +313,6 @@ export type FinalizePhase2Params = {
   requiredRaise: bigint
   floorPriceQ96: bigint
   auctionSteps: Hex
-  meteoraAlphaVault: Hex
-  solanaIxs: readonly FinalizePhase2SolanaIx[]
 }
 
 export type FinalizeShareBridgeQuote = {
@@ -518,6 +570,55 @@ export function buildShareBridgeExecutorLzReceiveOptions(gasLimit = FINALIZE_SHA
   )
 }
 
+function mapDecodedFinalizeParams(params: Record<string, unknown> | null | undefined): FinalizePhase2Params | null {
+  if (!params) return null
+  const shareOFT = readShareAddress(params)
+  const creatorToken = normalizeAddress(params.creatorToken)
+  const owner = normalizeAddress(params.owner)
+  const wrapper = normalizeAddress(params.wrapper)
+  const vault = normalizeAddress(params.vault)
+  const gaugeController = normalizeAddress(params.gaugeController)
+  const ccaLaunchArm = normalizeAddress(params.ccaLaunchArm)
+  const oracle = normalizeAddress(params.oracle)
+  const depositAmount = BigInt((params.depositAmount ?? 0n) as bigint | string | number)
+  if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaLaunchArm || !oracle) {
+    return null
+  }
+  return {
+    creatorToken,
+    owner,
+    vault,
+    wrapper,
+    shareOFT,
+    gaugeController,
+    ccaLaunchArm,
+    oracle,
+    version: typeof params.version === 'string' ? params.version : '',
+    depositAmount,
+    requiredRaise: BigInt((params.requiredRaise ?? 0n) as bigint | string | number),
+    floorPriceQ96: BigInt((params.floorPriceQ96 ?? 0n) as bigint | string | number),
+    auctionSteps: (params.auctionSteps ?? '0x') as Hex,
+  }
+}
+
+function isFinalizePhase2Selector(selector: string): boolean {
+  return (
+    selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+    selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
+  )
+}
+
+function isFinalizePhase2WithPermit2Selector(selector: string): boolean {
+  return (
+    selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
+    selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY
+  )
+}
+
+export function isFinalizePhase2CallSelector(selector: string): boolean {
+  return isFinalizePhase2Selector(selector) || isFinalizePhase2WithPermit2Selector(selector)
+}
+
 export function decodeFinalizePhase2Call(data: Hex): {
   functionName: 'finalizePhase2' | 'finalizePhase2WithPermit2'
   params: FinalizePhase2Params
@@ -526,39 +627,19 @@ export function decodeFinalizePhase2Call(data: Hex): {
   if (selector === SELECTOR_BATCHER_FINALIZE_PHASE2) {
     try {
       const decoded = decodeFunctionData({ abi: FINALIZE_PHASE2_ABI, data })
-      const params = decoded.args?.[0] as Record<string, unknown>
-      const shareOFT = readShareAddress(params)
-      const creatorToken = normalizeAddress(params?.creatorToken)
-      const owner = normalizeAddress(params?.owner)
-      const wrapper = normalizeAddress(params?.wrapper)
-      const vault = normalizeAddress(params?.vault)
-      const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
-      const oracle = normalizeAddress(params?.oracle)
-      const depositAmount = BigInt((params?.depositAmount ?? 0n) as bigint | string | number)
-      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaLaunchArm || !oracle) {
-        return null
-      }
-      return {
-        functionName: 'finalizePhase2',
-        params: {
-          creatorToken,
-          owner,
-          vault,
-          wrapper,
-          shareOFT,
-          gaugeController,
-          ccaLaunchArm,
-          oracle,
-          version: typeof params?.version === 'string' ? params.version : '',
-          depositAmount,
-          requiredRaise: BigInt((params?.requiredRaise ?? 0n) as bigint | string | number),
-          floorPriceQ96: BigInt((params?.floorPriceQ96 ?? 0n) as bigint | string | number),
-          auctionSteps: (params?.auctionSteps ?? '0x') as Hex,
-          meteoraAlphaVault: (params?.meteoraAlphaVault ?? ZERO_BYTES32) as Hex,
-          solanaIxs: Array.isArray(params?.solanaIxs) ? params.solanaIxs : [],
-        },
-      }
+      const params = mapDecodedFinalizeParams(decoded.args?.[0] as Record<string, unknown>)
+      if (!params) return null
+      return { functionName: 'finalizePhase2', params }
+    } catch {
+      return null
+    }
+  }
+  if (selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY) {
+    try {
+      const decoded = decodeFunctionData({ abi: FINALIZE_PHASE2_LEGACY_EXTENDED_ABI, data })
+      const params = mapDecodedFinalizeParams(decoded.args?.[0] as Record<string, unknown>)
+      if (!params) return null
+      return { functionName: 'finalizePhase2', params }
     } catch {
       return null
     }
@@ -566,39 +647,19 @@ export function decodeFinalizePhase2Call(data: Hex): {
   if (selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2) {
     try {
       const decoded = decodeFunctionData({ abi: FINALIZE_PHASE2_WITH_PERMIT2_ABI, data })
-      const params = decoded.args?.[0] as Record<string, unknown>
-      const shareOFT = readShareAddress(params)
-      const creatorToken = normalizeAddress(params?.creatorToken)
-      const owner = normalizeAddress(params?.owner)
-      const wrapper = normalizeAddress(params?.wrapper)
-      const vault = normalizeAddress(params?.vault)
-      const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
-      const oracle = normalizeAddress(params?.oracle)
-      const depositAmount = BigInt((params?.depositAmount ?? 0n) as bigint | string | number)
-      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaLaunchArm || !oracle) {
-        return null
-      }
-      return {
-        functionName: 'finalizePhase2WithPermit2',
-        params: {
-          creatorToken,
-          owner,
-          vault,
-          wrapper,
-          shareOFT,
-          gaugeController,
-          ccaLaunchArm,
-          oracle,
-          version: typeof params?.version === 'string' ? params.version : '',
-          depositAmount,
-          requiredRaise: BigInt((params?.requiredRaise ?? 0n) as bigint | string | number),
-          floorPriceQ96: BigInt((params?.floorPriceQ96 ?? 0n) as bigint | string | number),
-          auctionSteps: (params?.auctionSteps ?? '0x') as Hex,
-          meteoraAlphaVault: (params?.meteoraAlphaVault ?? ZERO_BYTES32) as Hex,
-          solanaIxs: Array.isArray(params?.solanaIxs) ? params.solanaIxs : [],
-        },
-      }
+      const params = mapDecodedFinalizeParams(decoded.args?.[0] as Record<string, unknown>)
+      if (!params) return null
+      return { functionName: 'finalizePhase2WithPermit2', params }
+    } catch {
+      return null
+    }
+  }
+  if (selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY) {
+    try {
+      const decoded = decodeFunctionData({ abi: FINALIZE_PHASE2_WITH_PERMIT2_LEGACY_EXTENDED_ABI, data })
+      const params = mapDecodedFinalizeParams(decoded.args?.[0] as Record<string, unknown>)
+      if (!params) return null
+      return { functionName: 'finalizePhase2WithPermit2', params }
     } catch {
       return null
     }
@@ -860,10 +921,12 @@ export async function attachFinalizeShareBridgeValueToCalls<T extends DeploySess
       throw new Error('Deploy session call data must be a hex string.')
     }
     const selector = getSelector(call.data as Hex)
-    if (
-      selector !== SELECTOR_BATCHER_FINALIZE_PHASE2 &&
-      selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2
-    ) {
+    // Recognize trimmed + legacy-extended selectors so old live calldata still gets fee attach.
+    if (!isFinalizePhase2CallSelector(selector)) {
+      continue
+    }
+    // Selector-only stubs (common in unit tests) cannot be quoted; skip without failing the stage.
+    if ((call.data as string).length <= 10) {
       continue
     }
     const batcherAddress =

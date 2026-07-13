@@ -230,16 +230,6 @@ const BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -284,8 +274,6 @@ function buildFinalizePhase2CallData(params?: {
         requiredRaise: 100_000_000_000_000_000n,
         floorPriceQ96: 1_000_000n,
         auctionSteps: '0x',
-        meteoraAlphaVault: ZERO_BYTES32,
-        solanaIxs: [],
       },
     ],
   })
@@ -374,16 +362,6 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
               { name: 'requiredRaise', type: 'uint128' },
               { name: 'floorPriceQ96', type: 'uint256' },
               { name: 'auctionSteps', type: 'bytes' },
-              { name: 'meteoraAlphaVault', type: 'bytes32' },
-              {
-                name: 'solanaIxs',
-                type: 'tuple[]',
-                components: [
-                  { name: 'programId', type: 'bytes32' },
-                  { name: 'serializedAccounts', type: 'bytes[]' },
-                  { name: 'data', type: 'bytes' },
-                ],
-              },
             ],
           },
         ],
@@ -423,13 +401,11 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           requiredRaise: 100_000_000_000_000_000n,
           floorPriceQ96: 1_000_000n,
           auctionSteps: '0x',
-          meteoraAlphaVault: ZERO_BYTES32,
-          solanaIxs: [],
         },
       ],
     })
 
-    expect(finalizeData.slice(0, 10).toLowerCase()).toBe('0xbd4583fb')
+    expect(finalizeData.slice(0, 10).toLowerCase()).toBe('0xcafc9348')
 
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
@@ -572,16 +548,6 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
               { name: 'requiredRaise', type: 'uint128' },
               { name: 'floorPriceQ96', type: 'uint256' },
               { name: 'auctionSteps', type: 'bytes' },
-              { name: 'meteoraAlphaVault', type: 'bytes32' },
-              {
-                name: 'solanaIxs',
-                type: 'tuple[]',
-                components: [
-                  { name: 'programId', type: 'bytes32' },
-                  { name: 'serializedAccounts', type: 'bytes[]' },
-                  { name: 'data', type: 'bytes' },
-                ],
-              },
             ],
           },
           {
@@ -638,8 +604,6 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           requiredRaise: 100_000_000_000_000_000n,
           floorPriceQ96: 1_000_000n,
           auctionSteps: '0x',
-          meteoraAlphaVault: ZERO_BYTES32,
-          solanaIxs: [],
         },
         {
           permitted: { token: creatorToken, amount: 5_000_000n * 10n ** 18n },

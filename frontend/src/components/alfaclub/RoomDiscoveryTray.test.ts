@@ -156,9 +156,15 @@ describe('RoomDiscoveryTray grouping', () => {
 
     expect(await screen.findByText('2 / 3')).toBeTruthy()
     expect(screen.getByText('social')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Points' }).getAttribute('aria-pressed')).toBe(
-      'true',
+
+    fireEvent.click(screen.getByRole('button', { name: /Filters/ }))
+    expect((screen.getByRole('combobox', { name: 'Sort by' }) as HTMLSelectElement).value).toBe(
+      'points',
     )
+    expect((screen.getByRole('combobox', { name: 'Room type' }) as HTMLSelectElement).value).toBe(
+      'social',
+    )
+
     const roomThree = screen.getByRole('option', { name: /Room 3/ })
     expect(roomThree.getAttribute('data-room-type')).toBe('social')
     expect(roomThree.textContent).not.toContain('SOC')

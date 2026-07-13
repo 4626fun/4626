@@ -2418,16 +2418,6 @@ describe('paymaster payout-router external approvals', () => {
             { name: 'requiredRaise', type: 'uint128' },
             { name: 'floorPriceQ96', type: 'uint256' },
             { name: 'auctionSteps', type: 'bytes' },
-            { name: 'meteoraAlphaVault', type: 'bytes32' },
-            {
-              name: 'solanaIxs',
-              type: 'tuple[]',
-              components: [
-                { name: 'programId', type: 'bytes32' },
-                { name: 'serializedAccounts', type: 'bytes[]' },
-                { name: 'data', type: 'bytes' },
-              ],
-            },
           ],
         },
       ],
@@ -2497,8 +2487,6 @@ describe('paymaster payout-router external approvals', () => {
           requiredRaise: 100_000_000_000_000_000n,
           floorPriceQ96: 1_000_000n,
           auctionSteps: '0x',
-          meteoraAlphaVault: (`0x${'0'.repeat(64)}`) as `0x${string}`,
-          solanaIxs: [],
         },
       ],
     })

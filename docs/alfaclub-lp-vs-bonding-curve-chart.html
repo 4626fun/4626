@@ -945,7 +945,7 @@
           primaryFee,
           midAtSupply,
           coinPriceUsd,
-          feeRate: (roomType === "trading" ? 690 : 300) / 10_000,
+          feeRate: (roomType === "trading" ? 690 : 3) / 10_000,
           windowSize: effectiveFitWindow,
           minDelta: 2,
           maxDelta: Math.max(5_000, sudoDeltaForKeys(lpSeedKeys) * 12),
@@ -956,7 +956,7 @@
           deltaMode === "frenmint" ? frenmintDelta :
           fitted.delta
         if (Number.isFinite(midAtSupply) && midAtSupply > 0 && coinPriceUsd > 0) {
-          const roomFeeBps = roomType === "trading" ? 690 : 300
+          const roomFeeBps = roomType === "trading" ? 690 : 3
           const feeRate = roomFeeBps / 10_000
           if (Number.isFinite(primaryAskCoinAtSupply) && Number.isFinite(primaryBidCoinAtSupply)) {
             const currentModel = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd, deltaOverride: activeDelta })
@@ -1156,7 +1156,7 @@
           midAtSupply,
           coinSymbol,
           coinPriceUsd,
-          lpFeeBps: roomType === "trading" ? 690 : 300,
+          lpFeeBps: roomType === "trading" ? 690 : 3,
           activeDelta,
           frenmintDelta,
           fitted,

@@ -1,14 +1,19 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   isPrivyProviderLinked,
   OAUTH_RETURN_SYNC_PROVIDERS,
   type OAuthReturnSyncProvider,
 } from './privyLinkedAccounts'
-import { syncAccountsProviderLink } from './providerLink'
+import {
+  isPendingAccountsProviderLinkError,
+  syncAccountsProviderLink,
+} from './providerLink'
 
 const OAUTH_SYNC_RATE_LIMIT_BACKOFF_MS = 20_000
 const OAUTH_SYNC_AUTH_BACKOFF_MS = 30_000
+const OAUTH_SYNC_HYDRATION_BACKOFF_MS = 5_000
+const OAUTH_SYNC_MAX_HYDRATION_CYCLES = 3
 const oauthSyncBackoffUntilMs: Partial<Record<OAuthReturnSyncProvider, number>> = {}
 
 function shouldRetryOAuthBackendSync(error: unknown): boolean {
@@ -37,7 +42,12 @@ export function usePrivyOAuthReturnBackendSync(params: {
   onSynced?: () => void
   onError?: (error: unknown, provider: OAuthReturnSyncProvider) => void
 }): void {
+  const [retryRevision, setRetryRevision] = useState(0)
   const syncAttemptRef = useRef<Partial<Record<OAuthReturnSyncProvider, boolean>>>({})
+  const hydrationCycleRef = useRef<Partial<Record<OAuthReturnSyncProvider, number>>>({})
+  const hydrationRetryTimerRef = useRef<
+    Partial<Record<OAuthReturnSyncProvider, ReturnType<typeof setTimeout>>>
+  >({})
   const onSyncedRef = useRef(params.onSynced)
   const onErrorRef = useRef(params.onError)
   const getAccessTokenRef = useRef(params.getAccessToken)
@@ -47,6 +57,15 @@ export function usePrivyOAuthReturnBackendSync(params: {
     onErrorRef.current = params.onError
     getAccessTokenRef.current = params.getAccessToken
   }, [params.getAccessToken, params.onError, params.onSynced])
+
+  useEffect(
+    () => () => {
+      for (const timer of Object.values(hydrationRetryTimerRef.current)) {
+        if (timer) clearTimeout(timer)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     if (params.enabled === false) return
@@ -62,10 +81,21 @@ export function usePrivyOAuthReturnBackendSync(params: {
       const backendLinked = (params.linkedMethods?.[provider] ?? []).length > 0
       if (backendLinked) {
         syncAttemptRef.current[provider] = false
+        hydrationCycleRef.current[provider] = 0
+        const timer = hydrationRetryTimerRef.current[provider]
+        if (timer) clearTimeout(timer)
+        delete hydrationRetryTimerRef.current[provider]
         oauthSyncBackoffUntilMs[provider] = 0
         continue
       }
-      if (!isPrivyProviderLinked(params.privyUser, provider)) continue
+      if (!isPrivyProviderLinked(params.privyUser, provider)) {
+        syncAttemptRef.current[provider] = false
+        hydrationCycleRef.current[provider] = 0
+        const timer = hydrationRetryTimerRef.current[provider]
+        if (timer) clearTimeout(timer)
+        delete hydrationRetryTimerRef.current[provider]
+        continue
+      }
       if (syncAttemptRef.current[provider]) continue
       pending.push(provider)
     }
@@ -81,8 +111,28 @@ export function usePrivyOAuthReturnBackendSync(params: {
             provider,
             getAccessToken: getAccessTokenRef.current,
           })
+          hydrationCycleRef.current[provider] = 0
           if (!cancelled) onSyncedRef.current?.()
         } catch (error) {
+          if (cancelled) {
+            syncAttemptRef.current[provider] = false
+            return
+          }
+          if (isPendingAccountsProviderLinkError(error, provider)) {
+            const cycle = (hydrationCycleRef.current[provider] ?? 0) + 1
+            hydrationCycleRef.current[provider] = cycle
+            if (cycle < OAUTH_SYNC_MAX_HYDRATION_CYCLES) {
+              const currentTimer = hydrationRetryTimerRef.current[provider]
+              if (currentTimer) clearTimeout(currentTimer)
+              hydrationRetryTimerRef.current[provider] = setTimeout(() => {
+                delete hydrationRetryTimerRef.current[provider]
+                syncAttemptRef.current[provider] = false
+                setRetryRevision((revision) => revision + 1)
+              }, OAUTH_SYNC_HYDRATION_BACKOFF_MS)
+            }
+            continue
+          }
+
           const status = typeof (error as { status?: unknown })?.status === 'number'
             ? (error as { status: number }).status
             : null
@@ -114,5 +164,6 @@ export function usePrivyOAuthReturnBackendSync(params: {
     params.privyReady,
     params.privyUser,
     params.providers,
+    retryRevision,
   ])
 }

@@ -4,46 +4,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import { Connection, Keypair, PublicKey } from '@solana/web3.js'
-import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
-import { base } from 'viem/chains'
-import {
-  runWrapToken,
-  toExecErrorText as toErrorText,
-} from '../_lib/onchain/solanaBridgeCliRunner.js'
-import {
-  WRAP_TOKEN_NAME_MAX_LENGTH,
-  WRAP_TOKEN_SYMBOL_MAX_LENGTH,
-  isLikelyUnsupportedMetadataUriFlagError,
-  normalizeWrapTokenMetadataUri,
-  normalizeWrapTokenName,
-  normalizeWrapTokenSymbol,
-  readBridgeTokenMetadata,
-} from '../_lib/onchain/solanaBridgeTokenMetadata.js'
-import {
-  parseMintPubkeyFromAlreadyExistsError,
-  parseMintPubkeyFromWrapOutput,
-  solanaPubkeyToBytes32Hex,
-} from '../_lib/onchain/solanaBridgePubkey.js'
-import {
-  BASE_SOLANA_BRIDGE_SCALARS_ABI,
-  resolveBaseSolanaBridge,
-} from '../_lib/onchain/resolveBaseSolanaBridge.js'
+import { Connection, Keypair } from '@solana/web3.js'
+import { type Hex } from 'viem'
+import { solanaPubkeyToBytes32Hex } from '../_lib/onchain/solanaBridgePubkey.js'
 
 const execFileAsync = promisify(execFile)
 const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
-const SOLANA_SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
-const SOLANA_TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
-
-type ProvisionBody = {
-  bridgeToken?: string
-  deployEnv?: string
-  solanaDecimals?: number | string
-  tokenMetadataUri?: string
-  scalerExponent?: number | string
-  payerKp?: string
-  payForRelay?: boolean
-}
 
 type MeteoraAccountMetaBody = {
   pubkey?: string
@@ -73,62 +39,12 @@ function parseBooleanEnv(name: string, fallback: boolean): boolean {
 const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv('PROVISIONER_HEALTH_DEBUG', false)
 const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv('PROVISIONER_EXTENDED_ENDPOINTS', false)
 
-type ProvisionerMintCompatibilityHints = {
-  tokenProgram: 'spl-token' | 'token-2022' | null
-  transferHookDetected: boolean | null
-  oftFeeBps: number | null
-  adapterMode: 'regular-oft' | 'oft-adapter' | null
-  authorityCompatible: boolean | null
-  rentValueLamports: string | null
-}
-
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   const body = JSON.stringify(payload)
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
   res.end(body)
-}
-
-function parseDecimals(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 255) {
-    return Math.floor(value)
-  }
-  if (typeof value === 'string') {
-    const n = Number(value.trim())
-    if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
-  }
-  return null
-}
-
-function parseEnvInt(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback
-  const parsed = Number.parseInt(String(value).trim(), 10)
-  if (!Number.isFinite(parsed)) return fallback
-  return parsed
-}
-
-function readProvisionerWrapRetryAttempts(): number {
-  const attempts = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_ATTEMPTS, 3)
-  return Math.min(Math.max(attempts, 1), 8)
-}
-
-function readProvisionerWrapRetryDelayMs(): number {
-  const delayMs = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_DELAY_MS, 1_200)
-  return Math.max(delayMs, 0)
-}
-
-function isRetryableWrapTokenError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('blockhash not found') ||
-    lower.includes('transaction simulation failed') ||
-    lower.includes('temporarily unavailable') ||
-    lower.includes('timed out') ||
-    lower.includes('timeout') ||
-    lower.includes('econnreset') ||
-    lower.includes('socket hang up')
-  )
 }
 
 function parseUint64(value: unknown): bigint | null {
@@ -174,159 +90,12 @@ function envBool(key: string, fallback = false): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes'
 }
 
+function toErrorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function readStrictSolPairEnabled(): boolean {
   return envBool('SOLANA_STRICT_SOL_PAIR', true)
-}
-
-function readAdapterModeHint(): 'regular-oft' | 'oft-adapter' | null {
-  const raw = String(process.env.SOLANA_OVAULT_ADAPTER_MODE ?? '').trim().toLowerCase()
-  if (!raw) return null
-  if (raw === 'regular-oft' || raw === 'regular' || raw === 'oft') return 'regular-oft'
-  if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter'
-  return null
-}
-
-function parseNonNegativeInt(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.floor(value)
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value.trim(), 10)
-    if (Number.isFinite(parsed) && parsed >= 0) return parsed
-  }
-  return null
-}
-
-function deepFindNumberByKey(value: unknown, keys: string[]): number | null {
-  const want = new Set(keys.map((k) => k.toLowerCase()))
-  const seen = new Set<unknown>()
-  const stack: unknown[] = [value]
-  while (stack.length > 0) {
-    const current = stack.pop()
-    if (!current || typeof current !== 'object') continue
-    if (seen.has(current)) continue
-    seen.add(current)
-    if (Array.isArray(current)) {
-      for (const item of current) stack.push(item)
-      continue
-    }
-    for (const [key, nested] of Object.entries(current as Record<string, unknown>)) {
-      if (want.has(key.toLowerCase())) {
-        const parsed = parseNonNegativeInt(nested)
-        if (parsed !== null) return parsed
-      }
-      stack.push(nested)
-    }
-  }
-  return null
-}
-
-function ownerToTokenProgram(ownerRaw: unknown): 'spl-token' | 'token-2022' | null {
-  const owner =
-    typeof ownerRaw === 'string'
-      ? ownerRaw
-      : ownerRaw && typeof (ownerRaw as any).toBase58 === 'function'
-        ? String((ownerRaw as any).toBase58())
-        : ''
-  if (owner === SOLANA_SPL_TOKEN_PROGRAM) return 'spl-token'
-  if (owner === SOLANA_TOKEN_2022_PROGRAM) return 'token-2022'
-  return null
-}
-
-function detectTransferHookFromParsedInfo(info: unknown): boolean | null {
-  if (!info || typeof info !== 'object') return null
-  const serialized = JSON.stringify(info).toLowerCase()
-  if (!serialized) return null
-  return (
-    serialized.includes('transferhook') ||
-    serialized.includes('transfer_hook') ||
-    serialized.includes('transfer hook')
-  )
-}
-
-function readAuthorityCompatibleHint(params: {
-  parsedInfo: unknown
-  payerPubkey: string | null
-}): boolean | null {
-  const info = params.parsedInfo as Record<string, unknown> | null
-  if (!info || typeof info !== 'object') return null
-  const mintAuthority = typeof info.mintAuthority === 'string' ? info.mintAuthority : null
-  const freezeAuthority = typeof info.freezeAuthority === 'string' ? info.freezeAuthority : null
-  if (!params.payerPubkey) {
-    // Conservative default when payer authority is unknown: require authorities to be immutable.
-    return mintAuthority === null && freezeAuthority === null
-  }
-  const payer = params.payerPubkey
-  const mintOk = mintAuthority === null || mintAuthority === payer
-  const freezeOk = freezeAuthority === null || freezeAuthority === payer
-  return mintOk && freezeOk
-}
-
-async function readMintCompatibilityHints(params: {
-  mintPubkey: string
-  payerPubkey: string | null
-}): Promise<ProvisionerMintCompatibilityHints> {
-  const fallbackAdapterMode = readAdapterModeHint()
-  const out: ProvisionerMintCompatibilityHints = {
-    tokenProgram: null,
-    transferHookDetected: null,
-    oftFeeBps: null,
-    adapterMode: fallbackAdapterMode,
-    authorityCompatible: null,
-    rentValueLamports: null,
-  }
-
-  const rpcUrl =
-    String(process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com').trim()
-    || 'https://api.mainnet-beta.solana.com'
-  try {
-    const connection = new Connection(rpcUrl, 'confirmed')
-    const mintKey = new PublicKey(params.mintPubkey)
-    const accountInfo = await connection.getParsedAccountInfo(mintKey, 'confirmed')
-    const value: any = accountInfo?.value
-    if (!value) return out
-
-    out.tokenProgram = ownerToTokenProgram(value.owner)
-    if (typeof value.lamports === 'number' && Number.isFinite(value.lamports) && value.lamports >= 0) {
-      out.rentValueLamports = BigInt(Math.floor(value.lamports)).toString()
-    }
-
-    const parsedInfo = (value?.data as any)?.parsed?.info
-    const transferHookDetected = detectTransferHookFromParsedInfo(parsedInfo)
-    if (transferHookDetected !== null) out.transferHookDetected = transferHookDetected
-
-    const detectedFeeBps = deepFindNumberByKey(parsedInfo, [
-      'transferFeeBasisPoints',
-      'newerTransferFeeBasisPoints',
-      'basisPoints',
-      'feeBps',
-      'fee_basis_points',
-    ])
-    if (detectedFeeBps !== null) out.oftFeeBps = detectedFeeBps
-    if (out.transferHookDetected === false && out.oftFeeBps === null) {
-      out.oftFeeBps = 0
-    }
-
-    const authorityCompatible = readAuthorityCompatibleHint({
-      parsedInfo,
-      payerPubkey: params.payerPubkey,
-    })
-    if (authorityCompatible !== null) out.authorityCompatible = authorityCompatible
-    if (out.authorityCompatible === null) out.authorityCompatible = true
-    if (out.transferHookDetected === null) out.transferHookDetected = false
-    return out
-  } catch (error) {
-    process.stderr.write(
-      `[solana-provisioner] mint compatibility hint probe failed for ${params.mintPubkey}: ${error instanceof Error ? error.message : String(error)}\n`,
-    )
-    return out
-  }
-}
-
-function readWrapTokenMetadataUriEnabled(): boolean {
-  const raw = String(process.env.SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED ?? '')
-    .trim()
-    .toLowerCase()
-  if (!raw) return false
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 function readBody(req: IncomingMessage, maxBytes = PROVISIONER_MAX_BODY_BYTES): Promise<string> {
@@ -502,35 +271,6 @@ async function readProvisionerPayerHealth(): Promise<{
   }
 }
 
-async function runWrapTokenWithRetry(
-  cliDir: string,
-  cliBinRaw: string,
-  wrapArgs: string[],
-): Promise<{ output: string; runner: string }> {
-  const retryAttempts = readProvisionerWrapRetryAttempts()
-  const retryDelayMs = readProvisionerWrapRetryDelayMs()
-
-  for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
-    try {
-      return await runWrapToken(cliDir, cliBinRaw, wrapArgs)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const retryable = isRetryableWrapTokenError(message)
-      const willRetry = retryable && attempt < retryAttempts
-      process.stderr.write(
-        `[solana-provisioner] wrap-token attempt failed attempt=${attempt}/${retryAttempts} retryable=${retryable} willRetry=${willRetry}: ${message}\n`,
-      )
-      if (!willRetry) throw error
-      const backoffMs = retryDelayMs * attempt
-      if (backoffMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, backoffMs))
-      }
-    }
-  }
-
-  throw new Error('wrap-token failed after retries')
-}
-
 async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
@@ -597,258 +337,14 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
   json(res, 200, payload)
 }
 
-async function handleProvision(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const secret = readProvisionerBearerSecret().value
-  if (!secret) {
-    return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
-  }
-  if (!authOk(req, secret)) {
-    return json(res, 401, { success: false, error: 'Unauthorized' })
-  }
-
-  const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
-  if (!cliDir || !existsSync(cliDir)) {
-    return json(res, 503, {
-      success: false,
-      error: 'SOLANA_BRIDGE_CLI_DIR is not configured or does not exist on this runtime.',
-    })
-  }
-
-  let body: ProvisionBody
-  try {
-    const raw = await readBody(req)
-    body = (raw ? JSON.parse(raw) : {}) as ProvisionBody
-  } catch (error) {
-    if (error instanceof Error && error.message === 'request_body_too_large') {
-      return json(res, 413, { success: false, error: 'Request body too large.' })
-    }
-    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
-  }
-
-  const bridgeTokenRaw = String(body?.bridgeToken ?? '').trim()
-  if (!isAddress(bridgeTokenRaw)) {
-    return json(res, 400, { success: false, error: 'Invalid bridgeToken address' })
-  }
-  const bridgeToken = bridgeTokenRaw as Address
-
-  const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? parseDecimals(process.env.SOLANA_DEFAULT_MINT_DECIMALS) ?? 9
-  const deployEnv = String(body?.deployEnv ?? process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
-  const scalerExponent =
-    parseDecimals(body?.scalerExponent) ??
-    parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ??
-    solanaDecimals
-  const payerKp = String(body?.payerKp ?? process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
-  const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
-  const payForRelay =
-    typeof body?.payForRelay === 'boolean' ? body.payForRelay : envBool('SOLANA_BRIDGE_PAY_FOR_RELAY', true)
-  const provisionerPayer = resolveProvisionerPayerKeypair()
-  const provisionerPayerPubkey = provisionerPayer.keypair?.publicKey?.toBase58?.() ?? null
-  const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
-  const publicClient = createPublicClient({
-    chain: base,
-    transport: http(rpcUrl, { timeout: 20_000 }),
+async function handleProvision(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return json(res, 410, {
+    success: false,
+    error: 'gone',
+    code: 'twin_wrap_token_provisioning_retired',
+    message:
+      'POST /provision Twin wrap-token provisioning is retired. Use LayerZero ShareOFT share-mesh provisioning instead: Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer) plus LZ OFT store/mint setup. See docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md and docs/_internal/operations/solana/solana-share-mesh-budget-paths.md.',
   })
-  const bridgeTokenMetadata = await readBridgeTokenMetadata({ publicClient, bridgeToken })
-  if (!bridgeTokenMetadata) {
-    return json(res, 409, {
-      success: false,
-      error: 'Bridge token metadata unavailable. Name/symbol are required for strict Solana parity provisioning.',
-    })
-  }
-  const tokenName = normalizeWrapTokenName(bridgeTokenMetadata.name)
-  const tokenSymbol = normalizeWrapTokenSymbol(bridgeTokenMetadata.symbol)
-  if (!tokenName || !tokenSymbol) {
-    return json(res, 409, {
-      success: false,
-      error:
-        `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
-        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, lowercase-coerced).`,
-    })
-  }
-  const tokenMetadataUriRaw =
-    typeof body?.tokenMetadataUri === 'string' ? body.tokenMetadataUri.trim() : ''
-  const tokenMetadataUri = tokenMetadataUriRaw
-    ? normalizeWrapTokenMetadataUri(tokenMetadataUriRaw)
-    : null
-  if (tokenMetadataUriRaw && !tokenMetadataUri) {
-    return json(res, 400, {
-      success: false,
-      error: 'Invalid tokenMetadataUri. Expected http(s)://, ipfs://, or ar:// URL.',
-    })
-  }
-  const includeMetadataUriByDefault = readWrapTokenMetadataUriEnabled() && Boolean(tokenMetadataUri)
-  const buildWrapArgs = (tokenSymbol: string, includeMetadataUri: boolean): string[] => {
-    const args = [
-      'sol',
-      'bridge',
-      'wrap-token',
-      '--deploy-env',
-      deployEnv,
-      '--remote-token',
-      bridgeToken,
-      '--decimals',
-      String(solanaDecimals),
-      '--name',
-      tokenName,
-      '--symbol',
-      tokenSymbol,
-      '--scaler-exponent',
-      String(scalerExponent),
-      '--payer-kp',
-      payerKp,
-    ]
-    if (includeMetadataUri && tokenMetadataUri) {
-      args.push('--metadata-uri', tokenMetadataUri)
-    }
-    if (payForRelay) args.push('--pay-for-relay')
-    return args
-  }
-
-  try {
-    let combined = ''
-    let runner = ''
-    const metadataAttempts = includeMetadataUriByDefault ? [true, false] : [false]
-    let result: { output: string; runner: string } | null = null
-    for (let metadataIdx = 0; metadataIdx < metadataAttempts.length; metadataIdx += 1) {
-      const includeMetadataUri = metadataAttempts[metadataIdx]
-      try {
-        result = await runWrapTokenWithRetry(cliDir, cliBin, buildWrapArgs(tokenSymbol, includeMetadataUri))
-        break
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        const canRetryWithoutMetadata =
-          includeMetadataUriByDefault &&
-          includeMetadataUri &&
-          isLikelyUnsupportedMetadataUriFlagError(message)
-        if (!canRetryWithoutMetadata) throw error
-        process.stderr.write(
-          `[solana-provisioner] wrap-token metadata-uri flag unsupported; retrying without metadata-uri symbol=${tokenSymbol}: ${message}\n`,
-        )
-      }
-    }
-    if (!result) {
-      throw new Error('wrap-token did not return output')
-    }
-    combined = result.output
-    runner = result.runner
-
-    const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
-    if (!mintPubkey) {
-      return json(res, 500, {
-        success: false,
-        error: `Could not parse mint pubkey from wrap-token output: ${combined.slice(-1200)}`,
-      })
-    }
-    const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-    const mintCompatibilityHints = await readMintCompatibilityHints({
-      mintPubkey,
-      payerPubkey: provisionerPayerPubkey,
-    })
-    const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
-    let scalar = 0n
-    for (let i = 0; i < 24; i += 1) {
-      scalar = await publicClient
-        .readContract({
-          address: baseSolanaBridge,
-          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
-          functionName: 'scalars',
-          args: [bridgeToken, mintBytes32],
-        })
-        .then((v) => BigInt(v as bigint))
-        .catch(() => 0n)
-      if (scalar > 0n) break
-      await new Promise((resolve) => setTimeout(resolve, 5_000))
-    }
-    if (scalar === 0n) {
-      return json(res, 500, {
-        success: false,
-        error: `Route scalar remained 0 for ${bridgeToken} and ${mintBytes32} after wrap-token.`,
-      })
-    }
-
-    // ── Post-provision: legacy creator-SPL auto-pool (retired) ─────────
-    // SOLANA_AUTO_POOL previously created DLMM + Alpha Vault on bridge-wrapped
-    // creator SPL. Greenfield share liquidity uses the LZ share-mesh runbook instead
-    // (docs/operations/solana-share-mesh-budget-paths.md). The env var is ignored.
-    let poolResult: { signature?: string; error?: string } | null = null
-    let vaultResult: { vault?: string; signature?: string; error?: string } | null = null
-
-    if (envBool('SOLANA_AUTO_POOL', false)) {
-      process.stderr.write(
-        '[solana-provisioner] SOLANA_AUTO_POOL is retired and ignored. ' +
-          'Do not auto-pool bridge-wrapped creator SPL. Use share-mesh Path 1/2 instead ' +
-          '(docs/operations/solana-share-mesh-budget-paths.md).\n',
-      )
-    }
-
-    return json(res, 200, {
-      success: true,
-      mintBytes32,
-      data: {
-        bridgeToken,
-        mintPubkey,
-        mintBytes32,
-        runner,
-        tokenSymbol,
-        routeScalar: scalar.toString(),
-        mintCompatibilityHints,
-        pool: poolResult,
-        alphaVault: vaultResult,
-      },
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-
-    // Idempotency recovery is intentionally strict:
-    // only recover on explicit "account already exists" mint errors.
-    // Do not recover from ConstraintSeeds under strict metadata parity.
-    const existingMintPubkey = parseMintPubkeyFromAlreadyExistsError(message)
-    if (existingMintPubkey) {
-      try {
-        const mintBytes32 = solanaPubkeyToBytes32Hex(existingMintPubkey)
-        const mintCompatibilityHints = await readMintCompatibilityHints({
-          mintPubkey: existingMintPubkey,
-          payerPubkey: provisionerPayerPubkey,
-        })
-        const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
-        let scalar = 0n
-        for (let i = 0; i < 24; i += 1) {
-          scalar = await publicClient
-            .readContract({
-              address: baseSolanaBridge,
-              abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
-              functionName: 'scalars',
-              args: [bridgeToken, mintBytes32],
-            })
-            .then((v) => BigInt(v as bigint))
-            .catch(() => 0n)
-          if (scalar > 0n) break
-          await new Promise((resolve) => setTimeout(resolve, 5_000))
-        }
-        if (scalar > 0n) {
-          return json(res, 200, {
-            success: true,
-            mintBytes32,
-            data: {
-              bridgeToken,
-              mintPubkey: existingMintPubkey,
-              mintBytes32,
-              runner: 'existing-mint-reuse',
-              routeScalar: scalar.toString(),
-              mintCompatibilityHints,
-            },
-          })
-        }
-      } catch {
-        // Fall through to standard error response below.
-      }
-    }
-
-    return json(res, 500, {
-      success: false,
-      error: `Failed to provision dynamic Solana route: ${message}`,
-    })
-  }
 }
 
 async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse): Promise<void> {

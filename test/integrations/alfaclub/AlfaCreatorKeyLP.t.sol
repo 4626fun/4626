@@ -415,4 +415,75 @@ contract AlfaCreatorKeyLPTest is Test {
         vm.expectRevert(abi.encodeWithSelector(AlfaCreatorKeyPool.FeeBpsTooHigh.selector, tooHigh));
         new AlfaCreatorKeyPool(address(friendKey), address(creatorCoin), TOKEN_ID, tooHigh);
     }
+
+    function testFuzzBuyThenSellPreservesOrIncreasesK(uint8 rawBuyAmount) public {
+        AlfaCreatorKeyPool pool = _createPool();
+        uint256 buyAmount = bound(uint256(rawBuyAmount), 1, INITIAL_KEYS - 1);
+        (uint256 creatorBefore, uint256 keysBefore) = pool.getReserves();
+        uint256 kBefore = creatorBefore * keysBefore;
+
+        uint256 buyQuote = pool.quoteBuyKeys(buyAmount);
+        vm.startPrank(trader);
+        creatorCoin.approve(address(pool), type(uint256).max);
+        pool.buyKeys(buyAmount, buyQuote, trader);
+        vm.stopPrank();
+
+        (uint256 creatorAfterBuy, uint256 keysAfterBuy) = pool.getReserves();
+        assertGe(creatorAfterBuy * keysAfterBuy, kBefore, "buy must not reduce k");
+
+        uint256 sellQuote = pool.quoteSellKeys(buyAmount);
+        vm.startPrank(trader);
+        friendKey.setApprovalForAll(address(pool), true);
+        pool.sellKeys(buyAmount, sellQuote, trader);
+        vm.stopPrank();
+
+        (uint256 creatorAfterSell, uint256 keysAfterSell) = pool.getReserves();
+        assertGe(creatorAfterSell * keysAfterSell, creatorAfterBuy * keysAfterBuy, "sell must not reduce k");
+    }
+
+    function testFuzzAddRemoveIsProportional(uint8 rawKeyAmount) public {
+        AlfaCreatorKeyPool pool = _createPool();
+        uint256 keyAmount = bound(uint256(rawKeyAmount), 2, 20);
+        friendKey.mintKeys(lp2, TOKEN_ID, keyAmount);
+        (uint256 creatorQuote, uint256 shareQuote) = pool.quoteAddLiquidity(keyAmount);
+
+        vm.startPrank(lp2);
+        creatorCoin.approve(address(pool), creatorQuote);
+        friendKey.setApprovalForAll(address(pool), true);
+        (, uint256 shares) = pool.addLiquidity(keyAmount, creatorQuote, shareQuote, lp2);
+        (uint256 creatorOut, uint256 keysOut) = pool.removeLiquidity(shares, 0, 0, lp2);
+        vm.stopPrank();
+
+        assertLe(creatorOut, creatorQuote, "rounding must not overpay creator coin");
+        assertLe(keysOut, keyAmount, "rounding must not overpay keys");
+        assertGe(keysOut, keyAmount - 1, "proportional removal lost more than one integer key");
+    }
+
+    function testIntegerKeyReserveBoundary() public {
+        AlfaCreatorKeyPool pool = _createPool();
+        assertGt(pool.quoteBuyKeys(INITIAL_KEYS - 1), 0);
+        vm.expectRevert(AlfaCreatorKeyPool.InsufficientReserves.selector);
+        pool.quoteBuyKeys(INITIAL_KEYS);
+    }
+
+    function testAdversarialAlternatingTradesKeepStoredReservesBacked() public {
+        AlfaCreatorKeyPool pool = _createPool();
+
+        vm.startPrank(trader);
+        creatorCoin.approve(address(pool), type(uint256).max);
+        friendKey.setApprovalForAll(address(pool), true);
+        for (uint256 i = 0; i < 8; i++) {
+            uint256 buyQuote = pool.quoteBuyKeys(1);
+            pool.buyKeys(1, buyQuote, trader);
+            uint256 sellQuote = pool.quoteSellKeys(1);
+            pool.sellKeys(1, sellQuote, trader);
+        }
+        vm.stopPrank();
+
+        (uint256 creatorReserve, uint256 keyReserve) = pool.getReserves();
+        assertGe(creatorCoin.balanceOf(address(pool)), creatorReserve);
+        assertGe(friendKey.balanceOf(address(pool), TOKEN_ID), keyReserve);
+        assertGt(creatorReserve, 0);
+        assertGt(keyReserve, 0);
+    }
 }

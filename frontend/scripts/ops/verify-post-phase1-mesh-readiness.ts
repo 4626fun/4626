@@ -38,7 +38,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '../..')
 
 const SHARE_MESH_MINT = '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv'
-const BATCHER_DEFAULT_PEER =
+/** Example Solana OFT store peer bytes32 for composer mesh planning (not a batcher-global peer). */
+const SHARE_MESH_PEER_EXAMPLE =
   '0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f'
 
 function getArg(name: string, fallback = ''): string {
@@ -120,8 +121,6 @@ async function main(): Promise<void> {
     requiredRaise: BigInt(getArg('--required-raise', '100000000000000000')),
     floorPriceQ96: BigInt(getArg('--floor-price-q96', '1')),
     auctionSteps: '0x' as Hex,
-    meteoraAlphaVault: `0x${'00'.repeat(32)}` as Hex,
-    solanaIxs: [],
   }
 
   const finalizeCallData = buildFinalizePhase2CallData(finalizeParams)
@@ -142,15 +141,17 @@ async function main(): Promise<void> {
     process.stdout.write(`✗ wiring: ${wiring.code} — ${wiring.message}\n\n`)
     if (wiring.code === 'oft_peer_not_configured') {
       process.stdout.write(
-        'Fix: batcher solanaShareOftPeer should already be set from Pipe A cutover. Re-run verify-batcher-pipe-a-readiness.\n\n',
+        'Fix: seed Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer) before finalize.\n' +
+          'Batcher shell readiness (destination + OVault runtime): verify-batcher-pipe-a-readiness.ts\n' +
+          'Runbook: docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md\n\n',
       )
     }
     process.exit(1)
   }
 
-  process.stdout.write(`✓ batcher default peer: ${wiring.batcherDefaultPeer ?? 'unset'}\n`)
-  process.stdout.write(`✓ effective peer:     ${wiring.effectivePeer ?? 'unset'}\n`)
-  process.stdout.write(`  ShareOFT peers():   ${wiring.shareOftPeer ?? 'unset (finalize may set)'}\n`)
+  process.stdout.write(`✓ registry peer:     ${wiring.registryPeer ?? 'unset'}\n`)
+  process.stdout.write(`✓ effective peer:    ${wiring.effectivePeer ?? 'unset'}\n`)
+  process.stdout.write(`  ShareOFT peers():  ${wiring.shareOftPeer ?? 'unset (finalize may set)'}\n`)
 
   const quote = await quoteFinalizeShareBridgeNativeFee({
     publicClient: client,
@@ -188,11 +189,12 @@ async function main(): Promise<void> {
   process.stdout.write(`  (keep existing keys if other creators are live)\n`)
   process.stdout.write(`  sudo systemctl restart solana-keeper-orchestrator\n\n`)
 
-  process.stdout.write('--- Composer mesh (protocol treasury Safe) ---\n')
+  process.stdout.write('--- Composer mesh + registry peer ---\n')
   process.stdout.write(
-    `pnpm -C frontend exec tsx scripts/ops/plan-akita-share-mesh-phase-a.ts \\\n` +
+    `Seed Registry4626.setRemoteOFTPeerBytes32(creator, 30168, peer) then:\n` +
+      `pnpm -C frontend exec tsx scripts/ops/plan-akita-share-mesh-phase-a.ts \\\n` +
       `  --share-mesh ${shareOft} \\\n` +
-      `  --solana-share-peer ${BATCHER_DEFAULT_PEER} \\\n` +
+      `  --solana-share-peer ${SHARE_MESH_PEER_EXAMPLE} \\\n` +
       `  --solana-eid 30168\n\n`,
   )
 

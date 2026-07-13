@@ -1,8 +1,20 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { AlertTriangle, Clock3, Inbox, KeyRound, Search, Star, Users, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  Clock3,
+  Inbox,
+  KeyRound,
+  Search,
+  SlidersHorizontal,
+  Star,
+  Users,
+  X,
+} from 'lucide-react'
 import {
   type KeyboardEvent,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -400,6 +412,14 @@ export function RoomDiscoveryTray({
   )
 }
 
+function countActiveDiscoveryFilters(filters: RoomDiscoveryFilters): number {
+  let count = 0
+  if (filters.roomType !== 'all') count += 1
+  if (filters.tier !== 'all') count += 1
+  if (filters.sort !== DEFAULT_FILTERS.sort) count += 1
+  return count
+}
+
 function DiscoveryHeader({
   totalCount,
   visibleCount,
@@ -411,8 +431,10 @@ function DiscoveryHeader({
   filters: RoomDiscoveryFilters
   onFiltersChange: (filters: RoomDiscoveryFilters) => void
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const activeFilterLabel = describeActiveFilters(filters)
   const hasActiveFilters = activeFilterLabel.length > 0
+  const activeFilterCount = countActiveDiscoveryFilters(filters)
   return (
     <div className="shrink-0">
       <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">AlfaClub</p>
@@ -443,46 +465,31 @@ function DiscoveryHeader({
           </button>
         ) : null}
       </label>
-      <div className="mt-3.5 flex flex-wrap gap-1.5" aria-label="Room type">
-        {TYPE_OPTIONS.map((option) => (
-          <FilterButton
-            key={option.id}
-            active={filters.roomType === option.id}
-            onClick={() => onFiltersChange({ ...filters, roomType: option.id })}
-          >
-            {option.label}
-          </FilterButton>
-        ))}
-      </div>
-      <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Bonding curve tier">
-        {TIER_OPTIONS.map((option) => (
-          <FilterButton
-            key={option.id}
-            active={filters.tier === option.id}
-            onClick={() => onFiltersChange({ ...filters, tier: option.id })}
-          >
-            {option.label}
-          </FilterButton>
-        ))}
-      </div>
-      <div className="mt-2.5 flex items-center justify-between gap-2" aria-label="Sort rooms">
-        <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">Sort</span>
-        <div className="flex gap-1.5">
-          {SORT_OPTIONS.map((option) => (
-            <FilterButton
-              key={option.id}
-              active={filters.sort === option.id}
-              onClick={() => onFiltersChange({ ...filters, sort: option.id })}
-            >
-              {option.label}
-            </FilterButton>
-          ))}
-        </div>
-      </div>
-      <div className="mb-3 mt-3 flex min-h-5 items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
-        <span className="truncate font-mono text-[10px] text-zinc-500" aria-live="polite">
-          {hasActiveFilters ? activeFilterLabel : 'All room signals'}
-        </span>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          aria-controls="alfaclub-room-filters-panel"
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[11px] transition-colors',
+            filtersOpen || activeFilterCount > 0
+              ? 'bg-sky-500/15 text-sky-200 ring-1 ring-sky-400/30'
+              : 'bg-white/[0.03] text-zinc-400 ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:text-zinc-200',
+          )}
+        >
+          <SlidersHorizontal className="size-3" aria-hidden />
+          Filters
+          {activeFilterCount > 0 ? (
+            <span className="grid size-4 place-items-center rounded-full bg-sky-400 text-[9px] font-bold text-black">
+              {activeFilterCount}
+            </span>
+          ) : null}
+          <ChevronDown
+            className={cn('size-3 transition-transform', filtersOpen && 'rotate-180')}
+            aria-hidden
+          />
+        </button>
         {hasActiveFilters ? (
           <button
             type="button"
@@ -491,7 +498,40 @@ function DiscoveryHeader({
           >
             Clear
           </button>
-        ) : null}
+        ) : (
+          <span className="truncate font-mono text-[10px] text-zinc-500" aria-live="polite">
+            All room signals
+          </span>
+        )}
+      </div>
+      <div
+        id="alfaclub-room-filters-panel"
+        hidden={!filtersOpen}
+        className="mt-2.5 grid grid-cols-1 gap-2.5 rounded-xl bg-black/30 p-3 ring-1 ring-white/[0.06] sm:grid-cols-3"
+      >
+        <FilterSelect
+          label="Room type"
+          value={filters.roomType}
+          options={TYPE_OPTIONS}
+          onChange={(roomType) => onFiltersChange({ ...filters, roomType })}
+        />
+        <FilterSelect
+          label="Bonding curve"
+          value={filters.tier}
+          options={TIER_OPTIONS}
+          onChange={(tier) => onFiltersChange({ ...filters, tier })}
+        />
+        <FilterSelect
+          label="Sort by"
+          value={filters.sort}
+          options={SORT_OPTIONS}
+          onChange={(sort) => onFiltersChange({ ...filters, sort })}
+        />
+      </div>
+      <div className="mb-3 mt-2.5 flex min-h-4 items-center border-t border-white/[0.06] pt-2.5">
+        <span className="truncate font-mono text-[10px] text-zinc-500" aria-live="polite">
+          {hasActiveFilters ? activeFilterLabel : 'No filters applied'}
+        </span>
       </div>
     </div>
   )
@@ -503,32 +543,40 @@ function describeActiveFilters(filters: RoomDiscoveryFilters): string {
   if (query) labels.push(`“${query}”`)
   if (filters.roomType !== 'all') labels.push(filters.roomType)
   if (filters.tier !== 'all') labels.push(filters.tier)
+  if (filters.sort !== DEFAULT_FILTERS.sort) {
+    labels.push(`sort: ${SORT_OPTIONS.find((option) => option.id === filters.sort)?.label ?? filters.sort}`)
+  }
   return labels.join(' · ')
 }
 
-function FilterButton({
-  active,
-  onClick,
-  children,
+function FilterSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
 }: {
-  active: boolean
-  onClick: () => void
-  children: string
+  label: string
+  value: T
+  options: ReadonlyArray<{ id: T; label: string }>
+  onChange: (value: T) => void
 }) {
+  const id = useId()
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        'shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] transition-colors',
-        active
-          ? 'bg-sky-500 text-white shadow-sm shadow-sky-950/40'
-          : 'bg-white/[0.03] text-zinc-400 ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:text-zinc-200',
-      )}
-    >
-      {children}
-    </button>
+    <label htmlFor={id} className="block">
+      <span className="block text-[10px] uppercase tracking-wide text-zinc-500">{label}</span>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value as T)}
+        className="mt-1 w-full appearance-none rounded-lg bg-black/45 px-2.5 py-1.5 text-xs text-zinc-200 ring-1 ring-white/[0.08] outline-none transition-shadow focus:ring-2 focus:ring-sky-500/40"
+      >
+        {options.map((option) => (
+          <option key={option.id} value={option.id} className="bg-zinc-900 text-zinc-200">
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
 

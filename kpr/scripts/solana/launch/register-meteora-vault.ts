@@ -1,11 +1,14 @@
 /**
  * Register (upsert) a Meteora Alpha Vault config into the `creator_meteora_alpha_vaults`
- * Supabase table so that the `registerSolanaBridgeToken` API can build the Phase 2 Meteora ix payload.
+ * Supabase table for legacy Alpha Vault ix payloads / ops maps.
+ *
+ * Twin `registerSolanaBridgeToken` / wrap-token is retired. Prefer LayerZero ShareOFT
+ * share-mesh Path 1/2 (see docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md).
  *
  * Run this AFTER you have:
- *   1. Wrapped the ERC-20 ShareOFT on Solana  (`solana:create-token-2022-mint` / `wrap-token`)
+ *   1. Provisioned the Solana LZ share-mesh mint (not Twin wrap-token)
  *   2. Created the Meteora DLMM pool          (`pnpm solana:create-dlmm-pool`)
- *   3. Created the Meteora Alpha Vault        (`pnpm solana:create-alpha-vault`)
+ *   3. Created the Meteora Alpha Vault        (`pnpm solana:create-alpha-vault`) when that lane applies
  *
  * Usage:
  *   pnpm solana:register-meteora-vault

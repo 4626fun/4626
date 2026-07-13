@@ -969,6 +969,43 @@ describe('txRouter', () => {
     )
   })
 
+  it('does not use canonicalDirect when a sponsored one-call action is denied', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('request denied - called_address_not_allowed'),
+    )
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      requireCanonicalSponsorship: true,
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+    })
+
+    await expect(
+      buildAndSendCalls({
+        context,
+        calls: [
+          {
+            to: ADDRESS_C,
+            from: ADDRESS_A,
+            data: '0x1234',
+            value: '0',
+            chainId: 8453,
+          },
+        ],
+      }),
+    ).rejects.toThrow(/paymaster sponsorship is required/i)
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).not.toHaveBeenCalled()
+  })
+
   it('normalizes unauthorized canonical signer errors into setup guidance', () => {
     expect(
       normalizeCanonicalSendError(

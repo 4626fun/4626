@@ -68,6 +68,8 @@ export type TxRouterContext = {
   preferEphemeralNonceLane?: boolean
   /** Zora CSW path: submit-time prepare already production-simulated router calldata. */
   zoraRouterValidatedBeforeSend?: boolean
+  /** Fail closed instead of using canonicalDirect when this action requires sponsorship. */
+  requireCanonicalSponsorship?: boolean
 }
 
 export type TxRoutingDecision = {
@@ -335,6 +337,10 @@ function embeddedCanonicalSponsorshipRequiredError(reason: string): Error {
 /** Multi-call canonical batches (approval+swap) must stay on ERC-4337 (audit M2-04 / AGENTS). */
 function isCanonicalSponsoredBatch(calls: RoutedCall[]): boolean {
   return calls.length > 1
+}
+
+function isCanonicalSponsorshipRequired(context: TxRouterContext, calls: RoutedCall[]): boolean {
+  return context.requireCanonicalSponsorship === true || isCanonicalSponsoredBatch(calls)
 }
 
 function canonicalSponsorshipRequiredError(reason: string, isEmbedded: boolean): Error {
@@ -736,8 +742,13 @@ async function sendViaCanonical4337(params: {
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
     const reason = 'swap-router native-value call is not eligible for the current paymaster path'
     // M2-04: never fall back to un-sponsored gas for multi-call approval+swap batches.
-    if (isCanonicalSponsoredBatch(calls) || requiresSponsoredCanonical4337(context)) {
-      if (requiresSponsoredCanonical4337(context) && shouldAllowEmbeddedCanonicalDirectFallback(context) && !isCanonicalSponsoredBatch(calls)) {
+    if (isCanonicalSponsorshipRequired(context, calls) || requiresSponsoredCanonical4337(context)) {
+      if (
+        context.requireCanonicalSponsorship !== true &&
+        requiresSponsoredCanonical4337(context) &&
+        shouldAllowEmbeddedCanonicalDirectFallback(context) &&
+        !isCanonicalSponsoredBatch(calls)
+      ) {
         context.debug?.({
           event: 'send_fallback',
           mode: decision.mode,
@@ -820,8 +831,9 @@ async function sendViaCanonical4337(params: {
     const shouldFallbackToCanonicalDirect = isCanonicalPaymasterPolicyFallbackError(error)
     if (shouldFallbackToCanonicalDirect) {
       // M2-04 / AGENTS: approval+swap multi-call batches must not fall back to canonicalDirect.
-      if (isCanonicalSponsoredBatch(calls) || requiresSponsoredCanonical4337(context)) {
+      if (isCanonicalSponsorshipRequired(context, calls) || requiresSponsoredCanonical4337(context)) {
         if (
+          context.requireCanonicalSponsorship !== true &&
           requiresSponsoredCanonical4337(context) &&
           shouldAllowEmbeddedCanonicalDirectFallback(context) &&
           !isCanonicalSponsoredBatch(calls)

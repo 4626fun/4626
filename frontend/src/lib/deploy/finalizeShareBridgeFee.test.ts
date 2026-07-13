@@ -9,10 +9,12 @@ import {
   FINALIZE_SHARE_BRIDGE_SOLANA_PERCENT,
   SELECTOR_BATCHER_FINALIZE_PHASE2,
   SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   assertFinalizeShareBridgeCallValue,
   attachFinalizeShareBridgeValueToCalls,
   buildShareBridgeExecutorLzReceiveOptions,
   decodeFinalizePhase2Call,
+  isFinalizePhase2CallSelector,
   isLayerZeroNoPeerQuoteError,
   parseCallValue,
   buildFinalizePhase2CallData,
@@ -39,8 +41,6 @@ const FINALIZE_PARAMS = {
   requiredRaise: 100_000_000_000_000_000n,
   floorPriceQ96: 1n,
   auctionSteps: '0x' as Hex,
-  meteoraAlphaVault: ZERO_BYTES32,
-  solanaIxs: [],
 } as const
 
 const FINALIZE_ABI = [
@@ -66,16 +66,6 @@ const FINALIZE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -149,7 +139,6 @@ type MockClientConfig = {
   runtimeAsTuple?: boolean
   solanaEidAsBigint?: boolean
   registryPeer?: Hex | null
-  solanaShareOftPeer?: Hex | null
   wrapperBytecode?: Hex | null
   /** When true, quoteSend on the finalize target ShareOFT throws LayerZero NoPeer. */
   quoteSendNoPeerOnTarget?: boolean
@@ -169,7 +158,6 @@ function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadC
     runtimeAsTuple = false,
     solanaEidAsBigint = false,
     registryPeer = `0x${'cd'.repeat(32)}` as Hex,
-    solanaShareOftPeer = null,
     wrapperBytecode = '0x6001600055' as Hex,
     quoteSendNoPeerOnTarget = false,
   } = config
@@ -204,9 +192,6 @@ function createMockPublicClient(config: MockClientConfig = {}): ShareBridgeReadC
       }
       if (req.functionName === 'getRemoteOFTPeerBytes32') {
         return registryPeer ?? ZERO_BYTES32
-      }
-      if (req.functionName === 'solanaShareOftPeer') {
-        return solanaShareOftPeer ?? ZERO_BYTES32
       }
       if (req.functionName === 'quoteOFT') {
         if (quoteOftThrows) throw new Error('quoteOFT reverted')
@@ -247,8 +232,59 @@ describe('finalizeShareBridgeFee', () => {
     const permit2 = encodeFinalizePermit2()
     expect(finalize.slice(0, 10).toLowerCase()).toBe(SELECTOR_BATCHER_FINALIZE_PHASE2)
     expect(permit2.slice(0, 10).toLowerCase()).toBe(SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
+    expect(SELECTOR_BATCHER_FINALIZE_PHASE2).toBe('0xcafc9348')
+    expect(SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2).toBe('0x8e782ae1')
     expect(decodeFinalizePhase2Call(finalize)?.functionName).toBe('finalizePhase2')
     expect(decodeFinalizePhase2Call(permit2)?.functionName).toBe('finalizePhase2WithPermit2')
+    expect(isFinalizePhase2CallSelector(SELECTOR_BATCHER_FINALIZE_PHASE2)).toBe(true)
+  })
+
+  it('decodes legacy extended finalizePhase2 selectors and ignores retired fields', () => {
+    const legacyAbi = [
+      {
+        type: 'function',
+        name: 'finalizePhase2',
+        stateMutability: 'payable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              ...FINALIZE_ABI[0].inputs[0].components,
+              { name: 'meteoraAlphaVault', type: 'bytes32' },
+              {
+                name: 'solanaIxs',
+                type: 'tuple[]',
+                components: [
+                  { name: 'programId', type: 'bytes32' },
+                  { name: 'serializedAccounts', type: 'bytes[]' },
+                  { name: 'data', type: 'bytes' },
+                ],
+              },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const legacyData = encodeFunctionData({
+      abi: legacyAbi,
+      functionName: 'finalizePhase2',
+      args: [
+        {
+          ...FINALIZE_PARAMS,
+          meteoraAlphaVault: ZERO_BYTES32,
+          solanaIxs: [],
+        },
+      ],
+    })
+    expect(legacyData.slice(0, 10).toLowerCase()).toBe(SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY)
+    expect(SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY).toBe('0xbd4583fb')
+    const decoded = decodeFinalizePhase2Call(legacyData)
+    expect(decoded?.functionName).toBe('finalizePhase2')
+    expect(decoded?.params.shareOFT.toLowerCase()).toBe(FINALIZE_PARAMS.shareOFT.toLowerCase())
+    expect(decoded?.params).not.toHaveProperty('meteoraAlphaVault')
+    expect(decoded?.params).not.toHaveProperty('solanaIxs')
   })
 
   it('parses persisted call values', () => {
@@ -336,7 +372,6 @@ describe('finalizeShareBridgeFee quote paths', () => {
       ccaLaunchArm: getAddress(FINALIZE_PARAMS.ccaLaunchArm),
       oracle: getAddress(FINALIZE_PARAMS.oracle),
       auctionSteps: FINALIZE_PARAMS.auctionSteps as Hex,
-      meteoraAlphaVault: FINALIZE_PARAMS.meteoraAlphaVault as Hex,
     })
 
     const quote = await quoteFinalizeShareBridgeNativeFee({
@@ -405,15 +440,6 @@ describe('finalizeShareBridgeFee quote paths', () => {
   })
 
   it('fails closed when registry remote OFT peer is missing', async () => {
-    const quote = await quoteFinalizeShareBridgeNativeFee({
-      publicClient: createMockPublicClient({ registryPeer: null, solanaShareOftPeer: null }),
-      batcherAddress: BATCHER,
-      finalizeCallData: encodeFinalize(),
-    })
-    expect('code' in quote && quote.code).toBe('oft_peer_not_configured')
-  })
-
-  it('fails closed when batcher default peer fallback is unavailable', async () => {
     const quote = await quoteFinalizeShareBridgeNativeFee({
       publicClient: createMockPublicClient({ registryPeer: null }),
       batcherAddress: BATCHER,
@@ -873,33 +899,20 @@ describe('finalizeShareBridgeFee stress round 3 (adversarial + failure modes)', 
     }
   })
 
-  it('legacy finalize selector is ignored by attach (100 iterations)', async () => {
-    const legacySelector = '0xcafc9348'
-    const client = createMockPublicClient({ nativeFee: 9_999_000_000_000_000n })
-    for (let i = 0; i < 100; i += 1) {
-      const legacyData = `${legacySelector}${encodeFinalize().slice(10)}` as Hex
-      const calls = [{ to: BATCHER, value: String(i + 1), data: legacyData }]
-      const out = await attachFinalizeShareBridgeValueToCalls({ publicClient: client, calls })
-      expect(out[0]?.value).toBe(String(i + 1))
-    }
-  })
-
   it('adversarial calldata fails decode or attach safely (150 cases)', async () => {
     const client = createMockPublicClient()
     const adversarial: Hex[] = [
       '0x' as Hex,
-      '0xbd4583fb' as Hex,
       '0xdeadbeef' as Hex,
       `${SELECTOR_BATCHER_FINALIZE_PHASE2}${'00'.repeat(8)}` as Hex,
+      `${SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY}${'00'.repeat(8)}` as Hex,
       encodeFinalize().slice(0, 20) as Hex,
     ]
     for (let i = 0; i < 150; i += 1) {
       const base = adversarial[i % adversarial.length] ?? '0x'
       const data = (i < 5 ? base : `${base}${i.toString(16).padStart(8, '0')}`) as Hex
       const selector = data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
-      const isFinalizeSelector =
-        selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
-        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2
+      const isFinalizeSelector = isFinalizePhase2CallSelector(selector)
 
       if (!isFinalizeSelector) {
         const out = await attachFinalizeShareBridgeValueToCalls({
@@ -960,9 +973,6 @@ describe('finalizeShareBridgeFee stress round 3 (adversarial + failure modes)', 
           }
           if (req.functionName === 'getRemoteOFTPeerBytes32') {
             return DESTINATION
-          }
-          if (req.functionName === 'solanaShareOftPeer') {
-            return ZERO_BYTES32
           }
           if (req.functionName === 'quoteOFT') {
             return [{ minAmountLD: 0n, maxAmountLD: 1n }, [], { amountReceivedLD: 1n }]

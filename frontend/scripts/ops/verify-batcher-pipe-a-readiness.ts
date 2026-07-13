@@ -41,21 +41,7 @@ const BATCHER_VIEW_ABI = [
   },
   {
     type: 'function',
-    name: 'solanaBridgeAdapter',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
     name: 'solanaDestination',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bytes32' }],
-  },
-  {
-    type: 'function',
-    name: 'solanaShareOftPeer',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'bytes32' }],
@@ -171,8 +157,11 @@ Options:
   --rpc <url>           Base RPC (default: BASE_RPC_URL)
   --json                Machine-readable output only
   --markdown            Markdown summary + JSON payload
-  --shell-only          Exit 0 when batcher shell is wired (peer may still be unset)
+  --shell-only          Exit 0 when batcher shell is wired (destination + OVault runtime)
   --help                Show this help
+
+Pipe A batcher readiness = destination + OVault runtime + phase modules + registry auth + salt.
+Per-creator Solana peers are seeded via Registry4626.setRemoteOFTPeerBytes32 (not batcher-global).
 `)
 }
 
@@ -180,27 +169,6 @@ function normalizeAddress(value: unknown): Address | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!isAddress(raw)) return null
   return getAddress(raw) as Address
-}
-
-async function readSolanaShareOftPeer(
-  client: ReturnType<typeof createPublicClient>,
-  batcher: Address,
-): Promise<{ supported: boolean; peer: Hex | null; error: string | null }> {
-  try {
-    const peer = (await client.readContract({
-      address: batcher,
-      abi: BATCHER_VIEW_ABI,
-      functionName: 'solanaShareOftPeer',
-    })) as Hex
-    return {
-      supported: true,
-      peer: peer.toLowerCase() === ZERO_BYTES32.toLowerCase() ? null : peer,
-      error: null,
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error ?? 'unknown')
-    return { supported: false, peer: null, error: message }
-  }
 }
 
 async function detectPhase1SaltOverrideSupport(
@@ -274,14 +242,12 @@ async function main() {
   const rpcUrl = getArg('--rpc', process.env.BASE_RPC_URL || 'https://mainnet.base.org')
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
 
-  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead, registryAuthorized, saltSupport] =
+  const [phase1Module, phase2Module, destination, runtime, registryAuthorized, saltSupport] =
     await Promise.all([
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase1Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase2Module' }),
-    client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaBridgeAdapter' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaDestination' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'getOVaultRuntimeConfig' }),
-    readSolanaShareOftPeer(client, batcher),
     readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_REGISTRY_4626 }),
     detectPhase1SaltOverrideSupport(client, batcher),
   ])
@@ -333,13 +299,6 @@ async function main() {
       detail: `enabled=${runtimeTuple.enabled} hub=${runtimeTuple.hubComposer} eid=${runtimeTuple.solanaEid}`,
     },
     {
-      id: 'solana_bridge_adapter',
-      ok:
-        isAddress(String(adapter)) &&
-        String(adapter).toLowerCase() !== '0x0000000000000000000000000000000000000000',
-      detail: String(adapter),
-    },
-    {
       id: 'solana_destination',
       ok: typeof destination === 'string' && destination.toLowerCase() !== ZERO_BYTES32.toLowerCase(),
       detail: String(destination),
@@ -353,18 +312,6 @@ async function main() {
           : `authorizedFactories(${batcher})=false — run Registry4626.setAuthorizedFactory before greenfield Phase 2 finalize`,
     },
     {
-      id: 'solana_share_oft_peer_selector',
-      ok: peerRead.supported,
-      detail: peerRead.supported
-        ? 'solanaShareOftPeer() readable on batcher bytecode'
-        : `missing on live batcher (${peerRead.error ?? 'revert'})`,
-    },
-    {
-      id: 'solana_share_oft_peer_configured',
-      ok: peerRead.supported && peerRead.peer !== null,
-      detail: peerRead.peer ?? (peerRead.supported ? 'unset (zero)' : 'n/a until batcher cutover'),
-    },
-    {
       id: 'phase1_salt_override_enabled',
       ok: saltSupport.supported,
       detail: saltSupport.detail,
@@ -372,14 +319,14 @@ async function main() {
   ]
 
   const ready = checks.every((check) => check.ok)
-  const shellReady = checks
-    .filter((check) => check.id !== 'solana_share_oft_peer_configured')
-    .every((check) => check.ok)
+  const shellReady = checks.every((check) => check.ok)
   const shellOnly = hasFlag('--shell-only')
   const payload = {
     batcher,
     readyForPipeAFinalizeBridge: ready,
     readyForBatcherShell: shellReady,
+    note:
+      'Pipe A batcher shell is ready when destination + OVault runtime are configured. Per-creator peers are seeded in Registry4626.setRemoteOFTPeerBytes32 (not batcher-global peer).',
     checks,
   }
 
@@ -389,7 +336,10 @@ async function main() {
     process.stdout.write(`## Pipe A Batcher Readiness\n\n`)
     process.stdout.write(`- Batcher: \`${batcher}\`\n`)
     process.stdout.write(`- Readiness mode: \`${shellOnly ? 'shell-only' : 'full'}\`\n`)
-    process.stdout.write(`- Status: \`${shellOnly ? (shellReady ? 'pass' : 'fail') : ready ? 'pass' : 'fail'}\`\n\n`)
+    process.stdout.write(`- Status: \`${shellOnly ? (shellReady ? 'pass' : 'fail') : ready ? 'pass' : 'fail'}\`\n`)
+    process.stdout.write(
+      `- Note: Pipe A ready when destination + OVault runtime are configured; per-creator peers via Registry4626.setRemoteOFTPeerBytes32\n\n`,
+    )
     process.stdout.write(`### Checks\n\n`)
     for (const check of checks) {
       process.stdout.write(`- [${check.ok ? 'x' : ' '}] \`${check.id}\` — ${check.detail}\n`)
@@ -400,17 +350,15 @@ async function main() {
     process.stdout.write(
       shellOnly
         ? shellReady
-          ? 'Pipe A batcher shell readiness: PASS (share OFT peer may still be pending mesh)\n'
+          ? 'Pipe A batcher shell readiness: PASS (destination + OVault runtime configured; seed per-creator peers on Registry4626)\n'
           : 'Pipe A batcher shell readiness: FAIL — see checks above\n'
         : ready
-          ? 'Pipe A batcher readiness: PASS\n'
-          : shellReady
-            ? 'Pipe A batcher readiness: PARTIAL — shell wired; set solanaShareOftPeer before greenfield finalize bridge\n'
-            : 'Pipe A batcher readiness: FAIL — see checks above and docs/operations/deployment/batcher-pipe-a-cutover.md\n',
+          ? 'Pipe A batcher readiness: PASS (destination + OVault runtime; per-creator peers via Registry4626.setRemoteOFTPeerBytes32)\n'
+          : 'Pipe A batcher readiness: FAIL — see checks above and docs/_internal/operations/deployment/batcher-pipe-a-cutover.md\n',
     )
   }
 
-  process.exit(shellOnly ? (shellReady ? 0 : 2) : ready ? 0 : shellReady ? 3 : 2)
+  process.exit(shellOnly ? (shellReady ? 0 : 2) : ready ? 0 : 2)
 }
 
 main().catch((error) => {

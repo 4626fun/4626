@@ -182,7 +182,7 @@ export const BASE_DEFAULTS = {
   // For Base Sepolia we rely on the env override; the default stays zero so
   // an unconfigured environment fails loudly at the consumer rather than
   // routing writes to a stale or wrong address.
-  alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
+  alfaCreatorKeyLpFactory: addr('08156CF52BBD983Daf99a26508462d3593c5f6bf'),
 
   // Impairment-v1 auxiliary contracts.
   // Claims/escrow are PER-VAULT: each 1-click deploy derives a fresh pair via

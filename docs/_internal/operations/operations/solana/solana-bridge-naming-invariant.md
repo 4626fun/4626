@@ -1,5 +1,5 @@
 ---
-title: Solana Bridge Naming Invariant
+title: Legacy Twin Bridge Naming Invariant
 sidebar_position: 6
 ---
 
@@ -8,14 +8,14 @@ This document narrates the historical migration of the
 `SolanaBridgeAdapter` contract and contains the addresses that were
 current at each point in time. For the **current canonical deployment
 addresses**, always consult
-[`docs/reference/addresses.md`](../reference/addresses.md) — it is the
+[`docs/reference/addresses.md`](/reference/addresses) — it is the
 single source of truth and is updated on every release. Addresses
 below (e.g. `0x653326dD…`) are preserved for historical context only.
 :::
 
-# Solana Bridge Naming Invariant
+# Legacy Twin bridge naming invariant
 
-Canonical reference for how creator coins' Solana-side display identity
+Historical reference for how creator coins' Solana-side display identity
 (bridge-wrapped Token-2022 mint `name` and `symbol`) is derived and
 enforced across the 4626 deploy pipeline.
 
@@ -30,7 +30,15 @@ It does **not** define the **LayerZero share-mesh OFT** mint used for
 user lottery / Pipe A. For that, read:
 
 - [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md)
-- [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md)
+- [solana-share-mesh-budget-paths.md](../../solana/solana-share-mesh-budget-paths.md)
+- [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md)
+
+For active v1.19.0 launches, provision a distinct LZ OFT store/mint, seed
+`Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)` before
+finalize, and create Meteora against that LZ mint. The batcher
+`0x02D7abC547F8B1e7E2D7a919D8D1005918361750` stores destination + OVault
+runtime only. Never add adapter or batcher-global-peer operations to the
+unsigned 11-operation registration Safe packet.
 
 Do not point share-mesh Meteora pools or `relay_entries` at the creator
 SPL mint derived here (e.g. AKITA `9JWh…`) unless product explicitly
@@ -47,7 +55,7 @@ Every creator coin's Solana bridge-wrapped mint has:
 4. `SolanaBridgeAdapter.tokenToSolanaMint[creatorCoin]` is that same PDA
 5. `SolanaBridgeAdapter.tokenToSolanaDecimals[creatorCoin]` == 9
 
-These four layers must agree exactly. Any drift is a protocol bug.
+These five layers must agree exactly within the legacy Twin grain.
 
 ## Why lowercase
 
@@ -62,8 +70,9 @@ therefore **immutable post-wrap by design**.
 Given immutability, we lock in a single canonical casing rule rather
 than mirroring whatever case the creator happened to put in their Base
 ERC-20 `name()` / `symbol()`. Lowercase is the choice, applied uniformly
-via `normalizeWrapTokenName` / `normalizeWrapTokenSymbol` in
-[`frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts`](../../frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts).
+via the historical `normalizeWrapTokenName` / `normalizeWrapTokenSymbol`
+implementation that lived at
+`frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts`.
 
 ## Derivation
 
@@ -85,12 +94,12 @@ mintPubkey    = findProgramAddress(
 Byte-for-byte identical to the
 [`base/bridge` wrap-token handler](https://github.com/base/bridge/blob/main/scripts/src/commands/sol/bridge/solana-to-base/wrap-token.handler.ts).
 
-The canonical implementation in this repo lives in
-[`frontend/server/_lib/onchain/solanaWrappedMintPda.ts`](../../frontend/server/_lib/onchain/solanaWrappedMintPda.ts)
-as `deriveWrappedMintPda(input)`. Its test file has golden fixtures for
-the two AKITA mappings pinned against live mainnet state.
+The retired implementation lived at
+`frontend/server/_lib/onchain/solanaWrappedMintPda.ts` as
+`deriveWrappedMintPda(input)`. Its tests had golden fixtures for the two AKITA
+mappings pinned against live mainnet state.
 
-## End-to-end flow for a new creator
+## Historical Twin end-to-end flow
 
 ```
 Creator deploys ERC-20 "MyCoin" / "MTK" on Base
@@ -123,7 +132,8 @@ Creator deploys ERC-20 "MyCoin" / "MTK" on Base
   Solana explorers, Meteora, DexScreener, wallets: "mycoin" / "mtk"
 ```
 
-Zero operator intervention per creator. The policy is locked at four
+This was the retired Twin automation flow; it is not the greenfield launch
+plane. Its naming policy was locked at four
 enforcement points:
 
 | Layer | What enforces it |
@@ -131,9 +141,9 @@ enforcement points:
 | Type | `ProvisionBody` in `frontend/server/solana-provisioner/index.ts` has no `tokenName` / `tokenSymbol` override fields |
 | Runtime | `normalizeWrapTokenName` / `normalizeWrapTokenSymbol` apply `.toLowerCase()` and fail-close on null-byte / oversized inputs (pre- and post-fold byte-length check for Unicode case folding like Turkish dotted I) |
 | Cryptographic | Mint PDA is seed-bound; any metadata drift produces a different mint that the Base bridge's scalar doesn't recognize |
-| Tests | [`solanaWrappedMintPda.test.ts`](../../frontend/server/_lib/onchain/solanaWrappedMintPda.test.ts), [`solanaBridgeTokenMetadata.test.ts`](../../frontend/server/_lib/onchain/solanaBridgeTokenMetadata.test.ts), [`verifyCreatorSolanaMintParity.test.ts`](../../frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.test.ts), [`deployRegisterSolanaBridgeToken.test.ts`](../../frontend/api/__tests__/deployRegisterSolanaBridgeToken.test.ts) |
+| Tests | Historical `solanaWrappedMintPda.test.ts`, `solanaBridgeTokenMetadata.test.ts`, `verifyCreatorSolanaMintParity.test.ts`, and `deployRegisterSolanaBridgeToken.test.ts` |
 
-## Verification
+## Legacy parity verification
 
 Operators can verify any creator's parity state at any time with the
 read-only script:
@@ -143,8 +153,9 @@ pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
   --creator 0x<creator-base-erc20>
 ```
 
-Defaults to the current live adapter from `VITE_SOLANA_BRIDGE_ADAPTER`
-and mainnet bridge program. Outputs a human-readable report with exit
+Defaults to the configured legacy adapter from `VITE_SOLANA_BRIDGE_ADAPTER`
+and mainnet bridge program. This does not verify the active LZ share-mesh
+route. It outputs a human-readable report with exit
 code 0 (parity) or 2 (drift + details of which invariant failed).
 
 For machine-readable output pass `--json`:
@@ -154,9 +165,8 @@ pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
   --creator 0x5b67... --json
 ```
 
-The programmatic entry point is
-`verifyCreatorSolanaMintParity` in
-[`frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts`](../../frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts).
+The retired programmatic entry point was `verifyCreatorSolanaMintParity` in
+`frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts`.
 It returns a structured result with a `matched: boolean` and a `drift:
 string[]` array naming each invariant that failed. Callable from any
 Node context; inject a Solana RPC metadata fetcher via
@@ -204,9 +214,8 @@ adapter-swap migration:
    pre-existing mapping.
 3. `registerToken(AKITA, 0x7b59f36c…3a33, 9)` was called on the new
    adapter (tx `0x808cd54da1243bf81156c368af6ae898a6b61147638235fbee82efce39424fe7`).
-4. `BASE_DEFAULTS.solanaBridgeAdapter` in
-   [`frontend/src/config/contracts.defaults.ts`](../../frontend/src/config/contracts.defaults.ts)
-   updated from v1 to v2.
+4. `BASE_DEFAULTS.solanaBridgeAdapter` in the historical
+   `frontend/src/config/contracts.defaults.ts` updated from v1 to v2.
 5. `VITE_SOLANA_BRIDGE_ADAPTER` and `SOLANA_BRIDGE_ADAPTER` env examples
    updated.
 6. `creator_meteora_alpha_vaults` DB row for AKITA marked
@@ -220,34 +229,36 @@ creator deployed after commit `27d7ec4f` (which landed the frontend
 config update) gets their SolanaStrategy constructed with
 `bridgeAddress = v2 adapter`.
 
-For any future creator whose Solana mapping ends up on v1 by accident,
-apply the same migration pattern: deploy a new adapter (or reuse the
-current canonical adapter if unregistered), re-register on the new
-adapter, update the frontend default.
+For historical Twin deployments only, the adapter-swap pattern explains how
+that immutable mapping was remediated. Do not apply it to a greenfield creator;
+use the per-creator LZ OFT runbook instead.
 
-### Current canonical adapter
+### Last canonical adapter for the legacy grain
 
-Live code and env defaults use **`0x700b4BBAf965c013123bAd02a6562FBa487aC0f1`**
-(see [`docs/reference/addresses.md`](../reference/addresses.md)). The
+The last canonical Twin grain used
+**`0x700b4BBAf965c013123bAd02a6562FBa487aC0f1`**
+(see [`docs/reference/addresses.md`](/reference/addresses)). It is not part of
+the active v1.19.0 registration or per-creator share-mesh plane. The
 `0x653326dD…` deployment above is historical context for the AKITA
 strict-parity migration; do not treat it as the active default.
 
 ## Meteora integration runbook
 
-Bridging to Solana is independent from depositing bridged tokens into a
-Meteora DLMM / Alpha Vault. The bridge is set up for every creator
-automatically (via `wrap-token` + `SolanaBridgeAdapter.registerToken`),
-but Meteora infrastructure for a creator's **bridge-wrapped creator SPL**
-mint is NOT automatic. Setting up Meteora is an operator-side per-creator
-step, handled via KPR launch scripts plus a DB row.
+Historically, Twin bridging and depositing the wrapped creator SPL into a
+Meteora DLMM / Alpha Vault were separate. The retired bridge was set up via
+`wrap-token` + `SolanaBridgeAdapter.registerToken`; Meteora was an operator
+step handled by KPR launch scripts plus a DB row.
 
 This runbook targets **legacy bridge-wrapped creator SPL** (+ optional Alpha
-Vault). For **share-mesh** Meteora pools, use
-[`create-dlmm-pool.ts`](../../kpr/scripts/solana/launch/create-dlmm-pool.ts)
-with the LZ share mint as `TOKEN_MINT_X` — see
-[solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md).
+Vault). For **share-mesh** Meteora pools, use the active command documented in
+the budget-path runbook with the LZ share mint as `TOKEN_MINT_X` — see
+[solana-share-mesh-budget-paths.md](../../solana/solana-share-mesh-budget-paths.md).
 
 ### When to do it
+
+Only use the steps below when maintaining an explicitly grandfathered Twin
+creator-SPL deployment. For active launches, use the LZ share-mesh budget and
+creator-provisioning runbooks linked above.
 
 Create new Meteora infra for a creator when:
 
@@ -324,11 +335,10 @@ header for required env).
   already `enabled=true`. Re-running destroys existing liquidity; migrate
   an existing pool with a dedicated LP migration script instead.
 
-### Current AKITA state
+### Historical AKITA Twin state
 
 AKITA's Meteora row is `enabled=false` with `supersededReason =
-v2-adapter-migration-2026-04-19`. To re-enable Meteora for AKITA after
-the v2 migration:
+v2-adapter-migration-2026-04-19`. The historical re-enable procedure was:
 
 1. Fund the Solana keeper `7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY`
    with ~4 SOL.
@@ -337,10 +347,11 @@ the v2 migration:
 3. Update the existing row's `enabled=true` and point it at the new
    Meteora pool/vault pubkeys.
 
-Without this, AKITA's vault works normally on Base; bridged value on
-the Solana side lands in a custody wallet rather than an Alpha Vault.
+Do not run that historical procedure for the active launch plane. AKITA's
+current Solana trading path uses its LZ share-mesh mint and the canonical
+Meteora runbook.
 
-## Invariants summary
+## Legacy-grain invariants summary
 
 Put these on the wall:
 
@@ -352,21 +363,22 @@ Put these on the wall:
   metadata; any rebrand is a new mint at a new PDA.
 - **Adapters are one-shot per (token, mint) pair.** Re-registering the
   same creator on the same adapter will revert. Rebrand = new adapter.
-- **The SolanaStrategy contract stores `bridgeAddress` at construction
-  and has no setter.** Swap the frontend default BEFORE deploying new
-  creator vaults.
+- **The legacy SolanaStrategy contract stores `bridgeAddress` at construction
+  and has no setter.** This explains historical immutability; do not add the
+  adapter back to greenfield deployment.
 
-## Related code
+## Historical code inventory
 
-- [`frontend/server/_lib/onchain/solanaWrappedMintPda.ts`](../../frontend/server/_lib/onchain/solanaWrappedMintPda.ts) — PDA derivation
-- [`frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts`](../../frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts) — lowercase normalizers
-- [`frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts`](../../frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts) — parity verification
-- [`frontend/scripts/verify-solana-mint-parity.ts`](../../frontend/scripts/verify-solana-mint-parity.ts) — operator CLI
-- [`contracts/utilities/bridge/SolanaBridgeAdapter.sol`](../../contracts/utilities/bridge/SolanaBridgeAdapter.sol) — adapter contract
-- [`contracts/vault/strategies/SolanaStrategy.sol`](../../contracts/vault/strategies/SolanaStrategy.sol) — creator vault's Solana strategy
-- [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts) — provisioner host that dispatches `wrap-token`
-- [`frontend/scripts/mine-solana-mint-vanity.ts`](../../frontend/scripts/mine-solana-mint-vanity.ts) — dev tool for vanity mint addresses
-- [`kpr/actions/keepr-solana-rebalance.action.ts`](../../kpr/actions/keepr-solana-rebalance.action.ts) — keeper action that bridges adapter-held CREATOR tokens to Solana (stub: routing/config wired, onchain dispatch intentionally gated behind `KPR_SOLANA_REBALANCE_EXECUTE=1`)
-- [`kpr/scripts/solana/launch/create-dlmm-pool.ts`](../../kpr/scripts/solana/launch/create-dlmm-pool.ts), [`create-alpha-vault.ts`](../../kpr/scripts/solana/launch/create-alpha-vault.ts), [`register-meteora-vault.ts`](../../kpr/scripts/solana/launch/register-meteora-vault.ts) — per-creator Meteora setup (see [Meteora integration runbook](#meteora-integration-runbook))
-- [`kpr/scripts/solana/launch/bootstrap-solana-side.ts`](../../kpr/scripts/solana/launch/bootstrap-solana-side.ts) — chains route registration + Meteora upsert + ix smoke-build
-- [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) — share-mesh lottery (orthogonal mint grain)
+- `frontend/server/_lib/onchain/solanaWrappedMintPda.ts` — retired PDA derivation
+- `frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts` — retired lowercase normalizers
+- `frontend/server/_lib/onchain/verifyCreatorSolanaMintParity.ts` — retired parity verification
+- `frontend/scripts/verify-solana-mint-parity.ts` — retired operator CLI
+- `contracts/utilities/bridge/SolanaBridgeAdapter.sol` — retired adapter contract
+- `contracts/vault/strategies/SolanaStrategy.sol` — retired creator-vault strategy
+- `frontend/server/solana-provisioner/index.ts` — legacy provisioner host
+- `frontend/scripts/mine-solana-mint-vanity.ts` — retired dev tool
+- `kpr/actions/keepr-solana-rebalance.action.ts` — retired adapter-grain keeper action
+- `kpr/scripts/solana/launch/create-dlmm-pool.ts`, `create-alpha-vault.ts`, and
+  `register-meteora-vault.ts` — historical creator-SPL Meteora setup
+- `kpr/scripts/solana/launch/bootstrap-solana-side.ts` — retired route helper
+- [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) — active share-mesh policy

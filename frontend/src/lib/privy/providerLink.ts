@@ -152,10 +152,21 @@ function parseAccountsLinkFailure(
   })
 }
 
-function isMissingProviderLinkError(provider: string, message: string): boolean {
+function isMissingProviderLinkMessage(provider: string, message: string): boolean {
   const normalizedProvider = provider.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = new RegExp(`No linked value found for provider "${normalizedProvider}"\\.`, 'i')
   return pattern.test(message)
+}
+
+export function isPendingAccountsProviderLinkError(error: unknown, provider: string): boolean {
+  if ((error as { recoveryRequired?: unknown })?.recoveryRequired === true) return false
+  const status =
+    typeof (error as { status?: unknown })?.status === 'number'
+      ? (error as { status: number }).status
+      : null
+  if (status != null && status !== 409) return false
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return isMissingProviderLinkMessage(provider, message)
 }
 
 async function runWithSanitizedRedirect<T>(work: () => T | Promise<T>): Promise<T> {
@@ -231,8 +242,7 @@ export async function syncAccountsProviderLink(params: {
     try {
       return await postAccountsLink(params)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      if (!isMissingProviderLinkError(params.provider, message)) throw error
+      if (!isPendingAccountsProviderLinkError(error, params.provider)) throw error
       lastError = error
       if (attempt < attempts - 1 && delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs))

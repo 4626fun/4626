@@ -1,8 +1,14 @@
 # AKITA — Solana share-mesh gap audit
 
-AKITA-specific on-chain/env gaps vs [share-mesh policy](./solana-share-mesh-lottery-policy.md). Runbooks: [budget paths](./solana-share-mesh-budget-paths.md).
+AKITA-specific on-chain/env gaps vs
+[share-mesh policy](../operations/solana/solana-share-mesh-lottery-policy.md).
+Runbooks: [budget paths](./solana-share-mesh-budget-paths.md) and
+[per-creator provisioning](../operations/solana/solana-share-mesh-creator-provisioning.md).
 
-Last verified: 2026-05-25 (re-run `read-akita-ovault-mesh-onchain.ts` before ops).
+Historical snapshot verified: 2026-05-25. Re-run
+`read-akita-ovault-mesh-onchain.ts` before relying on any status below.
+The active v1.19.0 batcher is
+`0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
 
 ## Base snapshot (not the mesh wire target)
 
@@ -14,14 +20,14 @@ Last verified: 2026-05-25 (re-run `read-akita-ovault-mesh-onchain.ts` before ops
 
 Base ShareOFT Uniswap buys on the **current AKITA ShareOFT mapping** (`0x4df30…`) = live lottery today on Base. Solana tradable share mesh uses a **separate** LZ mint (`■AKITA` on Solana oftStore) + a **new** Base mesh OFT wire.
 
-## Gaps
+## Historical gaps (2026-05-25)
 
 | Item | Status |
 |------|--------|
 | `creatorMesh(AKITA)` on composer | **Unset** (zeros) |
-| Batcher `solanaShareOftPeer()` | **Unset** — blocks Pipe A finalize |
+| Batcher `solanaShareOftPeer()` | **Unset** — historical global-peer check; this field is retired and must not be repaired |
 | LZ share mesh on Solana | **Not deployed** |
-| ShareOFT on adapter `0x700b4B…` | **Not registered** |
+| ShareOFT on adapter `0x700b4B…` | **Not registered** — legacy Twin grain, not an active blocker |
 | Meteora on share mesh | **Not done** |
 | Orchestrator `SOLANA_CREATOR_MINTS` | **`9JWh…`** — wrong grain (creator SPL) |
 | `relay_entries` | **Must stay off** until share-mesh pool + B2 path |
@@ -33,13 +39,25 @@ Base ShareOFT Uniswap buys on the **current AKITA ShareOFT mapping** (`0x4df30�
 | Creator SPL | `9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp` (`akita`/`akita`) | Adapter grain — not share mesh |
 | Current orchestrator env | `9JWh…` → ShareOFT | Misconfigured for policy |
 
-Adapter parity (not share mesh): `pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x5b674196812451b7cec024fe9d22d2c0b172fa75`
+Historical adapter parity (not share mesh):
+`pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x5b674196812451b7cec024fe9d22d2c0b172fa75`.
+Do not use its result to gate the active LZ route.
 
 ## AKITA unblock sequence
 
-Follow [budget paths](./solana-share-mesh-budget-paths.md) with AKITA constants:
+Follow [budget paths](./solana-share-mesh-budget-paths.md) and
+[per-creator provisioning](../operations/solana/solana-share-mesh-creator-provisioning.md)
+with AKITA constants:
 
-- Share mesh Base OFT: deploy/wire **new** mesh OFT (`■AKITA` path), not the current ShareOFT mapping `0x4df30…`
+- Solana share mesh: reuse AKITA's existing LZ OFT store
+  `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` and mint
+  `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv`, or provision a replacement
+  only through the canonical runbook
+- Base ShareOFT: wire the **new** deploy's `■AKITA` ShareOFT to that store
+- Registry: before finalize, explicitly call
+  `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f)`
+- Batcher: verify destination + OVault runtime only; there is no adapter/global-peer requirement
+- Meteora: create the pool against the LZ share-mesh mint using the budget-path runbook
 - Creator coin: `0x5b674196812451b7cec024fe9d22d2c0b172fa75`
 - Display: `TOKEN_SYMBOL='■AKITA'`, `TOKEN_NAME='Akita Share Token'`
 - On-chain read: `pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts`
@@ -50,9 +68,10 @@ Follow [budget paths](./solana-share-mesh-budget-paths.md) with AKITA constants:
 
 | Blocker | Blocks |
 |---------|--------|
-| No share mesh + peer | Pipe A |
+| No LZ store/mint or explicit registry peer | Pipe A |
 | `relay_entries` on creator SPL | Wrong lottery entries |
-| Adapter not registered | Strategy bridge preflight |
-| B1 vs B2 not chosen | Phase B Meteora/hook plan |
+| Adapter not registered | Legacy Twin grain only; does not block active Pipe A |
+| B1 pool not provisioned | Solana trading; B2 relay remains blocked |
 
-Keeper/registry gaps (separate): [akita-keeper-stack-activation.md](./akita-keeper-stack-activation.md).
+Keeper/registry gaps (separate):
+[akita-keeper-stack-activation.md](../akita/akita-keeper-stack-activation.md).

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildPrivyUnlinkMethodArgs,
+  isPendingAccountsProviderLinkError,
   isRecoverableOAuthLinkError,
   linkAndSyncPrivyProvider,
   linkPrivyProvider,
@@ -193,10 +194,26 @@ describe('providerLink', () => {
   })
 
   describe('syncAccountsProviderLink', () => {
+    it('classifies only the matching server-hydration conflict as pending', () => {
+      const pendingError = Object.assign(
+        new Error('No linked value found for provider "twitter".'),
+        { status: 409, recoveryRequired: false },
+      )
+      const recoveryError = Object.assign(
+        new Error('No linked value found for provider "twitter".'),
+        { status: 409, recoveryRequired: true },
+      )
+
+      expect(isPendingAccountsProviderLinkError(pendingError, 'twitter')).toBe(true)
+      expect(isPendingAccountsProviderLinkError(pendingError, 'google')).toBe(false)
+      expect(isPendingAccountsProviderLinkError(recoveryError, 'twitter')).toBe(false)
+    })
+
     it('retries when Privy has not hydrated the linked provider yet', async () => {
       vi.mocked(apiFetch)
         .mockResolvedValueOnce({
           ok: false,
+          status: 409,
           json: async () => ({
             success: false,
             error: 'No linked value found for provider "twitter".',

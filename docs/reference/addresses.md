@@ -169,3 +169,20 @@ Vault, wrapper, share OFT, gauge, and oracle addresses are creator-specific and 
 |----------|-------|---------|
 | Chainlink VRF Coordinator | Base | `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` |
 | WETH | Base | `0x4200000000000000000000000000000000000006` |
+
+### AlfaClub room 1659 LP pilot
+
+| Role | Address / status |
+|------|------------------|
+| FriendKey ERC-1155 | `0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F` |
+| FriendKey token ID | `1659` |
+| Verified Creator Coin (AKITA) | `0x5b674196812451B7cEC024FE9d22D2c0b172fa75` |
+| Factory owner | Protocol treasury Safe `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
+| Pilot seeder / canonical sender | `0xAb6d5C10b03300326CD7fAb7267Ae192842967b5` |
+| AlfaCreatorKeyLPFactory | `0x08156CF52BBD983Daf99a26508462d3593c5f6bf` |
+| Factory deployment tx | `0xcc642be6d2b6ca7322a1574dd7628096bd0b3a767ce727c87a7a261a2d5e733e` |
+| Seeder/pair allowlist tx | `0x3953ee689ea8b527bc3e78e76f56e17f21894e6ef2adf27665bfe5b8a56cfa86` |
+
+The room creator (`0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9`)
+is an AlfaClub identity, not the Creator Coin contract. The factory is source
+verified on Basescan; its pool registry was empty immediately after deployment.

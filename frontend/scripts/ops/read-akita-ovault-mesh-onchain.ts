@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Read AKITA OVault mesh + adapter wiring on Base mainnet.
+ * Read AKITA OVault mesh wiring on Base mainnet (LayerZero ShareOFT; Twin adapter retired).
  *
  *   pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts
  */
@@ -35,13 +35,6 @@ const composerAbi = [
       { name: 'paused', type: 'bool' },
     ],
   },
-  {
-    type: 'function',
-    name: 'endpoint',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
 ] as const
 
 const batcherAbi = [
@@ -58,7 +51,7 @@ const batcherAbi = [
   },
   {
     type: 'function',
-    name: 'solanaShareOftPeer',
+    name: 'solanaDestination',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'bytes32' }],
@@ -80,6 +73,7 @@ const registryPeerAbi = [
 
 const SOLANA_EID = 30168
 const REGISTRY = BASE_DEFAULTS.registry as Address
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 
 const wrapperAbi = [
   {
@@ -90,23 +84,6 @@ const wrapperAbi = [
     outputs: [{ type: 'bool' }],
   },
   { type: 'function', name: 'shareOFT', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-] as const
-
-const adapterAbi = [
-  {
-    type: 'function',
-    name: 'tokenToSolanaMint',
-    stateMutability: 'view',
-    inputs: [{ name: 'baseToken', type: 'address' }],
-    outputs: [{ type: 'bytes32' }],
-  },
-  {
-    type: 'function',
-    name: 'isRegistered',
-    stateMutability: 'view',
-    inputs: [{ name: 'baseToken', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
 ] as const
 
 const shareOftAbi = [
@@ -130,10 +107,10 @@ async function main() {
   console.log('AKITA creator:', AKITA_DEFAULTS.token)
   console.log('Hub composer:', HUB_COMPOSER)
   console.log('Split batcher:', SPLIT_PHASE1_DEPLOYMENT_BATCHER)
-  console.log('Solana adapter:', BASE_DEFAULTS.solanaBridgeAdapter)
+  console.log('Bridge model: LayerZero ShareOFT (Twin adapter retired)')
   console.log('')
 
-  const [composerCode, mesh, batcherCfg, batcherSharePeer, wrapperCode] = await Promise.all([
+  const [composerCode, mesh, batcherCfg, batcherDestination, wrapperCode] = await Promise.all([
     client.getBytecode({ address: HUB_COMPOSER }),
     client.readContract({
       address: HUB_COMPOSER,
@@ -149,7 +126,7 @@ async function main() {
     client.readContract({
       address: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
       abi: batcherAbi,
-      functionName: 'solanaShareOftPeer',
+      functionName: 'solanaDestination',
     }),
     client.getBytecode({ address: AKITA_DEFAULTS.wrapper }),
   ])
@@ -173,10 +150,10 @@ async function main() {
   console.log('hubComposer:', batcherCfg[0])
   console.log('solanaEid:', batcherCfg[1])
   console.log('enabled:', batcherCfg[2])
-  console.log('solanaShareOftPeer():', batcherSharePeer)
+  console.log('solanaDestination():', batcherDestination)
   console.log(
-    'pipe-a peer gate:',
-    batcherSharePeer !== `0x${'00'.repeat(32)}` ? 'configured' : 'BLOCKED (zero)',
+    'pipe-a destination gate:',
+    String(batcherDestination).toLowerCase() !== ZERO_BYTES32 ? 'configured' : 'BLOCKED (zero)',
   )
   console.log('')
 
@@ -205,43 +182,8 @@ async function main() {
   console.log('wrapper.shareOFT():', wrapperShareOft ?? 'n/a')
   console.log('')
 
-  const adapter = BASE_DEFAULTS.solanaBridgeAdapter as Address
-  const [creatorMint, shareMint, creatorReg, shareReg] = await Promise.all([
-    client.readContract({
-      address: adapter,
-      abi: adapterAbi,
-      functionName: 'tokenToSolanaMint',
-      args: [AKITA_DEFAULTS.token],
-    }),
-    client.readContract({
-      address: adapter,
-      abi: adapterAbi,
-      functionName: 'tokenToSolanaMint',
-      args: [AKITA_DEFAULTS.shareOFT],
-    }),
-    client.readContract({
-      address: adapter,
-      abi: adapterAbi,
-      functionName: 'isRegistered',
-      args: [AKITA_DEFAULTS.token],
-    }),
-    client.readContract({
-      address: adapter,
-      abi: adapterAbi,
-      functionName: 'isRegistered',
-      args: [AKITA_DEFAULTS.shareOFT],
-    }),
-  ])
-
-  console.log('=== SolanaBridgeAdapter (canonical) ===')
-  console.log('creator registered:', creatorReg)
-  console.log('creator tokenToSolanaMint:', creatorMint)
-  console.log('ShareOFT registered:', shareReg)
-  console.log('ShareOFT tokenToSolanaMint:', shareMint)
-  console.log('')
-
   const shareCode = await client.getBytecode({ address: AKITA_DEFAULTS.shareOFT })
-  console.log('=== ShareOFT ===')
+  console.log('=== ShareOFT + Registry4626 peer ===')
   console.log('deployed:', shareCode && shareCode !== '0x' ? 'yes' : 'no')
   let registrySharePeer: `0x${string}` | null = null
   try {
@@ -252,6 +194,12 @@ async function main() {
       args: [AKITA_DEFAULTS.token, SOLANA_EID],
     })
     console.log(`registry.getRemoteOFTPeerBytes32(AKITA, ${SOLANA_EID}):`, registrySharePeer)
+    console.log(
+      'registry peer gate:',
+      registrySharePeer && registrySharePeer.toLowerCase() !== ZERO_BYTES32
+        ? 'configured'
+        : 'BLOCKED (zero) — seed setRemoteOFTPeerBytes32',
+    )
   } catch {
     console.log('registry peer read: failed')
   }

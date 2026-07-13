@@ -30,8 +30,39 @@ import { useAccountContext } from '@/wallet/accountContext'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 const MAX_UINT256 = (1n << 256n) - 1n
 const BPS = 10_000n
+const ROOM_1659_CREATOR_COIN = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
+const ROOM_1659_TOKEN_ID = 1659n
 
 type Mode = 'create' | 'add' | 'buy' | 'sell' | 'remove'
+
+export function getAlfaClubLiquidityDisabledReason(params: {
+  factoryReady: boolean
+  creatorCoin: Address | null
+  tokenId: bigint | null
+  executionAddress: Address | null
+  executionMode: 'canonical' | 'eoa'
+  loading: boolean
+  snapshot: Pick<LpSnapshot, 'pool' | 'pairAllowed' | 'creatorAllowed'> | null
+  mode: Mode
+  hasCreateAmount: boolean
+}): string | null {
+  if (!params.factoryReady) return 'Pool factory deployment is not configured'
+  if (!params.creatorCoin || !params.tokenId) return 'Enter a valid Creator Coin and room token ID'
+  if (!params.executionAddress) return 'Connect an execution-ready wallet'
+  if (
+    params.executionMode === 'canonical' &&
+    (params.creatorCoin !== ROOM_1659_CREATOR_COIN || params.tokenId !== ROOM_1659_TOKEN_ID)
+  ) {
+    return 'Canonical sponsorship is limited to the verified room 1659 / AKITA pair'
+  }
+  if (params.loading) return 'Loading onchain readiness'
+  if (!params.snapshot) return 'Onchain readiness could not be verified'
+  if (params.mode === 'create' && !params.snapshot.pairAllowed) return 'Pair allowlist is closed'
+  if (params.mode === 'create' && !params.snapshot.creatorAllowed) return 'Pool creator allowlist is closed'
+  if (params.mode !== 'create' && !params.snapshot.pool) return 'Pool is not deployed'
+  if (params.mode === 'create' && !params.hasCreateAmount) return 'Enter the initial Creator Coin amount'
+  return null
+}
 
 const modeTabs: Array<{ id: Mode; label: string; icon: typeof Plus }> = [
   { id: 'create', label: 'Create', icon: Plus },
@@ -448,6 +479,7 @@ export function AlfaClubLiquidity({
       connectorId: account.connector?.id ?? null,
       connectorName: account.connector?.name ?? null,
       capabilities: accountContext.capabilities,
+      requireCanonicalSponsorship: executionMode === 'canonical',
     }
   }, [
     account.connector?.id,
@@ -645,19 +677,17 @@ export function AlfaClubLiquidity({
           ? snapshot?.sellQuote
           : null
 
-  const disabledReason = !factoryReady
-    ? 'Factory not deployed'
-    : !creatorCoin || !tokenId
-      ? 'Enter pair'
-      : !executionAddress
-        ? 'Connect wallet'
-        : snapshotQuery.isLoading
-          ? 'Loading'
-          : mode !== 'create' && !snapshot?.pool
-            ? 'No pool'
-            : mode === 'create' && !creatorCoinAmount
-              ? 'Enter amount'
-              : null
+  const disabledReason = getAlfaClubLiquidityDisabledReason({
+    factoryReady: Boolean(factoryReady),
+    creatorCoin,
+    tokenId,
+    executionAddress,
+    executionMode,
+    loading: snapshotQuery.isLoading,
+    snapshot,
+    mode,
+    hasCreateAmount: creatorCoinAmount !== null,
+  })
 
   return (
     <div className={embedded ? 'relative' : 'relative pb-24 md:pb-0'}>
@@ -798,6 +828,11 @@ export function AlfaClubLiquidity({
                   <Droplets className="h-4 w-4" />
                   {switchingChain ? 'Switching Chain' : isSubmitting ? 'Submitting' : disabledReason ?? modeTabs.find((x) => x.id === mode)?.label}
                 </button>
+                {disabledReason ? (
+                  <div className="mt-3 text-xs text-amber-300" role="status">
+                    {disabledReason}
+                  </div>
+                ) : null}
                 {lastHash ? <div className="mt-3 truncate text-xs font-mono text-zinc-500">{lastHash}</div> : null}
               </div>
             </div>

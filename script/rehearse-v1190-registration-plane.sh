@@ -60,14 +60,14 @@ export OFT_BOOTSTRAP_CODE_ID="$(manifest_code_id OFTBootstrapRegistry)"
 export REGISTRATION_PLANE_EPOCH_TAG="v1.19.0-registration-plane"
 export REGISTRATION_PLANE_OWNER="0xB05Cf01231cF2fF99499682E64D3780d57c80FdD"
 export VRF_CONSUMER="0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36"
-export SOLANA_BRIDGE_ADAPTER="0x9A61814082A26192DD9Cb201b44058506685Be60"
 export UNIVERSAL_BYTECODE_STORE="0xfa3e3b466635DAff910057f18749B93d56F9DE50"
 export UNIVERSAL_CREATE2_DEPLOYER="0x54660E61857a652753d805aD2c7b4f759C138bD5"
 export PROTOCOL_TREASURY="0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3"
 export PROTOCOL_AUTOMATION="0x08f0875E40781578F902998b2b831cc48d838eBE"
 export OVAULT_HUB_COMPOSER="0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1"
 export OVAULT_SOLANA_EID="30168"
-export SOLANA_SHARE_OFT_PEER="0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f"
+# Per-creator registry peer for the greenfield lifecycle rehearsal only (not a batcher-global peer).
+export REHEARSAL_SOLANA_SHARE_OFT_PEER="${REHEARSAL_SOLANA_SHARE_OFT_PEER:-0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f}"
 export SOLANA_DESTINATION
 SOLANA_DESTINATION="$(cast call \
   0x02D7abC547F8B1e7E2D7a919D8D1005918361750 \
@@ -98,7 +98,6 @@ write_static_handoff() {
   {
     printf 'REGISTRATION_PLANE_OWNER=%s\n' "$REGISTRATION_PLANE_OWNER"
     printf 'VRF_CONSUMER=%s\n' "$VRF_CONSUMER"
-    printf 'SOLANA_BRIDGE_ADAPTER=%s\n' "$SOLANA_BRIDGE_ADAPTER"
     printf 'UNIVERSAL_BYTECODE_STORE=%s\n' "$UNIVERSAL_BYTECODE_STORE"
     printf 'UNIVERSAL_CREATE2_DEPLOYER=%s\n' "$UNIVERSAL_CREATE2_DEPLOYER"
     printf 'PROTOCOL_TREASURY=%s\n' "$PROTOCOL_TREASURY"
@@ -106,7 +105,7 @@ write_static_handoff() {
     printf 'SOLANA_DESTINATION=%s\n' "$SOLANA_DESTINATION"
     printf 'OVAULT_HUB_COMPOSER=%s\n' "$OVAULT_HUB_COMPOSER"
     printf 'OVAULT_SOLANA_EID=%s\n' "$OVAULT_SOLANA_EID"
-    printf 'SOLANA_SHARE_OFT_PEER=%s\n' "$SOLANA_SHARE_OFT_PEER"
+    printf 'REHEARSAL_SOLANA_SHARE_OFT_PEER=%s\n' "$REHEARSAL_SOLANA_SHARE_OFT_PEER"
   } >> "$HANDOFF"
 }
 
@@ -141,7 +140,7 @@ set +a
 echo "==> [3/9] Seed current release bytecode into the reused store"
 ./script/seed-greenfield-bytecode-store.sh v1.19.0 | tee "$LOG_DIR/bytecode-seed.log"
 
-echo "==> [4/9] Safe-wire helpers, module codehashes, codeIds, factory, and Solana config"
+echo "==> [4/9] Safe-wire helpers, module codehashes, codeIds, factory, destination, and OVault runtime"
 BASE_RPC_URL="$RPC_URL" pnpm -C frontend exec tsx scripts/ops/execute-v1190-registration-plane-safe.ts \
   --handoff "$HANDOFF" \
   --manifest "$MANIFEST" \
@@ -152,9 +151,8 @@ CREATE2_FROM_STORE_OWNER="$REGISTRATION_PLANE_OWNER" \
 forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
   --rpc-url "$RPC_URL" --legacy --gas-price "$FORK_GAS_PRICE" --broadcast -vvvv | tee "$LOG_DIR/phased-infra-authorize.log"
 
-echo "==> [6/9] Bind batcher, authorize CREATE2, and retarget adapter on fork"
+echo "==> [6/9] Bind batcher and authorize CREATE2 on fork (LayerZero destination/runtime already Safe-wired)"
 export NEW_DEPLOYMENT_BATCHER="$DEPLOYMENT_BATCHER"
-export RETARGET_SOLANA_ADAPTER=1
 forge script script/DeployV1190RegistrationPlane.s.sol:DeployV1190RegistrationPlane \
   --rpc-url "$RPC_URL" --legacy --gas-price "$FORK_GAS_PRICE" --broadcast -vvvv | tee "$LOG_DIR/finalize-registration-plane.log"
 
@@ -165,6 +163,7 @@ BASE_RPC_URL="$RPC_URL" pnpm -C frontend exec tsx scripts/ops/verify-v1190-regis
   --rpc "$RPC_URL" | tee "$LOG_DIR/verification.json"
 
 echo "==> [8/9] Execute one greenfield Phase1/Phase2 registration lifecycle"
+export REHEARSAL_SOLANA_SHARE_OFT_PEER
 forge script script/RehearseV1190GreenfieldLifecycle.s.sol:RehearseV1190GreenfieldLifecycle \
   --rpc-url "$RPC_URL" --legacy --gas-price "$FORK_GAS_PRICE" --broadcast --slow --gas-estimate-multiplier 380 -vvvv \
   | tee "$LOG_DIR/greenfield-lifecycle.log"
@@ -175,6 +174,26 @@ BASE_RPC_URL="$RPC_URL" pnpm -C frontend exec tsx scripts/ops/execute-v1190-regi
   --manifest "$MANIFEST" \
   --rpc "$RPC_URL" \
   --dry-run > "$LOG_DIR/unsigned-safe-calldata.json"
+
+python3 - <<'PY'
+import json
+import sys
+from pathlib import Path
+
+log_dir = Path("tmp/v1.19.0-registration-plane-fork")
+path = log_dir / "unsigned-safe-calldata.json"
+payload = json.loads(path.read_text())
+labels = [op.get("label", "") for op in payload.get("operations", [])]
+joined = " ".join(labels).lower()
+required = {"set_solana_destination", "set_ovault_runtime_config"}
+forbidden = ("adapter", "set_solana_config", "set_solana_share_oft_peer", "solana_bridge")
+missing = sorted(required - set(labels))
+bad = [label for label in labels if any(token in label.lower() for token in forbidden)]
+if missing or bad:
+    print(f"Safe packet validation failed missing={missing} forbidden={bad}", file=sys.stderr)
+    sys.exit(1)
+print(f"Safe packet validation passed: {len(labels)} ops include destination + OVault runtime only")
+PY
 
 echo "Registration-plane fork rehearsal passed."
 echo "Handoff: ${HANDOFF}"

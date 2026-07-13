@@ -46,7 +46,9 @@ canonical_keys = [
     "LOTTERY_MANAGER",
     "VRF_CONSUMER",
     "VAULT_ACTIVATION_BATCHER",
-    "SOLANA_BRIDGE_ADAPTER",
+    "SOLANA_DESTINATION",
+    "OVAULT_HUB_COMPOSER",
+    "OVAULT_SOLANA_EID",
     "UNIVERSAL_BYTECODE_STORE",
     "UNIVERSAL_CREATE2_DEPLOYER",
     "UNIVERSAL_CREATE2_FROM_STORE",
@@ -69,7 +71,6 @@ vite_keys = {
     "VITE_LOTTERY_MANAGER": "LOTTERY_MANAGER",
     "VITE_VRF_CONSUMER": "VRF_CONSUMER",
     "VITE_VAULT_ACTIVATION_BATCHER": "VAULT_ACTIVATION_BATCHER",
-    "VITE_SOLANA_BRIDGE_ADAPTER": "SOLANA_BRIDGE_ADAPTER",
     "VITE_UNIVERSAL_BYTECODE_STORE": "UNIVERSAL_BYTECODE_STORE",
     "VITE_UNIVERSAL_CREATE2_DEPLOYER": "UNIVERSAL_CREATE2_DEPLOYER",
     "VITE_DEPLOYMENT_BATCHER": "DEPLOYMENT_BATCHER",
@@ -84,6 +85,8 @@ legacy_remove_prefixes = (
     "CREATOR_LOTTERY_MANAGER",
     "CREATOR_VRF_CONSUMER",
     "VITE_CREATOR_VAULT_BATCHER",
+    "SOLANA_BRIDGE_ADAPTER",
+    "VITE_SOLANA_BRIDGE_ADAPTER",
 )
 
 def upsert(lines: list[str], key: str, value: str) -> None:
@@ -126,4 +129,4 @@ for env_path in env_paths:
     print(f"synced {env_path}")
 PY
 
-echo "Done. Removed legacy CREATOR_* / VITE_CREATOR_VAULT_* keys; wrote canonical v${epoch:-?} infra pins."
+echo "Done. Removed legacy CREATOR_* / Twin adapter keys; wrote canonical v${epoch:-?} infra pins (destination + OVault runtime)."

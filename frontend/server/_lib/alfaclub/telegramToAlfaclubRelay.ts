@@ -12,7 +12,13 @@
 
 import { logger } from '../infra/logger.js'
 import { readAlfaClubChatBridgeFlags, sendAlfaClubRoomText } from './chatBridge.js'
+import {
+  claimAlfaClubCrossChannelIngress,
+  linkAlfaClubCrossChannelIngress,
+} from './crossChannelIngress.js'
+import { lookupEnabledAlfaClubRoomChannelBindingByTelegram } from './roomChannelBindings.js'
 import { normalizeTelegramChatIdForMatch, parseTelegramChatRef } from './telegramChatRef.js'
+import { validateTelegramAlfaClubIssuer } from './telegramIssuerValidator.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -136,6 +142,11 @@ export type TelegramToAlfaclubRelayResult =
   | { status: 'relayed'; roomId: string; lane: string }
   | { status: 'failed'; error: string }
 
+export type TelegramIssuerValidation = {
+  profileId: string | number
+  canonicalIssuer: string
+}
+
 /**
  * When the update matches the configured Telegram source, post into AlfaClub and
  * return `relayed` so the webhook can skip duplicate local command handling.
@@ -148,44 +159,80 @@ export async function relayTelegramMessageToAlfaClub(params: {
   username?: string | null
   userId?: string | null
   config?: TelegramToAlfaclubRelayConfig
+  validateIssuer?: (params: {
+    roomId: string
+    telegramUserId: string
+  }) => Promise<TelegramIssuerValidation | null>
 }): Promise<TelegramToAlfaclubRelayResult> {
-  const config = params.config ?? readTelegramToAlfaclubRelayConfig()
-  if (!config.enabled) return { status: 'disabled' }
+  const incomingChatId = normalizeTelegramChatIdForMatch(params.chatId)
+  const registryLookup = params.config
+    ? { available: true, binding: null }
+    : await lookupEnabledAlfaClubRoomChannelBindingByTelegram({
+        chatId: incomingChatId,
+        threadId: params.messageThreadId,
+      })
+  if (!registryLookup.available) return { status: 'failed', error: 'room_channel_registry_unavailable' }
 
-  if (!matchesTelegramToAlfaclubSource({
-    chatId: params.chatId,
-    messageThreadId: params.messageThreadId,
-    config,
-  })) {
-    return { status: 'skipped', reason: 'source_mismatch' }
+  const registryBinding = registryLookup.binding
+  const fallbackConfig = params.config ?? readTelegramToAlfaclubRelayConfig()
+  if (!registryBinding) {
+    if (!fallbackConfig.enabled) return { status: 'disabled' }
+    if (!matchesTelegramToAlfaclubSource({
+      chatId: params.chatId,
+      messageThreadId: params.messageThreadId,
+      config: fallbackConfig,
+    })) {
+      return { status: 'skipped', reason: 'source_mismatch' }
+    }
   }
 
-  const roomId = (config.roomId ?? '').trim()
+  const roomId = (registryBinding?.roomId ?? fallbackConfig.roomId ?? '').trim()
   if (!roomId) {
     return { status: 'failed', error: 'room_id_missing' }
   }
 
   const text = String(params.text ?? '').trim()
-  if (config.textOnly && !text) {
+  if (!registryBinding && fallbackConfig.textOnly && !text) {
     return { status: 'skipped', reason: 'text_only_empty' }
   }
-
+  if (typeof params.messageId !== 'number' || !Number.isFinite(params.messageId)) {
+    return { status: 'failed', error: 'source_message_id_missing' }
+  }
   const flags = readAlfaClubChatBridgeFlags()
   if (!flags.botToken) {
     return { status: 'failed', error: 'alfaclub_bot_token_missing' }
   }
+  const validateIssuer = params.validateIssuer ?? validateTelegramAlfaClubIssuer
+  const validated = params.userId
+    ? await validateIssuer({ roomId, telegramUserId: params.userId })
+    : null
+  if (!validated) {
+    return { status: 'skipped', reason: 'issuer_not_authorized' }
+  }
+
+  const sourceMessageId = [
+    incomingChatId,
+    params.messageThreadId ?? 'general',
+    Math.floor(params.messageId),
+  ].join(':')
+  const claim = await claimAlfaClubCrossChannelIngress({
+    sourceChannel: 'telegram',
+    sourceMessageId,
+    sourceConversationId: `${incomingChatId}:${params.messageThreadId ?? 'general'}`,
+    targetRoomId: roomId,
+    originalText: text,
+  })
+  if (!claim) return { status: 'failed', error: 'ingress_claim_unavailable' }
+  if (!claim.claimed) return { status: 'skipped', reason: 'duplicate_source_message' }
 
   const body = formatTelegramToAlfaclubBody({
     text,
     username: params.username,
     userId: params.userId,
-    prefix: config.prefix,
+    prefix: registryBinding ? '' : fallbackConfig.prefix,
   })
 
-  const dedupeKey =
-    typeof params.messageId === 'number' && Number.isFinite(params.messageId)
-      ? `telegram:${normalizeTelegramChatIdForMatch(params.chatId)}:${params.messageId}`
-      : `telegram:${normalizeTelegramChatIdForMatch(params.chatId)}:${Date.now()}`
+  const dedupeKey = `telegram:${sourceMessageId}`
 
   try {
     const send = await sendAlfaClubRoomText({
@@ -195,11 +242,25 @@ export async function relayTelegramMessageToAlfaClub(params: {
       flags,
       origin: 'telegram',
     })
+    if (send.messageId) {
+      const linked = await linkAlfaClubCrossChannelIngress({
+        sourceChannel: 'telegram',
+        sourceMessageId,
+        alfaclubRoomId: roomId,
+        alfaclubMessageId: send.messageId,
+        validatedProfileId: validated.profileId,
+        validatedIssuer: validated.canonicalIssuer,
+      })
+      if (!linked) {
+        return { status: 'failed', error: 'ingress_link_unavailable' }
+      }
+    }
     logger.info('[telegram-to-alfaclub] relayed', {
       roomId,
       chatId: params.chatId,
       messageId: params.messageId ?? null,
       lane: send.lane,
+      issuerValidated: true,
     })
     return { status: 'relayed', roomId, lane: send.lane }
   } catch (error) {

@@ -103,7 +103,7 @@ async function assertOvaultRuntimeReady(params: {
   if (!isOvaultRuntimeConfigured(runtime)) {
     throw new Error(
       `Solana preflight failed: OVault runtime config is not enabled on deployment batcher ${params.batcherAddress}. ` +
-        'Wire Pipe A platform readiness (setSolanaShareOftPeer) per docs/operations/solana-share-mesh-budget-paths.md.',
+        'Seed Registry4626.setRemoteOFTPeerBytes32 and enable OVault runtime via setOVaultRuntimeConfig + setSolanaDestination.',
     )
   }
 }

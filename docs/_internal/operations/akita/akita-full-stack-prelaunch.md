@@ -1,6 +1,6 @@
 # AKITA full-stack redeploy — pre-launch checklist
 
-> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. Terminology: [Operator terminology](../../OPERATOR-TERMINOLOGY.md).
+> **Release truth:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
 
 Use this before **you** launch AKITA’s new vault stack on `https://app.4626.fun/deploy/vault`. Platform ops can finish everything here; the deploy session itself stays with the creator/operator wallet.
 
@@ -18,8 +18,8 @@ Related:
 |--|------------------------|----------------|
 | Creator coin | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | **Same** |
 | Vault / wrapper / ShareOFT | `0x82C06…` / `0x58Cd1…` / `0x4df30…` | **New CREATE2 addresses (`■AKITA`)** |
-| Registry row | Absent until finalize | Registered during Phase 2 finalize |
-| Solana mesh | Platform oftStore already live | Reuse batcher default peer (below) |
+| Registry row | Absent in the historical snapshot | Creator registered and explicit Solana peer seeded before Phase 2 finalize |
+| Solana mesh | AKITA LZ OFT store/mint already live | Reuse that identity, but seed AKITA's explicit `Registry4626` peer before finalize |
 | Keeper DB | Points at current vault | **Re-backfill** after new addresses |
 
 Wire LayerZero to the **new** `CreatorShareOFT` deployed in Phase 1 (`■AKITA` symbol).
@@ -35,8 +35,11 @@ Wire LayerZero to the **new** `CreatorShareOFT` deployed in Phase 1 (`■AKITA` 
 
 **Still manual (cannot be skipped today):**
 
-1. **LayerZero Base wire** on the new ShareOFT (once, in your LZ scaffold) — post-phase1 prints exact commands if blocked  
-2. **Wrapper `setBeneficiaryOperator`** (your CSW) + **`configureCreatorMesh`** (protocol Safe) — post-finalize prints calldata  
+1. **LayerZero Base wire** on the new ShareOFT (once, in your LZ scaffold) — post-phase1 prints exact commands if blocked
+2. **Explicit AKITA registry peer** — call
+   `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, peer)` before finalize;
+   never use a batcher-global peer
+3. **Wrapper `setBeneficiaryOperator`** (your CSW) + **`configureCreatorMesh`** (protocol Safe), when the optional composer lane is intentionally configured — post-finalize prints calldata
 
 Keeper registry backfill also runs automatically on vault settlement (`KEEPER_REGISTRY_AUTO_BOOTSTRAP_ENABLED=1` default).
 
@@ -67,7 +70,7 @@ That inserts `vault_full_deploy` (bundles Charm + Ajna + Solana mesh + Meteora e
 
 | Check | Expect |
 |-------|--------|
-| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
+| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | Production `solanaInfraStatus` | `readyForAutoRegistration: true`, `blockers: []` |
 | Release target | `bash test/current-release-target-guard.sh` |
 | Hook bytecode | `ops:verify-hook-mainnet-bytecode` → **PASS (canonical)** |
@@ -80,8 +83,8 @@ Public HTTPS probes (no SSH required):
 |-------|--------|
 | Orchestrator | `https://orchestrator.4626.fun/healthz` → `{"ok":true}` |
 | Orchestrator auth | `POST /reconcile` with `SOLANA_ORCHESTRATOR_API_KEY` → `settle_fees` + `winner_relay` **200** |
-| `relay_entries` paused | `POST /reconcile` action `relay_entries` → **503** `action_disabled:relay_entries` (correct until B2 pool) |
-| Provisioner | `https://provisioner.4626.fun/healthz` + bearer → `ok: true`, `payerHealthy: true` |
+| `relay_entries` paused | `POST /reconcile` action `relay_entries` → **503** `action_disabled:relay_entries` (correct until all production relay gates close) |
+| Optional hook provisioner | `https://provisioner.4626.fun/healthz` + bearer → `ok: true`, `payerHealthy: true`; not the LZ OFT provisioning path |
 | Provisioner DNS | Response `Server: nginx` — **not** Vercel SPA HTML |
 
 Vercel → Vultr chain:
@@ -113,15 +116,17 @@ Pre-deploy Vultr defaults (keep as-is):
 - `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`
 - `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay` on Vercel (no `relay_entries` yet)
 
-**Expected deferral (not a launch blocker):** `pnpm -C kpr preflight-orchestrator` can fail on adapter registration while `SOLANA_SHARE_OFT_MAPPING` still points at the current ShareOFT. Pipe A share mesh does not use `SolanaBridgeAdapter` for the 30% finalize bridge. Re-run preflight **after** redeploy with new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
+**Legacy-only warning:** adapter-registration failures concern the retired Twin
+creator-SPL grain and do not gate Pipe A. Do not repair them by adding adapter
+operations to the v1.19.0 Safe packet. Re-run active preflight after redeploy
+with the new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
 
 ## Vercel production env (Solana deploy lane)
 
 | Variable | Expected |
 |----------|----------|
-| `SOLANA_DYNAMIC_ROUTE_ENABLED` | `1` |
-| `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` | `https://provisioner.4626.fun/provision` |
-| `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET` | matches Vultr provisioner bearer |
+| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| Batcher onchain runtime | destination + OVault runtime enabled; no adapter/global peer |
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | matches Vultr `/etc/4626/solana-keeper-orchestrator.env` |
 | `KEEPER_SOLANA_RECONCILE_ENABLED` | `1` |
@@ -134,10 +139,12 @@ Pre-deploy Vultr defaults (keep as-is):
 | Solana LZ OFT program | `6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s` |
 | OFT store | `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` |
 | Share mesh mint | `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` (`■AKITA`) |
-| Batcher `solanaShareOftPeer` | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` |
+| AKITA registry peer | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` — seed explicitly for `(AKITA, 30168)` |
 | ULN | 6-of-9 optional DVNs Base ↔ Solana (configured on Solana oftStore) |
 
-No new Solana OFT deploy is required for AKITA redeploy if you keep this mesh identity.
+No new Solana OFT deploy is required for AKITA redeploy if you keep this mesh
+identity. This reuse does **not** create a global default: the peer still must be
+written explicitly to the active `Registry4626` row before finalize.
 
 ## Before you click Deploy (your side)
 
@@ -165,10 +172,13 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
    Solana oftStore is already configured; this step configures the **Base** OApp for the new ShareOFT.
 
 2. **Phase 2 finalize** — batcher will:
-   - Register creator in `CreatorRegistry`
-   - Seed registry peer from batcher default if unset
+   - Use the already-registered creator and its explicit `Registry4626` peer
    - `setPeer(30168, …)` on new ShareOFT if needed
    - Bridge 30% ShareOFT to Solana (payable finalize — attach LZ fee)
+
+   If AKITA is not yet present in the active registry, register the creator
+   coin first, then seed `setRemoteOFTPeerBytes32`; do not wait for finalize to
+   invent or inherit a peer.
 
 3. **Composer mesh (Safe on protocol treasury)**  
    After vault/wrapper addresses known:
@@ -188,7 +198,7 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
 | Config | Update `AKITA_DEFAULTS` in `frontend/src/config/contracts.defaults.ts` + Vercel env overrides |
 | Keeper | `scripts/ops/backfill-keepr-vault.ts` with **new** vault/share addresses |
 | `SOLANA_SHARE_OFT_MAPPING` | Map share mesh mint → **new** ShareOFT (not `0x4df30…`) |
-| Orchestrator | `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `RELAY_ENTRIES_ENABLED=0` until B2 pool |
+| Orchestrator | `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `RELAY_ENTRIES_ENABLED=0` until all production relay gates close |
 | Meteora B1 | Optional after Path 1 supply on Solana — `kpr solana:create-dlmm-pool` on share mesh mint |
 | Prior stack | Keep documented for explorer traceability; avoid removing onchain history |
 
@@ -198,6 +208,7 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
 - `relay_entries` enabled
 - Meteora pool + LP
 - Legacy `SolanaBridgeAdapter` registration of ShareOFT (mesh lane ≠ adapter grain)
+- Any batcher-global `solanaShareOftPeer` operation
 
 ## Verification after you finish
 

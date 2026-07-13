@@ -9,7 +9,8 @@ const {
   repliedCommandLedgerMock,
   getChatBridgeMessageOriginsMock,
   recordChatBridgeMessageOriginMock,
-  relayNewRoom1659MessagesToXmtpBridgeMock,
+  relayRoomMessagesToXmtpMock,
+  lookupEnabledRoomBindingMock,
 } = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
@@ -33,7 +34,23 @@ const {
   repliedCommandLedgerMock: new Set<string>(),
   getChatBridgeMessageOriginsMock: vi.fn(async () => new Map<string, 'telegram' | 'xmtp'>()),
   recordChatBridgeMessageOriginMock: vi.fn(async () => {}),
-  relayNewRoom1659MessagesToXmtpBridgeMock: vi.fn(async () => ({ enqueued: 0, skipped: 0 })),
+  relayRoomMessagesToXmtpMock: vi.fn(async () => ({ enqueued: 0, skipped: 0 })),
+  lookupEnabledRoomBindingMock: vi.fn(async (roomId: string) => ({
+    available: true,
+    binding: {
+      roomId,
+      enabled: true,
+      rolloutStatus: 'enabled',
+      telegram: { enabled: true, chatId: '-100123', threadId: null },
+      xmtp: {
+        enabled: true,
+        groupId: `group-${roomId}`,
+        syntheticKeeprVaultAddress: '0x0000000000000000000000000000000000001659',
+      },
+      createdAt: '2026-07-12T00:00:00.000Z',
+      updatedAt: '2026-07-12T00:00:00.000Z',
+    },
+  })),
 }))
 
 vi.mock('./commandReplyLedger.js', () => ({
@@ -44,7 +61,7 @@ vi.mock('./commandReplyLedger.js', () => ({
   recordCommandReply: vi.fn(async ({ messageId }: { roomId: string; messageId: string }) => {
     repliedCommandLedgerMock.add(messageId)
   }),
-  // Pre-existing gap (unrelated to the room-1659 XMTP bridge): tryClaimCommandReply was added
+  // tryClaimCommandReply is required by the live command path.
   // to commandReplyLedger.ts without updating this mock, so any test exercising the live
   // command path failed with "No tryClaimCommandReply export is defined on the mock".
   tryClaimCommandReply: vi.fn(async ({ messageId }: { roomId: string; messageId: string }) => {
@@ -79,8 +96,12 @@ vi.mock('./chatBridgeMessageOrigin.js', () => ({
   recordChatBridgeMessageOrigin: recordChatBridgeMessageOriginMock,
 }))
 
-vi.mock('./room1659XmtpBridge.js', () => ({
-  relayNewRoom1659MessagesToXmtpBridge: relayNewRoom1659MessagesToXmtpBridgeMock,
+vi.mock('./roomChannelBridge.js', () => ({
+  relayRoomMessagesToXmtp: relayRoomMessagesToXmtpMock,
+}))
+
+vi.mock('./roomChannelBindings.js', () => ({
+  lookupEnabledAlfaClubRoomChannelBindingByRoom: lookupEnabledRoomBindingMock,
 }))
 
 vi.mock('../../agents/core/executeDeterministicCommand.js', () => ({
@@ -95,6 +116,7 @@ import {
   _ingestLiveMessagesForTests,
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
+  _sendCommandReplyToRoomForTests,
   _sendRoomMessageViaWebSocketForTests,
   buildAlfaClubOutboundFrame,
   canBridgeExecuteCommandsInRoom,
@@ -232,8 +254,8 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     getChatBridgeMessageOriginsMock.mockResolvedValue(new Map())
     recordChatBridgeMessageOriginMock.mockReset()
     recordChatBridgeMessageOriginMock.mockResolvedValue(undefined)
-    relayNewRoom1659MessagesToXmtpBridgeMock.mockReset()
-    relayNewRoom1659MessagesToXmtpBridgeMock.mockResolvedValue({ enqueued: 0, skipped: 0 })
+    relayRoomMessagesToXmtpMock.mockReset()
+    relayRoomMessagesToXmtpMock.mockResolvedValue({ enqueued: 0, skipped: 0 })
     FakeWebSocket.instances = []
     ;(globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket
     _resetBridgeAuthHealthForTests()
@@ -860,6 +882,35 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     await expect(lanePromise).resolves.toBe('websocket')
   })
 
+  it('does not fall back to the bot API when a JWT websocket reply fails', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ error: 'upstream_failed' }), {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await expect(
+      _sendCommandReplyToRoomForTests({
+        flags: makeFlags({
+          botToken: 'alfa_bot_still_configured',
+          wsProxyHttpSendUrl: 'https://proxy.example/send',
+        }),
+        jwt: 'jwt-current',
+        roomId: '1043',
+        text: 'single websocket reply',
+        attachments: [],
+        replyToMessageId: 'trigger-1',
+        replyToMessageDate: Date.now(),
+        commandMessageId: 'trigger-1',
+      }),
+    ).rejects.toThrow('ws_proxy_send_failed:502')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(FakeWebSocket.instances).toHaveLength(0)
+  })
+
   it('cron tick options skip live websocket connect', async () => {
     mockHistorySuccess()
     const flags = makeFlags({
@@ -906,6 +957,9 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     const rows = (firstCall?.[0] ?? []) as any[]
     expect(rows).toHaveLength(1)
     expect(rows[0]?.messageId).toBe('m-gmeow')
+    expect(relayRoomMessagesToXmtpMock).toHaveBeenCalledWith([
+      { roomId: '1043', messageId: 'm-gmeow', text: '/gmeow' },
+    ])
   })
 
   it('polls Hermit room 1659 when pollRoomId is set on the tick', async () => {
@@ -1148,7 +1202,7 @@ describe('buildAlfaClubOutboundFrame reply/thread contract', () => {
   })
 })
 
-describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
+describe('data-driven room channel origin-aware outbound fan-out', () => {
   const realFetch = globalThis.fetch
 
   function makeInboundMessage(
@@ -1173,8 +1227,8 @@ describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
     getChatBridgeMessageOriginsMock.mockResolvedValue(new Map())
     recordChatBridgeMessageOriginMock.mockReset()
     recordChatBridgeMessageOriginMock.mockResolvedValue(undefined)
-    relayNewRoom1659MessagesToXmtpBridgeMock.mockReset()
-    relayNewRoom1659MessagesToXmtpBridgeMock.mockResolvedValue({ enqueued: 0, skipped: 0 })
+    relayRoomMessagesToXmtpMock.mockReset()
+    relayRoomMessagesToXmtpMock.mockResolvedValue({ enqueued: 0, skipped: 0 })
   })
 
   afterEach(() => {
@@ -1193,9 +1247,10 @@ describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
       makeFlags({ roomId: '1659', telegramRelayEnabled: false }),
     )
 
-    expect(relayNewRoom1659MessagesToXmtpBridgeMock).toHaveBeenCalledTimes(1)
-    expect(relayNewRoom1659MessagesToXmtpBridgeMock).toHaveBeenCalledWith([
+    expect(relayRoomMessagesToXmtpMock).toHaveBeenCalledTimes(1)
+    expect(relayRoomMessagesToXmtpMock).toHaveBeenCalledWith([
       { roomId: '1659', messageId: 'm1', text: 'native message' },
+      { roomId: '1659', messageId: 'm2', text: 'xmtp echo', origin: 'xmtp' },
     ])
   })
 
@@ -1246,7 +1301,7 @@ describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
       }),
     )
 
-    expect(relayNewRoom1659MessagesToXmtpBridgeMock).toHaveBeenCalledWith([
+    expect(relayRoomMessagesToXmtpMock).toHaveBeenCalledWith([
       { roomId: '1659', messageId: 'n1', text: 'native both' },
     ])
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -1256,6 +1311,6 @@ describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
     await _ingestLiveMessagesForTests([], makeFlags({ roomId: '1659' }))
 
     expect(upsertAlfaClubIngestMessagesMock).not.toHaveBeenCalled()
-    expect(relayNewRoom1659MessagesToXmtpBridgeMock).not.toHaveBeenCalled()
+    expect(relayRoomMessagesToXmtpMock).not.toHaveBeenCalled()
   })
 })

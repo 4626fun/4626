@@ -343,16 +343,6 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -383,6 +373,16 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
     ],
@@ -1885,10 +1885,11 @@ function extractFinalizePhase2InvariantInfo(data: Hex): {
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
         shareToken?: string
+        shareOFT?: string
         gaugeController?: string
       } | null
       const creatorToken = normalizeAddressOrNull(params?.creatorToken)
-      const shareToken = normalizeAddressOrNull(params?.shareToken)
+      const shareToken = normalizeAddressOrNull(params?.shareToken ?? params?.shareOFT)
       const gaugeController = normalizeAddressOrNull(params?.gaugeController)
       if (!creatorToken || !shareToken || !gaugeController) continue
       return {

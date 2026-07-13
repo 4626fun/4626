@@ -59,6 +59,7 @@ import {
   readActivationOwnerToken,
   type DecodedActivationOwnerToken,
 } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { validateAlfaClubLpCalls } from '../../../server/_lib/paymaster/alfaclubLpPolicy.js'
 import { assertActivationOwnerTokenClaimActive } from '../../../server/_lib/wallet/activationOwnerTokenClaim.js'
 
 
@@ -461,16 +462,6 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
       {
@@ -526,6 +517,78 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase2WithPermit2',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+      {
+        name: 'permit',
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  // Decode-only: legacy extended finalizePhase2 (meteoraAlphaVault + solanaIxs).
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -781,12 +844,13 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 // finalizePhase2 selectors:
-// - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
-// - permit2-backed current tuple: 0xab56c176
-// - compatibility (pre-Solana tuple extension): 0xcafc9348
-const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
-const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0xab56c176'
-const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
+// - current trimmed Phase2FinalizeParams: 0xcafc9348
+// - permit2-backed trimmed tuple: 0x8e782ae1
+// - legacy extended (meteoraAlphaVault + solanaIxs) decode/allowlist: 0xbd4583fb / 0xab56c176
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 = '0x8e782ae1'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xbd4583fb'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY = '0xab56c176'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x881d4960'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
@@ -828,6 +892,7 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_FINALIZE_PHASE2,
   SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2,
   SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
@@ -2280,9 +2345,21 @@ async function validateInnerCalls(params: {
     const isFinalizeShareBridge =
       c.target === deploymentBatcher &&
       (selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
-        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY)
     if (isFinalizeShareBridge) continue
     throw new Error('value_transfer_not_allowed')
+  }
+
+  const alfaClubLp = await validateAlfaClubLpCalls({
+    calls: innerCalls,
+    sender: params.sender,
+    client: await getBaseClient(),
+    env: process.env,
+  })
+  if (alfaClubLp) {
+    return { expectedCreatorToken: alfaClubLp.creatorCoin, mode: 'alfaclub_lp' }
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -2315,6 +2392,7 @@ async function validateInnerCalls(params: {
     | 'deploy'
     | 'activate'
     | 'swap'
+    | 'alfaclub_lp'
     | 'legacy_withdraw'
     | 'deploy_session_setup'
     | 'agent_registry'
@@ -2353,6 +2431,7 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
@@ -2575,7 +2654,8 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
           selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
           selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
@@ -3113,7 +3193,9 @@ async function validateInnerCalls(params: {
         const selector = getSelector(c.data)
         if (
           selector !== SELECTOR_BATCHER_FINALIZE_PHASE2 &&
-          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2 &&
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY &&
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2_LEGACY
         ) {
           continue
         }

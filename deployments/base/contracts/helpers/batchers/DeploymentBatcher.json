@@ -1317,33 +1317,6 @@
               "name": "auctionSteps",
               "type": "bytes",
               "internalType": "bytes"
-            },
-            {
-              "name": "meteoraAlphaVault",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "solanaIxs",
-              "type": "tuple[]",
-              "internalType": "struct IBaseSolanaBridge.Ix[]",
-              "components": [
-                {
-                  "name": "programId",
-                  "type": "bytes32",
-                  "internalType": "bytes32"
-                },
-                {
-                  "name": "serializedAccounts",
-                  "type": "bytes[]",
-                  "internalType": "bytes[]"
-                },
-                {
-                  "name": "data",
-                  "type": "bytes",
-                  "internalType": "bytes"
-                }
-              ]
             }
           ]
         }
@@ -1452,33 +1425,6 @@
               "name": "auctionSteps",
               "type": "bytes",
               "internalType": "bytes"
-            },
-            {
-              "name": "meteoraAlphaVault",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "solanaIxs",
-              "type": "tuple[]",
-              "internalType": "struct IBaseSolanaBridge.Ix[]",
-              "components": [
-                {
-                  "name": "programId",
-                  "type": "bytes32",
-                  "internalType": "bytes32"
-                },
-                {
-                  "name": "serializedAccounts",
-                  "type": "bytes[]",
-                  "internalType": "bytes[]"
-                },
-                {
-                  "name": "data",
-                  "type": "bytes",
-                  "internalType": "bytes"
-                }
-              ]
             }
           ]
         },
@@ -2039,28 +1985,10 @@
     },
     {
       "type": "function",
-      "name": "setSolanaConfig",
+      "name": "setSolanaDestination",
       "inputs": [
-        {
-          "name": "_adapter",
-          "type": "address",
-          "internalType": "address"
-        },
         {
           "name": "_destination",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setSolanaShareOftPeer",
-      "inputs": [
-        {
-          "name": "_peer",
           "type": "bytes32",
           "internalType": "bytes32"
         }
@@ -2101,33 +2029,7 @@
     },
     {
       "type": "function",
-      "name": "solanaBridgeAdapter",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "solanaDestination",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "solanaShareOftPeer",
       "inputs": [],
       "outputs": [
         {
@@ -2902,14 +2804,8 @@
     },
     {
       "type": "event",
-      "name": "SolanaConfigSet",
+      "name": "SolanaDestinationSet",
       "inputs": [
-        {
-          "name": "adapter",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
         {
           "name": "solanaDestination",
           "type": "bytes32",

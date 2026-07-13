@@ -1,21 +1,28 @@
 # Solana Dynamic Route Provisioner
 
-Minimal external service for dynamic bridge-token -> Solana route provisioning.
+Minimal external service for Solana-side helpers used by 4626 deploy/ops.
 
-This service is designed for VM/container runtimes where the bridge CLI is available on disk.
+**LayerZero ShareOFT is the only active Base↔Solana share path.** Twin wrap-token
+provisioning (`POST /provision`) is retired and returns HTTP **410**.
 
 ## Why this exists
 
-`/api/deploy/registerSolanaBridgeToken` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
+Historically, `/api/deploy/registerSolanaBridgeToken` could call this service for
+Twin wrap-token mint creation on VM runtimes. That path is gone.
 
-Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
+Keep this service for:
+
+- `GET /healthz` readiness
+- `POST /meteora-ixs` (legacy Alpha Vault ix payloads when that lane still applies)
+- optional extended endpoints (`/setup-creator`, `/create-pool`) when enabled
+
+Share-mesh creator wiring uses LayerZero OFT store + mint provisioning and
+`Registry4626.setRemoteOFTPeerBytes32` — see
+`docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md`
+and `docs/_internal/operations/solana/solana-share-mesh-budget-paths.md`.
+
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
-(or rely on automatic `/meteora-ixs` derivation from the dynamic-route URL).
-
-This service provisions bridge routes and Meteora ix payloads; it does **not**
-by itself guarantee wallet/aggregator icon display for the resulting mint.
-
-Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
+(or derive `/meteora-ixs` from a legacy dynamic-route URL base).
 
 ## Endpoints
 
@@ -23,63 +30,27 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
   - Bearer-authenticated
   - Returns coarse runtime readiness (`cliExists`, `secretSet`, payer readiness, RPC configuration)
   - Detailed payer/source diagnostics are returned only when `PROVISIONER_HEALTH_DEBUG=1`
-- `POST /provision`
-  - Bearer-authenticated
-  - Runs `cli sol bridge wrap-token`
-  - Verifies route scalar on Base
-  - Returns `mintBytes32` (both top-level and inside `data`)
+- `POST /provision` — **RETIRED (HTTP 410)**
+  - Twin wrap-token provisioning is retired
+  - JSON body explains LayerZero ShareOFT share-mesh replacement
 - `POST /meteora-ixs`
   - Bearer-authenticated
   - Builds Base bridge `Ix[]` payload for Meteora Alpha Vault `deposit(max_amount)`
   - Returns `meteoraAlphaVault` (`bytes32`) + serialized `solanaIxs`
 
-## Request contract (`POST /provision`)
+## Retired: `POST /provision`
 
 ```json
 {
-  "bridgeToken": "0x...",
-  "deployEnv": "mainnet",
-  "solanaDecimals": 9,
-  "tokenMetadataUri": "https://api.4626.fun/v1/token/0x.../metadata?chain=8453",
-  "scalerExponent": 9,
-  "payerKp": "config",
-  "payForRelay": true
+  "success": false,
+  "error": "gone",
+  "code": "twin_wrap_token_provisioning_retired",
+  "message": "…use LayerZero ShareOFT + Registry4626.setRemoteOFTPeerBytes32…"
 }
 ```
 
-The provisioner runs in strict parity mode: it reads `name()` and `symbol()`
-directly from the `bridgeToken` ERC-20 on Base via `readBridgeTokenMetadata`,
-lowercase-coerces both values, and passes them to `wrap-token` as
-`--name` / `--symbol`. Lowercase is applied uniformly so every creator's
-Solana display (`"akita"` / `"akita"`) stays consistent regardless of how
-the Base token cased its own metadata (`"AKITA"`, `"MyCoin"`, etc). The
-request body intentionally does NOT accept a `tokenName` / `tokenSymbol`
-override -- the Solana mint's identity is cryptographically bound to its
-metadata via the bridge program's wrapped-token PDA seeds, so the lowercase
-form IS the on-chain identity on Solana. Provisioning fails closed
-(HTTP 409) if the Base metadata is missing, empty, or exceeds the
-wrap-token constraints (name<=32 bytes, symbol<=12 bytes, no null bytes).
-
-## Response contract (success)
-
-```json
-{
-  "success": true,
-  "mintBytes32": "0x...",
-  "data": {
-    "bridgeToken": "0x...",
-    "mintPubkey": "...",
-    "mintBytes32": "0x...",
-    "routeScalar": "1"
-  }
-}
-```
-
-`/provision` may also return additional fields in `data`, including:
-- `runner` (which CLI runner executed)
-- `tokenSymbol` (echo of the symbol used; equals `bridgeToken.symbol()` on Base)
-- `mintCompatibilityHints` (mint-compatibility diagnostics)
-- `pool` / `alphaVault` — **removed:** `SOLANA_AUTO_POOL` is retired (use share-mesh runbook instead)
+Do not point new automation at `/provision`. Use the share-mesh creator provisioning
+runbook instead.
 
 ## Request contract (`POST /meteora-ixs`)
 
@@ -116,6 +87,7 @@ wrap-token constraints (name<=32 bytes, symbol<=12 bytes, no null bytes).
   }
 }
 ```
+
 
 ## Run locally
 
@@ -170,8 +142,8 @@ Use this flow when the bridge CLI only exists on your own machine (for example
 
 Then set app runtime envs to your tunnel hostname:
 
-- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL=https://provisioner.4626.fun/provision`
-- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same PROVISIONER_BEARER_TOKEN>`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` historically pointed at `/provision` — that path is retired (HTTP 410). Prefer LayerZero ShareOFT runbooks; keep the URL only for fail-closed callers.
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same PROVISIONER_BEARER_TOKEN>` (optional legacy)
 - `METEORA_IX_PROVISIONER_URL=https://provisioner.4626.fun/meteora-ixs` (optional)
 - `METEORA_IX_PROVISIONER_SECRET=<same PROVISIONER_BEARER_TOKEN>` (optional)
 
@@ -213,7 +185,7 @@ Important:
 Route only:
 
 - `GET /healthz`
-- `POST /provision`
+- `POST /provision` (retired — returns HTTP 410; keep route for fail-closed callers)
 - `POST /meteora-ixs`
 
 Extended mutation endpoints stay disabled by default:

@@ -1,8 +1,9 @@
 # Greenfield launch readiness
 
-> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.14.1 batcher `0x660B251F…61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
 
-Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md).
+Repeatable gate for **new vault deploys** (not grandfather migrations). Policy:
+[solana-share-mesh-lottery-policy.md](../solana/solana-share-mesh-lottery-policy.md).
 
 **AKITA full-stack redeploy:** use the dedicated checklist and one-command gate in [akita-full-stack-prelaunch.md](../../akita/akita-full-stack-prelaunch.md) (`pnpm -C frontend ops:verify-akita-prelaunch --production`).
 
@@ -11,7 +12,7 @@ Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: 
 | Milestone | Ready when | Solana lottery relay |
 |-----------|------------|----------------------|
 | **Base vault live** | Deploy session complete; Base ShareOFT buy → lottery works | Off (`relay_entries` paused) |
-| **Solana lottery live** | Share-mesh Meteora pool + LP; **B2:** test pool buy confirms Base lottery via `relay_entries`. **B1:** Meteora trading only (relay not shipped) | On (**B2 only**) |
+| **Solana trading live** | Per-creator LZ OFT store/mint + explicit registry peer + Meteora pool + LP | Off; `relay_entries` is not production-ready |
 
 Base launch does not require Solana lottery relay.
 
@@ -31,24 +32,20 @@ Also verify:
 | Check | Command / URL |
 |-------|----------------|
 | Batcher OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` → hub + EID `30168` + `true` |
-| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` → exit 0 |
-| Provisioner | `curl -H "Authorization: Bearer $SECRET" https://provisioner.4626.fun/healthz` → `ok: true`, payer healthy |
+| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750` → exit 0 |
+| Per-creator route | LZ OFT store/mint exists and `Registry4626.getRemoteOFTPeerBytes32(creatorToken, 30168)` is non-zero before finalize |
 | Orchestrator | `curl https://orchestrator.4626.fun/healthz` → `ok: true` |
 | Release target | `bash test/current-release-target-guard.sh` |
 | Keeper registry auth | `curl -H "Authorization: Bearer $KPR_API_KEY" https://app.4626.fun/api/vaults/active?chainId=8453` |
 
-### Required Vercel production env (Solana deploy lane)
+### Required production configuration (Solana deploy lane)
 
 | Variable | Purpose |
 |----------|---------|
-| `SOLANA_DYNAMIC_ROUTE_ENABLED=1` | Remote provisioner for mesh mints |
-| `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` / `_SECRET` / `_HEALTH_URL` | `provisioner.4626.fun` |
-| `SOLANA_ADAPTER_OWNER_PRIVATE_KEY` | Must match `SolanaBridgeAdapter.owner()` (not `KPR_PRIVATE_KEY`) |
-| `DEPLOY_SOLANA_REGISTRATION_SECRET` + `DEPLOY_SOLANA_REGISTRATION_ORIGINS` | Cross-origin session registration |
 | `DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE=ovault_first` | Mesh-first deploy preflight |
-| `SOLANA_OVAULT_ASSET_MINT_ORIGIN=new` | Greenfield mints (skip legacy existing-mint hint blockers) |
-| `SOLANA_BRIDGE_ADAPTER` + `SOLANA_DESTINATION` | Batcher-aligned adapter + keeper pubkey |
-| `METEORA_IX_PROVISIONER_URL` / `_SECRET` | Optional Meteora ix generation |
+| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.19.0 batcher `0x02D7…1750` |
+| Batcher onchain config | Non-zero destination + enabled OVault runtime (Solana EID `30168`) |
+| Registry per-creator config | Explicit `setRemoteOFTPeerBytes32` before finalize |
 
 Redeploy production after env changes (`vercel deploy --prod --archive=tgz`).
 
@@ -80,7 +77,9 @@ SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
    legacy individual comp rows still work for grandfathered creators)
 5. Optional: fork dry-run — `pnpm -C frontend run dev:deploy-dry-run`
 
-Pipe A (30% ShareOFT auto-bridge at finalize) additionally requires a **Pipe-A-ready batcher** — see [batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md):
+Pipe A (30% ShareOFT auto-bridge at finalize) additionally requires a
+**Pipe-A-ready batcher** and an explicit peer for this creator — see
+[batcher-pipe-a-cutover.md](/operations/deployment/batcher-pipe-a-cutover):
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
@@ -88,31 +87,31 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
 
 Expect `readyForPipeAFinalizeBridge: true`. The deprecated `solana_bridge_strategy` Phase-3 TVL lane is removed; Solana share seeding happens in Phase 2 finalize instead.
 
+Provision the per-creator LayerZero OFT store/mint and seed
+`Registry4626.setRemoteOFTPeerBytes32` by following
+[Solana share-mesh creator provisioning](/operations/solana/solana-share-mesh-creator-provisioning).
+Never substitute Twin `wrap-token`, adapter registration, or a batcher-global
+peer.
+
 ## Deploy session checklist
 
 - Phases 1–3 complete (+ Phase 4 if deferred launch)  
 - If Solana enabled: session reaches `ovault_mesh_confirmed`  
 - Base smoke: deposit, withdraw, ShareOFT **buy** → lottery entry  
 
-## Solana lottery flip (Phase B — **B2 only today**)
+## Solana post-launch (Meteora trading)
 
-After share-mesh Meteora pool + LP, and (**B2**) hook PDAs + one verified pool buy → Base lottery:
-
-```bash
-KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
-SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
-# SOLANA_CREATOR_MINTS + SOLANA_SHARE_OFT_MAPPING → hook / share mint (not creator SPL 9JWh…)
-```
-
-**B1 (Meteora trading without Solana lottery relay):** stop after pool + LP; keep `relay_entries` off; Base Uniswap lottery remains live.
-
-Redeploy Vercel; restart orchestrator on Vultr.
+After Path 1, create and seed the Meteora pool against the creator's LZ
+share-mesh mint using
+[Solana share-mesh budget paths](/operations/solana/solana-share-mesh-budget-paths).
+Keep `relay_entries` off; Base Uniswap lottery remains live. The historical
+Twin creator-SPL/Alpha-Vault grain is not a greenfield route.
 
 ## Ops helpers
 
 ```bash
-# Safe batcher config proposals (dry-run, then --propose)
-pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts
+# Generate the unsigned 11-operation v1.19.0 Safe packet
+pnpm -C frontend exec tsx scripts/ops/execute-v1190-registration-plane-safe.ts --dry-run
 
 # Read-only Pipe A readiness gate
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
@@ -121,4 +120,4 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
 pnpm -C frontend exec tsx scripts/ops/execute-pending-safe-txs.ts <safeTxHash>...
 ```
 
-Cutover runbook: [deployment/batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md).
+Cutover runbook: [deployment/batcher-pipe-a-cutover.md](/operations/deployment/batcher-pipe-a-cutover).

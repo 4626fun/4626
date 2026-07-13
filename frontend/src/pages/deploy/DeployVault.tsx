@@ -2766,8 +2766,6 @@ function DeployVaultBatcher({
       requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
       floorPriceQ96: floorPriceQ96ForBatcher,
       auctionSteps: encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS),
-      meteoraAlphaVault: ZERO_BYTES32 as Hex,
-      solanaIxs: [],
     }
     return mergePipeAFinalizeParams(predicted, phase1OnchainQuery.data ?? null)
   }, [
@@ -4730,8 +4728,6 @@ function DeployVaultBatcher({
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96ForBatcher,
           auctionSteps,
-          meteoraAlphaVault: ZERO_BYTES32 as `0x${string}`,
-          solanaIxs: [],
         } as const
 
         // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna only (Solana share seed is Phase 2 auto-bridge)

@@ -196,6 +196,37 @@ const DRY_RUN_FINALIZE_PHASE2_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+/** Decode-only compatibility for pre-trim finalize calldata (meteoraAlphaVault + solanaIxs). */
+const DRY_RUN_FINALIZE_PHASE2_LEGACY_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
           { name: 'meteoraAlphaVault', type: 'bytes32' },
           {
             name: 'solanaIxs',
@@ -212,6 +243,18 @@ const DRY_RUN_FINALIZE_PHASE2_ABI = [
     outputs: [],
   },
 ] as const
+
+function decodeDryRunFinalizePhase2(data: Hex) {
+  for (const abi of [DRY_RUN_FINALIZE_PHASE2_ABI, DRY_RUN_FINALIZE_PHASE2_LEGACY_ABI] as const) {
+    try {
+      return decodeFunctionData({ abi, data })
+    } catch {
+      continue
+    }
+  }
+  throw new Error('Unable to decode finalizePhase2 calldata')
+}
+
 
 const DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI = [
   {
@@ -646,10 +689,7 @@ function isPhase1BatcherCall(call: Call): boolean {
 
 function isFinalizePhase2Call(call: Call): boolean {
   try {
-    const decoded = decodeFunctionData({
-      abi: DRY_RUN_FINALIZE_PHASE2_ABI,
-      data: call.data,
-    })
+    const decoded = decodeDryRunFinalizePhase2(call.data)
     return decoded.functionName === 'finalizePhase2'
   } catch {
     return false
@@ -911,7 +951,7 @@ async function alignPhase2ToFinalizedPhase1State(params: {
 
     const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
       try {
-        const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+        const decoded = decodeDryRunFinalizePhase2(call.data)
         if (decoded.functionName !== 'finalizePhase2') return call
         const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
         if (!finalizeParams) return call
@@ -1025,7 +1065,7 @@ function normalizePhase2IdentityToPhase1(params: {
 
   const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
     try {
-      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') return call
       const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
       if (!finalizeParams) return call
@@ -1182,7 +1222,7 @@ async function normalizePhase2AddressesToPhase1State(params: {
 
   const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
     try {
-      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') return call
       const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
       if (!finalizeParams) return call
@@ -1229,10 +1269,7 @@ function extractFinalizePhase2CoreAddresses(calls: Call[]): {
 } | null {
   for (const call of calls) {
     try {
-      const decoded = decodeFunctionData({
-        abi: DRY_RUN_FINALIZE_PHASE2_ABI,
-        data: call.data,
-      })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') continue
       const params = decoded.args[0]
       const gaugeController = getTupleAddress(params, 'gaugeController', 5)
@@ -1251,10 +1288,7 @@ function extractFinalizePhase2CoreAddresses(calls: Call[]): {
 function extractFinalizePhase2Identity(calls: Call[]): { creatorToken: Address; owner: Address } | null {
   for (const call of calls) {
     try {
-      const decoded = decodeFunctionData({
-        abi: DRY_RUN_FINALIZE_PHASE2_ABI,
-        data: call.data,
-      })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') continue
       const params = decoded.args[0]
       const creatorToken = getTupleAddress(params, 'creatorToken', 0)
@@ -1450,7 +1484,7 @@ async function alignPhase2FinalizeToCoreDeploymentEvent(params: {
   let rewrote = false
   const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
     try {
-      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') return call
       const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
       if (!finalizeParams) return call
@@ -1510,7 +1544,7 @@ async function alignPhase2FinalizeToLiveCoreCode(params: {
   const phase2FinalizeCalls: Call[] = []
   for (const call of params.phase2FinalizeCalls) {
     try {
-      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') {
         phase2FinalizeCalls.push(call)
         continue
@@ -1632,7 +1666,7 @@ async function alignPhase2FinalizeFromSimulation(params: {
     }
 
     try {
-      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      const decoded = decodeDryRunFinalizePhase2(call.data)
       if (decoded.functionName !== 'finalizePhase2') {
         phase2FinalizeCalls.push(call)
         continue
@@ -1724,7 +1758,7 @@ async function recoverPhase2FinalizeCallFromLogs(params: {
 }): Promise<Call | null> {
   let finalizeParams: Record<string, unknown> | null = null
   try {
-    const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: params.call.data })
+    const decoded = decodeDryRunFinalizePhase2(params.call.data)
     if (decoded.functionName !== 'finalizePhase2') return null
     finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
   } catch {

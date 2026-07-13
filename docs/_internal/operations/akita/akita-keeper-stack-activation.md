@@ -2,7 +2,11 @@
 
 Turn-on checklist for live vault `0x82C06EaAE27B1Ca31fA29F22341A162A670A4471` (creator `0x5b674196812451b7cec024fe9d22d2c0b172fa75`).
 
-**Solana lottery policy (2026-05-25):** lottery on Solana = **pool buy of share mesh** only — not bridge-wrapped creator SPL, not compose deposit. Pause `relay_entries` until share-mesh pool is live. See [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) and [akita-solana-share-mesh-audit.md](./akita-solana-share-mesh-audit.md).
+**Solana lottery policy:** lottery on Solana would be a **pool buy of share mesh**
+only — not bridge-wrapped creator SPL or compose deposit. `relay_entries`
+remains disabled until the documented production gates close. See
+[solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md)
+and [akita-solana-share-mesh-audit.md](../solana/akita-solana-share-mesh-audit.md).
 
 ## Layer map
 
@@ -31,7 +35,7 @@ Set in [Vercel → 4626 → Settings → Environment Variables](https://vercel.c
 | `KEEPER_AJNA_MANAGER_CHAIN_ID` | `8453` |
 | `KEEPER_AJNA_MANAGER_LIMIT` | `25` |
 | `KEEPER_SOLANA_RECONCILE_ENABLED` | `1` (likely already set) |
-| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,winner_relay` only until share-mesh pool live; then add `relay_entries`. Add `rebalance` after strategy bridge Phase 2. |
+| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,winner_relay`; do not add `relay_entries` until the production relay gates close. Add `rebalance` only for an explicitly supported active LZ route. |
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | Same secret as Vultr orchestrator env |
 | `KEEPER_PROCESS_KPR_ACTIONS_ENABLED` | `1` — Vercel cron executes `keepr_actions` queue (Charm/Ajna writes) |
@@ -115,26 +119,28 @@ Per `docs/operations/ajna-vault-manager-p0-runbook.md`:
 2. Set `automation_status = dry_run` for canary.
 3. After enqueue cron runs, promote to `live` via `POST /api/deploy/v2/ajna/automation/control`.
 
-## Phase 2 — Solana bridge (blocked until adapter registration)
+## Phase 2 — Solana share mesh
 
-**Current blocker:** AKITA is **not** registered on canonical adapter `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1`.
+The active lane is the per-creator LayerZero ShareOFT mesh. Twin
+`SolanaBridgeAdapter` registration, `registerSolanaBridgeToken`, and the
+strict-parity creator SPL mint `9JWh…` are preserved historical grain; they do
+not gate AKITA's active share-mesh route.
 
-```bash
-pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x5b674196812451b7cec024fe9d22d2c0b172fa75
-# exit 2 = adapter_not_registered
-```
+Before finalize:
 
-### Register on Base (operator)
-
-Run the existing provisioner / `POST /api/deploy/registerSolanaBridgeToken` path for AKITA so canonical adapter maps:
-
-- Base creator: `0x5b674196812451b7cec024fe9d22d2c0b172fa75`
-- ShareOFT: `0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57`
-- Solana mint (strict parity): `9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp`
+1. Reuse or provision AKITA's LZ OFT store/mint with the canonical
+   [creator provisioning runbook](../operations/solana/solana-share-mesh-creator-provisioning.md).
+2. Seed
+   `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f)`.
+3. Verify the registry peer is non-zero and the v1.19.0 batcher
+   `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` has destination + OVault
+   runtime enabled.
+4. After supply arrives on Solana, create the Meteora pool against the LZ
+   share-mesh mint through the canonical budget/runbook path.
 
 ### Vultr orchestrator env (`/etc/4626/solana-keeper-orchestrator.env`)
 
-After registration + preflight clean:
+After LZ store/mint wiring + explicit registry-peer preflight is clean:
 
 ```bash
 pnpm -C kpr preflight-orchestrator   # must exit 0
@@ -147,28 +153,32 @@ Then on Vultr:
 | `SOLANA_KEEPER_BASE_WRITES_ENABLED` | `1` |
 | `SOLANA_ORCHESTRATOR_EXECUTE` | `1` |
 | `SOLANA_ORCHESTRATOR_REBALANCE_ENABLED` | `1` (when ready) |
-| `SOLANA_CREATOR_MINTS` | **Do not use** `9JWh…` for lottery — that is bridge-wrapped **creator** SPL. After share-mesh pool: set to **share mesh mint** pubkey only. |
+| `SOLANA_CREATOR_MINTS` | **Do not use** `9JWh…` — that is legacy Twin bridge-wrapped **creator** SPL. Use the LZ share-mesh mint only where the workflow requires a mint. |
 | `SOLANA_SHARE_OFT_MAPPING` | After Phase B: `{"<share_mesh_mint>":"0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"}` — not creator SPL → ShareOFT. |
 | `KPR_PRIVATE_KEY` | Production keeper (`0xAb6d5…`) |
 
 Restart: `sudo systemctl restart solana-keeper-orchestrator`
 
-Optional hook lane: `POST /setup-creator` on provisioner for CreatorConfig PDA (warning only until hook product is live).
+Optional B2 hook setup remains non-production; keep `relay_entries` disabled.
 
 ### Enable rebalance cron action
 
 On Vercel, append `rebalance` to `KEEPER_SOLANA_RECONCILE_ACTIONS` and set on Vultr/local:
 
 - `KPR_SOLANA_REBALANCE_EXECUTE=1`
-- `KPR_SOLANA_REBALANCE_CREATORS_JSON` with AKITA creator + current adapter `0x2414…` + destination pubkey
+- `KPR_SOLANA_REBALANCE_CREATORS_JSON` only for an explicitly supported active
+  LZ route. Do not restore a Twin adapter address to make this preflight pass.
 
-## Quick status (2026-05-25)
+## Historical Twin status (2026-05-25)
+
+This table records the retired adapter grain as observed on 2026-05-25. It is
+not the current launch checklist.
 
 | Check | Status |
 |-------|--------|
 | Vultr orchestrator `/healthz` | ✅ 200 |
-| AKITA on canonical Solana adapter | ❌ not registered |
-| ShareOFT on adapter | ❌ neither current nor target share registered |
+| AKITA on then-canonical Solana adapter | ❌ not registered (legacy; no active remediation required) |
+| ShareOFT on adapter | ❌ neither current nor target share registered (legacy) |
 | Local `KPR_API_KEY` vs Vercel | sync via `./scripts/ops/sync-kpr-env-from-vercel.sh` |
 | Keeper code on `main` | ✅ shipped |
 | `KEEPER_AJNA_MANAGER_*` on Vercel | ✅ enabled |
@@ -188,7 +198,7 @@ flowchart TD
   deploy[Vault deploy completes / sweep settles]
   cp[Control plane: provisionVaultEconomy]
   db[(keepr_vaults + ajna_vaults + automation dry_run)]
-  sol[Solana register if strategy paid]
+  sol[LZ OFT provision + explicit registry peer]
   vercel[Vercel crons already enabled]
   vultr[Vultr orchestrator preflight then writes]
   kpr[KPR vault-keeper via HTTP bridge]
@@ -209,7 +219,7 @@ flowchart TD
 | P0 | **`sync-kpr-env-from-vercel.sh`** | One command local env sync (no dashboard copy/paste) |
 | P1 | **Post-settle hook** — `executeSettleVault` calls `ensureKeeperRegistryForVault` when `settlementStage=completed` | New deploys auto-seed registry if row missing |
 | P1 | **Enable `KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED=1`** with `tend,report` | Crons fan out vault keeper without KPR polling registry |
-| P2 | **Solana share mesh (Pipe A)** — batcher `solanaShareOftPeer` + Path 1 LZ OFT before finalize bridge | Legacy `solana_bridge_strategy` / creator-SPL auto-pool retired |
+| P2 | **Solana share mesh (Pipe A)** — per-creator LZ OFT + `Registry4626.setRemoteOFTPeerBytes32` before finalize | Legacy `solana_bridge_strategy`, adapter registration, global peer, and creator-SPL auto-pool retired |
 | P2 | **Ajna default `dry_run`** on seed, promote to `live` via control-plane only | Safe-by-default automation |
 
 ### One-time AKITA backfill (grandfathered vault)

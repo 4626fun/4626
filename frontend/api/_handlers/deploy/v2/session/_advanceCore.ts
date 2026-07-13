@@ -47,11 +47,7 @@ import {
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedTokenList.js'
-import {
-  ensureShareMeshOvaultPreflight,
-  isLegacySolanaBridgePreflightEnabled,
-} from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
-import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
+import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
@@ -66,7 +62,6 @@ const CONCURRENT_MODIFICATION = 'concurrent_modification'
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
-const SOLANA_RESERVE_PERCENT_BPS = 3_000n
 const BPS_DENOMINATOR = 10_000n
 const SESSION_EXPIRED_RESTART_REQUIRED = 'session_expired_restart_required'
 const SESSION_EXPIRED_AT_KEY = 'sessionExpiredAt'
@@ -308,10 +303,6 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
-function shouldRequireInlineMeteoraPayload(): boolean {
-  return isTruthyEnv(process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD, false)
-}
-
 function isVercelDeploymentOrigin(origin: string): boolean {
   try {
     return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
@@ -360,49 +351,6 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
 ] as const
 
-const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'solanaBridgeAdapter',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'solanaDestination',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bytes32' }],
-  },
-  {
-    type: 'function',
-    name: 'getOVaultRuntimeConfig',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      {
-        type: 'tuple',
-        components: [
-          { name: 'hubComposer', type: 'address' },
-          { name: 'solanaEid', type: 'uint32' },
-          { name: 'enabled', type: 'bool' },
-        ],
-      },
-    ],
-  },
-] as const
-
-const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'isRegistered',
-    stateMutability: 'view',
-    inputs: [{ name: 'token', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-] as const
-
 const OWNABLE_OWNER_VIEW_ABI = [
   {
     type: 'function',
@@ -436,16 +384,6 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -476,6 +414,16 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
     ],
@@ -825,49 +773,6 @@ function headerValue(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
 }
 
-function parseConfiguredOrigin(value: string): string | null {
-  const raw = String(value ?? '').trim()
-  if (!raw) return null
-  try {
-    return new URL(raw).origin
-  } catch {
-    return null
-  }
-}
-
-function readAdditionalSolanaRegistrationOrigins(): string[] {
-  const raw =
-    String(process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS ?? '').trim() ||
-    String(process.env.SOLANA_REGISTRATION_ORIGINS ?? '').trim()
-  if (!raw) return []
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const entry of raw.split(/[,\s]+/)) {
-    const origin = parseConfiguredOrigin(entry)
-    if (!origin) continue
-    const key = origin.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(origin)
-  }
-  return out
-}
-
-type SolanaPreflightRoutePath = '/api/deploy/registerSolanaBridgeToken'
-const SOLANA_PREFLIGHT_ROUTE_PATH: SolanaPreflightRoutePath = '/api/deploy/registerSolanaBridgeToken'
-
-function dedupeOrigins(origins: string[]): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const origin of origins) {
-    const key = origin.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(origin)
-  }
-  return out
-}
-
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
@@ -950,40 +855,6 @@ function findFinalizePhase2Entry(calls: Array<{ to: Address; value: bigint; data
 
 function isOvaultRequestEnabled(value: unknown): boolean {
   return isPlainObject(value) && value.enabled === true
-}
-
-function isOvaultRuntimeConfigured(value: unknown): boolean {
-  const tuple = Array.isArray(value) ? value : null
-  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
-  const hubComposer =
-    typeof obj?.hubComposer === 'string'
-      ? obj.hubComposer
-      : tuple && typeof tuple[0] === 'string'
-        ? tuple[0]
-        : ''
-  const solanaEid =
-    typeof obj?.solanaEid === 'number'
-      ? obj.solanaEid
-      : typeof obj?.solanaEid === 'bigint'
-        ? Number(obj.solanaEid)
-        : tuple && typeof tuple[1] === 'number'
-          ? tuple[1]
-          : tuple && typeof tuple[1] === 'bigint'
-            ? Number(tuple[1])
-            : 0
-  const enabled =
-    typeof obj?.enabled === 'boolean'
-      ? obj.enabled
-      : tuple && typeof tuple[2] === 'boolean'
-        ? tuple[2]
-        : false
-  return (
-    enabled === true &&
-    typeof hubComposer === 'string' &&
-    isAddress(hubComposer) &&
-    getAddress(hubComposer as Address).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-    Number(solanaEid) > 0
-  )
 }
 
 async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
@@ -1688,7 +1559,6 @@ async function verifyPhase4PostState(params: {
 }
 
 async function ensureSolanaRouteReadyForPhase3(params: {
-  req: VercelRequest
   publicClient: any
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
   solanaOvault?: unknown
@@ -1719,250 +1589,16 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     return defaultStatus
   }
 
-  if (!isLegacySolanaBridgePreflightEnabled()) {
-    const ovaultStatus = await ensureShareMeshOvaultPreflight({
-      publicClient: params.publicClient,
-      finalizeCall: finalizeEntry.call,
-      ovaultRequested,
-    })
-    return {
-      ...ovaultStatus,
-      meteoraAlphaVault: null,
-      solanaProgramIds: [],
-    }
+  const ovaultStatus = await ensureShareMeshOvaultPreflight({
+    publicClient: params.publicClient,
+    finalizeCall: finalizeEntry.call,
+    ovaultRequested,
+  })
+  return {
+    ...ovaultStatus,
+    meteoraAlphaVault: null,
+    solanaProgramIds: [],
   }
-
-  const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
-  const batcherAddress = getAddress(finalizeCall.to)
-  const bridgeToken = finalizeInfo.creatorToken
-  const expectedSolanaAmount =
-    finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
-      ? (finalizeInfo.depositAmount * SOLANA_RESERVE_PERCENT_BPS) / BPS_DENOMINATOR
-      : null
-  const solanaOvault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
-  const assetMintOrigin =
-    typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
-      ? solanaOvault.assetMintOrigin.trim()
-      : 'existing'
-  // Never trust session-persisted hints from client payloads.
-  // Compatibility hints used for OVault gating must come from trusted server config.
-  const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
-  const hasMintCompatibilityHints = Object.values(mintCompatibilityHints).some((value) => value !== null)
-
-  const [adapterRaw, destinationRaw, ovaultRuntimeRaw] = await Promise.all([
-    params.publicClient
-      .readContract({
-        address: batcherAddress,
-        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
-        functionName: 'solanaBridgeAdapter',
-      })
-      .catch(() => ZERO_ADDRESS as Address),
-    params.publicClient
-      .readContract({
-        address: batcherAddress,
-        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
-        functionName: 'solanaDestination',
-      })
-      .catch(() => ZERO_BYTES32 as Hex),
-    params.publicClient
-      .readContract({
-        address: batcherAddress,
-        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
-        functionName: 'getOVaultRuntimeConfig',
-      })
-      .catch(() => null),
-  ])
-  const adapter = getAddress((adapterRaw as Address) || ZERO_ADDRESS)
-  const destination = ((destinationRaw as Hex) || ZERO_BYTES32).toLowerCase()
-  const solanaEnabled =
-    adapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-    destination !== ZERO_BYTES32.toLowerCase()
-  if (ovaultRequested && !isOvaultRuntimeConfigured(ovaultRuntimeRaw)) {
-    throw new Error(
-      `Solana preflight failed: OVault runtime config is not enabled on deployment batcher ${batcherAddress}.`,
-    )
-  }
-  if (!solanaEnabled) {
-    if (ovaultRequested) {
-      throw new Error(
-        `Solana preflight failed: Solana bridge is not enabled on deployment batcher ${batcherAddress}.`,
-      )
-    }
-    return defaultStatus
-  }
-
-  const registered = await params.publicClient
-    .readContract({
-      address: adapter,
-      abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
-      functionName: 'isRegistered',
-      args: [bridgeToken],
-    })
-    .then((v: unknown) => Boolean(v))
-    .catch(() => null)
-
-  // Use only trusted origins for internal API calls to avoid host-header injection.
-  const canonicalOrigin = getCanonicalOrigin(params.req)
-  const defaultOrigins = [canonicalOrigin].filter((o): o is string => Boolean(o))
-  const configuredOrigins = readAdditionalSolanaRegistrationOrigins()
-  const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
-  if (candidateOrigins.length === 0) {
-    throw new Error(
-      'Solana preflight failed: no registration origin available. Configure APP_ORIGIN or DEPLOY_SOLANA_REGISTRATION_ORIGINS.',
-    )
-  }
-  if (registered !== true && (!expectedSolanaAmount || expectedSolanaAmount <= 0n)) {
-    throw new Error(
-      'Solana preflight failed: missing finalize deposit amount for reserve checks.',
-    )
-  }
-  const internalRegistrationSecret = String(
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
-      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
-      '',
-  ).trim()
-  if (!internalRegistrationSecret) {
-    throw new Error(
-      'Solana preflight failed: DEPLOY_SOLANA_REGISTRATION_SECRET is required for internal registration checks.',
-    )
-  }
-  const routePath: SolanaPreflightRoutePath = SOLANA_PREFLIGHT_ROUTE_PATH
-  const tryRegister = async (
-    origin: string,
-  ): Promise<{
-    ok: boolean
-    failure: string | null
-    ovault: {
-      existingMintCompatible: boolean
-      redeemEligible: boolean
-      sharePeerSet: boolean
-      meshStep: 'ovault_mesh_confirmed'
-      meteoraAlphaVault: Hex | null
-      solanaProgramIds: Hex[]
-    } | null
-  }> => {
-    try {
-      const registerUrl = `${origin}${routePath}`
-      const payload: Record<string, unknown> = {
-        bridgeToken,
-        buildOnly: true,
-        batcherAddress,
-        assetMintOrigin,
-        enforceCompatibility: true,
-      }
-      if (hasMintCompatibilityHints) payload.mintCompatibilityHints = mintCompatibilityHints
-      // Only force Meteora payload generation while the bridge token is not yet registered.
-      if (registered !== true) {
-        payload.creatorToken = bridgeToken
-        payload.expectedSolanaAmount = expectedSolanaAmount?.toString()
-      }
-      const trustedInternalHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-CV-Solana-Registration-Secret': internalRegistrationSecret,
-      }
-      const registerRes = await fetch(registerUrl, {
-        method: 'POST',
-        headers: trustedInternalHeaders,
-        body: JSON.stringify(payload),
-      })
-      const rawBody = await registerRes.text().catch(() => '')
-      let registerJson: ApiEnvelope<any> | null = null
-      try {
-        registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
-      } catch {
-        registerJson = null
-      }
-      if (registerRes.ok && registerJson?.success) {
-        const data = registerJson?.data ?? null
-        const registered = data?.registered === true
-        const existingMintCompatible = data?.existingMintCompatible === true
-        const depositEligible = data?.depositEligible === true
-        const redeemEligible = data?.redeemEligible === true
-        const assetPeerSet = data?.assetPeerSet === false ? false : true
-        const sharePeerSet = data?.sharePeerSet === false ? false : true
-        const meteoraAlphaVault = data?.meteoraAlphaVault
-        const hasMeteoraAlphaVault = isBytes32Hex(meteoraAlphaVault) && meteoraAlphaVault !== ZERO_BYTES32
-        const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
-        const solanaProgramIds = Array.isArray(data?.solanaIxs)
-          ? Array.from(
-              new Set(
-                data.solanaIxs
-                  .map((ix: unknown) =>
-                    isPlainObject(ix) && isBytes32Hex(ix.programId) ? (ix.programId as Hex).toLowerCase() : null,
-                  )
-                  .filter((v: string | null): v is string => Boolean(v)),
-              ),
-            ).map((value) => value as Hex)
-          : []
-        const requireInlineMeteoraPayload = shouldRequireInlineMeteoraPayload()
-        if (
-          !registered ||
-          !existingMintCompatible ||
-          !depositEligible ||
-          !redeemEligible ||
-          !assetPeerSet ||
-          !sharePeerSet ||
-          (requireInlineMeteoraPayload && (!hasMeteoraAlphaVault || !hasSolanaIxs))
-        ) {
-          const blockersRaw = data?.mintCompatibility?.blockers
-          const blockers =
-            Array.isArray(blockersRaw) && blockersRaw.length > 0
-              ? blockersRaw.map((v: unknown) => String(v)).join(' ')
-              : null
-          return {
-            ok: false,
-            failure:
-              `${origin}${routePath} (ovault readiness): ` +
-              `registered=${String(data?.registered)} ` +
-              `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
-              `depositEligible=${String(data?.depositEligible)} ` +
-              `redeemEligible=${String(data?.redeemEligible)} ` +
-              `assetPeerSet=${String(data?.assetPeerSet)} ` +
-              `sharePeerSet=${String(data?.sharePeerSet)} ` +
-              `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} ` +
-              `solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'} ` +
-              `inlineMeteoraRequired=${requireInlineMeteoraPayload ? 'yes' : 'no'}` +
-              (blockers ? ` blockers=${blockers}` : ''),
-            ovault: null,
-          }
-        }
-        return {
-          ok: true,
-          failure: null,
-          ovault: {
-            existingMintCompatible,
-            redeemEligible,
-            sharePeerSet,
-            meshStep: 'ovault_mesh_confirmed',
-            meteoraAlphaVault: hasMeteoraAlphaVault ? (meteoraAlphaVault as Hex) : null,
-            solanaProgramIds,
-          },
-        }
-      }
-      const detail =
-        registerJson?.error
-          ? String(registerJson.error)
-          : rawBody
-            ? rawBody.slice(0, 240)
-            : `http_${registerRes.status}`
-      return {
-        ok: false,
-        failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
-        ovault: null,
-      }
-    } catch {
-      return { ok: false, failure: `${origin}${routePath}: request_failed`, ovault: null }
-    }
-  }
-  const failures: string[] = []
-  for (const origin of candidateOrigins) {
-    const registration = await tryRegister(origin)
-    if (registration.ok) return registration.ovault ?? defaultStatus
-    if (registration.failure) failures.push(registration.failure)
-  }
-  throw new Error(
-    `Solana preflight failed: ${failures.join(' | ') || `${routePath} call failed.`}`,
-  )
 }
 
 async function getOwnerAccount(rec: any) {
@@ -2396,7 +2032,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!markedSent) throw new Error(CONCURRENT_MODIFICATION)
 
     const ovault = await ensureSolanaRouteReadyForPhase3({
-      req,
       publicClient,
       phase2FinalizeCalls,
       solanaOvault: payload.solanaOvault,
@@ -2417,7 +2052,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (hasPhase3) {
       if (!hasOvaultMeshStage) {
         const ovault = await ensureSolanaRouteReadyForPhase3({
-          req,
           publicClient,
           phase2FinalizeCalls,
           solanaOvault: payload.solanaOvault,
@@ -2734,7 +2368,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   if (step === 'ovault_mesh_sent') {
     const ovault = await ensureSolanaRouteReadyForPhase3({
-      req,
       publicClient,
       phase2FinalizeCalls,
       solanaOvault: payload.solanaOvault,

@@ -26,16 +26,6 @@ const BATCHER_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -151,8 +141,6 @@ function finalizeData(): `0x${string}` {
         requiredRaise: 1n,
         floorPriceQ96: 1n,
         auctionSteps: '0x',
-        meteoraAlphaVault: `0x${'00'.repeat(32)}`,
-        solanaIxs: [],
       },
     ],
   })

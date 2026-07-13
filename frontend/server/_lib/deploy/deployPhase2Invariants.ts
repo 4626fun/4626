@@ -30,16 +30,6 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
         ],
       },
     ],
@@ -70,6 +60,16 @@ const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
     ],
@@ -200,11 +200,12 @@ function extractFinalizePhase2Info(calls: Array<{ to: Address; value: bigint; da
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
         shareToken?: string
+        shareOFT?: string
         gaugeController?: string
         ccaLaunchArm?: string
       } | null
       const creatorToken = normalizeAddress(params?.creatorToken)
-      const shareToken = normalizeAddress(params?.shareToken)
+      const shareToken = normalizeAddress(params?.shareToken ?? params?.shareOFT)
       const gaugeController = normalizeAddress(params?.gaugeController)
       const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
       if (!creatorToken || !shareToken || !gaugeController || !ccaLaunchArm) continue

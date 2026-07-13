@@ -93,6 +93,7 @@ import { fetchWaitlistMe, getWaitlistMeSessionQueryKey } from '@/lib/waitlist/wa
 const OTP_RESEND_DELAY_MS = 30_000
 const OTP_SUCCESS_HOLD_MS = 320
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const WAITLIST_OAUTH_RETURN_SYNC_PROVIDERS = ['twitter'] as const
 const noop = () => {}
 
 function isValidEmail(value: string): boolean {
@@ -1371,7 +1372,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   usePrivyOAuthReturnBackendSync({
     enabled: Boolean(joinedSessionAddress),
-    providers: ['twitter'],
+    providers: WAITLIST_OAUTH_RETURN_SYNC_PROVIDERS,
     privyReady: privy.ready,
     privyAuthenticated: privy.authenticated,
     privyUser: privy.user,

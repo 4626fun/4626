@@ -22,9 +22,9 @@ describe('isLegacySolanaBridgePreflightEnabled', () => {
     expect(isLegacySolanaBridgePreflightEnabled()).toBe(false)
   })
 
-  it('enables legacy bridge preflight when flag is set', () => {
+  it('ignores env overrides (Twin preflight is retired)', () => {
     process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-    expect(isLegacySolanaBridgePreflightEnabled()).toBe(true)
+    expect(isLegacySolanaBridgePreflightEnabled()).toBe(false)
   })
 })
 

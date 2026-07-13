@@ -520,7 +520,12 @@ export function AlfaClubKeySafety({
     <div className={cn('relative', !embedded && 'pb-24 md:pb-0')}>
       <section className={cn(!embedded && 'cinematic-section')}>
         <TooltipProvider>
-          <div className={cn('mx-auto max-w-3xl space-y-5', !embedded && 'px-4 sm:px-6')}>
+          <div
+            className={cn(
+              'mx-auto space-y-5',
+              embedded ? 'max-w-5xl' : 'max-w-3xl px-4 sm:px-6',
+            )}
+          >
             {!embedded && showResults && roomContext && statusMeta && StatusIcon ? (
               <header
                 className={cn(

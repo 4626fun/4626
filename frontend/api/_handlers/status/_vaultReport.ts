@@ -140,8 +140,9 @@ const AJNA_AUTH_VIEW_ABI = [
   { type: 'function', name: 'paused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const
 
-const SOLANA_BRIDGE_STRATEGY_VIEW_ABI = [
+const LEGACY_SOLANA_STRATEGY_BRIDGE_VIEW_ABI = [
   { type: 'function', name: 'bridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'bridgeAddress', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
 ] as const
 
@@ -475,18 +476,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let ajnaMinBucketIndex: bigint | null = null
     let ajnaPaused: boolean | null = null
     let ajnaCollateralToken: `0x${string}` | null = null
-    let solanaStrategyAddress: `0x${string}` | null = null
-    let solanaStrategyOwner: `0x${string}` | null = null
-    let solanaBridgeAdapterAddress: `0x${string}` | null = null
-    let solanaBridgeDestination: `0x${string}` | null = null
+    let legacySolanaStrategyBridgeStrategyAddress: `0x${string}` | null = null
+    let legacySolanaStrategyBridgeOwner: `0x${string}` | null = null
+    let legacySolanaStrategyBridgeAddress: `0x${string}` | null = null
+    let legacySolanaStrategyBridgeDestination: `0x${string}` | null = null
 
     const stratCalls: any[] = []
     for (const s of strategies) {
       stratCalls.push({ address: s, abi: STRATEGY_VIEW_ABI, functionName: 'isActive' })
       stratCalls.push({ address: s, abi: STRATEGY_VIEW_ABI, functionName: 'asset' })
       stratCalls.push({ address: s, abi: CREATOR_CHARM_STRATEGY_VIEW_ABI, functionName: 'charmVault' })
-      stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'bridgeAdapter' })
-      stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'solanaDestination' })
+      stratCalls.push({ address: s, abi: LEGACY_SOLANA_STRATEGY_BRIDGE_VIEW_ABI, functionName: 'bridgeAdapter' })
+      stratCalls.push({ address: s, abi: LEGACY_SOLANA_STRATEGY_BRIDGE_VIEW_ABI, functionName: 'bridgeAddress' })
+      stratCalls.push({ address: s, abi: LEGACY_SOLANA_STRATEGY_BRIDGE_VIEW_ABI, functionName: 'solanaDestination' })
       stratCalls.push({ address: s, abi: OWNABLE_VIEW_ABI, functionName: 'owner' })
     }
 
@@ -499,7 +501,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         details: 'Rate limited while reading strategy details. Try again.',
       })
     } else {
-      const stride = 6
+      const stride = 7
       for (let i = 0; i < strategies.length; i++) {
         const s = strategies[i]
         const w = weights[i] ?? 0n
@@ -508,9 +510,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isActive = pickResult<boolean>(stratRes[base + 0])
         const asset = pickResult<`0x${string}`>(stratRes[base + 1])
         const charmVault = pickResult<`0x${string}`>(stratRes[base + 2])
-        const bridgeAdapter = pickResult<`0x${string}`>(stratRes[base + 3])
-        const solanaDestination = pickResult<`0x${string}`>(stratRes[base + 4])
-        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 5])
+        const legacyBridgeAdapter = pickResult<`0x${string}`>(stratRes[base + 3])
+        const legacyBridgeAddress = pickResult<`0x${string}`>(stratRes[base + 4])
+        const legacyBridgeDestination = pickResult<`0x${string}`>(stratRes[base + 5])
+        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 6])
+        const legacyStrategyBridgeAddress = addrOk(legacyBridgeAdapter)
+          ? legacyBridgeAdapter
+          : addrOk(legacyBridgeAddress)
+            ? legacyBridgeAddress
+            : null
         let nestedAjnaInnerVault: `0x${string}` | null = null
         let nestedAjnaAuth: `0x${string}` | null = null
         let nestedAjnaAdmin: `0x${string}` | null = null
@@ -555,16 +563,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             nestedAjnaPaused = pickResult<boolean>(authRes[3])
           }
         }
-        const hasSolanaRoute =
-          addrOk(bridgeAdapter) || (typeof solanaDestination === 'string' && solanaDestination.toLowerCase() !== ZERO_BYTES32)
+        const hasLegacySolanaStrategyBridge =
+          addrOk(legacyStrategyBridgeAddress) ||
+          (typeof legacyBridgeDestination === 'string' && legacyBridgeDestination.toLowerCase() !== ZERO_BYTES32)
         const isNestedAjna = Boolean(nestedAjnaInnerVault && addrOk(effectiveAjnaPool))
 
         const flavor = addrOk(charmVault)
           ? 'Charm LP (CharmStrategy4626)'
           : isNestedAjna
             ? 'Ajna lending (adapter-backed inner vault)'
-            : hasSolanaRoute
-              ? 'Solana bridge (adapter route)'
+            : hasLegacySolanaStrategyBridge
+              ? 'Legacy Solana strategy bridge'
             : `Strategy #${i + 1}`
 
         const assetOk = asset && isAddress(asset) ? asset.toLowerCase() === creatorToken.toLowerCase() : null
@@ -590,8 +599,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (nestedAjnaMinBucket !== null && nestedAjnaMinBucket !== undefined) extras.push(`minBucket=${nestedAjnaMinBucket.toString()}`)
           if (typeof nestedAjnaPaused === 'boolean') extras.push(`paused=${String(nestedAjnaPaused)}`)
         }
-        if (bridgeAdapter) extras.push(`bridgeAdapter=${bridgeAdapter}`)
-        if (solanaDestination) extras.push(`solanaDestination=${solanaDestination}`)
+        if (legacyStrategyBridgeAddress) extras.push(`legacySolanaStrategyBridge=${legacyStrategyBridgeAddress}`)
+        if (legacyBridgeDestination) extras.push(`legacySolanaDestination=${legacyBridgeDestination}`)
         if (stratOwner) extras.push(`owner=${stratOwner}`)
 
         strategyChecks.push({
@@ -614,11 +623,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ajnaPaused = nestedAjnaPaused
           ajnaCollateralToken = nestedAjnaCollateral ?? null
         }
-        if (!solanaStrategyAddress && hasSolanaRoute) {
-          solanaStrategyAddress = s
-          solanaStrategyOwner = stratOwner
-          solanaBridgeAdapterAddress = bridgeAdapter ?? null
-          solanaBridgeDestination = solanaDestination ?? null
+        if (!legacySolanaStrategyBridgeStrategyAddress && hasLegacySolanaStrategyBridge) {
+          legacySolanaStrategyBridgeStrategyAddress = s
+          legacySolanaStrategyBridgeOwner = stratOwner
+          legacySolanaStrategyBridgeAddress = legacyStrategyBridgeAddress
+          legacySolanaStrategyBridgeDestination = legacyBridgeDestination ?? null
         }
       }
     }
@@ -1012,10 +1021,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ajnaMinBucketIndex: ajnaMinBucketIndex == null ? null : ajnaMinBucketIndex.toString(),
           ajnaPaused,
           ajnaSuggestedBucketIndex: suggestedAjnaBucket == null ? null : String(suggestedAjnaBucket),
-          solanaStrategyAddress,
-          solanaStrategyOwner,
-          solanaBridgeAdapterAddress,
-          solanaBridgeDestination,
+          legacySolanaStrategyBridgeStrategyAddress,
+          legacySolanaStrategyBridgeOwner,
+          legacySolanaStrategyBridgeAddress,
+          legacySolanaStrategyBridgeDestination,
           creatorTreasury,
           protocolTreasury,
           shareName,

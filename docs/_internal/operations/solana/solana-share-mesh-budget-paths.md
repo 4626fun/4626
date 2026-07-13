@@ -1,15 +1,19 @@
 # Solana share mesh — budget & runbook
 
-> **Release truth:** v1.18.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+> **Release truth:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
+
+> **Retired:** Twin wrap-token / batcher-global `setSolanaShareOftPeer`. Per-creator peers
+> use `Registry4626.setRemoteOFTPeerBytes32`. Batcher shell: `setSolanaDestination` +
+> `setOVaultRuntimeConfig`.
 
 Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Current batcher: `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` (v1.14/v1.16 batchers are historical only).
+Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md). Current batcher: `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` (v1.14/v1.16 batchers are historical only). The v1.19.0 registration Safe packet is 11 operations and contains destination + OVault runtime, never adapter/global-peer operations.
 
 ## Scope
 
-- **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) + `setSolanaShareOftPeer` + optional Meteora/lottery (B1/B2).
-- **Out:** compose deposit lane (Pipe B — **dormant**: no Solana asset mesh exists while the creator coin is Base-only; deposit-eligibility hints are stripped from deploy preflight/infra status and the lane reactivates only via `configureCreatorMesh` if a creator-coin bridge ever launches), bridge-wrapped creator SPL as lottery token, `POST /provision` auto-pool for share mesh.
+- **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) per creator + `Registry4626.setRemoteOFTPeerBytes32` + optional Meteora/lottery (B1/B2).
+- **Out:** compose deposit lane (Pipe B — **dormant**: no Solana asset mesh exists while the creator coin is Base-only; deposit-eligibility hints are stripped from deploy preflight/infra status and the lane reactivates only via `configureCreatorMesh` if a creator-coin bridge ever launches), Twin wrap-token creator SPL as lottery token, `POST /provision` Twin wrap-token (HTTP 410).
 
 Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2 relay only**, not a substitute for LZ share OFT.
 
@@ -33,7 +37,7 @@ pnpm -C frontend ops:pipe-a-devnet-rehearsal
 
 Runs Forge `ShareOftPeer` tests, Vitest wiring/fee suites, and optional `pnpm -C kpr solana:cost-probe-devnet` (Path 1 rent proxy). Set `SOLANA_PRIVATE_KEY` and a **paid** `SOLANA_RPC_URL` or `RPC_URL_SOLANA_TESTNET` — public `api.devnet.solana.com` often returns 429.
 
-Full LZ OFT store + peer bytes32 on devnet (EID **40168**) still uses LayerZero `create-lz-oapp` + `hardhat lz:oft:solana:create`. **Do not** call mainnet `setSolanaShareOftPeer` with a devnet peer — mainnet uses EID **30168**.
+Full LZ OFT store + peer bytes32 on devnet (EID **40168**) still uses LayerZero `create-lz-oapp` + `hardhat lz:oft:solana:create`. **Do not** seed mainnet `Registry4626.setRemoteOFTPeerBytes32` with a devnet peer — mainnet uses EID **30168**. Batcher-global `setSolanaShareOftPeer` is retired.
 
 ### ULN security — 6-of-9 optional DVNs (mainnet)
 
@@ -70,7 +74,7 @@ pnpm hardhat lz:oft:solana:debug --eid 40168 --dst-eids 40231 --action peers
 
 Trade-offs vs 2-of-2 required: higher DVN fees (~6 verifiers billed per message), slower tail latency (wait for sixth verifier), but no single-DVN failure mode and no two-operator collusion window.
 
-**Template + per-creator runbook:** copy [templates/layerzero-share-mesh.config.ts](./templates/layerzero-share-mesh.config.ts) into each `create-lz-oapp` scaffold; follow [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md) for creator #N (registry peer → preflight → finalize).
+**Template + per-creator runbook:** copy [templates/layerzero-share-mesh.config.ts](../templates/layerzero-share-mesh.config.ts) into each `create-lz-oapp` scaffold; follow [solana-share-mesh-creator-provisioning.md](../operations/solana/solana-share-mesh-creator-provisioning.md) for creator #N (registry peer → preflight → finalize).
 
 ## Measured costs (2026-05-27, local validator)
 
@@ -89,17 +93,21 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
 ## Path 1 — Share mesh live
 
 1. **Deploy + peer** (LayerZero ops): Solana share OFT EID `30168`, peer to Base `CreatorShareOFT`; set mint metadata **`■<TICKER>`** / **`{Creator} Share Token`**.
-2. **Wire batcher:**
+2. **Seed registry peer (required per creator):**
    ```bash
-   pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts \
-     --share-oft-peer 0x<64-hex-peer>
+   export REGISTRY=0x…
+   export CREATOR_TOKEN=0x…
+   export SOLANA_EID=30168
+   export SOLANA_REMOTE_OFT_PEER_BYTES32=0x<64-hex-peer>
+   forge script script/SeedRegistry4626SolanaPeer.s.sol:SeedRegistry4626SolanaPeer \
+     --rpc-url "$BASE_RPC_URL" --broadcast
    ```
-3. **Verify:**
+3. **Verify batcher shell** (destination + OVault runtime — not a global peer):
    ```bash
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
      --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
    ```
-4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not legacy creator-SPL registration). `finalizePhase2` bridges 30% ShareOFT.
+4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not Twin wrap-token registration). `finalizePhase2` bridges 30% ShareOFT.
 5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
 
 ## Path 2 — Meteora (+ optional B2 lottery)
@@ -117,7 +125,7 @@ Prerequisite: Path 1 complete.
 
 1. Meteora admin **`token_badge`** → `setup-creator-full` PDAs → allowlist Meteora program (**before** pool).
 2. Pool on **same** hook mint; seed LP.
-3. Keep orchestrator relay disabled. The current Meteora/TransferHook compatibility claim, finalized source-event identity, durable inbox, and keeper-Twin transport must all be proven before an end-to-end canary.
+3. Keep orchestrator relay disabled. The current Meteora/TransferHook compatibility claim, finalized source-event identity, durable inbox, and keeper transport must all be proven before an end-to-end canary.
 
 ### Meteora UI + display
 
@@ -159,25 +167,25 @@ Deploy session preflight (`_continueCore` / `_statusCore`) defaults to **`ensure
 - `getOVaultRuntimeConfig` on the deployment batcher must be enabled.
 - `assertShareBridgeOftWiringForFinalize` validates Pipe A wiring for the finalize call.
 
-Set `DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT=1` only when intentionally running the retired creator-SPL `/api/deploy/registerSolanaBridgeToken` path.
+Set `DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT=1` only when intentionally exercising retired Twin paths (not supported for new creators).
 
 Disable automatic queue enqueue with `SOLANA_SHARE_MESH_PROVISIONING_ENABLED=0` (operator manual follow-up only).
 
 ## Sequencing
 
 ```text
-P0  LZ share OFT + setSolanaShareOftPeer     →  Pipe A live
-P1a B1: Meteora pool + LP on share mesh       →  Solana trading (lottery on Base)
-P1b B2: blocked pending relay architecture     →  no production enablement
+P0  LZ share OFT + Registry4626.setRemoteOFTPeerBytes32  →  Pipe A live
+P1a B1: Meteora pool + LP on share mesh                   →  Solana trading (lottery on Base)
+P1b B2: blocked pending relay architecture                 →  no production enablement
 ```
 
-Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridge-wrapped creator SPL mints (e.g. AKITA `9JWh…`). Adapter/provisioner naming rules live in [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md) for historical parity checks only.
+Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at Twin wrap-token creator SPL mints (e.g. AKITA `9JWh…`). Adapter/provisioner naming rules live in [solana-bridge-naming-invariant.md](../operations/solana/solana-bridge-naming-invariant.md) for historical parity checks only.
 
 ## Reference (mainnet)
 
 | Role | Address |
 |------|---------|
-| DeploymentBatcher (v1.18.0) | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| DeploymentBatcher (v1.19.0 active launch plane) | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
 | creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (upgrade: [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md)) |

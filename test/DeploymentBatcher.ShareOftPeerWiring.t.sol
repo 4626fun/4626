@@ -31,6 +31,13 @@ contract MockShareOftPeerWiring is ERC20 {
     mapping(uint32 => bytes32) public peers;
     uint256 public setPeerCallCount;
 
+    uint256 public lastAmountLD;
+    uint32 public lastDstEid;
+    bytes32 public lastTo;
+    uint256 public lastNativeFee;
+    uint256 public lastMsgValue;
+    uint256 public sendCallCount;
+
     constructor(address owner_) ERC20("Share Token", "SHARE") {
         owner = owner_;
     }
@@ -60,16 +67,22 @@ contract MockShareOftPeerWiring is ERC20 {
     }
 
     function quoteSend(SendParam calldata, bool) external pure returns (MessagingFee memory fee) {
-        fee = MessagingFee({nativeFee: 1, lzTokenFee: 0});
+        fee = MessagingFee({nativeFee: 0.01 ether, lzTokenFee: 0});
     }
 
-    function send(SendParam calldata, MessagingFee calldata, address)
+    function send(SendParam calldata sendParam, MessagingFee calldata fee, address)
         external
         payable
         returns (MessagingReceipt memory receipt, OFTReceipt memory oftReceipt)
     {
-        receipt = MessagingReceipt({guid: bytes32(0), nonce: 0, fee: MessagingFee({nativeFee: 0, lzTokenFee: 0})});
-        oftReceipt = OFTReceipt({amountSentLD: 0, amountReceivedLD: 0});
+        lastAmountLD = sendParam.amountLD;
+        lastDstEid = sendParam.dstEid;
+        lastTo = sendParam.to;
+        lastNativeFee = fee.nativeFee;
+        lastMsgValue = msg.value;
+        sendCallCount += 1;
+        receipt = MessagingReceipt({guid: bytes32(0), nonce: 0, fee: fee});
+        oftReceipt = OFTReceipt({amountSentLD: sendParam.amountLD, amountReceivedLD: sendParam.amountLD});
     }
 }
 
@@ -161,6 +174,17 @@ contract Phase2DelegatecallProbe is DeploymentBatcherPhase2Module {
         }
         _ensureRegistryAndShareOftPeerWired(params, solanaEid);
     }
+
+    /// @dev Payable wrapper so msg.value can reach non-payable finalizePhase2Execution via an internal call.
+    function runFinalizePhase2Execution(
+        DeploymentBatcher.Phase2FinalizeParams calldata params,
+        bytes32 baseSalt
+    ) external payable returns (FinalizeExecutionResult memory result) {
+        if (address(this) != batcher) {
+            revert NotBatcherContext();
+        }
+        return finalizePhase2Execution(params, baseSalt);
+    }
 }
 
 contract DeploymentBatcherPeerHarness is DeploymentBatcher {
@@ -230,6 +254,15 @@ contract DeploymentBatcherPeerHarness is DeploymentBatcher {
             abi.encodeWithSelector(
                 Phase2DelegatecallProbe.runEnsureRegistryAndShareOftPeerWired.selector, params, solanaEid
             )
+        );
+    }
+
+    function runFinalizePhase2ExecutionForTest(
+        DeploymentBatcher.Phase2FinalizeParams calldata params,
+        bytes32 baseSalt
+    ) external payable {
+        _delegatePhase2(
+            abi.encodeWithSelector(Phase2DelegatecallProbe.runFinalizePhase2Execution.selector, params, baseSalt)
         );
     }
 
@@ -398,5 +431,41 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
 
         assertEq(shareOFT.peers(SOLANA_EID), REGISTRY_PEER);
         assertEq(shareOFT.setPeerCallCount(), callsBefore, "setPeer should not run when peer already matches");
+    }
+
+    function test_finalizePhase2Execution_bridgesThirtyPercentToConfiguredSolanaPeer() external {
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
+        registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);
+
+        DeploymentBatcher.Phase2FinalizeParams memory params = _params();
+        params.depositAmount = 100 ether;
+
+        creatorToken.mint(address(batcher), params.depositAmount);
+        vm.deal(address(this), 1 ether);
+
+        uint256 expectedSolanaAmount = (params.depositAmount * 30) / 100;
+        uint256 quoteFee = 0.01 ether;
+
+        batcher.runFinalizePhase2ExecutionForTest{value: quoteFee}(params, bytes32(uint256(0xBEEF)));
+
+        assertEq(shareOFT.sendCallCount(), 1, "OFT send should run once");
+        assertEq(shareOFT.lastAmountLD(), expectedSolanaAmount, "solana allocation should be 30% of deposit");
+        assertEq(shareOFT.lastDstEid(), SOLANA_EID, "dstEid should be Solana EID");
+        assertEq(shareOFT.lastTo(), SOLANA_DESTINATION, "to should be solanaDestination");
+        assertEq(shareOFT.lastNativeFee(), quoteFee, "fee.nativeFee should match quoteSend");
+        assertEq(shareOFT.lastMsgValue(), quoteFee, "msg.value on send should cover quote fee");
+        assertEq(shareOFT.peers(SOLANA_EID), REGISTRY_PEER, "peer should be wired before send");
+    }
+
+    function test_finalizePhase2Execution_revertsWhenRegistryPeerMissing() external {
+        DeploymentBatcher.Phase2FinalizeParams memory params = _params();
+        params.depositAmount = 100 ether;
+        creatorToken.mint(address(batcher), params.depositAmount);
+        vm.deal(address(this), 1 ether);
+
+        vm.expectRevert(DeploymentBatcherPhase2Module.SolanaShareOftPeerNotConfigured.selector);
+        batcher.runFinalizePhase2ExecutionForTest{value: 0.01 ether}(params, bytes32(uint256(0xBEEF)));
+
+        assertEq(shareOFT.sendCallCount(), 0, "OFT send must not run without registry peer");
     }
 }

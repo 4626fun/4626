@@ -530,7 +530,6 @@ export async function enrichVaultArtifactsFromOnChain(params: {
       }
     }
     if (solana?.bridgeAddress) {
-      assignIfMissing(artifacts, 'solanaBridgeAdapter', solana.bridgeAddress)
       assignIfMissing(artifacts, 'solanaStrategy', solana.strategy)
     }
   } catch (error) {

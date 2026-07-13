@@ -1,9 +1,9 @@
 /**
  * Full Solana-side creator setup: Token-2022 mint + PDA init + extra-account-meta.
  *
- * Called by the Solana route provisioner (`POST /setup-creator`) after the bridge
- * route is created via `wrap-token`. Outputs JSON to stdout for programmatic
- * consumption; all human-readable logs go to stderr.
+ * Called by the Solana provisioner (`POST /setup-creator`) for the lottery hook
+ * lane. Outputs JSON to stdout for programmatic consumption; all human-readable
+ * logs go to stderr.
  *
  * Usage:
  *   tsx scripts/solana/deploy/setup-creator-full.ts \

@@ -59,6 +59,7 @@ export const API_ENDPOINTS = {
     keySafetyClubRisk: '/api/v1/alfaclub/key-safety-club-risk',
     keySafetySummary: '/api/v1/alfaclub/key-safety-summary',
     tradingRooms: '/api/v1/alfaclub/trading-rooms',
+    roomTimeline: '/api/v1/alfaclub/room-timeline',
     backtestSweep: '/api/v1/alfaclub/backtest-sweep',
     backtestAudit: '/api/v1/alfaclub/backtest-audit',
     backtestSeries: '/api/v1/alfaclub/backtest-series',

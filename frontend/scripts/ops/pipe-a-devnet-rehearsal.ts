@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pipe A devnet rehearsal — fast local gates before mainnet LZ + setSolanaShareOftPeer.
+ * Pipe A devnet rehearsal — fast local gates before mainnet LZ + Registry4626.setRemoteOFTPeerBytes32.
  *
  *   pnpm -C frontend ops:pipe-a-devnet-rehearsal
  *   pnpm -C frontend ops:pipe-a-devnet-rehearsal -- --skip-cost-probe
@@ -12,7 +12,7 @@
  * 3. Optional kpr cost-probe on Solana devnet (rent rehearsal; not a real LZ OFT)
  *
  * Full LZ OFT store + peer bytes32 still requires LayerZero create-lz-oapp (see --help).
- * Devnet peer (EID 40168) must never be written to mainnet batcher (EID 30168).
+ * Devnet peer (EID 40168) must never be seeded into mainnet Registry4626 (EID 30168).
  */
 
 import { spawnSync } from 'node:child_process'
@@ -96,8 +96,10 @@ After rehearsal passes, deploy real LZ OFT on devnet:
   pnpm dlx create-lz-oapp@latest --ci -d /tmp/4626-oft-devnet -e oft-solana -p pnpm
   # then: anchor build, solana program deploy -ud, hardhat lz:oft:solana:create --eid ${SOLANA_DEVNET_EID}
 
-Mainnet cutover (separate): setSolanaShareOftPeer with EID ${SOLANA_MAINNET_EID} peer only.
-See docs/operations/solana-share-mesh-budget-paths.md and batcher-pipe-a-cutover.md
+Mainnet cutover (separate): Registry4626.setRemoteOFTPeerBytes32(creatorToken, ${SOLANA_MAINNET_EID}, peer).
+Batcher shell: setSolanaDestination + setOVaultRuntimeConfig (not batcher-global setSolanaShareOftPeer).
+See docs/_internal/operations/solana/solana-share-mesh-budget-paths.md and
+docs/_internal/operations/deployment/batcher-pipe-a-cutover.md
 `)
 }
 

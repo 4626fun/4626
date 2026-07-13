@@ -19,19 +19,21 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.9.2`)
+- `DEPLOYMENT_EPOCH_TAG` (current: `v1.19.0`)
 
 Optional:
 
 - `REGISTRY` (if you already deployed a new registry and want to pin it)
-- `SOLANA_BRIDGE_ADAPTER`, `SOLANA_DESTINATION` (+ `CONFIGURE_SOLANA=1`)
+- `SOLANA_DESTINATION`, `OVAULT_HUB_COMPOSER`, and `OVAULT_SOLANA_EID`
+  when configuring the LayerZero share-mesh runtime
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `v1.14.1`) and keep it in release notes.
+Pick an immutable epoch token and keep it in release notes. New production
+launches use `v1.19.0`.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.14.1"
+export DEPLOYMENT_EPOCH_TAG="v1.19.0"
 ```
 
 Deployment scripts derive `base-release:*` salt tags from this epoch automatically unless raw `INFRA_*_SALT` values are provided.
@@ -64,21 +66,30 @@ This deploys (or predicts and reuses if already present):
 - `DeploymentBatcher`
 - then runs `SeedUniversalBytecodeStore` (idempotent)
 
-## 4) (Optional) Configure Solana Routing
+## 4) Configure LayerZero Share-Mesh Runtime
 
-If this epoch should have Solana route config set on the batcher:
+The batcher shell stores only:
+
+- `setSolanaDestination(bytes32)`
+- `setOVaultRuntimeConfig(address,uint32,bool)`
+
+Do not configure a Twin `SolanaBridgeAdapter` or batcher-global
+`solanaShareOftPeer`. Those are retired grains.
+
+Generate the current unsigned v1.19.0 Safe packet and confirm it has exactly 11
+operations before execution:
 
 ```bash
-export CONFIGURE_SOLANA=1
-export SOLANA_BRIDGE_ADAPTER="0x..."
-export SOLANA_DESTINATION="0x..."
-
-forge script script/ConfigureDeploymentBatcherSolana.s.sol:ConfigureDeploymentBatcherSolana \
-  --rpc-url "$BASE_RPC_URL" \
-  --broadcast
+pnpm -C frontend exec tsx scripts/ops/execute-v1190-registration-plane-safe.ts \
+  --dry-run
 ```
 
-Note: Solana provisioning/registration is out-of-band and strategy-stage orchestrated; it is not a phase-2 finalize gate.
+Discard and regenerate any packet containing stale adapter/global-peer
+operations. Per-creator provisioning is a separate mandatory step:
+provision the creator's LZ OFT store/mint, then call
+`Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)` before
+finalize. Follow
+[Solana share-mesh creator provisioning](/operations/solana/solana-share-mesh-creator-provisioning).
 
 ## 5) Verify Bytecode Store Coverage
 
@@ -101,11 +112,12 @@ Repeat for:
 
 Record the release hash snapshot after regenerating deploy bytecode:
 
-- `deployments/base/v1.14.1-bytecode-manifest.json`
+- `deployments/base/v1.19.0-bytecode-manifest.json`
 
 ## 6) App/API Cutover
 
-Update environment/config to the new epoch addresses. For **v1.14.1**, canonical values are in [Contract addresses](/reference/addresses#environment-cutover-v1141).
+Update environment/config to the new epoch addresses. Canonical current values
+are in [Contract addresses](/reference/addresses#environment-for-v1190-launches).
 
 - server env:
   - `REGISTRY_4626`
@@ -113,13 +125,10 @@ Update environment/config to the new epoch addresses. For **v1.14.1**, canonical
   - `VAULT_ACTIVATION_BATCHER`
   - `UNIVERSAL_BYTECODE_STORE` (chunked `UniversalBytecodeStoreV2`)
   - `UNIVERSAL_CREATE2_FROM_STORE`
-  - `UNIVERSAL_CREATE2_DEPLOYER` (legacy alias; same value as `UNIVERSAL_CREATE2_FROM_STORE`)
+  - `UNIVERSAL_CREATE2_DEPLOYER`
   - `DEPLOYMENT_BATCHER`
   - `DEPLOYMENT_BATCHER_AUTO_HANDOFF`
-  - `DEPLOYMENT_BATCHER`
   - `LOTTERY_MANAGER`
-  - `LOTTERY_MANAGER`
-  - `SOLANA_BRIDGE_ADAPTER`
 - frontend env:
   - `VITE_REGISTRY`
   - `VITE_FACTORY`
@@ -129,9 +138,8 @@ Update environment/config to the new epoch addresses. For **v1.14.1**, canonical
   - `VITE_DEPLOYMENT_BATCHER`
   - `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF`
   - `VITE_LOTTERY_MANAGER`
-  - `VITE_SOLANA_BRIDGE_ADAPTER`
 - bump deploy namespace:
-  - `VITE_DEPLOYMENT_VERSION` (e.g. `v1.14.1` for greenfield CREATE2 namespace)
+  - `VITE_DEPLOYMENT_VERSION` (`v1.19.0` for the current CREATE2 namespace)
 
 Apply these in both local env files (`/.env`, `frontend/.env`) and Vercel project env scopes (`production`, `preview`, `development`) before traffic cutover. **Redeploy** after Vercel env updates — bundled `VITE_*` values are baked at build time unless the route uses runtime config (`/api/deploy/config`).
 
@@ -149,6 +157,9 @@ Before full traffic cutover:
    - no `InvalidCodeId`
    - expected stage transitions complete
 3. Confirm strategy-stage Solana registration path executes (when configured).
+   For the active lane this means the creator's LZ OFT store/mint exists and
+   the explicit registry peer is non-zero before finalize; it does not mean
+   Twin adapter registration.
 
 ## Rollback
 

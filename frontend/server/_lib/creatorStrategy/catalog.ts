@@ -272,7 +272,7 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
     provisionerTag: 'solana_meteora',
     requires: [
       '`solana_ovault_mesh` must already be active — share mesh seeded at finalizePhase2',
-      'Path 1 share-mesh OFT live with batcher `solanaShareOftPeer` wired before Meteora pool create',
+      'Path 1 share-mesh OFT live with per-creator `Registry4626.setRemoteOFTPeerBytes32` wired before Meteora pool create',
       'Use `create-dlmm-pool.ts` with the LZ share mint as `TOKEN_MINT_X` (see share-mesh budget runbook)',
     ],
     estimatedActivationWindow: 'Usually within 1 business day; longer if the Solana keeper needs funding.',

@@ -1,31 +1,35 @@
 # Solana share mesh — per-creator provisioning
 
-> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.14.1 batcher `0x660B251F…61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
 
-Operator checklist to wire **creator N** (not only the first platform mesh) for Pipe A: Solana LZ OFT → DVN wire → registry peer → preflight → `finalizePhase2` bridge.
+> **Retired:** Twin wrap-token / `registerSolanaBridgeToken` and batcher-global
+> `solanaShareOftPeer` / `setSolanaShareOftPeer`. Every creator needs an explicit
+> `Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer)` before finalize.
+
+Operator checklist to wire **creator N** for Pipe A: Solana LZ OFT → DVN wire → registry peer → preflight → `finalizePhase2` bridge.
 
 Related:
 
 - Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md)
-- Costs / Path 2: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md)
-- LZ template: [templates/layerzero-share-mesh.config.ts](./templates/layerzero-share-mesh.config.ts)
-- Platform batcher: [deployment/batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md)
+- Costs / Path 2: [solana-share-mesh-budget-paths.md](../../solana/solana-share-mesh-budget-paths.md)
+- LZ template: [templates/layerzero-share-mesh.config.ts](../../templates/layerzero-share-mesh.config.ts)
+- Platform batcher: [deployment/batcher-pipe-a-cutover.md](../../deployment/batcher-pipe-a-cutover.md)
 
 ## Creator #1 vs creator #N
 
 | | **Creator #1 (platform bootstrap)** | **Creator #2+** |
 |--|-------------------------------------|-----------------|
-| Batcher `solanaShareOftPeer` | Set once via Safe (`execute-batcher-share-oft-peer-safe.ts`) as platform default | **Do not reuse** another creator's peer for a different share token |
-| Registry peer | Can fall back to batcher default at first finalize | **`setRemoteOFTPeerBytes32` required before finalize** |
+| Registry peer | **`setRemoteOFTPeerBytes32` required before finalize** | **Same — new peer per creator** |
+| Batcher global peer | **Retired** — do not call `setSolanaShareOftPeer` | **Retired** |
 | Solana side | First LZ OFT deploy + wire | **New OFT store + mint per creator** (`■<TICKER>`) |
-| DVN policy | Same template for every creator | Copy [layerzero-share-mesh.config.ts](./templates/layerzero-share-mesh.config.ts) |
+| DVN policy | Same template for every creator | Copy [layerzero-share-mesh.config.ts](../../templates/layerzero-share-mesh.config.ts) |
 
 Each creator gets their own Base `CreatorShareOFT` at vault deploy. Solana tradable shares are **that** creator's LZ mint — not a shared platform SPL ticker.
 
 ## Prerequisites
 
 - [ ] Creator paid **`vault_full_deploy`** (includes `solana_ovault_mesh`) — row in `creator_strategy_features`
-- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` → exit **0** (after first mesh peer is set for creator #1)
+- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750` → exit **0** (destination + OVault runtime; peers are per-creator)
 - [ ] `SOLANA_PRIVATE_KEY` funded on mainnet (~4+ SOL Path 1 per creator; see budget doc)
 - [ ] Paid Solana RPC (`SOLANA_RPC_URL` / `RPC_URL_SOLANA_TESTNET` for rehearsal)
 
@@ -63,7 +67,7 @@ Record from `deployments/solana-mainnet/OFT.json` / debug output:
 
 ## Step 2 — Wire DVNs (platform template)
 
-1. Copy [templates/layerzero-share-mesh.config.ts](./templates/layerzero-share-mesh.config.ts) → scaffold `layerzero.config.ts`
+1. Copy [templates/layerzero-share-mesh.config.ts](../../templates/layerzero-share-mesh.config.ts) → scaffold `layerzero.config.ts`
 2. Point `getOftStoreAddress` / deployments at **this creator's** store
 3. Deploy/wire Base-side MyOFT if not already paired to the same OApp config
 4. Run:
@@ -87,9 +91,9 @@ pnpm hardhat lz:oft:solana:debug --eid 30168 --dst-eids 30184 --action peers
 
 ---
 
-## Step 3 — Registry peer (creator #N)
+## Step 3 — Registry peer (required for every creator)
 
-Before this creator's vault **`finalizePhase2`**, set the Solana bytes32 peer on **`Registry4626`** (not only batcher default):
+Before this creator's vault **`finalizePhase2`**, set the Solana bytes32 peer on **`Registry4626`**:
 
 ```bash
 export REGISTRY=0x…
@@ -111,9 +115,11 @@ cast call "$REGISTRY" \
   --rpc-url "$BASE_RPC_URL"
 ```
 
-**Creator #1 only:** batcher `setSolanaShareOftPeer` can seed the first peer if registry was empty at finalize; still prefer explicit registry seed for auditability.
+**Do not** fall back to batcher-global `setSolanaShareOftPeer` — that selector/path is retired.
 
-**Grandfathered AKITA:** `setRemoteOFTPeerBytes32` reverts with `Token not registered` until the creator coin exists in `Registry4626`. For AKITA, rely on batcher default peer at first finalize (registry registers during finalize) or call `registerCreatorCoin` first if seeding early.
+If `setRemoteOFTPeerBytes32` reverts with `Token not registered`, register the
+creator coin in `Registry4626` first, then seed the peer. The peer must be
+non-zero **before** finalize; do not rely on finalize to discover or inherit it.
 
 ---
 
@@ -121,7 +127,7 @@ cast call "$REGISTRY" \
 
 - [ ] Registry peer **non-zero** for `(creatorToken, 30168)`
 - [ ] Deploy session / UI preflight: share-bridge wiring shows `effectivePeer` matching registry
-- [ ] `verify-batcher-pipe-a-readiness.ts` exit **0** (platform shell)
+- [ ] `verify-batcher-pipe-a-readiness.ts` exit **0** (platform shell: destination + OVault runtime)
 - [ ] Creator entitlement: `solana_ovault_mesh` active or pending on `creatorToken`
 - [ ] LZ fee quote path succeeds for payable finalize (session create / `finalizeShareBridgeFee`)
 
@@ -139,7 +145,7 @@ POST /api/keeper/solana/provision-creator  # machine auth
 Standard vault deploy through phase 2. On **`finalizePhase2`** / `finalizePhase2WithPermit2`:
 
 - Batcher registers vault stack on `Registry4626` if missing
-- Uses registry peer (or batcher default only when registry peer unset)
+- Uses **registry** peer (batcher-global peer fallback is retired)
 - Calls `CreatorShareOFT.setPeer(30168, peer)` when mismatched
 - Bridges **30%** ShareOFT to Solana via OVault composer path
 
@@ -155,7 +161,7 @@ Only after Path 1 mint exists for **this** creator:
 - Upsert `creator_meteora_alpha_vaults`
 - B2: hook PDAs + `relay_entries` per [lottery policy](./solana-share-mesh-lottery-policy.md)
 
-Update keeper env maps with **this** mint → Base `CreatorShareOFT` address — not bridge-wrapped creator SPL.
+Update keeper env maps with **this** mint → Base `CreatorShareOFT` address — not Twin wrap-token creator SPL.
 
 ---
 
@@ -176,8 +182,9 @@ Update keeper env maps with **this** mint → Base `CreatorShareOFT` address —
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `SolanaShareOftPeerNotConfigured` at finalize | Registry peer zero and batcher default zero |
+| `oft_peer_not_configured` / finalize peer missing | Registry peer zero — seed `setRemoteOFTPeerBytes32` |
 | Wrong Solana mint / no supply | Peer pointed at another creator's OFT store |
 | Wire fails on DVN name | Name missing on one chain in pathway — shrink pool or pick intersection |
 | `optionalDVNThreshold` > pool size | e.g. 6-of-9 on Hyperliquid leg — use Hype six-name block |
 | Finalize peer mismatch | Registry peer ≠ `shareOFT.peers(30168)` — re-seed registry or manual `setPeer` |
+| Twin `/provision` or `registerSolanaBridgeToken` | Retired — use this LZ runbook instead |

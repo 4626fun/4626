@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  syncRoom1659XmtpBridgeMembershipMock,
+  syncRoomChannelBridgeMembershipMock,
+  backfillActiveRoomChannelBridgeMembersMock,
   getDbMock,
   ensureAlfaClubVigilanteSchemaMock,
   getKeeprBaseRpcUrlsMock,
@@ -10,7 +11,8 @@ const {
   readContractMock,
   eligibilityState,
 } = vi.hoisted(() => ({
-  syncRoom1659XmtpBridgeMembershipMock: vi.fn(async () => true),
+  syncRoomChannelBridgeMembershipMock: vi.fn(async () => true),
+  backfillActiveRoomChannelBridgeMembersMock: vi.fn(async () => ({ rooms: 0, enqueued: 0, skipped: 0 })),
   getDbMock: vi.fn(),
   ensureAlfaClubVigilanteSchemaMock: vi.fn(async () => undefined),
   getKeeprBaseRpcUrlsMock: vi.fn(() => ['http://fake-rpc.invalid']),
@@ -24,8 +26,9 @@ const {
   },
 }))
 
-vi.mock('./room1659XmtpBridge.js', () => ({
-  syncRoom1659XmtpBridgeMembership: syncRoom1659XmtpBridgeMembershipMock,
+vi.mock('./roomChannelBridge.js', () => ({
+  syncRoomChannelBridgeMembership: syncRoomChannelBridgeMembershipMock,
+  backfillActiveRoomChannelBridgeMembers: backfillActiveRoomChannelBridgeMembersMock,
 }))
 
 vi.mock('../db/postgres.js', () => ({
@@ -158,8 +161,8 @@ function makePolicyRow(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
   beforeEach(() => {
-    syncRoom1659XmtpBridgeMembershipMock.mockReset()
-    syncRoom1659XmtpBridgeMembershipMock.mockResolvedValue(true)
+    syncRoomChannelBridgeMembershipMock.mockReset()
+    syncRoomChannelBridgeMembershipMock.mockResolvedValue(true)
     ensureAlfaClubVigilanteSchemaMock.mockReset()
     ensureAlfaClubVigilanteSchemaMock.mockResolvedValue(undefined)
     getKeeprBaseRpcUrlsMock.mockReset()
@@ -194,8 +197,8 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
 
     expect(result.eligible).toBe(true)
     expect(result.membership.status).toBe('active')
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledTimes(1)
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledWith({
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledTimes(1)
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'add',
@@ -211,7 +214,7 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
 
     expect(result.eligible).toBe(false)
     expect(result.membership.status).toBe('pending')
-    expect(syncRoom1659XmtpBridgeMembershipMock).not.toHaveBeenCalled()
+    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
   it('recheck auto-enters a pending member once balance clears the enter threshold and syncs an add', async () => {
@@ -237,8 +240,8 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
 
     expect(result).toEqual({ checked: 1, autoEntered: 1, removed: 0, stale: 0 })
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledTimes(1)
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledWith({
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledTimes(1)
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'add',
@@ -269,7 +272,7 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
 
     expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 0, stale: 0 })
-    expect(syncRoom1659XmtpBridgeMembershipMock).not.toHaveBeenCalled()
+    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
   it('recheck moves an active member into grace (no sync yet) once balance drops below the exit threshold', async () => {
@@ -296,7 +299,7 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
 
     expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 0, stale: 0 })
     expect(fakeDb.memberships.get(`${ROOM_ID}:${WALLET_A}`)?.status).toBe('grace')
-    expect(syncRoom1659XmtpBridgeMembershipMock).not.toHaveBeenCalled()
+    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
   it('recheck removes a member once their grace period expires and syncs a remove', async () => {
@@ -325,8 +328,8 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
 
     expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 1, stale: 0 })
     expect(fakeDb.memberships.get(`${ROOM_ID}:${WALLET_A}`)?.status).toBe('removed')
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledTimes(1)
-    expect(syncRoom1659XmtpBridgeMembershipMock).toHaveBeenCalledWith({
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledTimes(1)
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'remove',

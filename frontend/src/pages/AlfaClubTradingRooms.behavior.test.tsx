@@ -1,13 +1,22 @@
 // @vitest-environment happy-dom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const apiFetchMock = vi.fn()
+const useSiweAuthMock = vi.fn(() => ({
+  authAddress: null as string | null,
+  hasSession: false,
+  sessionHydrated: true,
+}))
 
 vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+}))
+
+vi.mock('@/hooks/useSiweAuth', () => ({
+  useSiweAuth: () => useSiweAuthMock(),
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
@@ -50,6 +59,11 @@ describe('AlfaClub room hub behavior', () => {
     window.localStorage.clear()
     window.sessionStorage.clear()
     apiFetchMock.mockReset()
+    useSiweAuthMock.mockReturnValue({
+      authAddress: null,
+      hasSession: false,
+      sessionHydrated: true,
+    })
     apiFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -89,6 +103,31 @@ describe('AlfaClub room hub behavior', () => {
           ],
         },
       }),
+    })
+  })
+
+  it('does not request personalized room holdings during public browsing', async () => {
+    await renderHub('/rooms')
+    await screen.findAllByText('AKITA')
+
+    expect(
+      apiFetchMock.mock.calls.some(([url]) => url === '/api/wallet/friend-key-holdings'),
+    ).toBe(false)
+  })
+
+  it('requests personalized room holdings after the 4626 session is hydrated', async () => {
+    useSiweAuthMock.mockReturnValue({
+      authAddress: '0x00000000000000000000000000000000000000aa',
+      hasSession: true,
+      sessionHydrated: true,
+    })
+
+    await renderHub('/rooms')
+
+    await waitFor(() => {
+      expect(
+        apiFetchMock.mock.calls.some(([url]) => url === '/api/wallet/friend-key-holdings'),
+      ).toBe(true)
     })
   })
 
@@ -135,8 +174,12 @@ describe('AlfaClub room hub behavior', () => {
     expect(await screen.findAllByText('2.5K pts')).not.toHaveLength(0)
     expect(screen.queryByText('$2,500')).toBeNull()
     expect(screen.getAllByText('Trading Room')).not.toHaveLength(0)
-    expect(screen.getByRole('button', { name: 'Social' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Club' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Filters/ }))
+    const roomTypeSelect = screen.getByRole('combobox', { name: 'Room type' }) as HTMLSelectElement
+    const tierSelect = screen.getByRole('combobox', { name: 'Bonding curve' }) as HTMLSelectElement
+    expect(Array.from(roomTypeSelect.options).map((option) => option.text)).toContain('Social')
+    expect(Array.from(tierSelect.options).map((option) => option.text)).toContain('Club')
   })
 
   it('renders room overview and full safety analysis inline', async () => {
@@ -146,6 +189,17 @@ describe('AlfaClub room hub behavior', () => {
     expect(screen.getByRole('heading', { name: 'Room overview', level: 2 })).toBeTruthy()
     expect(screen.getByText('Safety analysis for room 9')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Room overview' })).toBeNull()
+  })
+
+  it('shows the trading activity widget for trading rooms only, not social rooms', async () => {
+    await renderHub('/rooms?roomId=1659')
+    expect(await screen.findByRole('heading', { name: 'PNL & recent trades', level: 2 })).toBeTruthy()
+
+    const socialRender = await renderHub('/rooms?roomId=9')
+    await within(socialRender.container).findByRole('heading', { name: 'Room Nine', level: 1 })
+    expect(
+      within(socialRender.container).queryByRole('heading', { name: 'PNL & recent trades' }),
+    ).toBeNull()
   })
 
   it('keeps the discovery tray and its filters mounted across workspace tabs', async () => {
