@@ -1,6 +1,7 @@
-import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
+import { encodeFunctionData, getAddress, keccak256, type Address, type Hex } from 'viem'
 
 import { BASE_DEFAULTS } from '../../../src/config/contracts.defaults.js'
+import { DEPLOY_BYTECODE } from '../../../src/deploy/bytecode.generated.js'
 import { resolveAlignedPhase1DeployDeps } from '../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { resolveProtocolTreasuryAddress } from '../wallet/protocolTreasurySafe.js'
 import type { ForkImpersonationMode } from './ensureBatcherRegistryAuthorization.js'
@@ -12,6 +13,14 @@ import {
 
 /** Uniswap V3 swap router used by deploy UI auxiliary batcher calls. */
 const DEFAULT_SWAP_ROUTER = getAddress('0x2626664c2603336E57B271c5C0b26F421741e481')
+
+const EXPECTED_AUX_CODE_IDS = {
+  vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
+  creatorRevenueRouter: keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex),
+  agentRevenueRouter: keccak256(DEPLOY_BYTECODE.AgentRevenueRouter as Hex),
+  creatorRevenuePolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
+  agentRevenuePolicyController: keccak256(DEPLOY_BYTECODE.AgentRevenuePolicyController as Hex),
+} as const
 
 const AUX_BATCHER_IMMUTABLES_ABI = [
   {
@@ -48,6 +57,41 @@ const AUX_BATCHER_IMMUTABLES_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vaultShareBurnStreamCodeId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'creatorRevenueRouterCodeId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'agentRevenueRouterCodeId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'creatorRevenuePolicyControllerCodeId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'agentRevenuePolicyControllerCodeId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
   },
 ] as const
 
@@ -156,40 +200,96 @@ async function readAuxiliaryBatcherWiring(params: {
     }
   }
 
-  const [auxCreate2, auxStore, auxBatcher, swapRouter] = await Promise.all([
-    params.publicClient.readContract({
-      address: configuredAuxiliaryBatcher,
-      abi: AUX_BATCHER_IMMUTABLES_ABI,
-      functionName: 'create2Deployer',
-    }),
-    params.publicClient.readContract({
-      address: configuredAuxiliaryBatcher,
-      abi: AUX_BATCHER_IMMUTABLES_ABI,
-      functionName: 'bytecodeStore',
-    }),
-    params.publicClient.readContract({
-      address: configuredAuxiliaryBatcher,
-      abi: AUX_BATCHER_IMMUTABLES_ABI,
-      functionName: 'deploymentBatcher',
-    }),
-    params.publicClient.readContract({
-      address: configuredAuxiliaryBatcher,
-      abi: AUX_BATCHER_IMMUTABLES_ABI,
-      functionName: 'swapRouter',
-    }),
-  ])
+  try {
+    const [
+      auxCreate2,
+      auxStore,
+      auxBatcher,
+      swapRouter,
+      burnStreamCodeId,
+      creatorRouterCodeId,
+      agentRouterCodeId,
+      creatorPolicyCodeId,
+      agentPolicyCodeId,
+    ] = await Promise.all([
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'create2Deployer',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'bytecodeStore',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'deploymentBatcher',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'swapRouter',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'vaultShareBurnStreamCodeId',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'creatorRevenueRouterCodeId',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'agentRevenueRouterCodeId',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'creatorRevenuePolicyControllerCodeId',
+      }),
+      params.publicClient.readContract({
+        address: configuredAuxiliaryBatcher,
+        abi: AUX_BATCHER_IMMUTABLES_ABI,
+        functionName: 'agentRevenuePolicyControllerCodeId',
+      }),
+    ])
 
-  const aligned =
-    getAddress(auxCreate2 as Address) === expectedCreate2 &&
-    getAddress(auxStore as Address) === expectedStore &&
-    getAddress(auxBatcher as Address) === batcher
+    const codeIdsAligned =
+      String(burnStreamCodeId).toLowerCase() === EXPECTED_AUX_CODE_IDS.vaultShareBurnStream.toLowerCase() &&
+      String(creatorRouterCodeId).toLowerCase() === EXPECTED_AUX_CODE_IDS.creatorRevenueRouter.toLowerCase() &&
+      String(agentRouterCodeId).toLowerCase() === EXPECTED_AUX_CODE_IDS.agentRevenueRouter.toLowerCase() &&
+      String(creatorPolicyCodeId).toLowerCase() ===
+        EXPECTED_AUX_CODE_IDS.creatorRevenuePolicyController.toLowerCase() &&
+      String(agentPolicyCodeId).toLowerCase() ===
+        EXPECTED_AUX_CODE_IDS.agentRevenuePolicyController.toLowerCase()
 
-  return {
-    aligned,
-    configuredAuxiliaryBatcher,
-    create2Deployer: expectedCreate2,
-    bytecodeStore: expectedStore,
-    swapRouter: getAddress(swapRouter as Address),
+    const aligned =
+      getAddress(auxCreate2 as Address) === expectedCreate2 &&
+      getAddress(auxStore as Address) === expectedStore &&
+      getAddress(auxBatcher as Address) === batcher &&
+      codeIdsAligned
+
+    return {
+      aligned,
+      configuredAuxiliaryBatcher,
+      create2Deployer: expectedCreate2,
+      bytecodeStore: expectedStore,
+      swapRouter: getAddress(swapRouter as Address),
+    }
+  } catch {
+    // Pre-hardening helpers lack codeId immutables; treat as misaligned so the fork redeploys.
+    return {
+      aligned: false,
+      configuredAuxiliaryBatcher,
+      create2Deployer: expectedCreate2,
+      bytecodeStore: expectedStore,
+      swapRouter: DEFAULT_SWAP_ROUTER,
+    }
   }
 }
 
@@ -232,6 +332,11 @@ function deployVaultAuxiliaryDeployBatcherViaForge(params: {
       params.deploymentBatcher,
       params.protocolTreasury,
       params.swapRouter,
+      EXPECTED_AUX_CODE_IDS.vaultShareBurnStream,
+      EXPECTED_AUX_CODE_IDS.creatorRevenueRouter,
+      EXPECTED_AUX_CODE_IDS.agentRevenueRouter,
+      EXPECTED_AUX_CODE_IDS.creatorRevenuePolicyController,
+      EXPECTED_AUX_CODE_IDS.agentRevenuePolicyController,
     ],
   })
 }

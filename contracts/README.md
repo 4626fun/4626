@@ -53,11 +53,17 @@ shared `*4626` interfaces, while deployed per-lane implementations keep their
 
 | Integration role | Shared interface | Current implementations |
 |---|---|---|
+| Vault wiring | `IOVault4626` | `CreatorOVault`, `AgentOVault` |
+| Vault wrapper | `IOVaultWrapper4626` | `CreatorOVaultWrapper`, `AgentOVaultWrapper` (cooldown hook excluded) |
 | External-earnings routing | `IRevenueRouter4626` | `CreatorPayoutRouter`, `AgentRevenueRouter` |
 | `tradeFeeCollector` | `ITradeFeeCollector4626` | `CreatorGaugeController`, `AgentGaugeController` |
 | Omnichain share token | `IShareOFT4626` | `CreatorShareOFT`, `AgentShareOFT` |
 | Asset oracle | `IOracle4626` | `CreatorOracle`, `AgentOracle` |
 | Revenue-policy authority | `IRevenuePolicyController4626` | lane extensions for Creator Coin and AgentTokenV4 |
+
+**Execution templates only:** `VaultKind` remains `{ Creator, Agent }`. A future named
+ecosystem (for example Farcaster) is a concrete implementation of one of those two
+templates, not a third `VaultKind`. Never introduce `FutureEcosystem*` placeholders.
 
 These interfaces expose only selector-compatible intersections. Asset setters,
 ongoing-treasury names, emergency semantics, wrapper cooldown hooks, and
@@ -112,18 +118,18 @@ The two lane folders are **intentionally not identical**. The creator lane is th
 
 1. **Thin overlays (inheritance, no duplication).** `AgentOVault` extends `CreatorOVault` and only overrides the expected core-module kind. `AgentOVaultCoreModule` extends `CreatorOVaultCoreModule`, swapping exact-transfer accounting for measured fee-on-transfer accounting. Both lanes directly reuse the lane-shared vault machinery under `shared/vault/` (admin/strategies modules, module base/storage, `OVaultLiquidityLib`, `OVaultHubComposer`, recovery escrow/claims), `shared/distribution/VaultShareBurnStream`, and `shared/distribution/LinearVesting4626` — those contracts have no per-lane copies on purpose (see the naming note above).
 
-2. **Copy-renamed forks (guarded).** Four contracts are per-lane forks whose logic must stay identical; only ABI-visible identifier naming differs (e.g. `agentTreasury` vs `creatorTreasury`, `setAgentToken` vs `setCreatorCoin`, `◆/◇` vs `■/▢`). The per-lane names are deliberate — they are baked into deployed ABIs, indexers, and deploy bytecode manifests — so the files stay separate, and CI enforces logic parity:
+2. **Lane forks with intentional behavioral divergence (classified, not false-parity).** These pairs share `I*4626` capability surfaces but keep real lane differences. `pnpm guard:lane-contract-parity` verifies both files exist and that each pair has a written justification; it does **not** force logic identity:
 
-   | Agent | Creator |
-   |---|---|
-   | `agent/vault/AgentShareOFT.sol` | `creator/vault/CreatorShareOFT.sol` |
-   | `agent/vault/AgentOVaultWrapper.sol` | `creator/vault/CreatorOVaultWrapper.sol` |
-   | `agent/revenue/AgentGaugeController.sol` | `creator/revenue/CreatorGaugeController.sol` |
-   | `agent/revenue/AgentRevenueRouter.sol` | `creator/revenue/CreatorPayoutRouter.sol` |
+   | Agent | Creator | Intentional divergence |
+   |---|---|---|
+   | `agent/vault/AgentShareOFT.sol` | `creator/vault/CreatorShareOFT.sol` | Cooldown hook arity, mint/owner auth, hub lottery peer callback rules |
+   | `agent/vault/AgentOVaultWrapper.sol` | `creator/vault/CreatorOVaultWrapper.sol` | `propagateCooldownOnTransfer` amount parameter |
+   | `agent/revenue/AgentGaugeController.sol` | `creator/revenue/CreatorGaugeController.sol` | Lottery-manager timelock, receiveFees accounting, emergency path |
+   | `agent/revenue/AgentRevenueRouter.sol` | `creator/revenue/CreatorPayoutRouter.sol` | Creator-only keeper spend caps and delayed emergency withdraw |
 
-   **When you change any of these files, mirror the change to the lane counterpart in the same PR.** `pnpm guard:lane-contract-parity` (CI-blocking in `test.yml`) diffs each pair with comments stripped and the approved rename map applied; any residual difference fails the build. Naming-only differences go in the rename map inside `scripts/check-lane-contract-parity.mjs`; a genuinely lane-specific behavior change means moving the pair to the intentionally-divergent list below with justification.
+   If a pair becomes rename-equivalent again, move it back to the parity `PAIRS` list in `scripts/check-lane-contract-parity.mjs`. Do not paper over intentional differences with rename-map hacks.
 
-3. **Intentionally divergent (not guarded).** `AgentOracle` vs `CreatorOracle`: the agent oracle adds a Uniswap V2 pair TWAP path (`setV2Pair`, `recordV2Observation`) because AgentTokenV4 tokens trade on V2-style pools, plus creator-interface alias getters. Lane-exclusive contracts: `agent/revenue/AgentRevenuePolicyController` and `AgentOVaultTaxAdapter` (AgentTokenV4 tax cooperation); `creator/revenue/CreatorCoinPolicyController` (creator-coin specific).
+3. **Other intentional divergence.** `AgentOracle` vs `CreatorOracle`: the agent oracle adds a Uniswap V2 pair TWAP path (`setV2Pair`, `recordV2Observation`) because AgentTokenV4 tokens trade on V2-style pools. Lane-exclusive contracts: `agent/revenue/AgentRevenuePolicyController` and `AgentOVaultTaxAdapter` (AgentTokenV4 tax cooperation); `creator/revenue/CreatorCoinPolicyController` (creator-coin specific). Auxiliaries deploy through lane-aware `VaultAuxiliaryDeployBatcher` with concrete Creator/Agent salt tags and code IDs.
 
 ## Shared protocol singletons (`4626*`)
 

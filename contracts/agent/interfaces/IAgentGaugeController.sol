@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {ITradeFeeCollector4626} from
+    "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
+
 /**
  * @title IAgentGaugeController
  * @author 0xakita.eth
- * @notice Interface for configuring agent gauge controllers.
- * @dev Used by registry and vault setup flows.
+ * @notice Agent-lane gauge controller setup interface.
+ * @dev Extends the shared tradeFeeCollector surface with the agent-token asset
+ *      setter used by DeploymentBatcher phase 2.
  */
-interface IAgentGaugeController {
-    function setVault(address _vault) external;
-    function setWrapper(address _wrapper) external;
-    function setAgentToken(address _agentToken) external;
-    function setLotteryManager(address _lotteryManager) external;
-    function setOracle(address _oracle) external;
-    function transferOwnership(address newOwner) external;
-    function receiveFees(uint256 amount) external;
+interface IAgentGaugeController is ITradeFeeCollector4626 {
+    function setAgentToken(address agentToken_) external;
 }

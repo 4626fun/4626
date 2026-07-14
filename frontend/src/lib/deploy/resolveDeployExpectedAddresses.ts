@@ -15,15 +15,16 @@ import {
   resolveDeployLaneGaugeBytecode,
   resolveDeployLaneOracleBytecode,
   resolveDeployLanePayoutRouterBytecode,
+  resolveDeployLaneRevenuePolicyControllerBytecode,
   resolveDeployLaneWrapperBytecode,
   resolveDeployLaneWrapperSaltLabel,
-  usesCreatorCoinPolicyController,
+  usesRevenuePolicyController,
 } from '@/lib/deploy/deployLaneBytecode'
 import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
 import type { DeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
-  deriveCreatorCoinPolicyControllerSalt,
   derivePayoutRouterSalt,
+  deriveRevenuePolicyControllerSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
 import { buildCreatorPayoutRouterInitCode } from '../../../shared/deploy/payoutRouterInitCode'
@@ -94,7 +95,8 @@ export async function resolveDeployExpectedAddresses(
   const gaugeBytecode = resolveDeployLaneGaugeBytecode(vaultKind)
   const oracleBytecode = resolveDeployLaneOracleBytecode(vaultKind)
   const payoutRouterBytecode = resolveDeployLanePayoutRouterBytecode(vaultKind)
-  const includePolicyController = usesCreatorCoinPolicyController(vaultKind)
+  const revenuePolicyControllerBytecode = resolveDeployLaneRevenuePolicyControllerBytecode(vaultKind)
+  const includePolicyController = usesRevenuePolicyController(vaultKind)
 
   const create2Deployer = params.batcherInfra.create2Deployer
   const protocolTreasury = params.batcherInfra.protocolTreasury
@@ -157,10 +159,12 @@ export async function resolveDeployExpectedAddresses(
   const payoutRouterSalt = derivePayoutRouterSalt({
     creatorToken: params.creatorToken,
     owner: params.owner,
+    vaultKind,
   })
-  const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({
+  const creatorCoinPolicyControllerSalt = deriveRevenuePolicyControllerSalt({
     creatorToken: params.creatorToken,
     owner: params.owner,
+    vaultKind,
   })
 
   const phase2AuxAddresses = await (async () => {
@@ -197,7 +201,7 @@ export async function resolveDeployExpectedAddresses(
             payoutRouterAddress,
             protocolTreasury,
           ])
-          const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
+          const init = concatHex([revenuePolicyControllerBytecode, args])
           return predictCreate2AddressFromInitCode({
             create2Deployer,
             salt: creatorCoinPolicyControllerSalt,

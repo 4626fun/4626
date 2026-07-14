@@ -10,7 +10,7 @@ const SELECTOR_FINALIZE_PHASE2 = new Set([
 const PHASE2_PRE_FINALIZE_SELECTORS = new Set([
   '0x4689260b', // whitelistPayoutRouterOnWrapper(address,address)
   '0x8522016e', // setPayoutRouterShareOftNoFees(address,address)
-  '0xafe8d7e9', // deployPhase2Auxiliaries(...)
+  '0x2c147792', // deployPhase2Auxiliaries((address,address,address,address,address,address,address,address,uint8),(bytes32,bytes32,bytes32))
 ])
 const SELECTOR_DEPLOY_PHASE3_STRATEGIES = '0x881d4960'
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'

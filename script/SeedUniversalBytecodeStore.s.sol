@@ -112,6 +112,9 @@ contract SeedUniversalBytecodeStore is Script {
             _storeIfMissing(store, vm.getCode("out/CreatorCoinPolicyController.sol/CreatorCoinPolicyController.json"), "CreatorCoinPolicyController");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/AgentRevenuePolicyController.sol/AgentRevenuePolicyController.json"), "AgentRevenuePolicyController");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(store, vm.getCode("out/CharmStrategy4626.sol/CharmStrategy4626.json"), "CharmStrategy4626");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {

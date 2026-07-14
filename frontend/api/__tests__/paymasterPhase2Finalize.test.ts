@@ -111,24 +111,34 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
 }))
 
 function makeMockDeployBytecode() {
-  const mockBytecode = ('0x' + '00'.repeat(32)) as `0x${string}`
+  // Distinct per-key bytecode so Creator vs Agent code IDs do not collide in lane checks.
+  const bc = (n: number) => (`0x${n.toString(16).padStart(2, '0').repeat(32)}`) as `0x${string}`
   return {
-    CreatorOVault: mockBytecode,
-    CreatorOVaultWrapper: mockBytecode,
-    CreatorShareOFT: mockBytecode,
-    OFTBootstrapRegistry: mockBytecode,
-    CreatorGaugeController: mockBytecode,
-    CCALaunchArm: mockBytecode,
-    CreatorOracle: mockBytecode,
-    CreatorPayoutRouter: mockBytecode,
-    VaultShareBurnStream: mockBytecode,
-    CreatorCoinPolicyController: mockBytecode,
-    CharmStrategy4626: mockBytecode,
-    OVaultImpairmentClaims: mockBytecode,
-    OVaultRecoveryEscrow: mockBytecode,
-    AjnaVaultAuth: mockBytecode,
-    AjnaERC4626Vault: mockBytecode,
-    ERC4626StrategyAdapter: mockBytecode,
+    CreatorOVault: bc(1),
+    AgentOVault: bc(2),
+    CreatorOVaultWrapper: bc(3),
+    AgentOVaultWrapper: bc(4),
+    CreatorShareOFT: bc(5),
+    AgentShareOFT: bc(6),
+    OFTBootstrapRegistry: bc(7),
+    CreatorGaugeController: bc(8),
+    AgentGaugeController: bc(9),
+    CCALaunchArm: bc(10),
+    CreatorOracle: bc(11),
+    AgentOracle: bc(12),
+    CreatorPayoutRouter: bc(13),
+    AgentRevenueRouter: bc(14),
+    VaultShareBurnStream: bc(15),
+    CreatorCoinPolicyController: bc(16),
+    AgentRevenuePolicyController: bc(17),
+    // Keep phase-3 strategy artifacts identical to the suite MOCK_BYTECODE
+    // (`0x` + 00*32) so tests can continue to pass MOCK_CODE_ID for those fields.
+    CharmStrategy4626: bc(0),
+    OVaultImpairmentClaims: bc(19),
+    OVaultRecoveryEscrow: bc(20),
+    AjnaVaultAuth: bc(0),
+    AjnaERC4626Vault: bc(0),
+    ERC4626StrategyAdapter: bc(0),
   }
 }
 
@@ -195,7 +205,9 @@ function configureMockReadContract(overrides: ReadContractOverrides = {}): void 
     if (functionName === 'getWrapperForToken') return Promise.resolve(wrapper)
     if (functionName === 'getShareOFTForToken') return Promise.resolve(shareOFT)
 
+    if (address === wrapper && functionName === 'vaultToken') return Promise.resolve(resolved.wrapperCreatorCoin)
     if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(resolved.wrapperCreatorCoin)
+    if (address === wrapper && functionName === 'agentToken') return Promise.resolve(null)
     if (address === wrapper && functionName === 'vault') return Promise.resolve(resolved.wrapperVault)
     if (address === wrapper && functionName === 'shareOFT') return Promise.resolve(resolved.wrapperShareOFT)
     if (address === wrapper && functionName === 'owner') return Promise.resolve(resolved.wrapperOwner)

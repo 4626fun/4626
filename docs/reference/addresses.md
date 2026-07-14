@@ -9,6 +9,14 @@ Canonical deployed contract addresses for 4626 on Base mainnet. Shared
 infrastructure is the **v1.18.0** stack; new per-creator launches use the
 **v1.19.0** bytecode/CREATE2 epoch.
 
+> **v1.19.1 prep (not cut over):**
+> [`deployments/base/v1.19.1-bytecode-manifest.json`](../../deployments/base/v1.19.1-bytecode-manifest.json)
+> adds `AgentRevenuePolicyController` and pairs with the hardened
+> `VaultAuxiliaryDeployBatcher` rotation. Do not flip
+> `CURRENT_RELEASE` / `VITE_DEPLOYMENT_VERSION` until store seed + Safe
+> codeId approval + aux helper redeploy complete. Runbook:
+> [`deploy-capable-batcher-rotation.md`](../_internal/operations/deployment/deploy-capable-batcher-rotation.md).
+
 > **v1.19 partial refresh:** release packet:
 > [`v1.19.0-partial-refresh.md`](../_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md).
 > This reuses the v1.18 shared addresses and changes only bytecode/codeIds,
@@ -47,10 +55,15 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | DeploymentBatcherPhase3Helper | `0xB8c10FE668d59E2DEb5771298133c2a3DBFc9bB3` |
 | DeploymentBatcherShareMeshHelper | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
 | DeploymentBatcherUtilsHelper | `0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52` |
+| VaultAuxiliaryDeployBatcher | `0xa3986F2F812a80a4Ee4A33646bE5248D9e22eb88` (pre-hardening; replace after redeploy) |
 
 Notes:
 - **v1.18.0** remains the shared/global infrastructure epoch. **v1.19.0** is
   the per-creator bytecode and CREATE2 namespace for new launches.
+- **v1.19.1** is prepared in-repo (Agent policy bytecode + hardened aux
+  batcher constructor) but not the live release target until ops cutover.
+- The listed `VaultAuxiliaryDeployBatcher` is the live pre-hardening helper;
+  do not treat it as codeId↔vaultKind-bound until rotated per the runbook.
 - `RegistryBootstrap4626` is an authorized factory on Registry4626 for ad hoc /
   single-tx token registration + first-time field binds (vault, wrapper, shareOFT,
   oracle, gauge, optional Solana mesh). Owner: `0xB05Cf0…FdD`. Deploy tx:

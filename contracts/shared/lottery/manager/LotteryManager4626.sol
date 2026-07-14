@@ -48,6 +48,9 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+import {ITradeFeeCollector4626} from
+    "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
+import {IShareOFT4626} from "@4626/shared/interfaces/vault/IShareOFT4626.sol";
 import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
 
 // ================================
@@ -68,17 +71,6 @@ interface IRegistry4626Lottery {
 
     // Global queries
     function getAllTokens() external view returns (address[] memory);
-}
-
-interface IGaugeControllerLottery {
-    function getJackpotReserve() external view returns (uint256);
-    function availableJackpotReserve() external view returns (uint256);
-    function payJackpot(address winner, uint256 shares) external;
-}
-
-/// @dev ShareOFT exposes block-start balance so same-tx flash loans cannot inflate coverage.
-interface IShareOFTLotteryCoverage {
-    function balanceEligibleForLotteryCoverage(address account) external view returns (uint256);
 }
 
 interface IVRFConsumer4626 {
@@ -1638,7 +1630,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /// @dev Read ShareOFT block-start eligible balance when available; else live balance.
     function _eligibleShareBalance(address shareOFT, address buyer) internal view returns (uint256) {
-        try IShareOFTLotteryCoverage(shareOFT).balanceEligibleForLotteryCoverage(buyer) returns (uint256 eligible) {
+        try IShareOFT4626(shareOFT).balanceEligibleForLotteryCoverage(buyer) returns (uint256 eligible) {
             return eligible;
         } catch {
             return IERC20(shareOFT).balanceOf(buyer);
@@ -2019,7 +2011,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         TokenStats storage stats = tokenStats[token];
         address gaugeAddr = registry.getGaugeControllerForToken(token);
         if (gaugeAddr != address(0)) {
-            jackpotBalance = IGaugeControllerLottery(gaugeAddr).getJackpotReserve();
+            jackpotBalance = ITradeFeeCollector4626(gaugeAddr).getJackpotReserve();
         }
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
     }
@@ -2388,7 +2380,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         }
         if (vaultAddr == address(0) || gaugeAddr == address(0)) return 0;
 
-        IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
+        ITradeFeeCollector4626 gaugeController = ITradeFeeCollector4626(gaugeAddr);
         uint256 jackpotShares;
         try gaugeController.availableJackpotReserve() returns (uint256 result) {
             jackpotShares = result;
@@ -2501,7 +2493,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
             if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
 
-            IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
+            ITradeFeeCollector4626 gaugeController = ITradeFeeCollector4626(gaugeAddr);
 
             // slither-disable-next-line calls-loop
             uint256 jackpotShares;

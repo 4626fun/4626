@@ -2,36 +2,27 @@
 /**
  * Static CI guard: agent/creator lane contract parity.
  *
- * Invariant:
- *   Four agent-lane contracts are copy-renamed forks of their creator-lane
- *   counterparts. They are intentionally separate files (per-lane ABI naming:
- *   agentTreasury vs creatorTreasury, setAgentToken vs setCreatorCoin, etc.
- *   are ABI-visible and baked into deploy manifests), but their LOGIC must
- *   stay identical. This guard fails when the pairs drift beyond the approved
- *   identifier rename map, so a bug fix applied to one lane cannot silently
- *   skip the other.
+ * Two classifications:
  *
- * Guarded pairs:
- *   agent/vault/AgentShareOFT.sol        <-> creator/vault/CreatorShareOFT.sol
- *   agent/vault/AgentOVaultWrapper.sol   <-> creator/vault/CreatorOVaultWrapper.sol
- *   agent/revenue/AgentGaugeController.sol <-> creator/revenue/CreatorGaugeController.sol
- *   agent/revenue/AgentRevenueRouter.sol <-> creator/revenue/CreatorPayoutRouter.sol
+ * 1. PAIRS — copy-renamed forks whose LOGIC must stay identical (modulo the
+ *    approved rename map). Currently empty: every former pair has intentional
+ *    behavioral divergence documented below. Re-add a pair here only when the
+ *    two files are again rename-equivalent.
  *
- * Intentionally NOT guarded (real functional divergence or thin overlays):
- *   - AgentOracle vs CreatorOracle (agent adds a Uniswap V2 pair TWAP path)
- *   - AgentOVault / AgentOVaultCoreModule (inherit the creator contracts)
+ * 2. INTENTIONALLY_DIVERGENT — lane forks that share an I*4626 capability
+ *    surface but keep real behavioral differences. The guard verifies the
+ *    files exist and prints the justification; it does NOT force false parity.
  *
- * How it compares:
- *   1. Strip comments (string-literal aware) and blank lines from both files.
- *   2. Apply the pair's ordered rename map to the AGENT file only
- *      (agent identifiers -> creator identifiers).
- *   3. Normalize whitespace and diff line-by-line (LCS). Any residual
- *      difference is a violation and is printed with original line numbers.
+ * Intentionally divergent justifications (see also contracts/README.md):
+ *   ShareOFT / OVaultWrapper — Agent cooldown hook takes amount; Creator does not.
+ *     Agent also differs on remote-peer lottery callback authority and mint auth.
+ *   GaugeController — Agent lottery-manager timelock + direct fee accounting;
+ *     Creator balance-delta fee accounting + emergency withdraw path.
+ *   RevenueRouter / PayoutRouter — Creator-only keeper spend caps and delayed
+ *     emergency withdraw; Agent omits those creator-custody controls.
  *
- * If a difference is INTENTIONAL (a genuinely lane-specific behavior), either
- * extend the pair's rename map (naming-only differences) or move the pair to
- * the "not guarded" list above with a written justification in
- * contracts/README.md.
+ * Thin overlays (not listed): AgentOVault / AgentOVaultCoreModule inherit creator.
+ * Oracles remain intentionally divergent (Agent V2 TWAP path).
  *
  * Run: node scripts/check-lane-contract-parity.mjs
  *      node scripts/check-lane-contract-parity.mjs --self-test
@@ -62,73 +53,43 @@ function info(msg) {
 }
 
 /**
- * Pair definitions.
- *
- * renames: ordered [pattern, replacement] applied to the AGENT source only,
- * most-specific first. Patterns are plain strings replaced globally; entries
- * marked { word: true } are wrapped in \b word boundaries.
+ * Pairs that must remain rename-equivalent. Empty while all former forks have
+ * intentional behavioral differences. Reintroduce a pair only after restoring
+ * logic parity.
  */
-const PAIRS = [
+const PAIRS = [];
+
+/**
+ * Documented intentional divergences. Guard checks presence + justification only.
+ */
+const INTENTIONALLY_DIVERGENT = [
   {
     name: 'ShareOFT',
     agent: 'contracts/agent/vault/AgentShareOFT.sol',
     creator: 'contracts/creator/vault/CreatorShareOFT.sol',
-    renames: [
-      ['@4626/agent/interfaces/', '@4626/creator/interfaces/'],
-      ['Agent', 'Creator'],
-      ['◆', '■'],
-      ['◇', '▢'],
-    ],
+    reason:
+      'Cooldown hook arity (amount), mint/owner auth, and hub lottery peer callback rules diverge; shared surface is IShareOFT4626.',
   },
   {
     name: 'OVaultWrapper',
     agent: 'contracts/agent/vault/AgentOVaultWrapper.sol',
     creator: 'contracts/creator/vault/CreatorOVaultWrapper.sol',
-    renames: [
-      ['agentToken', 'creatorCoin'],
-      ['AgentToken', 'CreatorCoin'],
-      ['Agent', 'Creator'],
-      ['agent', 'creator'],
-      ['◆', '■'],
-      ['◇', '▢'],
-    ],
+    reason:
+      'propagateCooldownOnTransfer(from,to,amount) vs (from,to); shared surface is IOVaultWrapper4626 (excludes cooldown hook).',
   },
   {
     name: 'GaugeController',
     agent: 'contracts/agent/revenue/AgentGaugeController.sol',
     creator: 'contracts/creator/revenue/CreatorGaugeController.sol',
-    renames: [
-      ['AgentTokenNotSet', 'CreatorCoinNotSet'],
-      ['AgentTokenSet', 'CreatorCoinSet'],
-      ['setAgentToken', 'setCreatorCoin'],
-      ['treasuryShareBps', 'creatorShareBps'],
-      ['totalTreasuryEarned', 'totalCreatorEarned'],
-      ['toTreasury', 'toCreator'],
-      ['treasuryOft', 'creatorOft'],
-      ['agentTreasury', 'creatorTreasury'],
-      // getFeeSplit() return param is named `treasury` in the agent lane, `creator` in the creator lane
-      ['uint256 treasury', 'uint256 creator'],
-      ['agentToken', 'creatorCoin'],
-      ['Agent', 'Creator'],
-      ['agent', 'creator'],
-      ['◆', '■'],
-      ['◇', '▢'],
-    ],
+    reason:
+      'Agent lottery-manager timelock + direct receiveFees accounting; Creator balance-delta fees + emergency withdraw. Shared surface is ITradeFeeCollector4626.',
   },
   {
     name: 'RevenueRouter/PayoutRouter',
     agent: 'contracts/agent/revenue/AgentRevenueRouter.sol',
     creator: 'contracts/creator/revenue/CreatorPayoutRouter.sol',
-    renames: [
-      ['AgentRevenueRouter', 'CreatorPayoutRouter'],
-      ['IVaultDeposit', 'ICreatorOVaultDeposit'],
-      ['_queueAgentTokenDeposit', '_queueCreatorCoinDeposit'],
-      ['agentToken', 'creatorCoin'],
-      ['Agent', 'Creator'],
-      ['agent', 'creator'],
-      ['◆', '■'],
-      ['◇', '▢'],
-    ],
+    reason:
+      'Creator-only keeper external spend caps and delayed emergency withdraw. Shared surface is IRevenueRouter4626.',
   },
 ];
 
@@ -217,72 +178,59 @@ function escapeRegExp(s) {
 
 function applyRenames(src, renames) {
   let out = src;
-  for (const [from, to, opts] of renames) {
-    const pattern = opts?.word ? `\\b${escapeRegExp(from)}\\b` : escapeRegExp(from);
-    out = out.replace(new RegExp(pattern, 'g'), to);
+  for (const entry of renames ?? []) {
+    const [from, to, opts] = Array.isArray(entry) ? entry : [entry.from, entry.to, entry];
+    if (opts?.word) {
+      out = out.replace(new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'), to);
+    } else {
+      out = out.split(from).join(to);
+    }
   }
   return out;
 }
 
-/**
- * Produce normalized lines with original 1-indexed line numbers:
- * comments stripped, whitespace collapsed, empty lines dropped.
- */
 function normalize(src, renames) {
   const stripped = stripComments(src);
-  const renamed = renames ? applyRenames(stripped, renames) : stripped;
-  const lines = renamed.split('\n');
-  const result = [];
-  for (let idx = 0; idx < lines.length; idx++) {
-    const text = lines[idx].replace(/\s+/g, ' ').trim();
-    if (text.length === 0) continue;
-    result.push({ text, line: idx + 1 });
-  }
-  return result;
+  const renamed = applyRenames(stripped, renames);
+  return renamed
+    .split('\n')
+    .map((line, idx) => ({ line: idx + 1, text: line.replace(/\s+/g, ' ').trim() }))
+    .filter((l) => l.text.length > 0);
 }
 
-/**
- * LCS-based diff over normalized lines.
- * Returns array of hunks: { agentLines: [...], creatorLines: [...] }.
- */
-function diffLines(a, b) {
+function diffLines(agentNorm, creatorNorm) {
+  const a = agentNorm.map((l) => l.text);
+  const b = creatorNorm.map((l) => l.text);
   const n = a.length;
   const m = b.length;
-  // lcs[i][j] = LCS length of a[i..] and b[j..]
-  const lcs = new Array(n + 1);
-  for (let i = n; i >= 0; i--) {
-    lcs[i] = new Uint32Array(m + 1);
-    if (i === n) continue;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      lcs[i][j] = a[i].text === b[j].text
-        ? lcs[i + 1][j + 1] + 1
-        : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
 
   const hunks = [];
   let i = 0;
   let j = 0;
-  let current = null;
-  const openHunk = () => {
-    if (!current) {
-      current = { agentLines: [], creatorLines: [] };
-      hunks.push(current);
-    }
-  };
   while (i < n || j < m) {
-    if (i < n && j < m && a[i].text === b[j].text) {
-      current = null;
+    if (i < n && j < m && a[i] === b[j]) {
       i++;
       j++;
-    } else if (j < m && (i === n || lcs[i][j + 1] >= lcs[i + 1][j])) {
-      openHunk();
-      current.creatorLines.push(b[j]);
-      j++;
-    } else {
-      openHunk();
-      current.agentLines.push(a[i]);
+      continue;
+    }
+    const agentLines = [];
+    const creatorLines = [];
+    while (i < n && (j >= m || dp[i + 1][j] >= dp[i][j + 1])) {
+      agentLines.push(agentNorm[i]);
       i++;
+    }
+    while (j < m && (i >= n || dp[i][j + 1] > dp[i + 1][j])) {
+      creatorLines.push(creatorNorm[j]);
+      j++;
+    }
+    if (agentLines.length || creatorLines.length) {
+      hunks.push({ agentLines, creatorLines });
     }
   }
   return hunks;
@@ -291,12 +239,13 @@ function diffLines(a, b) {
 function checkPair(pair) {
   const agentPath = path.join(repoRoot, pair.agent);
   const creatorPath = path.join(repoRoot, pair.creator);
-
-  for (const p of [agentPath, creatorPath]) {
-    if (!fs.existsSync(p)) {
-      fail(`${pair.name}: file not found: ${path.relative(repoRoot, p)}`);
-      return false;
-    }
+  if (!fs.existsSync(agentPath)) {
+    fail(`${pair.name}: missing agent file ${pair.agent}`);
+    return false;
+  }
+  if (!fs.existsSync(creatorPath)) {
+    fail(`${pair.name}: missing creator file ${pair.creator}`);
+    return false;
   }
 
   const agentNorm = normalize(fs.readFileSync(agentPath, 'utf8'), pair.renames);
@@ -327,6 +276,28 @@ function checkPair(pair) {
   return false;
 }
 
+function checkIntentional(entry) {
+  const agentPath = path.join(repoRoot, entry.agent);
+  const creatorPath = path.join(repoRoot, entry.creator);
+  let okEntry = true;
+  if (!fs.existsSync(agentPath)) {
+    fail(`${entry.name}: missing agent file ${entry.agent}`);
+    okEntry = false;
+  }
+  if (!fs.existsSync(creatorPath)) {
+    fail(`${entry.name}: missing creator file ${entry.creator}`);
+    okEntry = false;
+  }
+  if (!entry.reason || !String(entry.reason).trim()) {
+    fail(`${entry.name}: intentional divergence requires a written reason`);
+    okEntry = false;
+  }
+  if (okEntry) {
+    ok(`${entry.name}: intentionally divergent — ${entry.reason}`);
+  }
+  return okEntry;
+}
+
 function selfTest() {
   info('Running self-test...');
 
@@ -346,7 +317,10 @@ function selfTest() {
     '    function ping() external {}',
     '}',
   ].join('\n');
-  const renames = [['agentTreasury', 'creatorTreasury'], ['Agent', 'Creator']];
+  const renames = [
+    ['agentTreasury', 'creatorTreasury'],
+    ['Agent', 'Creator'],
+  ];
   const cleanHunks = diffLines(normalize(agentSrc, renames), normalize(creatorSrc, null));
   if (cleanHunks.length !== 0) {
     fail(`self-test: expected 0 hunks for rename-equivalent sources, got ${cleanHunks.length}`);
@@ -369,6 +343,18 @@ function selfTest() {
     return false;
   }
 
+  // 4. Intentional classification requires reasons and existing files.
+  if (INTENTIONALLY_DIVERGENT.length === 0) {
+    fail('self-test: expected intentional divergence registry to be non-empty');
+    return false;
+  }
+  for (const entry of INTENTIONALLY_DIVERGENT) {
+    if (!entry.reason?.trim()) {
+      fail(`self-test: ${entry.name} missing reason`);
+      return false;
+    }
+  }
+
   ok('self-test passed');
   return true;
 }
@@ -378,22 +364,26 @@ function main() {
     process.exit(selfTest() ? 0 : 1);
   }
 
-  info('Checking agent/creator lane contract parity (logic must match modulo approved renames)');
+  info('Checking agent/creator lane contract parity classification');
 
   let failures = 0;
   for (const pair of PAIRS) {
     if (!checkPair(pair)) failures++;
   }
+  for (const entry of INTENTIONALLY_DIVERGENT) {
+    if (!checkIntentional(entry)) failures++;
+  }
 
   if (failures > 0) {
-    console.error(`\n${RED}[FAIL]${RESET} ${failures} lane pair(s) drifted.`);
-    console.error('       A change landed in one lane but not its counterpart.');
-    console.error('       Mirror the change to the other lane, or (for naming-only');
-    console.error('       differences) extend the rename map in scripts/check-lane-contract-parity.mjs.');
+    console.error(`\n${RED}[FAIL]${RESET} ${failures} lane classification check(s) failed.`);
+    console.error('       For rename-equivalent pairs: mirror logic or extend the rename map.');
+    console.error('       For intentional divergences: keep files present and document the reason.');
     process.exit(1);
   }
 
-  console.log(`\n${GREEN}lane-contract-parity guard passed (${PAIRS.length} pairs).${RESET}`);
+  console.log(
+    `\n${GREEN}lane-contract-parity guard passed (${PAIRS.length} parity pairs, ${INTENTIONALLY_DIVERGENT.length} intentional divergences).${RESET}`,
+  );
 }
 
 main();

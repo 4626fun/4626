@@ -16,6 +16,9 @@ Scope: current live v1.18.0 Base shared infrastructure plus the canonical
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.18.0-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
+6. Prepared next epoch (not live): `deployments/base/v1.19.1-bytecode-manifest.json` +
+   hardened aux batcher rotation in
+   `docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md`
 
 ## Canonical Base Infrastructure
 
@@ -38,6 +41,7 @@ Scope: current live v1.18.0 Base shared infrastructure plus the canonical
 | `deploymentBatcherPhase3Helper` | `0xB8c10FE668d59E2DEb5771298133c2a3DBFc9bB3` |
 | `deploymentBatcherShareMeshHelper` | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
 | `deploymentBatcherUtilsHelper` | `0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52` |
+| `vaultAuxiliaryDeployBatcher` | `0xa3986F2F812a80a4Ee4A33646bE5248D9e22eb88` (pre-hardening; rotate before Agent aux hard cutover) |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 

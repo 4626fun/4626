@@ -5,8 +5,13 @@ import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 
 import {
   fromOnchainVaultKind,
+  parseOnchainVaultKind,
+  resolveDeployLaneBytecodeLabels,
   resolveDeployLanePhase1CodeIds,
+  resolveDeployLaneRevenuePolicyControllerCodeId,
   toOnchainVaultKind,
+  usesCreatorCoinPolicyController,
+  usesRevenuePolicyController,
 } from './deployLaneBytecode'
 
 describe('deployLaneBytecode', () => {
@@ -15,6 +20,12 @@ describe('deployLaneBytecode', () => {
     expect(toOnchainVaultKind('agent')).toBe(1)
     expect(fromOnchainVaultKind(1)).toBe('agent')
     expect(fromOnchainVaultKind(0)).toBe('creator')
+    expect(parseOnchainVaultKind(0)).toBe('creator')
+    expect(parseOnchainVaultKind(1)).toBe('agent')
+    expect(parseOnchainVaultKind(2)).toBeNull()
+    expect(parseOnchainVaultKind('nope')).toBeNull()
+    // Legacy default for non-strict callers remains creator.
+    expect(fromOnchainVaultKind(2)).toBe('creator')
   })
 
   it('selects agent lane codeIds from DEPLOY_BYTECODE', () => {
@@ -31,5 +42,21 @@ describe('deployLaneBytecode', () => {
     expect(codeIds.wrapper).toBe(keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex))
     expect(codeIds.gauge).toBe(keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex))
     expect(codeIds.oracle).toBe(keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex))
+  })
+
+  it('resolves lane-specific revenue policy controller code ids and labels', () => {
+    expect(resolveDeployLaneRevenuePolicyControllerCodeId('creator')).toBe(
+      keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
+    )
+    expect(resolveDeployLaneRevenuePolicyControllerCodeId('agent')).toBe(
+      keccak256(DEPLOY_BYTECODE.AgentRevenuePolicyController as Hex),
+    )
+    expect(resolveDeployLaneBytecodeLabels('agent').revenuePolicyController).toBe(
+      'AgentRevenuePolicyController',
+    )
+    expect(usesRevenuePolicyController('agent')).toBe(true)
+    expect(usesRevenuePolicyController('creator')).toBe(true)
+    expect(usesCreatorCoinPolicyController('agent')).toBe(false)
+    expect(usesCreatorCoinPolicyController('creator')).toBe(true)
   })
 })

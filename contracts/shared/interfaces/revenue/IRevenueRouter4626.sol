@@ -5,8 +5,14 @@ pragma solidity ^0.8.20;
  * @title IRevenueRouter4626
  * @notice Lane-neutral integration surface for external-earnings routers.
  * @dev CreatorPayoutRouter and AgentRevenueRouter expose this shared ABI today.
- *      Lane-specific asset getters, emergency controls, and keeper spend-cap
- *      semantics intentionally remain outside this interface.
+ *
+ *      Intentionally outside this interface / not lane-identical:
+ *      - Asset getters (`creatorCoin` vs `agentToken`).
+ *      - Emergency withdraw (Creator is timelocked; Agent is immediate).
+ *      - Keeper external-swap spend caps exist only on CreatorPayoutRouter.
+ *
+ *      Execution functions (`convertAndQueue`, `convertViaExternalAndQueue`,
+ *      `processBatch`, protocol-reward claims) require owner or keeper.
  */
 interface IRevenueRouter4626 {
     struct ExternalSwapParams {

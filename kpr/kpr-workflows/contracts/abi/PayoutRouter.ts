@@ -1,60 +1,35 @@
 /**
- * CreatorPayoutRouter ABI fragments for KPR payout-integrity workflow.
+ * Revenue-router ABI fragments for KPR payout-integrity workflow.
  *
- * Only includes read-only functions needed for monitoring.
+ * Neutral getters come from IRevenueRouter4626. Creator/Agent asset getters are
+ * explicit lane extensions.
  */
 
+import {
+  AGENT_REVENUE_ROUTER_ASSET_ABI,
+  CREATOR_REVENUE_ROUTER_ASSET_ABI,
+  REVENUE_ROUTER_4626_VIEW_ABI,
+} from '../../../../frontend/shared/payout-router/revenueRouter4626Abi.js'
+
+export const RevenueRouter4626ABI = REVENUE_ROUTER_4626_VIEW_ABI
+
+/** @deprecated Prefer RevenueRouter4626ABI + CreatorRevenueRouterAssetABI */
 export const PayoutRouterABI = [
-  {
-    type: "function",
-    name: "burnStream",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "keeper",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "wrapper",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "creatorCoin",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "shareOFT",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "swapPathToShareOFT",
-    inputs: [{ name: "tokenIn", type: "address" }],
-    outputs: [{ type: "bytes" }],
-    stateMutability: "view",
-  },
+  ...REVENUE_ROUTER_4626_VIEW_ABI.filter((item) =>
+    ['burnStream', 'keeper', 'wrapper', 'shareOFT', 'swapPathToShareOFT'].includes(item.name),
+  ),
+  ...CREATOR_REVENUE_ROUTER_ASSET_ABI,
 ] as const
+
+export const CreatorRevenueRouterAssetABI = CREATOR_REVENUE_ROUTER_ASSET_ABI
+export const AgentRevenueRouterAssetABI = AGENT_REVENUE_ROUTER_ASSET_ABI
 
 export const CreatorOVaultWrapperABI = [
   {
-    type: "function",
-    name: "isWhitelisted",
-    inputs: [{ name: "user", type: "address" }],
-    outputs: [{ type: "bool" }],
-    stateMutability: "view",
+    type: 'function',
+    name: 'isWhitelisted',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+    stateMutability: 'view',
   },
 ] as const

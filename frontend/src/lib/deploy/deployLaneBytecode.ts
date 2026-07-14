@@ -22,6 +22,7 @@ export type DeployLaneBytecodeLabels = {
   gauge: string
   oracle: string
   payoutRouter: string
+  revenuePolicyController: string
 }
 
 export function toOnchainVaultKind(vaultKind: VaultKind): OnchainVaultKind {
@@ -29,8 +30,17 @@ export function toOnchainVaultKind(vaultKind: VaultKind): OnchainVaultKind {
 }
 
 export function fromOnchainVaultKind(value: unknown): VaultKind {
-  const numeric = typeof value === 'bigint' ? Number(value) : Number(value ?? 0)
-  return numeric === 1 ? 'agent' : 'creator'
+  const parsed = parseOnchainVaultKind(value)
+  return parsed ?? 'creator'
+}
+
+/** Fail-closed parse: only `0` (creator) and `1` (agent) are accepted. */
+export function parseOnchainVaultKind(value: unknown): VaultKind | null {
+  const numeric = typeof value === 'bigint' ? Number(value) : Number(value)
+  if (!Number.isInteger(numeric)) return null
+  if (numeric === 0) return 'creator'
+  if (numeric === 1) return 'agent'
+  return null
 }
 
 export function parseVaultKindQueryParam(raw: string | null | undefined): VaultKind | null {
@@ -106,6 +116,19 @@ export function resolveDeployLanePayoutRouterBytecode(vaultKind: VaultKind): Hex
     : (DEPLOY_BYTECODE.CreatorPayoutRouter as Hex)
 }
 
+export function resolveDeployLaneRevenuePolicyControllerCodeId(vaultKind: VaultKind): Hex {
+  if (vaultKind === 'agent') {
+    return keccak256(DEPLOY_BYTECODE.AgentRevenuePolicyController as Hex)
+  }
+  return keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex)
+}
+
+export function resolveDeployLaneRevenuePolicyControllerBytecode(vaultKind: VaultKind): Hex {
+  return vaultKind === 'agent'
+    ? (DEPLOY_BYTECODE.AgentRevenuePolicyController as Hex)
+    : (DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex)
+}
+
 export function resolveDeployLaneVaultSaltLabel(vaultKind: VaultKind): 'vault' | 'agentVault' {
   return vaultKind === 'agent' ? 'agentVault' : 'vault'
 }
@@ -130,6 +153,7 @@ export function resolveDeployLaneBytecodeLabels(vaultKind: VaultKind): DeployLan
       gauge: 'AgentGaugeController',
       oracle: 'AgentOracle',
       payoutRouter: 'AgentRevenueRouter',
+      revenuePolicyController: 'AgentRevenuePolicyController',
     }
   }
 
@@ -140,9 +164,19 @@ export function resolveDeployLaneBytecodeLabels(vaultKind: VaultKind): DeployLan
     gauge: 'CreatorGaugeController',
     oracle: 'CreatorOracle',
     payoutRouter: 'CreatorPayoutRouter',
+    revenuePolicyController: 'CreatorCoinPolicyController',
   }
 }
 
+/** Both Creator and Agent lanes deploy a revenue policy controller auxiliary. */
+export function usesRevenuePolicyController(_vaultKind: VaultKind): boolean {
+  return true
+}
+
+/**
+ * CreatorCoin multi-owner grant path only. Agent enforcement uses AgentTokenV4
+ * `setProjectTaxRecipient` via AgentRevenuePolicyController after cooperation preflight.
+ */
 export function usesCreatorCoinPolicyController(vaultKind: VaultKind): boolean {
   return vaultKind === 'creator'
 }

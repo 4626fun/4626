@@ -5,7 +5,18 @@ pragma solidity ^0.8.20;
  * @title ITradeFeeCollector4626
  * @notice Lane-neutral integration surface for 4626 tradeFeeCollector contracts.
  * @dev CreatorGaugeController and AgentGaugeController expose this shared ABI.
- *      The lane asset setter and ongoing treasury getter remain lane-specific.
+ *
+ *      Intentionally outside this interface / not lane-identical:
+ *      - Asset setters (`setCreatorCoin` vs `setAgentToken`).
+ *      - Ongoing treasury getters (`creatorTreasury` vs `agentTreasury`) and BPS
+ *        names (`creatorShareBps` vs `treasuryShareBps`). `getFeeSplit()` third
+ *        return is the ongoing-treasury slice for both lanes.
+ *      - `receiveFees` accounting: Creator credits the observed balance delta;
+ *        Agent credits the requested `amount`.
+ *      - `setLotteryManager`: Creator applies immediately; Agent first set is
+ *        immediate, later updates are 1-day timelocked via
+ *        `executeLotteryManagerUpdate()`.
+ *      - WETH fee oracle fallback behavior differs when the oracle is disabled.
  */
 interface ITradeFeeCollector4626 {
     function vault() external view returns (address);

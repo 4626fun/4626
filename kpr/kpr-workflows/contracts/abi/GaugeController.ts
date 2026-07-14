@@ -1,76 +1,21 @@
 /**
- * CreatorGaugeController ABI fragments for KPR payout-integrity workflow.
+ * Gauge / tradeFeeCollector ABI fragments for KPR payout-integrity workflow.
  *
- * Only includes the read-only functions needed for monitoring.
- *
- * Selector stability: `burnShareBps`, `lotteryShareBps`, `creatorShareBps`, and
- * `protocolShareBps` must match the on-chain public getters (camelCase). The gauge
- * uses `uint256 public constant` with these names so splits are immutable without
- * changing function selectors.
+ * Neutral BPS and jackpot views come from ITradeFeeCollector4626. Creator
+ * ongoing-treasury getters remain a lane extension.
  */
 
+import {
+  CreatorTradeFeeCollectorExtensionABI,
+  TradeFeeCollector4626ABI,
+} from './TradeFeeCollector4626.js'
+
+export { TradeFeeCollector4626ABI, CreatorTradeFeeCollectorExtensionABI }
+
+/** Creator-lane monitor ABI (neutral + creator treasury extension). */
 export const GaugeControllerABI = [
-  {
-    type: "function",
-    name: "burnShareBps",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "lotteryShareBps",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "creatorShareBps",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "protocolShareBps",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "vault",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "creatorTreasury",
-    inputs: [],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "lastDistribution",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "jackpotReserve",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "totalSharesBurned",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
+  ...TradeFeeCollector4626ABI.filter((item) =>
+    ['burnShareBps', 'lotteryShareBps', 'protocolShareBps', 'vault'].includes(item.name),
+  ),
+  ...CreatorTradeFeeCollectorExtensionABI,
 ] as const

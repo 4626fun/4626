@@ -3,6 +3,7 @@ export const FRONTEND_DEPLOY_MANIFEST_KEYS = [
   'CCALaunchArm',
   'VaultShareBurnStream',
   'CreatorCoinPolicyController',
+  'AgentRevenuePolicyController',
   'CharmStrategy4626',
   'AjnaVaultAuth',
   'AjnaERC4626Vault',

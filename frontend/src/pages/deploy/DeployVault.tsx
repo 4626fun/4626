@@ -36,9 +36,15 @@ import {
   resolveDeployLaneBytecodeLabels,
   resolveDeployLanePayoutRouterCodeId,
   resolveDeployLanePhase1CodeIds,
+  resolveDeployLaneRevenuePolicyControllerCodeId,
   toOnchainVaultKind,
   usesCreatorCoinPolicyController,
+  usesRevenuePolicyController,
 } from '@/lib/deploy/deployLaneBytecode'
+import {
+  canOfferAgentRevenuePolicyEnforcement,
+  resolveAgentRevenuePolicyCooperation,
+} from '@/lib/deploy/agentRevenuePolicyCooperation'
 import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
 import {
   debugSignatureReady,
@@ -2331,7 +2337,8 @@ function DeployVaultBatcher({
 
   const codeIds = useMemo(() => resolveDeployLanePhase1CodeIds(vaultKind), [vaultKind])
   const onchainVaultKind = useMemo(() => toOnchainVaultKind(vaultKind), [vaultKind])
-  const includePolicyController = usesCreatorCoinPolicyController(vaultKind)
+  const includePolicyController = usesRevenuePolicyController(vaultKind)
+  const includeCreatorCoinPolicyGrant = usesCreatorCoinPolicyController(vaultKind)
 
   const shareOftVanitySuffix = useMemo(() => {
     const raw = (import.meta.env.VITE_SHARE_OFT_VANITY_SUFFIX as string | undefined) ?? DEFAULT_SHARE_OFT_VANITY_SUFFIX
@@ -2427,8 +2434,8 @@ function DeployVaultBatcher({
   }, [])
 
   const creatorCoinPolicyControllerCodeId = useMemo(() => {
-    return keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex)
-  }, [])
+    return resolveDeployLaneRevenuePolicyControllerCodeId(vaultKind)
+  }, [vaultKind])
 
   const strategyCodeIds = useMemo(() => {
     return {
@@ -3606,7 +3613,7 @@ function DeployVaultBatcher({
               functionName: 'deployPhase2Auxiliaries',
               args: [
                 {
-                  creatorToken,
+                  assetToken: creatorToken,
                   owner,
                   vault: expected.vault,
                   shareOFT: expected.shareOFT,
@@ -3614,11 +3621,12 @@ function DeployVaultBatcher({
                   swapRouter: getAddress(BASE_SWAP_ROUTER as Address),
                   weth,
                   protocolRewards: ZERO_ADDRESS,
+                  vaultKind: onchainVaultKind,
                 },
                 {
                   vaultShareBurnStream: vaultShareBurnStreamCodeId,
-                  payoutRouter: payoutRouterCodeId,
-                  creatorCoinPolicyController: creatorCoinPolicyControllerCodeId,
+                  revenueRouter: payoutRouterCodeId,
+                  revenuePolicyController: creatorCoinPolicyControllerCodeId,
                 },
               ],
             }),
@@ -4351,7 +4359,7 @@ function DeployVaultBatcher({
         functionName: 'setPayoutRecipient',
         args: [expectedPayoutRouter],
       })
-      const creatorCoinPolicyControllerOwnershipPlan = includePolicyController
+      const creatorCoinPolicyControllerOwnershipPlan = includeCreatorCoinPolicyGrant
         ? await planCreatorCoinPolicyControllerOwnershipGrant({
             publicClient,
             creatorToken,
@@ -4367,6 +4375,21 @@ function DeployVaultBatcher({
             deploySenderIsCoinOwner: false,
             legacyCoinOwner: null,
           }
+      const agentRevenuePolicyCooperation =
+        vaultKind === 'agent' && expectedPayoutRouter
+          ? await resolveAgentRevenuePolicyCooperation({
+              publicClient,
+              agentToken: creatorToken,
+              deploySender: owner,
+              expectedRevenueRouter: expectedPayoutRouter,
+              // Re-resolve onchain in the helper; avoid closing over later-declared query state.
+              integration: null,
+            })
+          : null
+      // Fail-closed: never treat policy-controller deploy as AgentTokenV4 enforcement readiness.
+      const offerAgentRevenuePolicyEnforcement = agentRevenuePolicyCooperation
+        ? canOfferAgentRevenuePolicyEnforcement(agentRevenuePolicyCooperation)
+        : false
       const canSetPayoutRecipientFromOwner = await (async () => {
         if (!payoutMismatch) return false
         try {
@@ -5156,7 +5179,7 @@ function DeployVaultBatcher({
             data: payoutRecipientCallData,
           })
         }
-        if (includePolicyController && creatorCoinPolicyControllerOwnershipPlan.needsGrant) {
+        if (includeCreatorCoinPolicyGrant && creatorCoinPolicyControllerOwnershipPlan.needsGrant) {
           if (!creatorCoinPolicyControllerOwnershipPlan.grantCallData) {
             const ownersDisplay =
               creatorCoinPolicyControllerOwnershipPlan.coinOwners?.length
@@ -5173,6 +5196,19 @@ function DeployVaultBatcher({
             target: creatorToken,
             value: 0n,
             data: creatorCoinPolicyControllerOwnershipPlan.grantCallData,
+          })
+        }
+        if (
+          vaultKind === 'agent' &&
+          agentRevenuePolicyCooperation &&
+          !offerAgentRevenuePolicyEnforcement &&
+          agentRevenuePolicyCooperation.readinessReason !== 'project_tax_recipient_already_router'
+        ) {
+          // Deploy auxiliaries may proceed; enforcement UI/actions stay gated by cooperation preflight.
+          console.info('[DeployVault] agent_revenue_policy_enforcement_not_offered', {
+            reason: agentRevenuePolicyCooperation.readinessReason,
+            tokenOwner: agentRevenuePolicyCooperation.tokenOwner,
+            projectTaxRecipient: agentRevenuePolicyCooperation.projectTaxRecipient,
           })
         }
 
@@ -5610,6 +5646,10 @@ function DeployVaultBatcher({
                     'NotOwner()': 'The batcher requires msg.sender == owner, but the smart wallet may not be recognized as the caller. Check owner address and ERC-4337 setup.',
                     'ZeroAddress()': 'One of the required addresses is zero. Check creator token, owner, or other parameters.',
                     'InvalidCodeId()': 'Bytecode not registered in the bytecode store. Run the bytecode registration script first.',
+                    'CodeIdKindMismatch()':
+                      'Auxiliary codeId does not match the vaultKind lane pinned on VaultAuxiliaryDeployBatcher.',
+                    'CodeIdKindMismatch(bytes32,bytes32)':
+                      'Auxiliary codeId does not match the vaultKind lane pinned on VaultAuxiliaryDeployBatcher.',
                     'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version). If this is a retry, keep the same version only when the full phase already exists; otherwise bump VITE_DEPLOYMENT_VERSION.',
                     'NotAuthorizedDeployer()':
                       'Create2 deployer rejected this caller. The smart wallet is not authorized for direct deploy(bytes32,bytes32,bytes) calls on the configured create2 deployer.',
@@ -5646,6 +5686,10 @@ function DeployVaultBatcher({
                       'NotOwner()': 'The batcher requires msg.sender == owner. The smart wallet address must match the owner parameter.',
                       'ZeroAddress()': 'One of the required addresses is zero.',
                       'InvalidCodeId()': 'Bytecode not registered. Run bytecode registration first.',
+                      'CodeIdKindMismatch()':
+                        'Auxiliary codeId does not match the vaultKind lane pinned on VaultAuxiliaryDeployBatcher.',
+                      'CodeIdKindMismatch(bytes32,bytes32)':
+                        'Auxiliary codeId does not match the vaultKind lane pinned on VaultAuxiliaryDeployBatcher.',
                       'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version).',
                       'NotAuthorizedDeployer()':
                         'Create2 deployer rejected this caller. The smart wallet is not authorized for direct deploy(bytes32,bytes32,bytes) calls on the configured create2 deployer.',
@@ -9098,7 +9142,7 @@ function DeployVaultMain() {
       ...phase1,
       payoutRouter: resolveDeployLanePayoutRouterCodeId(vaultKind),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
-      creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
+      creatorCoinPolicyController: resolveDeployLaneRevenuePolicyControllerCodeId(vaultKind),
       charmStrategy4626: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
@@ -9230,11 +9274,11 @@ function DeployVaultMain() {
         { key: 'oracle', label: laneBytecodeLabels.oracle, codeId: deployCodeIds.oracle },
         { key: 'vaultShareBurnStream', label: 'VaultShareBurnStream', codeId: deployCodeIds.vaultShareBurnStream },
         { key: 'payoutRouter', label: laneBytecodeLabels.payoutRouter, codeId: deployCodeIds.payoutRouter },
-        ...(usesCreatorCoinPolicyController(vaultKind)
+        ...(usesRevenuePolicyController(vaultKind)
           ? [
               {
                 key: 'creatorCoinPolicyController',
-                label: 'CreatorCoinPolicyController',
+                label: laneBytecodeLabels.revenuePolicyController,
                 codeId: deployCodeIds.creatorCoinPolicyController,
               },
             ]

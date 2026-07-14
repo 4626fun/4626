@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IOVault4626} from "@4626/shared/interfaces/vault/IOVault4626.sol";
+
 /**
  * @title IAgentOVault
  * @author 0xakita.eth
- * @notice Minimal vault interface for registry and helper wiring.
- * @dev Used by batchers and controllers to configure vaults.
+ * @notice Agent-lane vault wiring interface.
+ * @dev Extends the shared IOVault4626 capability surface. Asset-specific
+ *      getters remain on the concrete AgentOVault ABI.
  */
-interface IAgentOVault {
-    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
-    function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external;
-    function setGaugeController(address _controller) external;
-    function setCcaLaunchArm(address _ccaLaunchArm) external;
-    function setWhitelist(address _account, bool _status) external;
-    function setProtocolRescue(address rescue) external;
-    function transferOwnership(address newOwner) external;
-    function convertToAssets(uint256 shares) external view returns (uint256);
-}
+interface IAgentOVault is IOVault4626 {}

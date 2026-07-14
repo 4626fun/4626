@@ -55,6 +55,7 @@ contracts=(
   "AgentRevenueRouter"
   "VaultShareBurnStream"
   "CreatorCoinPolicyController"
+  "AgentRevenuePolicyController"
   "CharmStrategy4626"
   "AjnaVaultAuth"
   "AjnaERC4626Vault"

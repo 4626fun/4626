@@ -127,7 +127,7 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
         name: 'params',
         type: 'tuple',
         components: [
-          { name: 'creatorToken', type: 'address' },
+          { name: 'assetToken', type: 'address' },
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'shareOFT', type: 'address' },
@@ -135,6 +135,7 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
           { name: 'swapRouter', type: 'address' },
           { name: 'weth', type: 'address' },
           { name: 'protocolRewards', type: 'address' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -142,8 +143,8 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'vaultShareBurnStream', type: 'bytes32' },
-          { name: 'payoutRouter', type: 'bytes32' },
-          { name: 'creatorCoinPolicyController', type: 'bytes32' },
+          { name: 'revenueRouter', type: 'bytes32' },
+          { name: 'revenuePolicyController', type: 'bytes32' },
         ],
       },
     ],
@@ -153,11 +154,24 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'burnStream', type: 'address' },
-          { name: 'payoutRouter', type: 'address' },
-          { name: 'creatorCoinPolicyController', type: 'address' },
+          { name: 'revenueRouter', type: 'address' },
+          { name: 'revenuePolicyController', type: 'address' },
         ],
       },
     ],
+  },
+  {
+    type: 'error',
+    name: 'CodeIdKindMismatch',
+    inputs: [
+      { name: 'expected', type: 'bytes32' },
+      { name: 'actual', type: 'bytes32' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'InvalidVaultKind',
+    inputs: [{ name: 'vaultKind', type: 'uint8' }],
   },
 ] as const
 

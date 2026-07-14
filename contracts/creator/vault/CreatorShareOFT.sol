@@ -10,8 +10,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
-import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
+import {ITradeFeeCollector4626} from
+    "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
+import {IOVault4626} from "@4626/shared/interfaces/vault/IOVault4626.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /// @dev Hub-only: interface for local lottery manager calls on Base
@@ -665,7 +666,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
         // FIX: H-6 — remove fallback direct transfer that bypassed gauge accounting;
         // accumulate fees locally on failure instead of breaking gauge bookkeeping
-        try ICreatorGaugeController(_gaugeController).receiveFees(amount) {
+        try ITradeFeeCollector4626(_gaugeController).receiveFees(amount) {
             emit FeeCollected(_gaugeController, amount);
         } catch {
             // FIX: M-03 (4626-312) — revoke the self-approval granted above before
@@ -1232,7 +1233,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         }
         uint256 vaultShares = shares * VAULT_SHARE_NORMALIZATION;
         if (vault == address(0)) return vaultShares;
-        return ICreatorOVault(vault).convertToAssets(vaultShares);
+        return IOVault4626(vault).convertToAssets(vaultShares);
     }
 
     // NOTE: A cluster of dead view helpers (`previewFee`, `isTradingVenue`,

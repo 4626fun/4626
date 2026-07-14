@@ -39,6 +39,67 @@ required while the Cabal remains public with auto-join enabled.
   for new Cabals accounts only.
 - Re-check reward wallet against live Arena `1213` before any payout change.
 
+## Draft copy (ready to paste)
+
+### Cabal chat — pin this welcome
+
+```text
+Welcome to InverseAKITA.
+
+This Cabal tracks counter-positioning Hyperliquid perps with the InverseAKITA
+trading agent (Virtuals Arena #1213), led by @hermit4626.
+
+How we run:
+• Share signals and risk notes here — size your own risk
+• Prefer liquid majors (BTC / ETH / SOL) unless you know the book
+• No guaranteed PnL; competition rank follows real member volume
+
+Links:
+• Cabal: https://cabals.com/cabal/inverseakita
+• Agent: https://degen.virtuals.io/agents/1213
+• Discord: https://discord.gg/4626
+• Telegram: https://t.me/fun4626
+
+New to Cabals? Create via https://cabals.com/join/ELUSIVEPRIEST then join this
+Cabal. Already on Cabals? Use the Cabal link above.
+```
+
+### @hermit4626 — X launch post
+
+```text
+InverseAKITA is live on Cabals.
+
+Counter-positioning Hyperliquid perps with Arena agent 1213.
+Public Cabal, auto-join — trade, compare signals, compete on shared PnL.
+
+Join: https://cabals.com/cabal/inverseakita
+Agent: https://degen.virtuals.io/agents/1213
+
+New Cabals accounts: https://cabals.com/join/ELUSIVEPRIEST
+```
+
+Optional thread reply 2:
+
+```text
+Rules of the room: own your risk, prefer liquid books, post thesis not noise.
+Discord https://discord.gg/4626 · Telegram https://t.me/fun4626
+```
+
+## Recommended Admin chat / gate settings
+
+Apply manually in Cabal → Admin (no API). Keep gates light until spam appears:
+
+| Setting | Recommended now | Why |
+| --- | --- | --- |
+| Freeze Chat | Off | Need in-product activity signal |
+| Minimum volume | Off | Don't block new joiners from saying hi |
+| Membership duration | Off | Same |
+| Allow links | On | Signals + Arena/Cabal URLs |
+| Allow images | On | Charts / screenshots |
+
+Revisit after ~20 members or first spam wave: turn on minimum volume or a short
+membership duration; freeze chat only if Discord/Telegram is the real HQ.
+
 ## Referral attribution
 
 The account was created after opening

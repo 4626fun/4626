@@ -12,7 +12,10 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {IAgentGaugeController} from "@4626/agent/interfaces/IAgentGaugeController.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
-import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
+import {IOVault4626} from "@4626/shared/interfaces/vault/IOVault4626.sol";
+import {IOVaultWrapper4626} from "@4626/shared/interfaces/vault/IOVaultWrapper4626.sol";
+import {IShareOFT4626} from "@4626/shared/interfaces/vault/IShareOFT4626.sol";
+import {ITradeFeeCollector4626} from "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import {LinearVesting4626} from "@4626/shared/distribution/LinearVesting4626.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
@@ -529,28 +532,8 @@ interface IUniversalBytecodeStore {
     function get(bytes32 codeId) external view returns (bytes memory);
 }
 
-interface ICreatorOVaultWrapper {
-    function setShareOFT(address _shareOFT) external;
-    function deposit(uint256 amount) external returns (uint256 shareTokens);
-    function wrap(uint256 amount) external returns (uint256 shareTokens);
-    function setWhitelist(address user, bool status) external;
-    function transferOwnership(address newOwner) external;
-}
-
 interface IOwnableView {
     function owner() external view returns (address);
-}
-
-interface ICreatorShareOFT {
-    function setRegistry(address _registry) external;
-    function setVault(address _vault) external;
-    function setWrapper(address _wrapper) external;
-    function setMinter(address minter, bool status) external;
-    function setGaugeController(address _controller) external;
-    function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
-    function setAddressType(address addr, uint8 opType) external;
-    function transferOwnership(address newOwner) external;
-    function vault() external view returns (address);
 }
 
 interface ICCALaunchArm {
@@ -802,7 +785,7 @@ contract DeploymentBatcherPhase1Module {
 
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
         out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);
-        ICreatorOVault(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule);
+        IOVault4626(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule);
 
         bytes memory wrapperArgs = abi.encode(params.creatorToken, out.vault, tempOwner);
         out.wrapper = create2Deployer.deploy(wrapperSalt, codeIds.wrapper, wrapperArgs);
@@ -871,24 +854,24 @@ contract DeploymentBatcherPhase1Module {
             if (expectedAddr.code.length == 0) revert Phase1ShareOFTMissing();
             bytes32 verifyHash = keccak256(bytes.concat(bytecodeStore.get(codeIds.shareOFT), shareOftArgs));
             if (verifyHash != shareOftInitCodeHash) revert Phase1StateMismatch();
-            address existingVault = ICreatorShareOFT(expectedAddr).vault();
+            address existingVault = IShareOFT4626(expectedAddr).vault();
             if (existingVault != address(0) && existingVault != out.vault) {
                 revert Phase1ShareOFTAlreadyBound(expectedAddr, existingVault, out.vault);
             }
             out.shareOFT = expectedAddr;
         }
 
-        ICreatorOVaultWrapper(out.wrapper).setShareOFT(out.shareOFT);
-        ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
-        ICreatorShareOFT(out.shareOFT).setVault(out.vault);
-        ICreatorShareOFT(out.shareOFT).setWrapper(out.wrapper);
-        ICreatorShareOFT(out.shareOFT).setMinter(out.wrapper, true);
-        ICreatorShareOFT(out.shareOFT).setHubConfig(true, 0, address(0));
+        IOVaultWrapper4626(out.wrapper).setShareOFT(out.shareOFT);
+        IShareOFT4626(out.shareOFT).setRegistry(address(registry));
+        IShareOFT4626(out.shareOFT).setVault(out.vault);
+        IShareOFT4626(out.shareOFT).setWrapper(out.wrapper);
+        IShareOFT4626(out.shareOFT).setMinter(out.wrapper, true);
+        IShareOFT4626(out.shareOFT).setHubConfig(true, 0, address(0));
 
-        ICreatorOVault(out.vault).setWhitelist(out.wrapper, true);
-        ICreatorOVault(out.vault).setWhitelist(address(this), true);
+        IOVault4626(out.vault).setWhitelist(out.wrapper, true);
+        IOVault4626(out.vault).setWhitelist(address(this), true);
         if (vaultActivationBatcher != address(0)) {
-            ICreatorOVault(out.vault).setWhitelist(vaultActivationBatcher, true);
+            IOVault4626(out.vault).setWhitelist(vaultActivationBatcher, true);
         }
 
         state.shareOFT = out.shareOFT;
@@ -1099,18 +1082,18 @@ contract DeploymentBatcherPhase2Module {
         bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
         out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
 
-        ICreatorShareOFT(params.shareOFT).setGaugeController(out.gaugeController);
+        IShareOFT4626(params.shareOFT).setGaugeController(out.gaugeController);
 
-        ICreatorGaugeController(out.gaugeController).setVault(params.vault);
-        ICreatorGaugeController(out.gaugeController).setWrapper(params.wrapper);
+        ITradeFeeCollector4626(out.gaugeController).setVault(params.vault);
+        ITradeFeeCollector4626(out.gaugeController).setWrapper(params.wrapper);
         _wireGaugeAssetToken(out.gaugeController, params.creatorToken, vaultKind);
         if (lotteryManager != address(0)) {
-            ICreatorGaugeController(out.gaugeController).setLotteryManager(lotteryManager);
+            ITradeFeeCollector4626(out.gaugeController).setLotteryManager(lotteryManager);
         }
-        ICreatorGaugeController(out.gaugeController).setOracle(out.oracle);
+        ITradeFeeCollector4626(out.gaugeController).setOracle(out.oracle);
 
-        ICreatorOVault(params.vault).setGaugeController(out.gaugeController);
-        ICreatorOVault(params.vault).setCcaLaunchArm(out.ccaLaunchArm);
+        IOVault4626(params.vault).setGaugeController(out.gaugeController);
+        IOVault4626(params.vault).setCcaLaunchArm(out.ccaLaunchArm);
 
         ICCALaunchArm(out.ccaLaunchArm).setApprovedLauncher(address(this), true);
         if (vaultActivationBatcher != address(0)) {
@@ -1153,7 +1136,7 @@ contract DeploymentBatcherPhase2Module {
         if (address(this) != batcher) revert NotBatcherContext();
 
         IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
-        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
+        uint256 shareTokens = IOVaultWrapper4626(params.wrapper).deposit(params.depositAmount);
 
         result.auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;
         result.vestingAmount = (shareTokens * VESTING_PERCENT) / 100;
@@ -1183,11 +1166,11 @@ contract DeploymentBatcherPhase2Module {
             LinearVesting4626(result.vestingAddress).seed();
         }
 
-        ICreatorOVault(params.vault).setProtocolRescue(protocolTreasury);
-        ICreatorOVault(params.vault).transferOwnership(params.owner);
-        ICreatorOVaultWrapper(params.wrapper).transferOwnership(protocolTreasury);
-        ICreatorShareOFT(params.shareOFT).transferOwnership(protocolTreasury);
-        ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
+        IOVault4626(params.vault).setProtocolRescue(protocolTreasury);
+        IOVault4626(params.vault).transferOwnership(params.owner);
+        IOVaultWrapper4626(params.wrapper).transferOwnership(protocolTreasury);
+        IShareOFT4626(params.shareOFT).transferOwnership(protocolTreasury);
+        ITradeFeeCollector4626(params.gaugeController).transferOwnership(protocolTreasury);
         ICCALaunchArm(params.ccaLaunchArm).transferOwnership(protocolTreasury);
         IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
     }
@@ -2070,7 +2053,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (wrapper == address(0) || payoutRouter == address(0)) revert ZeroAddress();
         address wrapperOwner = IOwnableView(wrapper).owner();
         if (wrapperOwner != address(this)) revert WrapperOwnerMismatch(wrapper, wrapperOwner);
-        ICreatorOVaultWrapper(wrapper).setWhitelist(payoutRouter, true);
+        IOVaultWrapper4626(wrapper).setWhitelist(payoutRouter, true);
     }
 
     /// @notice Mark the payout router ShareOFT fee-exempt while the batcher still owns ShareOFT.
@@ -2079,7 +2062,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (shareOFT == address(0) || payoutRouter == address(0)) revert ZeroAddress();
         address shareOwner = IOwnableView(shareOFT).owner();
         if (shareOwner != address(this)) revert ShareOftOwnerMismatch(shareOFT, shareOwner);
-        ICreatorShareOFT(shareOFT).setAddressType(payoutRouter, 2);
+        IShareOFT4626(shareOFT).setAddressType(payoutRouter, 2);
     }
 
     function finalizePhase2(Phase2FinalizeParams calldata params)

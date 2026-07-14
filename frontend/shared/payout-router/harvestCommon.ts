@@ -1,56 +1,22 @@
 /**
  * Shared PayoutRouter harvest types + batch helpers (HTTP + KPR).
  * Keep plan logic in each runtime; keep batch shape/env parsing here.
+ *
+ * ABI fragments are sourced from the lane-neutral RevenueRouter4626 surface.
  */
+
+import {
+  REVENUE_ROUTER_4626_EXECUTION_ABI,
+  REVENUE_ROUTER_4626_VIEW_ABI,
+} from './revenueRouter4626Abi.js'
 
 export type HexAddress = `0x${string}`
 
 export const PAYOUT_ROUTER_HARVEST_ABI = [
-  {
-    type: 'function',
-    name: 'processBatch',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'actions',
-        type: 'tuple[]',
-        components: [
-          { name: 'kind', type: 'uint8' },
-          { name: 'tokenIn', type: 'address' },
-          { name: 'amountIn', type: 'uint256' },
-          { name: 'minOut', type: 'uint256' },
-          { name: 'spender', type: 'address' },
-          { name: 'swapTarget', type: 'address' },
-          { name: 'swapCallData', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [
-      { name: 'totalTokenOut', type: 'uint256' },
-      { name: 'totalSharesQueued', type: 'uint256' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapTargets',
-    stateMutability: 'view',
-    inputs: [{ name: 'target', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapSpenders',
-    stateMutability: 'view',
-    inputs: [{ name: 'spender', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'swapPathToShareOFT',
-    stateMutability: 'view',
-    inputs: [{ name: 'tokenIn', type: 'address' }],
-    outputs: [{ type: 'bytes' }],
-  },
+  REVENUE_ROUTER_4626_EXECUTION_ABI.find((item) => item.name === 'processBatch')!,
+  REVENUE_ROUTER_4626_VIEW_ABI.find((item) => item.name === 'approvedExternalSwapTargets')!,
+  REVENUE_ROUTER_4626_VIEW_ABI.find((item) => item.name === 'approvedExternalSwapSpenders')!,
+  REVENUE_ROUTER_4626_VIEW_ABI.find((item) => item.name === 'swapPathToShareOFT')!,
 ] as const
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as HexAddress

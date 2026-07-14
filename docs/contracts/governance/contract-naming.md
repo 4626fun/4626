@@ -10,10 +10,10 @@ sidebar_position: 1
 | Layer | Rule | Examples |
 |-------|------|----------|
 | **Shared protocol service** | `*4626` **suffix** | `Registry4626`, `LotteryManager4626`, `VRFConsumer4626`, `BribeDepot4626`, `BribesFactory4626`, `RewardStream4626`, `RewardStreamFactory4626` |
-| **Shared lane integration interface** | `I*4626` **suffix** | `IRevenueRouter4626`, `ITradeFeeCollector4626`, `IShareOFT4626`, `IOracle4626`, `IRevenuePolicyController4626` |
+| **Shared lane integration interface** | `I*4626` **suffix** | `IOVault4626`, `IOVaultWrapper4626`, `IRevenueRouter4626`, `ITradeFeeCollector4626`, `IShareOFT4626`, `IOracle4626`, `IRevenuePolicyController4626` |
 | **ve stack** | `ve4626*` **prefix** | `ve4626`, `ve4626GaugeVoting`, `ve4626VoterRewardsDistributor`, `ve4626BoostManager` |
 | **Creator / Agent lane** | `Creator*` / `Agent*` **prefix** (per-instance) | `CreatorGaugeController`, `CreatorOVault`, `AgentShareOFT` |
-| **Additional ecosystem lane** | Real ecosystem **prefix** (per-instance) | `FarcasterGaugeController`, `ZoraRevenueRouter`; never `FutureEcosystem*` |
+| **Additional ecosystem concrete** | Real ecosystem **prefix** on a Creator or Agent **execution template** | `FarcasterGaugeController`, `ZoraRevenueRouter`; never `FutureEcosystem*`; never a third `VaultKind` |
 | **Ops batchers / arms** | Keep established names unless product renames | `DeploymentBatcher`, `CCALaunchArm` |
 
 ## Forbidden legacy aliases
@@ -40,6 +40,9 @@ Historical docs under `docs/_internal/**` (old audits, release notes) may still 
 Use neutral `I*4626` names for the ABI that shared consumers depend on. Keep a
 real ecosystem prefix on concrete per-asset deployments:
 
+- `IOVault4626` / `IOVaultWrapper4626` are the shared vault/wrapper wiring types;
+  `CreatorOVault` / `AgentOVault` and their wrappers are concrete implementations.
+  The wrapper interface excludes the incompatible cooldown-hook arity.
 - `ITradeFeeCollector4626` is the shared type; `CreatorGaugeController` and
   `AgentGaugeController` are concrete implementations.
 - `IRevenueRouter4626` is the shared type; `CreatorPayoutRouter` and
@@ -48,6 +51,8 @@ real ecosystem prefix on concrete per-asset deployments:
 - `IRevenuePolicyController4626` contains only common ownership authority.
   Ecosystem extensions retain exact external-protocol selectors, such as
   `enforcePayoutRouter()` or `enforceProjectTaxRecipient()`.
+- Named ecosystem integrations implement the Creator or Agent execution template.
+  They do not add a third `VaultKind` value.
 
 Do not rename deployed Creator/Agent contracts to generic concrete names.
 Those names are tied to ABIs, CREATE2 salts, bytecode manifests, and operational
