@@ -47,6 +47,30 @@ contracts/
 
 **Oracle interface:** both lane oracles (`CreatorOracle`, `AgentOracle`) implement the lane-neutral `shared/interfaces/oracles/IOracle4626.sol` — `getAssetPrice()`, `getAssetEthTWAP()`, `updateAssetPrice*()`, `assetSymbol()`, etc., where "asset" is the vault's underlying token for that lane (creator coin or agent token). Shared consumers (strategies, `LotteryManager4626`, `VRFConsumer4626`, both gauge controllers) type against `IOracle4626` only. The former `ICreatorOracle` interface, the inline gauge/VRF oracle interfaces, and the creator-named alias functions on `AgentOracle` (`getCreatorPrice`, `creatorPoolKey`, `creatorIsToken0`) were removed in the July 2026 selector rename — this changed oracle/gauge/strategy bytecode, folded into the same v1.16.0 re-seed noted below.
 
+**Lane-neutral integration interfaces:** future ecosystem integrations type against
+shared `*4626` interfaces, while deployed per-lane implementations keep their
+`Creator*` / `Agent*` names and bytecode identities:
+
+| Integration role | Shared interface | Current implementations |
+|---|---|---|
+| External-earnings routing | `IRevenueRouter4626` | `CreatorPayoutRouter`, `AgentRevenueRouter` |
+| `tradeFeeCollector` | `ITradeFeeCollector4626` | `CreatorGaugeController`, `AgentGaugeController` |
+| Omnichain share token | `IShareOFT4626` | `CreatorShareOFT`, `AgentShareOFT` |
+| Asset oracle | `IOracle4626` | `CreatorOracle`, `AgentOracle` |
+| Revenue-policy authority | `IRevenuePolicyController4626` | lane extensions for Creator Coin and AgentTokenV4 |
+
+These interfaces expose only selector-compatible intersections. Asset setters,
+ongoing-treasury names, emergency semantics, wrapper cooldown hooks, and
+external-token enforcement calls remain lane-specific. In particular,
+`CreatorCoinPolicyController.enforcePayoutRouter()` and
+`AgentRevenuePolicyController.enforceProjectTaxRecipient()` are intentionally
+different extension selectors; do not hide them behind arbitrary
+`execute(address,bytes)`.
+
+Adding or changing an interface does not authorize editing a deployed lane
+contract. Concrete implementation changes still require the normal bytecode
+manifest, `UniversalBytecodeStore`, CREATE2, and release-epoch process.
+
 **Shared ABI neutralization (July 2026):** lane-shared contracts no longer expose creator-prefixed selectors where the implementation is lane-neutral. Highlights:
 
 | Area | Old | New |
@@ -150,12 +174,20 @@ Two canonical paths — pick per product:
 
 ### Mesh path (needs ShareOFT + gauge + lottery)
 
-1. Add `contracts/<ecosystem>/` mirroring `agent/` / `creator/` (vault, wrapper, ShareOFT, gauge, revenue router, oracle, interfaces).
-2. Add a distinct core-module kind string and vault overlay (or inheritance) as needed.
-3. Extend `VaultKind` in `IRegistry4626` + `DeploymentBatcher` (new registry/batcher epoch).
-4. Add bytecode manifest entries + `frontend/src/lib/deploy/deployLaneBytecode.ts` branch (or table).
-5. Extend `pnpm guard:lane-contract-parity` (or move intentionally divergent pairs with justification).
-6. Wire phase-2 `setAgentIntegrationMeta` / gauge asset setter for the new kind.
+1. Name the concrete lane for the real ecosystem (`Farcaster*`, `Zora*`, etc.);
+   never add placeholder `FutureEcosystem*` contracts.
+2. Implement the relevant shared integration surfaces from genesis:
+   `IRevenueRouter4626`, `ITradeFeeCollector4626`, `IShareOFT4626`, and
+   `IOracle4626`. Extend `IRevenuePolicyController4626` with the ecosystem's
+   exact external-admin selectors.
+3. Add `contracts/<ecosystem>/` mirroring only the required `agent/` /
+   `creator/` pieces (vault, wrapper, ShareOFT, gauge, revenue router, oracle,
+   interfaces).
+4. Add a distinct core-module kind string and vault overlay (or inheritance) as needed.
+5. Extend `VaultKind` in `IRegistry4626` + `DeploymentBatcher` (new registry/batcher epoch).
+6. Add bytecode manifest entries + `frontend/src/lib/deploy/deployLaneBytecode.ts` branch (or table).
+7. Extend `pnpm guard:lane-contract-parity` (or move intentionally divergent pairs with justification).
+8. Wire phase-2 lane metadata and the ecosystem-specific gauge asset setter.
 
 ### Non-mesh path (independent product)
 

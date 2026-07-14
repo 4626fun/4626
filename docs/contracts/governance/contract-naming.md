@@ -10,8 +10,10 @@ sidebar_position: 1
 | Layer | Rule | Examples |
 |-------|------|----------|
 | **Shared protocol service** | `*4626` **suffix** | `Registry4626`, `LotteryManager4626`, `VRFConsumer4626`, `BribeDepot4626`, `BribesFactory4626`, `RewardStream4626`, `RewardStreamFactory4626` |
+| **Shared lane integration interface** | `I*4626` **suffix** | `IRevenueRouter4626`, `ITradeFeeCollector4626`, `IShareOFT4626`, `IOracle4626`, `IRevenuePolicyController4626` |
 | **ve stack** | `ve4626*` **prefix** | `ve4626`, `ve4626GaugeVoting`, `ve4626VoterRewardsDistributor`, `ve4626BoostManager` |
 | **Creator / Agent lane** | `Creator*` / `Agent*` **prefix** (per-instance) | `CreatorGaugeController`, `CreatorOVault`, `AgentShareOFT` |
+| **Additional ecosystem lane** | Real ecosystem **prefix** (per-instance) | `FarcasterGaugeController`, `ZoraRevenueRouter`; never `FutureEcosystem*` |
 | **Ops batchers / arms** | Keep established names unless product renames | `DeploymentBatcher`, `CCALaunchArm` |
 
 ## Forbidden legacy aliases
@@ -32,6 +34,25 @@ pnpm -C frontend guard:registry4626-naming
 ```
 
 Historical docs under `docs/_internal/**` (old audits, release notes) may still contain legacy names; do not reintroduce them in **code**, public docs, or new write-ups.
+
+## Shared type vs concrete deployment
+
+Use neutral `I*4626` names for the ABI that shared consumers depend on. Keep a
+real ecosystem prefix on concrete per-asset deployments:
+
+- `ITradeFeeCollector4626` is the shared type; `CreatorGaugeController` and
+  `AgentGaugeController` are concrete implementations.
+- `IRevenueRouter4626` is the shared type; `CreatorPayoutRouter` and
+  `AgentRevenueRouter` are concrete implementations.
+- `IShareOFT4626` and `IOracle4626` follow the same pattern.
+- `IRevenuePolicyController4626` contains only common ownership authority.
+  Ecosystem extensions retain exact external-protocol selectors, such as
+  `enforcePayoutRouter()` or `enforceProjectTaxRecipient()`.
+
+Do not rename deployed Creator/Agent contracts to generic concrete names.
+Those names are tied to ABIs, CREATE2 salts, bytecode manifests, and operational
+runbooks. Do not add a generic arbitrary-call policy controller to simulate
+compatibility between unrelated ecosystem admin APIs.
 
 ## Product vs type
 
