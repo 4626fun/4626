@@ -310,6 +310,12 @@ export async function ensureMigrationApplied(
     }
   }
 
+  if (preflightCheck && !(await preflightCheck())) {
+    throw new Error(
+      `[schemaBootstrap] Migration ${filename} did not create all probed objects`,
+    )
+  }
+
   ensuredFiles.add(filename)
   await recordInLedger(db, filename)
   return true
@@ -573,6 +579,27 @@ export async function ensureAlfaclubDecisionLedgerSchema(db: Db): Promise<void> 
           SELECT
             to_regclass('alfaclub.decision_ledger') IS NOT NULL
             AND to_regclass('alfaclub.decision_outcomes') IS NOT NULL
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+    )
+  })
+}
+
+/** Durable InverseAKITA source-opinion, decision, and position lifecycle authority. */
+export async function ensureAlfaclubInverseOpinionTradeSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubInverseOpinionTrade', async () => {
+    await ensureMigrationApplied(
+      db,
+      '20260717000000_alfaclub_inverse_opinion_trade_lifecycle.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_source_messages') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_decisions') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_position_lifecycles') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_position_lifecycle_events') IS NOT NULL
             AS ok;
         `
         return Boolean(result.rows?.[0]?.ok)

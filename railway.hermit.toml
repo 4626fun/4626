@@ -34,7 +34,10 @@
 #   ALFACLUB_CHAT_JWT (or the Privy triplet)
 #   HERMIT_AGENT_CHAT_ENDPOINT + HERMIT_AGENT_BEARER_TOKEN
 #   ALFACLUB_CHAT_ROOM_ID=1043 (primary / legacy single-room paths)
-#   ALFACLUB_HERMIT_COMMAND_ROOMS=1043,1659 (both Hermit command rooms)
+#   ALFACLUB_HERMIT_COMMAND_ROOMS=2,1043,1484,1659,1660 (slash commands in all watcher rooms)
+#   HERMIT_ALLOWED_ROOM_IDS=2,1043,1484,1659,1660
+#   ARENA_ALLOWED_ROOM_IDS=2,1043,1484,1659,1660
+#   ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS=1484,1660,2,1043,1659
 #
 # Config-as-code
 #   - Railway Config File: railway.hermit.toml

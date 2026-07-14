@@ -33,3 +33,36 @@ describe('resolveSupabaseMigrationsRoot', () => {
     )
   })
 })
+
+describe('ensureAlfaclubInverseOpinionTradeSchema', () => {
+  afterEach(() => {
+    vi.resetModules()
+  })
+
+  it('recognizes an already-applied multi-table migration through table probes', async () => {
+    const queries: string[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        queries.push(text)
+        if (text.includes('schema_bootstrap_ledger')) {
+          return { rows: [{ ok: false }] }
+        }
+        if (text.includes('inverse_opinion_source_messages')) {
+          return { rows: [{ ok: true }] }
+        }
+        return { rows: [] }
+      }),
+    }
+    const { ensureAlfaclubInverseOpinionTradeSchema } = await import('./schemaBootstrap.js')
+
+    await ensureAlfaclubInverseOpinionTradeSchema(db)
+    await ensureAlfaclubInverseOpinionTradeSchema(db)
+
+    const probe = queries.find((query) => query.includes('inverse_opinion_source_messages'))
+    expect(probe).toContain('inverse_opinion_trade_decisions')
+    expect(probe).toContain('inverse_position_lifecycles')
+    expect(probe).toContain('inverse_position_lifecycle_events')
+    expect(queries.filter((query) => query.includes('inverse_opinion_source_messages'))).toHaveLength(1)
+  })
+})

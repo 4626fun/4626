@@ -248,6 +248,15 @@ function flushTickRollup(nowMs: number, force = false): void {
   resetTickRollup(nowMs)
 }
 
+// Keep /healthz + /readyz off the DB hot path. Probe responses serve the
+// in-memory snapshot; a short TTL + single-flight background refresh picks up
+// Vercel-cron / in-process refresher writes without blocking Railway liveness.
+const TOKEN_EXPIRY_REFRESH_TTL_MS = 30_000
+
+let tokenExpiryRefreshInFlight: Promise<void> | null = null
+let lastTokenExpiryRefreshAtMs = 0
+let stopTokenExpiryRefreshLoop: (() => void) | null = null
+
 async function refreshTokenExpiryState(): Promise<void> {
   try {
     const [chatToken, accessToken] = await Promise.all([
@@ -264,13 +273,43 @@ async function refreshTokenExpiryState(): Promise<void> {
     if (chatToken?.updatedAt) {
       state.lastSuccessfulTokenRefreshAt = chatToken.updatedAt
     }
-  } catch (err) {
+  } catch {
     // Non-fatal — health endpoint will just show older values
+  }
+}
+
+function scheduleTokenExpiryRefresh(force = false): void {
+  const now = Date.now()
+  if (tokenExpiryRefreshInFlight) return
+  if (!force && now - lastTokenExpiryRefreshAtMs < TOKEN_EXPIRY_REFRESH_TTL_MS) return
+
+  tokenExpiryRefreshInFlight = refreshTokenExpiryState()
+    .catch(() => {
+      // Errors already swallowed inside refreshTokenExpiryState; keep the
+      // in-flight guard from hanging if that ever changes.
+    })
+    .finally(() => {
+      tokenExpiryRefreshInFlight = null
+      lastTokenExpiryRefreshAtMs = Date.now()
+    })
+}
+
+function startTokenExpiryRefreshLoop(): void {
+  if (stopTokenExpiryRefreshLoop) return
+  scheduleTokenExpiryRefresh(true)
+  const timer = setInterval(() => {
+    scheduleTokenExpiryRefresh()
+  }, TOKEN_EXPIRY_REFRESH_TTL_MS)
+  if (typeof timer.unref === 'function') timer.unref()
+  stopTokenExpiryRefreshLoop = () => {
+    clearInterval(timer)
+    stopTokenExpiryRefreshLoop = null
   }
 }
 
 function startHealthServer(): void {
   const port = Number(process.env.PORT ?? '8080') || 8080
+  startTokenExpiryRefreshLoop()
   const server = http.createServer((req, res) => {
     const method = String(req.method ?? 'GET').toUpperCase()
     const url = (req.url ?? '/').split('?')[0]
@@ -295,6 +334,10 @@ function startHealthServer(): void {
       res.end('Not found')
       return
     }
+
+    // Kick a background refresh when the TTL is stale, but never await DB
+    // work on the probe path — Railway liveness must stay memory-only.
+    scheduleTokenExpiryRefresh()
 
     if (readCounterTradeState) {
       state.counterTrade = readCounterTradeState()
@@ -421,8 +464,8 @@ async function startRuntime(): Promise<void> {
         role: 'primary writer for alfaclub_runtime_secret (this Hermit instance owns token rotation)',
       })
 
-      // Capture initial token expiry for observability
-      void refreshTokenExpiryState()
+      // Capture initial token expiry for observability (non-blocking).
+      scheduleTokenExpiryRefresh(true)
     }
   } catch (error) {
     logger.warn('[hermit] AlfaClub Privy token refresher not started', {
@@ -513,6 +556,9 @@ async function startRuntime(): Promise<void> {
 function shutdown(signal: string): void {
   logger.info('[hermit] shutting down', { signal })
   flushTickRollup(Date.now(), true)
+  try {
+    stopTokenExpiryRefreshLoop?.()
+  } catch {}
   try {
     stopVirtualsAcp?.()
   } catch {}
