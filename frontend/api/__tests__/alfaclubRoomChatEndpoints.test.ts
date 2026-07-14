@@ -27,10 +27,12 @@ const {
   setNoStoreMock: vi.fn(),
   getSessionAddressMock: vi.fn(),
   readBoundedJsonObjectBodyMock: vi.fn(async () => ({})),
-  guardAgentApiRequestMock: vi.fn(async () => ({
-    ok: true,
-    auth: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
-  })),
+  guardAgentApiRequestMock: vi.fn(
+    async (): Promise<{ ok: true; auth: { address: string } | null }> => ({
+      ok: true,
+      auth: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+    }),
+  ),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 99, resetAt: Date.now() + 60_000 })),
   checkDurableRateLimitMock: vi.fn(async () => ({
     allowed: true,
@@ -168,6 +170,19 @@ describe('AlfaClub room-chat endpoints', () => {
       telegramEnabled: true,
       xmtpEnabled: true,
     })
+  })
+
+  it('GET rejects unauthenticated requests before reading chat history', async () => {
+    guardAgentApiRequestMock.mockResolvedValueOnce({ ok: true, auth: null })
+    getSessionAddressMock.mockReturnValueOnce(null)
+    const req = createMockReq({ method: 'GET', query: { roomId: '1659', limit: '1' } })
+    const res = createMockRes()
+    await roomChatHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Authentication required')
+    expect(listAlfaClubRoomChatMessagesMock).not.toHaveBeenCalled()
+    expect(readAlfaClubRoomChannelBindingMock).not.toHaveBeenCalled()
   })
 
   it('GET fails closed when the ingest store is unavailable', async () => {

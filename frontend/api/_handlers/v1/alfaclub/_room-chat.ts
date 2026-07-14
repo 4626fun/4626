@@ -75,8 +75,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   if (!g.ok) return
 
   const requesterAddress = normalizeChatAddress(g.auth?.address) ?? normalizeChatAddress(getSessionAddress(req))
+  if (!requesterAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required' })
+  }
+
   const limiter = checkRateLimit(
-    rateLimitKey('v1/alfaclub/room-chat', (requesterAddress ?? 'anon').toLowerCase(), getClientIp(req)),
+    rateLimitKey('v1/alfaclub/room-chat', requesterAddress.toLowerCase(), getClientIp(req)),
     RATE_LIMITS.read,
   )
   if (!limiter.allowed) {
