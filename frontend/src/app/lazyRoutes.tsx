@@ -260,6 +260,14 @@ export const AlfaClubTradingRooms = lazyNamed(
   () => import('../pages/AlfaClubTradingRooms'),
   'AlfaClubTradingRooms',
 )
+export const AlfaClubExploreRooms = lazyNamed(
+  () => import('../pages/AlfaClubExploreRooms'),
+  'AlfaClubExploreRooms',
+)
+export const AlfaClubInverseAkita = lazyNamed(
+  () => import('../pages/AlfaClubInverseAkita'),
+  'AlfaClubInverseAkita',
+)
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
 export const AddOwnerBaseApp = lazyNamed(

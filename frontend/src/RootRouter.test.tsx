@@ -88,6 +88,20 @@ describe('RootRouter', () => {
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
   })
 
+  it.each(['/explore/rooms', '/inverseakita', '/arena/positions'])(
+    'routes canonical AlfaClub path %s to the AlfaClub host',
+    async (pathname) => {
+      render(
+        <MemoryRouter initialEntries={[pathname]}>
+          <RootRouter />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByTestId('alfaclub-host-redirect')).toBeTruthy()
+      expect(screen.queryByTestId('protected-app')).toBeNull()
+    },
+  )
+
   it('routes the root marketing path through Home', async () => {
     mockHostMode = 'marketing'
 

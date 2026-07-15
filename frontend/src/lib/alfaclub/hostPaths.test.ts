@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ALFACLUB_ARENA_PATH,
+  ALFACLUB_EXPLORE_ROOMS_PATH,
+  ALFACLUB_INVERSE_AKITA_PATH,
   ALFACLUB_POOLS_PATH,
   ALFACLUB_ROOMS_PATH,
   ALFACLUB_SAFETY_PATH,
@@ -11,14 +14,20 @@ import {
 
 describe('resolveAlfaClubCanonicalPath', () => {
   it('maps legacy and alias paths to short canonical routes', () => {
-    expect(resolveAlfaClubCanonicalPath('/alfaclub')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/trading-rooms')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/trading-rooms/')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub')).toBe(ALFACLUB_EXPLORE_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/trading-rooms')).toBe(
+      ALFACLUB_EXPLORE_ROOMS_PATH,
+    )
+    expect(resolveAlfaClubCanonicalPath('/trading-rooms/')).toBe(ALFACLUB_EXPLORE_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/explore/rooms')).toBe(ALFACLUB_EXPLORE_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/inverseakita')).toBe(ALFACLUB_INVERSE_AKITA_PATH)
+    expect(resolveAlfaClubCanonicalPath('/arena')).toBe(ALFACLUB_ARENA_PATH)
+    expect(resolveAlfaClubCanonicalPath('/arena/positions')).toBe('/arena/positions')
   })
 
   it('returns null for unrelated paths', () => {

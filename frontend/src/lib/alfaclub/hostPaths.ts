@@ -2,6 +2,9 @@ import { ALFACLUB_ORIGIN } from '@/lib/env/host'
 
 /** Canonical hub and retained alias paths on alfaclub.4626.fun. */
 export const ALFACLUB_ROOMS_PATH = '/rooms'
+export const ALFACLUB_EXPLORE_ROOMS_PATH = '/explore/rooms'
+export const ALFACLUB_INVERSE_AKITA_PATH = '/inverseakita'
+export const ALFACLUB_ARENA_PATH = '/arena'
 export const ALFACLUB_SAFETY_PATH = '/safety'
 export const ALFACLUB_POOLS_PATH = '/pools'
 
@@ -11,9 +14,19 @@ type AlfaClubRedirectTarget = {
 }
 
 const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
-  '/alfaclub': { pathname: ALFACLUB_ROOMS_PATH },
-  '/alfaclub/trading-rooms': { pathname: ALFACLUB_ROOMS_PATH },
-  '/trading-rooms': { pathname: ALFACLUB_ROOMS_PATH },
+  '/alfaclub': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
+  '/alfaclub/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
+  '/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
+  [ALFACLUB_EXPLORE_ROOMS_PATH]: { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
+  [ALFACLUB_INVERSE_AKITA_PATH]: { pathname: ALFACLUB_INVERSE_AKITA_PATH },
+  [ALFACLUB_ARENA_PATH]: { pathname: ALFACLUB_ARENA_PATH },
+  '/arena/introduction': { pathname: '/arena/introduction' },
+  '/arena/getting-started': { pathname: '/arena/getting-started' },
+  '/arena/view-status': { pathname: '/arena/view-status' },
+  '/arena/view-chart': { pathname: '/arena/view-chart' },
+  '/arena/how-it-works': { pathname: '/arena/how-it-works' },
+  '/arena/backtest': { pathname: '/arena/backtest' },
+  '/arena/positions': { pathname: '/arena/positions' },
   '/safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
   '/alfaclub/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
   '/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },

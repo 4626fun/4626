@@ -739,12 +739,10 @@ export function ArenaStatusPage() {
                 Try refresh, then open this page on the app host:
                 {' '}
                 <a
-                  href="https://app.4626.fun/arena/view-status"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/arena/view-status"
                   className="underline underline-offset-2"
                 >
-                  app.4626.fun/arena/view-status
+                  alfaclub.4626.fun/arena/view-status
                 </a>
               </div>
             </div>

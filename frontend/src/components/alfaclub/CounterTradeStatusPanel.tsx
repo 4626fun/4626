@@ -1,11 +1,12 @@
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { ArrowRight, RefreshCw } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 
 const ARENA_LINKS = [
-  { label: 'Status', href: 'https://app.4626.fun/arena/view-status' },
-  { label: 'Positions', href: 'https://app.4626.fun/arena/positions' },
-  { label: 'Backtest', href: 'https://app.4626.fun/arena/backtest' },
+  { label: 'Status', href: '/arena/view-status' },
+  { label: 'Positions', href: '/arena/positions' },
+  { label: 'Backtest', href: '/arena/backtest' },
 ] as const
 
 export function CounterTradeStatusPanel({ showArenaLinks = false }: { showArenaLinks?: boolean }) {
@@ -18,7 +19,7 @@ export function CounterTradeStatusPanel({ showArenaLinks = false }: { showArenaL
           <p className="text-xs text-zinc-500">Inverse / counter-trade status</p>
           <h2 className="mt-1 text-sm font-medium text-zinc-200">Room 1659 strategy state</h2>
           <p className="mt-1 text-[11px] text-zinc-500">
-            In-room command: <span className="font-mono text-zinc-300">/strategy status</span>
+            In-room command: <span className="font-mono text-zinc-300">/h status</span>
           </p>
         </div>
         <button
@@ -94,16 +95,14 @@ export function CounterTradeStatusPanel({ showArenaLinks = false }: { showArenaL
       {showArenaLinks ? (
         <div className="mt-5 flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
           {ARENA_LINKS.map((link) => (
-            <a
+            <Link
               key={link.href}
-              href={link.href}
-              target="_blank"
-              rel="noreferrer"
+              to={link.href}
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/[0.08] hover:bg-white/[0.08]"
             >
               Open Arena {link.label.toLowerCase()}
-              <ExternalLink className="h-3 w-3" aria-hidden />
-            </a>
+              <ArrowRight className="h-3 w-3" aria-hidden />
+            </Link>
           ))}
         </div>
       ) : null}
