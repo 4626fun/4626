@@ -30,6 +30,10 @@ describe('alfaclub vigilante — vercel wiring', () => {
     const entry = (parsed.crons ?? []).find((c) => c.path === '/api/v1/alfaclub/daily-brief')
     expect(entry).toBeDefined()
     expect(entry?.schedule).toBe('10 12 * * *')
+    expect((parsed.crons ?? []).filter((c) => (
+      c.path === '/api/v1/alfaclub/daily-brief'
+      || c.path === '/api/v1/alfaclub/trade-journal'
+    ))).toEqual([entry])
   })
 
   it('frontend/vercel.json does not register the retired minute bridge cron', async () => {
@@ -198,7 +202,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(hostRoute('/pools')).toMatchObject({ status: 308, dest: '/rooms?tab=liquidity' })
   })
 
-  it('v1 route map exposes alfaclub/leaderboard, run, radar, daily-brief, compare, relay-now, chat-token, chat-token-refresh, chat-bridge-run', async () => {
+  it('v1 route map exposes the stable daily dispatcher and manual trade-journal surface', async () => {
     const src = await readFile(
       new URL('../_handlers/_routes.v1.ts', import.meta.url),
       'utf8',
@@ -207,6 +211,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(src).toContain("'alfaclub/run'")
     expect(src).toContain("'alfaclub/radar'")
     expect(src).toContain("'alfaclub/daily-brief'")
+    expect(src).toContain("'alfaclub/trade-journal'")
     expect(src).toContain("'alfaclub/compare'")
     expect(src).toContain("'alfaclub/relay-now'")
     expect(src).toContain("'alfaclub/chat-token'")

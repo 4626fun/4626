@@ -51,6 +51,9 @@ export type HyperliquidUserFill = {
 }
 
 export type HyperliquidUserFillDetailed = HyperliquidUserFill & {
+  /** Hyperliquid trade identity (`tid`, falling back to fill hash when exposed). */
+  fillId?: string | null
+  orderId?: string | null
   coin: string | null
   px: number | null
   sz: number | null
@@ -569,6 +572,16 @@ export async function getUserFillsByTimeDetailed(
       closedPnl: closed,
       fee,
       time,
+      fillId:
+        typeof fill.tid === 'string' || typeof fill.tid === 'number'
+          ? String(fill.tid)
+          : typeof fill.hash === 'string'
+            ? fill.hash
+            : null,
+      orderId:
+        typeof fill.oid === 'string' || typeof fill.oid === 'number'
+          ? String(fill.oid)
+          : null,
       coin: typeof fill.coin === 'string' ? fill.coin : null,
       px: parseFloatSafe(fill.px),
       sz: parseFloatSafe(fill.sz),

@@ -30,10 +30,36 @@ vi.mock('./hyperliquid.js', () => ({
   getAllPerpMarkets: vi.fn(),
 }))
 
+vi.mock('./inverseOpinionTradeRecorder.js', () => ({
+  claimInverseOpinionTradeIntent: vi.fn(),
+  recordInverseOpinionTradeSubmitted: vi.fn(),
+  recordInverseOpinionTradeTerminal: vi.fn(),
+  recordInverseOpinionTradeUnknown: vi.fn(),
+}))
+
+vi.mock('./inverseOpinionTradeReconciler.js', () => ({
+  reconcileInverseOpinionTrades: vi.fn(async () => ({
+    scanned: 0,
+    opened: 0,
+    refreshed: 0,
+    closed: 0,
+    ambiguous: 0,
+    stale: 0,
+    errors: 0,
+  })),
+}))
+
 import { runArenaOpenPositions, runArenaTrade } from '../arena/arenaClient.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { resolveInverseAkitaChatAuthorAccess } from './inverseAkitaChatReactionPolicy.js'
 import { getAllPerpMarkets } from './hyperliquid.js'
+import {
+  claimInverseOpinionTradeIntent,
+  recordInverseOpinionTradeSubmitted,
+  recordInverseOpinionTradeTerminal,
+  recordInverseOpinionTradeUnknown,
+} from './inverseOpinionTradeRecorder.js'
+import { reconcileInverseOpinionTrades } from './inverseOpinionTradeReconciler.js'
 import {
   __resetInverseAkitaBotOutboundTextRegistryForTests,
   __resetInverseAkitaChatReactionCooldownForTests,
@@ -61,6 +87,30 @@ const mockRunArenaOpenPositions = vi.mocked(runArenaOpenPositions)
 const mockResolveRoomDefaultArenaIdentity = vi.mocked(resolveRoomDefaultArenaIdentity)
 const mockResolveInverseAkitaChatAuthorAccess = vi.mocked(resolveInverseAkitaChatAuthorAccess)
 const mockGetAllPerpMarkets = vi.mocked(getAllPerpMarkets)
+const mockClaimInverseOpinionTradeIntent = vi.mocked(claimInverseOpinionTradeIntent)
+const mockRecordInverseOpinionTradeSubmitted = vi.mocked(recordInverseOpinionTradeSubmitted)
+const mockRecordInverseOpinionTradeTerminal = vi.mocked(recordInverseOpinionTradeTerminal)
+const mockRecordInverseOpinionTradeUnknown = vi.mocked(recordInverseOpinionTradeUnknown)
+
+const CLAIMED_DECISION = {
+  decisionId: '11111111-1111-4111-8111-111111111111',
+  sourceMessageId: '22222222-2222-4222-8222-222222222222',
+  intentOrdinal: 0,
+  normalizedMarket: 'BTC',
+  sourceSide: 'long' as const,
+  inverseSide: 'short' as const,
+  executionPhase: 'claimed' as const,
+  terminalOutcome: null,
+  reasonCode: null,
+  executorWallet: null,
+  requestedParameters: {},
+  receiptSummary: {},
+  attributionQuality: 'complete' as const,
+  observedAt: '2026-07-14T08:00:00.000Z',
+  submittedAt: null,
+  resolvedAt: null,
+  updatedAt: '2026-07-14T08:00:00.000Z',
+}
 
 describe('inverseAkitaChatReaction', () => {
   beforeEach(() => {
@@ -68,6 +118,7 @@ describe('inverseAkitaChatReaction', () => {
     __resetInverseAkitaChatReactionCooldownForTests()
     __resetInverseAkitaChatReactionMarketCacheForTests()
     __resetInverseAkitaBotOutboundTextRegistryForTests()
+    process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED = '1'
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED', '1')
     vi.stubEnv('ARENA_ENABLED', '1')
     vi.stubEnv('ARENA_TRADING_ENABLED', '1')
@@ -83,8 +134,8 @@ describe('inverseAkitaChatReaction', () => {
       roomId: '1659',
       senderAddress: '*',
       agentId: '1213',
-      agentWalletAddress: '0xagentwallet',
-      hlApiWalletAddress: '0xhlwallet',
+      agentWalletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      hlApiWalletAddress: '0xdddddddddddddddddddddddddddddddddddddddd',
     })
     mockResolveInverseAkitaChatAuthorAccess.mockResolvedValue({
       eligible: true,
@@ -97,10 +148,15 @@ describe('inverseAkitaChatReaction', () => {
       details: { positions: [] },
     })
     mockRunArenaTrade.mockResolvedValue({ ok: true, message: 'ok' })
+    mockClaimInverseOpinionTradeIntent.mockResolvedValue(CLAIMED_DECISION)
+    mockRecordInverseOpinionTradeSubmitted.mockResolvedValue(true)
+    mockRecordInverseOpinionTradeTerminal.mockResolvedValue(undefined)
+    mockRecordInverseOpinionTradeUnknown.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
   })
 
   it('formats skip replies for operator-visible config failures', () => {
@@ -270,14 +326,25 @@ describe('inverseAkitaChatReaction', () => {
     const intents = collectInverseAkitaChatTradeIntents({
       roomId: '1659',
       messages: [
-        { id: '1', sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', text: 'long btc' },
+        {
+          id: '1',
+          sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+          username: '@public_creator',
+          text: 'long btc',
+        },
         { id: '2', sender: '0x1111111111111111111111111111111111111111', text: 'should i long eth' },
         { id: '3', sender: '0x2222222222222222222222222222222222222222', text: 'gm' },
       ],
     })
     expect(intents).toHaveLength(2)
-    expect(intents[0]?.pair).toBe('BTC')
+    expect(intents[0]).toMatchObject({
+      pair: 'BTC',
+      publicAuthorLabel: '@public_creator',
+      ordinal: 0,
+      parseMode: 'strict',
+    })
     expect(intents[1]?.pair).toBe('ETH')
+    expect(intents[1]?.parseMode).toBe('qualified')
   })
 
   it('collects configured owner-room opinions but ignores unsupported rooms', () => {
@@ -352,6 +419,20 @@ describe('inverseAkitaChatReaction', () => {
     expect(
       parseInverseAkitaChatTradeIntent('long sol', { allowLooseSentiment: false }),
     ).toEqual({ userSide: 'long', pair: 'SOL' })
+  })
+
+  it('durably ignores marked journal prose after the in-memory registry expires', () => {
+    const journal =
+      '<!-- inverse-akita-trade-journal:v1 -->\nBTC long creator opinion; InverseAKITA opened a short. Bullish and bearish evidence reviewed.'
+    expect(isInverseAkitaBotAuthoredChatText(journal)).toBe(true)
+    expect(collectInverseAkitaChatTradeIntents({
+      roomId: '1659',
+      messages: [{
+        id: 'journal-parent',
+        sender: '0x1111111111111111111111111111111111111111',
+        text: journal,
+      }],
+    })).toEqual([])
   })
 
   it('uses 69% of Hyperliquid max leverage by default', () => {
@@ -575,7 +656,9 @@ describe('inverseAkitaChatReaction', () => {
     expect(result.reactionEmoji).toMatch(/^(🔄|🙃)$/)
     expect(mockRunArenaTrade).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'open', pair: 'BTC', side: 'short', leverage: 27 }),
-      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+      expect.objectContaining({
+        agentWalletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      }),
     )
     expect(result.replyText).toMatch(/short/i)
     expect(result.replyText).toContain('50 @ 27x')
@@ -583,6 +666,39 @@ describe('inverseAkitaChatReaction', () => {
       senderAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
       roomId: '1659',
     })
+  })
+
+  it('allows only one Arena call when two workers race the submission CAS', async () => {
+    mockRecordInverseOpinionTradeSubmitted
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+    const intent = {
+      id: 'm-submit-race',
+      date: Date.now(),
+      sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+      text: 'long btc',
+      userSide: 'long' as const,
+      pair: 'BTC',
+    }
+
+    const [first, second] = await Promise.all([
+      executeInverseAkitaChatReaction({
+        roomId: '1659',
+        intent,
+        claimedDecision: CLAIMED_DECISION,
+      }),
+      executeInverseAkitaChatReaction({
+        roomId: '1659',
+        intent,
+        claimedDecision: CLAIMED_DECISION,
+      }),
+    ])
+
+    expect([first, second].filter((result) => result.ok)).toHaveLength(1)
+    expect([first, second].filter(
+      (result) => result.skipReason === 'decision_already_claimed',
+    )).toHaveLength(1)
+    expect(mockRunArenaTrade).toHaveBeenCalledTimes(1)
   })
 
   it('canonicalizes a unique HIP-3 suffix before execution', async () => {
@@ -721,7 +837,9 @@ describe('inverseAkitaChatReaction', () => {
     )
     expect(mockRunArenaTrade).toHaveBeenCalledWith(
       expect.objectContaining({ side: 'short' }),
-      expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
+      expect.objectContaining({
+        agentWalletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      }),
     )
   })
 
@@ -848,5 +966,266 @@ describe('inverseAkitaChatReaction', () => {
     const second = await executeInverseAkitaChatReaction({ roomId: '1659', intent })
     expect(second.skipReason).toBe('sender_cooldown')
     expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('persists submitted and executed states around a successful Arena call', async () => {
+    mockRunArenaTrade.mockResolvedValueOnce({
+      ok: true,
+      message: 'submitted',
+      run: {
+        ok: true,
+        command: 'dgclaw',
+        args: [],
+        cwd: '/app',
+        stdout: '{"filled":{"totalSz":"0.01","avgPx":"100000"}}',
+        stderr: '',
+        code: 0,
+        timedOut: false,
+        dryRun: false,
+      },
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'persist-success',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        publicAuthorLabel: '@creator',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+        ordinal: 0,
+        parseMode: 'strict',
+      },
+    })
+
+    expect(mockClaimInverseOpinionTradeIntent).toHaveBeenCalled()
+    expect(mockRecordInverseOpinionTradeSubmitted).toHaveBeenCalledBefore(mockRunArenaTrade)
+    expect(mockRecordInverseOpinionTradeSubmitted).toHaveBeenCalledWith(expect.objectContaining({
+      requestedParameters: expect.objectContaining({
+        authorAccess: { eligible: true, reason: 'staker', stakedKeys: 1 },
+      }),
+    }))
+    expect(mockRecordInverseOpinionTradeTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'executed',
+      reasonCode: 'arena_execution_succeeded',
+      receiptSummary: expect.objectContaining({
+        fill: { totalSz: 0.01, avgPx: 100000 },
+        authorAccess: { eligible: true, reason: 'staker', stakedKeys: 1 },
+        terminalReply: {
+          replyText: result.replyText,
+          threadReceiptText: result.threadReceiptText,
+          reactionEmoji: result.reactionEmoji,
+          counterSide: result.counterSide,
+          pair: result.pair,
+          ok: true,
+        },
+      }),
+    }))
+    expect(vi.mocked(reconcileInverseOpinionTrades)).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['', '0'])(
+    'preserves legacy Arena execution with zero attribution calls when capture is %j',
+    async (captureFlag) => {
+      if (captureFlag) {
+        process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED = captureFlag
+      } else {
+        delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+      }
+
+      const result = await executeInverseAkitaChatReaction({
+        roomId: '1659',
+        intent: {
+          id: `capture-off-${captureFlag || 'default'}`,
+          date: Date.now(),
+          sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          text: 'long btc',
+          userSide: 'long',
+          pair: 'BTC',
+        },
+      })
+
+      expect(result.ok).toBe(true)
+      expect(mockRunArenaTrade).toHaveBeenCalledTimes(1)
+      expect(mockClaimInverseOpinionTradeIntent).not.toHaveBeenCalled()
+      expect(mockRecordInverseOpinionTradeSubmitted).not.toHaveBeenCalled()
+      expect(mockRecordInverseOpinionTradeTerminal).not.toHaveBeenCalled()
+      expect(mockRecordInverseOpinionTradeUnknown).not.toHaveBeenCalled()
+      expect(vi.mocked(reconcileInverseOpinionTrades)).not.toHaveBeenCalled()
+    },
+  )
+
+  it('persists rejected authority and blocked metadata outcomes', async () => {
+    mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
+      eligible: false,
+      stakedKeys: 0,
+      reason: 'insufficient_stake',
+    })
+    await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'persist-rejected',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+    expect(mockRecordInverseOpinionTradeTerminal).toHaveBeenLastCalledWith(expect.objectContaining({
+      outcome: 'rejected',
+      reasonCode: 'insufficient_stake',
+      receiptSummary: expect.objectContaining({
+        authorAccess: { eligible: false, reason: 'insufficient_stake', stakedKeys: 0 },
+      }),
+    }))
+
+    __resetInverseAkitaChatReactionCooldownForTests()
+    mockGetAllPerpMarkets.mockResolvedValueOnce(null)
+    await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'persist-blocked',
+        date: Date.now(),
+        sender: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        text: 'short eth',
+        userSide: 'short',
+        pair: 'ETH',
+      },
+    })
+    expect(mockRecordInverseOpinionTradeTerminal).toHaveBeenLastCalledWith(expect.objectContaining({
+      outcome: 'blocked',
+      reasonCode: 'market_metadata_unavailable',
+    }))
+  })
+
+  it('still captures an intent and records blocked when live reaction execution is disabled', async () => {
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED', '0')
+    const [intent] = collectInverseAkitaChatTradeIntents({
+      roomId: '1659',
+      messages: [{
+        id: 'disabled-capture',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        text: 'long btc',
+      }],
+    })
+
+    expect(intent).toBeDefined()
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: intent!,
+    })
+    expect(result).toMatchObject({ skipped: true, skipReason: 'disabled' })
+    expect(mockRecordInverseOpinionTradeTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'blocked',
+      reasonCode: 'reaction_disabled',
+    }))
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('fails closed with zero Arena calls when the attribution store is unavailable', async () => {
+    mockClaimInverseOpinionTradeIntent.mockRejectedValueOnce(new Error('db_unavailable'))
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'store-down',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+
+    expect(result).toMatchObject({
+      skipped: true,
+      skipReason: 'attribution_store_unavailable',
+    })
+    expect(mockRunArenaOpenPositions).not.toHaveBeenCalled()
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('allows only the atomic submitted claimant to call Arena', async () => {
+    mockRecordInverseOpinionTradeSubmitted
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+    const intent = {
+      id: 'concurrent-claim',
+      date: Date.now(),
+      sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      text: 'long btc',
+      userSide: 'long' as const,
+      pair: 'BTC',
+    }
+
+    const [first, second] = await Promise.all([
+      executeInverseAkitaChatReaction({ roomId: '1659', intent }),
+      executeInverseAkitaChatReaction({ roomId: '1659', intent }),
+    ])
+
+    expect(mockRunArenaTrade).toHaveBeenCalledTimes(1)
+    expect([first.skipReason, second.skipReason]).toContain('decision_already_claimed')
+  })
+
+  it('records confirmed Arena failures as failed and thrown submissions as unknown', async () => {
+    mockRunArenaTrade.mockResolvedValueOnce({
+      ok: false,
+      message: 'rejected',
+      run: {
+        ok: false,
+        command: 'dgclaw',
+        args: [],
+        cwd: '/app',
+        stdout: '',
+        stderr: 'exchange rejected',
+        code: 1,
+        timedOut: false,
+        dryRun: false,
+      },
+    })
+    const failedResult = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'confirmed-failure',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+    expect(mockRecordInverseOpinionTradeTerminal).toHaveBeenLastCalledWith(expect.objectContaining({
+      outcome: 'failed',
+      reasonCode: 'arena_execution_failed',
+      receiptSummary: expect.objectContaining({
+        terminalReply: expect.objectContaining({
+          ok: false,
+          replyText: failedResult.replyText,
+          threadReceiptText: failedResult.threadReceiptText,
+          reactionEmoji: failedResult.reactionEmoji,
+        }),
+      }),
+    }))
+
+    __resetInverseAkitaChatReactionCooldownForTests()
+    mockRunArenaTrade.mockRejectedValueOnce(new Error('process crashed after submit'))
+    await expect(executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'unknown-failure',
+        date: Date.now(),
+        sender: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        text: 'short eth',
+        userSide: 'short',
+        pair: 'ETH',
+      },
+    })).rejects.toThrow('process crashed after submit')
+    expect(mockRecordInverseOpinionTradeUnknown).toHaveBeenLastCalledWith(expect.objectContaining({
+      reasonCode: 'arena_submit_unknown',
+    }))
   })
 })

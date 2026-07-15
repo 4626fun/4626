@@ -268,15 +268,18 @@ function splitStatements(sql: string): string[] {
 export async function ensureMigrationApplied(
   db: Db,
   filename: string,
-  preflightCheck?: () => Promise<boolean>
+  preflightCheck?: () => Promise<boolean>,
+  options?: { strict?: boolean; verifyRecorded?: boolean },
 ): Promise<boolean> {
   if (ensuredFiles.has(filename)) return true
 
   // Durable cross-process short-circuit: skip the DDL replay entirely when a
   // previous process already applied this file against this database.
   if (await isRecordedInLedger(db, filename)) {
-    ensuredFiles.add(filename)
-    return true
+    if (!options?.verifyRecorded || !preflightCheck || await preflightCheck()) {
+      ensuredFiles.add(filename)
+      return true
+    }
   }
 
   if (preflightCheck) {
@@ -306,6 +309,7 @@ export async function ensureMigrationApplied(
       ) {
         continue
       }
+      if (options?.strict) throw e
       console.warn(`[schemaBootstrap] Non-fatal error applying statement from ${filename}:`, msg)
     }
   }
@@ -600,10 +604,450 @@ export async function ensureAlfaclubInverseOpinionTradeSchema(db: Db): Promise<v
             AND to_regclass('alfaclub.inverse_opinion_trade_decisions') IS NOT NULL
             AND to_regclass('alfaclub.inverse_position_lifecycles') IS NOT NULL
             AND to_regclass('alfaclub.inverse_position_lifecycle_events') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_position_lifecycles_one_open_idx') IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM pg_trigger
+              WHERE tgname = 'inverse_opinion_decision_transition_guard'
+                AND NOT tgisinternal
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_trigger
+              WHERE tgname = 'inverse_position_lifecycle_transition_guard'
+                AND NOT tgisinternal
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname IN (
+                  'inverse_opinion_source_messages',
+                  'inverse_opinion_trade_decisions',
+                  'inverse_position_lifecycles',
+                  'inverse_position_lifecycle_events'
+                )
+                AND c.relrowsecurity IS NOT TRUE
+            )
             AS ok;
         `
         return Boolean(result.rows?.[0]?.ok)
       },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717030000_alfaclub_inverse_opinion_trade_execution_guards.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_fill_claims') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_decisions_claim_expiry_idx') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_decisions_recovery_idx') IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_decisions'
+                AND column_name = 'execution_claim_token'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_decisions'
+                AND column_name = 'recovery_deadline_at'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_proc AS p
+              JOIN pg_namespace AS n ON n.oid = p.pronamespace
+              WHERE n.nspname = 'alfaclub'
+                AND p.proname = 'enforce_inverse_opinion_decision_transition'
+                AND pg_get_functiondef(p.oid) LIKE '%illegal same-phase inverse opinion decision update%'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_proc AS p
+              JOIN pg_namespace AS n ON n.oid = p.pronamespace
+              WHERE n.nspname = 'alfaclub'
+                AND p.proname = 'enforce_inverse_position_lifecycle_transition'
+                AND pg_get_functiondef(p.oid) LIKE '%generation must increment%'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_fill_claims'
+                AND c.relrowsecurity IS TRUE
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717010000_alfaclub_inverse_opinion_trade_analysis.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_trade_analyses') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_analyses_lifecycle_time_idx')
+              IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_analyses_window_idx') IS NOT NULL
+            AND (
+              SELECT count(*) = 8
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_opinion_trade_analysis_window_check',
+                  'inverse_opinion_trade_analysis_evidence_object_check',
+                  'inverse_opinion_trade_analysis_interpretation_object_check',
+                  'inverse_opinion_trade_analysis_verdict_check',
+                  'inverse_opinion_trade_analysis_confidence_check',
+                  'inverse_opinion_trade_analysis_refs_array_check',
+                  'inverse_opinion_trade_analysis_closed_assessment_check',
+                  'inverse_opinion_trade_analysis_only_check'
+                )
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_trade_analyses'
+                AND c.relrowsecurity IS TRUE
+            )
+            AND has_schema_privilege('service_role', 'alfaclub', 'USAGE')
+            AND has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_trade_analyses',
+              'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+            )
+            AND NOT has_table_privilege(
+              'anon',
+              'alfaclub.inverse_opinion_trade_analyses',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'authenticated',
+              'alfaclub.inverse_opinion_trade_analyses',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717020000_alfaclub_inverse_opinion_trade_journal_dispatch.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_trade_journal_dispatch') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_journal_revision_audit') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_journal_dispatch_state_lease_idx') IS NOT NULL
+            AND (
+              SELECT count(*) = 8
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_journal_dispatch_room_check',
+                  'inverse_journal_dispatch_window_check',
+                  'inverse_journal_dispatch_window_length_check',
+                  'inverse_journal_dispatch_state_check',
+                  'inverse_journal_dispatch_attempt_check',
+                  'inverse_journal_dispatch_revision_check',
+                  'inverse_journal_dispatch_content_hash_check',
+                  'inverse_journal_dispatch_sent_check'
+                )
+            )
+            AND (
+              SELECT count(*) = 6
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_journal_revision_number_check',
+                  'inverse_journal_revision_operator_check',
+                  'inverse_journal_revision_state_check',
+                  'inverse_journal_revision_sent_check',
+                  'inverse_journal_revision_hash_check',
+                  'inverse_journal_revision_marker_check'
+                )
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname IN (
+                  'inverse_opinion_trade_journal_dispatch',
+                  'inverse_opinion_trade_journal_revision_audit'
+                )
+                AND c.relrowsecurity IS NOT TRUE
+            )
+            AND has_schema_privilege('service_role', 'alfaclub', 'USAGE')
+            AND has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_trade_journal_dispatch',
+              'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+            )
+            AND has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_trade_journal_revision_audit',
+              'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+            )
+            AND NOT has_table_privilege(
+              'anon',
+              'alfaclub.inverse_opinion_trade_journal_dispatch',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'authenticated',
+              'alfaclub.inverse_opinion_trade_journal_revision_audit',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717040000_alfaclub_inverse_opinion_trade_journal_reliability.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_trade_journal_deliveries') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_trade_journal_resolution_audit') IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_trade_journal_deliveries'
+                AND c.relrowsecurity IS TRUE
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_trade_journal_resolution_audit'
+                AND c.relrowsecurity IS TRUE
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717050000_alfaclub_inverse_opinion_trade_recovery_completion.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_trade_decisions_submitted_recovery_idx')
+              IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_journal_deliveries'
+                AND column_name = 'public_text'
+                AND character_maximum_length = 2000
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_journal_revision_audit'
+                AND column_name = 'last_error_code'
+                AND character_maximum_length = 128
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717060000_alfaclub_inverse_opinion_trade_revision_recovery.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_journal_revision_recovery_idx') IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_journal_revision_audit'
+                AND column_name = 'public_text'
+                AND character_maximum_length = 2000
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_journal_revision_audit'
+                AND column_name = 'claimant_token'
+                AND data_type = 'uuid'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'alfaclub'
+                AND table_name = 'inverse_opinion_trade_journal_revision_audit'
+                AND column_name = 'send_started_at'
+                AND data_type = 'timestamp with time zone'
+            )
+            AND (
+              SELECT count(*) = 5
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_journal_revision_public_text_check',
+                  'inverse_journal_revision_recovery_attempt_check',
+                  'inverse_journal_revision_requested_recovery_check',
+                  'inverse_journal_revision_resolution_operator_check',
+                  'inverse_journal_revision_resolution_check'
+                )
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_trigger
+              WHERE tgname = 'inverse_journal_revision_immutable_payload_guard'
+                AND NOT tgisinternal
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717070000_alfaclub_inverse_opinion_reply_delivery.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_reply_deliveries') IS NOT NULL
+            AND to_regclass('alfaclub.inverse_opinion_reply_delivery_recovery_idx') IS NOT NULL
+            AND (
+              SELECT count(*) = 7
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_opinion_reply_delivery_kind_check',
+                  'inverse_opinion_reply_delivery_text_check',
+                  'inverse_opinion_reply_delivery_client_id_check',
+                  'inverse_opinion_reply_delivery_state_check',
+                  'inverse_opinion_reply_delivery_attempt_check',
+                  'inverse_opinion_reply_delivery_lease_check',
+                  'inverse_opinion_reply_delivery_sent_check'
+                )
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_trigger
+              WHERE tgname = 'inverse_opinion_reply_delivery_payload_guard'
+                AND NOT tgisinternal
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_reply_deliveries'
+                AND c.relrowsecurity IS TRUE
+            )
+            AND has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_reply_deliveries',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'anon',
+              'alfaclub.inverse_opinion_reply_deliveries',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'authenticated',
+              'alfaclub.inverse_opinion_reply_deliveries',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717080000_alfaclub_inverse_opinion_reply_resolution.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.inverse_opinion_reply_delivery_resolution_audit') IS NOT NULL
+            AND to_regclass(
+              'alfaclub.inverse_opinion_reply_delivery_resolution_audit_pkey'
+            ) IS NOT NULL
+            AND (
+              SELECT count(*) = 7
+              FROM pg_constraint
+              WHERE connamespace = 'alfaclub'::regnamespace
+                AND conname IN (
+                  'inverse_opinion_reply_delivery_resolution_audit_pkey',
+                  'inverse_opinion_reply_resolution_delivery_fk',
+                  'inverse_opinion_reply_resolution_operator_check',
+                  'inverse_opinion_reply_resolution_kind_check',
+                  'inverse_opinion_reply_resolution_action_check',
+                  'inverse_opinion_reply_resolution_state_check',
+                  'inverse_opinion_reply_resolution_note_check'
+                )
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM pg_class AS c
+              JOIN pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'alfaclub'
+                AND c.relname = 'inverse_opinion_reply_delivery_resolution_audit'
+                AND c.relrowsecurity IS TRUE
+            )
+            AND has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_reply_delivery_resolution_audit',
+              'SELECT, INSERT'
+            )
+            AND NOT has_table_privilege(
+              'service_role',
+              'alfaclub.inverse_opinion_reply_delivery_resolution_audit',
+              'UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'anon',
+              'alfaclub.inverse_opinion_reply_delivery_resolution_audit',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AND NOT has_table_privilege(
+              'authenticated',
+              'alfaclub.inverse_opinion_reply_delivery_resolution_audit',
+              'SELECT, INSERT, UPDATE, DELETE'
+            )
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+      { strict: true, verifyRecorded: true },
     )
   })
 }

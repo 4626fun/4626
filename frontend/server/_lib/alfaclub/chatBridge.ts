@@ -68,6 +68,9 @@ import {
   isInverseAkitaChatReactionRoom,
   readInverseAkitaChatReactionRoomIds,
 } from './inverseAkitaChatReactionPolicy.js'
+import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptureConfig.js'
+import { claimInverseOpinionTradeIntent } from './inverseOpinionTradeRecorder.js'
+import { deliverInverseOpinionTerminalReply } from './inverseOpinionTerminalReplyDelivery.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
@@ -865,6 +868,7 @@ type AlfaClubLiveInboundMessage = {
   date: number
   sender: string
   text: string
+  username?: string
   isBot?: boolean
   replyId?: string
   attachments: AlfaClubMessageAttachment[]
@@ -1016,6 +1020,11 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
       ]) ?? undefined
     const isBotRaw = node.isBot ?? (isJsonRecord(node.value) ? node.value.isBot : null)
     const isBot = typeof isBotRaw === 'boolean' ? isBotRaw : undefined
+    const username =
+      pickFirstString([
+        node.username,
+        isJsonRecord(node.value) ? node.value.username : null,
+      ]) ?? undefined
     let rawPayloadText: string | null = null
     try {
       rawPayloadText = JSON.stringify(node)
@@ -1029,6 +1038,7 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
       date,
       sender,
       text: text ?? '',
+      username,
       isBot,
       replyId,
       attachments,
@@ -1998,11 +2008,26 @@ async function sendCommandReplyToRoom(params: {
    */
   replyToMessageDate?: number | null
   commandMessageId: string
+  stableIdempotencyKey?: string
 }): Promise<string> {
   const replyToMessageDate =
     typeof params.replyToMessageDate === 'number' && Number.isFinite(params.replyToMessageDate)
       ? params.replyToMessageDate
       : undefined
+  if (params.stableIdempotencyKey && params.flags.botToken) {
+    await sendRoomMessageViaBotTokenWithProxyFallback({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+      directApiBaseUrl: params.flags.apiBaseUrl,
+      botToken: params.flags.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: resolveAlfaClubProxySecret(params.flags),
+      idempotencyKey: params.stableIdempotencyKey,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
+    return 'bot_token_stable_idempotency'
+  }
 
   const lane = await sendRoomMessageViaWebSocket({
     websocketUrl: params.flags.websocketUrl,
@@ -3055,6 +3080,7 @@ function ensureLiveCommandSocket(params: {
           date: message.date,
           sender: message.sender,
           text: message.text,
+          username: message.username,
           isBot: message.isBot,
           reply_id: message.replyId,
         }))
@@ -3229,33 +3255,57 @@ async function executeInverseAkitaChatReactionBatch(params: {
   if (!canBridgeReplyInRoom(params.flags, params.roomId)) return { processed: 0, reacted: 0 }
   if (params.intents.length === 0) return { processed: 0, reacted: 0 }
 
-  const unrepliedIds = await filterUnrepliedCommandMessageIds({
-    roomId: params.roomId,
-    messageIds: params.intents.map((intent) => intent.id),
-  })
-  const intents = params.intents.filter((intent) => unrepliedIds.has(intent.id))
-  if (intents.length === 0) return { processed: 0, reacted: 0 }
-
   let reacted = 0
-  for (const intent of intents) {
-    const claimed = await tryClaimCommandReply({
-      roomId: params.roomId,
-      messageId: intent.id,
-      commandHead: 'inverse-chat',
-    })
-    if (!claimed) {
-      logger.info('[alfaclub-chat] inverse_chat_reaction_skipped_already_claimed', {
+  for (const intent of params.intents) {
+    let claimedDecision
+    const captureEnabled = isInverseOpinionTradeCaptureEnabled()
+    if (captureEnabled) {
+      try {
+        claimedDecision = await claimInverseOpinionTradeIntent({
+          roomId: params.roomId,
+          intent,
+        })
+      } catch {
+        logger.warn('[alfaclub-chat] inverse_chat_reaction_attribution_unavailable', {
+          roomId: params.roomId,
+          messageId: intent.id,
+        })
+        continue
+      }
+      if (!claimedDecision.executionClaimed) {
+        // A terminal row may already exist, but history is not delivery truth.
+        // The durable outbox decides whether there is anything to send.
+        await deliverInverseOpinionTerminalReply(claimedDecision.decisionId)
+        if (claimedDecision.executionPhase !== 'resolved') {
+          logger.info('[alfaclub-chat] inverse_chat_execution_skipped_lease_owned', {
+            roomId: params.roomId,
+            messageId: intent.id,
+          })
+        }
+        continue
+      }
+    }
+    const replyClaimed = captureEnabled
+      ? true
+      : await tryClaimCommandReply({
+          roomId: params.roomId,
+          messageId: intent.id,
+          commandHead: 'inverse-chat',
+        })
+    if (!replyClaimed) {
+      logger.info('[alfaclub-chat] inverse_chat_reply_skipped_already_claimed', {
         roomId: params.roomId,
         messageId: intent.id,
         sender: intent.sender,
       })
-      continue
     }
     try {
       const result = await executeInverseAkitaChatReaction({
         roomId: params.roomId,
         intent,
+        ...(claimedDecision ? { claimedDecision } : {}),
       })
+      if (result.skipReason === 'decision_already_claimed') continue
       if (result.skipped) {
         logger.info('[alfaclub-chat] inverse_chat_reaction_skipped', {
           roomId: params.roomId,
@@ -3264,10 +3314,28 @@ async function executeInverseAkitaChatReactionBatch(params: {
           skipReason: result.skipReason ?? 'unknown',
         })
       }
+
+      if (captureEnabled && claimedDecision) {
+        // Immediate latency optimization only. The Railway sweep independently
+        // recreates missing rows and retries without bridge history.
+        await deliverInverseOpinionTerminalReply(claimedDecision.decisionId)
+        if (result.reactionEmoji) {
+          await reactToAlfaClubTriggerMessage({
+            flags: params.flags,
+            jwt: params.jwt,
+            roomId: params.roomId,
+            messageId: intent.id,
+            emoji: result.reactionEmoji,
+          })
+        }
+        if (result.ok) reacted += 1
+        continue
+      }
+
       if (result.skipped && result.skipReason === 'sender_cooldown') {
         continue
       }
-      if (result.replyText.trim()) {
+      if (replyClaimed && result.replyText.trim()) {
         registerInverseAkitaBotOutboundText(result.replyText)
         await sendCommandReplyToRoom({
           flags: params.flags,
@@ -3301,10 +3369,6 @@ async function executeInverseAkitaChatReactionBatch(params: {
               threadRootId: intent.id,
               timeoutMs: params.flags.sendTimeoutMs,
             })
-            logger.info('[alfaclub-chat] inverse_thread_receipt_sent', {
-              roomId: params.roomId,
-              messageId: intent.id,
-            })
           } catch (receiptError) {
             logger.warn('[alfaclub-chat] inverse_thread_receipt_failed', {
               roomId: params.roomId,
@@ -3328,7 +3392,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
     }
   }
 
-  return { processed: intents.length, reacted }
+  return { processed: params.intents.length, reacted }
 }
 
 async function executeCommandBatch(params: {
@@ -4598,6 +4662,8 @@ export async function sendAlfaClubRoomText(params: {
 
 export const _ingestLiveMessagesForTests = ingestLiveMessages
 export const _fanOutInsertedRoomMessagesForTests = fanOutInsertedRoomMessages
+export const _executeInverseAkitaChatReactionBatchForTests =
+  executeInverseAkitaChatReactionBatch
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {
   if (activeHandle !== null) clearInterval(activeHandle)

@@ -90,6 +90,7 @@
     "ops:alfaclub-proxy-reliability-smoke": "tsx scripts/ops/alfaclub-proxy-reliability-smoke.ts",
     "ops:counter-trade:normalize-optins": "tsx scripts/ops/normalize-counter-trade-room-optins.ts",
     "ops:inverse-akita:shadow-health": "tsx --env-file=.env scripts/ops/verify-inverse-akita-shadow-health.ts",
+    "ops:inverse-akita:trade-journal": "tsx --env-file=.env scripts/ops/verify-inverse-akita-trade-journal.ts",
     "ops:counter-trade:backtest": "tsx scripts/backtest-counter-rebalance.ts",
     "ops:hermit-telegram-webhook": "tsx --env-file=.env scripts/ops/setup-hermit-telegram-webhook.ts",
     "ops:hermit-dns-vercel": "tsx scripts/ops/setup-hermit-dns-vercel.ts",

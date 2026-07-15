@@ -18,6 +18,13 @@ Status: completed 2026-07-12 (profile polish 2026-07-13)
 The public Cabal URL is the join/share link. A private invite code is not
 required while the Cabal remains public with auto-join enabled.
 
+The room-`1659` InverseAKITA Trade Journal may link this public page as a
+community and wallet-level attribution surface. Cabals is not the authority for
+AlfaClub source-message lineage, opinion qualification, ACP execution, or
+Hyperliquid PnL. Public journal attribution remains limited to a public label or
+shortened wallet, a paraphrased opinion, and source-room context; it never
+includes a raw quote or direct source-message link.
+
 ## Profile polish (live)
 
 - Description pins Arena agent `1213`, `@hermit4626`, and the live agent URL.
@@ -133,6 +140,8 @@ Cabals currently documents no public service-account or agent API. Its Terms
 prohibit bot or automated access unless Cabals expressly permits it. Therefore:
 
 - do not call Cabals' private web API from repository code;
+- do not use a Cabals API, scraper, session token, or browser automation for
+  journal health or production smoke;
 - do not persist Cabals or Privy access tokens;
 - do not automate Cabal mutations with browser sessions;
 - keep InverseAKITA trading on the existing Arena/dgclaw execution lane; and

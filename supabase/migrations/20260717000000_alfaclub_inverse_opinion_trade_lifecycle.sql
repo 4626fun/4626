@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS alfaclub.inverse_position_lifecycles (
     CHECK (lifecycle_state IN ('pending', 'partial', 'open', 'closed', 'ambiguous', 'incomplete')),
   CONSTRAINT inverse_position_lifecycle_terminal_check
     CHECK (
-      (lifecycle_state IN ('closed', 'incomplete') AND closed_at IS NOT NULL)
-      OR (lifecycle_state NOT IN ('closed', 'incomplete') AND closed_at IS NULL)
+      (lifecycle_state = 'closed' AND closed_at IS NOT NULL)
+      OR (lifecycle_state <> 'closed' AND closed_at IS NULL)
     ),
   CONSTRAINT inverse_position_lifecycle_attribution_check
     CHECK (attribution_quality IN ('complete', 'partial', 'unknown')),
@@ -225,6 +225,12 @@ BEGIN
 
   IF NEW.reconciliation_generation < OLD.reconciliation_generation THEN
     RAISE EXCEPTION 'inverse position reconciliation generation cannot decrease'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF (OLD.attribution_quality = 'complete' AND NEW.attribution_quality <> 'complete')
+    OR (OLD.attribution_quality = 'partial' AND NEW.attribution_quality = 'unknown') THEN
+    RAISE EXCEPTION 'inverse position attribution quality cannot decrease'
       USING ERRCODE = '23514';
   END IF;
 

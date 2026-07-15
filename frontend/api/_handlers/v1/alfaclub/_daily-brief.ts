@@ -11,6 +11,10 @@ import {
   readAlfaClubDailyBriefFlags,
   runAlfaClubDailyBrief,
 } from '../../../../server/_lib/alfaclub/dailyBrief.js'
+import {
+  readInverseAkitaTradeJournalFlags,
+  runInverseAkitaTradeJournal,
+} from '../../../../server/_lib/alfaclub/inverseAkitaTradeJournal.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -70,16 +74,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
-  const flags = readAlfaClubDailyBriefFlags()
-  if (readForceSendQuery(req)) {
-    flags.forceSend = true
-  }
   try {
+    const journalFlags = readInverseAkitaTradeJournalFlags()
+    if (journalFlags.publishEnabled) {
+      const result = await runInverseAkitaTradeJournal()
+      return res.status(200).json({
+        success: true,
+        reason: result.skippedDuplicate ? 'duplicate_window' : null,
+        lane: 'inverse_akita_trade_journal',
+        captureEnabled: journalFlags.captureEnabled,
+        data: result,
+      })
+    }
+    const flags = readAlfaClubDailyBriefFlags()
+    if (readForceSendQuery(req)) {
+      flags.forceSend = true
+    }
     const result = await runAlfaClubDailyBrief({ flags })
     const status = result.ok ? 200 : 202
     return res.status(status).json({
       success: result.ok,
       reason: result.reason ?? null,
+      lane: 'legacy_daily_brief',
+      captureEnabled: journalFlags.captureEnabled,
       data: result,
     })
   } catch (err) {

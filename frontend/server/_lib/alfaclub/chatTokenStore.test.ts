@@ -95,6 +95,56 @@ describe('upsertAlfaClubPrivyAccessToken — diagnostics on failure', () => {
   })
 })
 
+describe('AlfaClub token metadata reads', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    getDbMock.mockReset()
+    ensureSchemaMock.mockResolvedValue(undefined)
+  })
+
+  it.each([
+    ['chat token', 'readAlfaClubChatTokenMeta', 'chat_jwt'],
+    ['Privy access token', 'readAlfaClubPrivyAccessTokenMeta', 'chat_privy_access_token'],
+  ] as const)('reads %s presence and expiry without selecting secret material', async (
+    _label,
+    helperName,
+    expectedKey,
+  ) => {
+    let queryText = ''
+    let queryValues: unknown[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        queryText = strings.join(' ')
+        queryValues = values
+        return {
+          rows: [{
+            has_token: true,
+            updated_at: '2026-07-14T20:00:00.000Z',
+            expires_at: '2099-07-14T21:00:00.000Z',
+            updated_by: 'token-refresher',
+          }],
+          rowCount: 1,
+        }
+      }),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const store = await import('./chatTokenStore.ts')
+    const meta = await store[helperName]()
+
+    expect(queryText.toLowerCase()).not.toContain('secret_value')
+    expect(queryValues).toContain(expectedKey)
+    expect(meta).toEqual({
+      hasToken: true,
+      updatedAt: '2026-07-14T20:00:00.000Z',
+      expiresAt: '2099-07-14T21:00:00.000Z',
+      updatedBy: 'token-refresher',
+      isExpired: false,
+    })
+  })
+})
+
 describe('upsertAlfaClubChatToken — diagnostics on failure', () => {
   beforeEach(() => {
     vi.resetModules()

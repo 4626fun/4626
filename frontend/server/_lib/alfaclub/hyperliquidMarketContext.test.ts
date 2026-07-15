@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getPerpMarketContext } from './hyperliquid.js'
+import { getPerpMarketContext, getUserFillsByTimeDetailed } from './hyperliquid.js'
 
 describe('getPerpMarketContext', () => {
   afterEach(() => vi.restoreAllMocks())
@@ -36,5 +36,36 @@ describe('getPerpMarketContext', () => {
       new Response(JSON.stringify([{ universe: [{ name: 'BTC' }] }, [{}]]), { status: 200 }),
     )
     await expect(getPerpMarketContext('ETH')).resolves.toBeNull()
+  })
+})
+
+describe('getUserFillsByTimeDetailed', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('retains Hyperliquid trade and order identities for idempotent reconciliation', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify([{
+        tid: 12345,
+        oid: 67890,
+        coin: 'BTC',
+        px: '100000',
+        sz: '0.001',
+        dir: 'Open Short',
+        startPosition: '0',
+        closedPnl: '0',
+        fee: '0.02',
+        time: 1_784_006_405_000,
+      }]), { status: 200 }),
+    )
+
+    await expect(
+      getUserFillsByTimeDetailed('0xcccccccccccccccccccccccccccccccccccccccc', 0),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        fillId: '12345',
+        orderId: '67890',
+        coin: 'BTC',
+      }),
+    ])
   })
 })

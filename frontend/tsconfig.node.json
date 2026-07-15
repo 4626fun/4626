@@ -43,6 +43,7 @@
     "server/ai/**/*.ts",
     "server/agents/**/*.ts",
     "scripts/**/*.d.ts",
+    "scripts/ops/verify-inverse-akita-trade-journal.ts",
     "src/config/contracts.defaults.ts",
     "src/config/contracts.ts",
     "src/config/remoteShareOftChains.ts",

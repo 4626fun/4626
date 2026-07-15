@@ -404,6 +404,10 @@ export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
   }
 }
 
+export function isInverseAkitaTradeJournalPublicationEnabled(): boolean {
+  return parseBool(process.env.ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_PUBLISH_ENABLED)
+}
+
 function parseBool(raw: string | undefined): boolean {
   const value = (raw ?? '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
@@ -2210,6 +2214,22 @@ export async function runAlfaClubDailyBrief(params: {
   flags?: DailyBriefFlags
 } = {}): Promise<AlfaClubDailyBriefResult> {
   const flags = params.flags ?? readAlfaClubDailyBriefFlags()
+  if (
+    isInverseAkitaTradeJournalPublicationEnabled()
+    && (flags.roomId === '1659' || listDailyBriefPostRoomIds().includes('1659'))
+  ) {
+    return {
+      ok: false,
+      reason: 'inverse_akita_trade_journal_publication_enabled',
+      snapshotTs: null,
+      previousSnapshotTs: null,
+      sent: false,
+      skippedDuplicate: false,
+      roomId: flags.roomId,
+      lane: null,
+      messageText: null,
+    }
+  }
   if (!flags.enabled) {
     return {
       ok: false,

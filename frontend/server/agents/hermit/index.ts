@@ -28,6 +28,10 @@ import {
   startCounterTradeTicker,
 } from '../../_lib/alfaclub/counterTradeTicker.js'
 import {
+  type InverseOpinionTradeReconcilerTickerState,
+  startInverseOpinionTradeReconcilerTicker,
+} from '../../_lib/alfaclub/inverseOpinionTradeReconcilerTicker.js'
+import {
   type AcpAuthBootstrapResult,
   logAcpAuthBootstrapResult,
   runAcpAuthBootstrap,
@@ -35,7 +39,14 @@ import {
 import { logger } from '../../_lib/infra/logger.js'
 import { isDbConfigured } from '../../_lib/db/postgres.js'
 import { parseAlfaClubBoolEnv } from '../../_lib/alfaclub/keeprAlfaClubSplit.js'
-import { readAlfaClubChatToken, readAlfaClubPrivyAccessToken } from '../../_lib/alfaclub/chatTokenStore.js'
+import {
+  readAlfaClubChatTokenMeta,
+  readAlfaClubPrivyAccessTokenMeta,
+} from '../../_lib/alfaclub/chatTokenStore.js'
+import {
+  applyTokenExpiryHealthMetadata,
+  createTokenExpiryHealthRefresher,
+} from './tokenExpiryHealth.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -139,6 +150,9 @@ type RuntimeState = {
   counterTradeTickerStarted: boolean
   counterTradeTickerReason: string | null
   counterTrade: CounterTradeTickerState | null
+  inverseOpinionReconcilerStarted: boolean
+  inverseOpinionReconcilerReason: string | null
+  inverseOpinionReconciler: InverseOpinionTradeReconcilerTickerState | null
   // ACP auth bootstrap result (signing readiness for live arena/counter-trades)
   acpAuthBootstrap: AcpAuthBootstrapResult | null
   // Optional Virtuals ACP bridge status (job-session lane).
@@ -180,16 +194,28 @@ const state: RuntimeState = {
   counterTradeTickerStarted: false,
   counterTradeTickerReason: null,
   counterTrade: null,
+  inverseOpinionReconcilerStarted: false,
+  inverseOpinionReconcilerReason: null,
+  inverseOpinionReconciler: null,
   acpAuthBootstrap: null,
   virtualsAcpStarted: false,
   virtualsAcpReason: null,
   virtualsAcp: null,
 }
 
+const readTokenExpiryHealthMetadata = createTokenExpiryHealthRefresher({
+  readChatMeta: readAlfaClubChatTokenMeta,
+  readAccessMeta: readAlfaClubPrivyAccessTokenMeta,
+})
+
 let stopBridge: (() => void) | null = null
 let stopRefresher: (() => void) | null = null
 let stopCounterTradeTicker: (() => void) | null = null
 let readCounterTradeState: (() => CounterTradeTickerState) | null = null
+let stopInverseOpinionReconciler: (() => void) | null = null
+let readInverseOpinionReconcilerState:
+  | (() => InverseOpinionTradeReconcilerTickerState)
+  | null = null
 let stopVirtualsAcp: (() => void) | null = null
 let readVirtualsAcpState:
   | (() => {
@@ -248,119 +274,73 @@ function flushTickRollup(nowMs: number, force = false): void {
   resetTickRollup(nowMs)
 }
 
-// Keep /healthz + /readyz off the DB hot path. Probe responses serve the
-// in-memory snapshot; a short TTL + single-flight background refresh picks up
-// Vercel-cron / in-process refresher writes without blocking Railway liveness.
-const TOKEN_EXPIRY_REFRESH_TTL_MS = 30_000
-
-let tokenExpiryRefreshInFlight: Promise<void> | null = null
-let lastTokenExpiryRefreshAtMs = 0
-let stopTokenExpiryRefreshLoop: (() => void) | null = null
-
 async function refreshTokenExpiryState(): Promise<void> {
   try {
-    const [chatToken, accessToken] = await Promise.all([
-      readAlfaClubChatToken().catch(() => null),
-      readAlfaClubPrivyAccessToken().catch(() => null),
-    ])
-
-    if (chatToken?.expiresAt) {
-      state.chatJwtExpiresAt = chatToken.expiresAt
-    }
-    if (accessToken?.expiresAt) {
-      state.accessTokenExpiresAt = accessToken.expiresAt
-    }
-    if (chatToken?.updatedAt) {
-      state.lastSuccessfulTokenRefreshAt = chatToken.updatedAt
-    }
-  } catch {
+    const metadata = await readTokenExpiryHealthMetadata()
+    applyTokenExpiryHealthMetadata(state, metadata)
+  } catch (err) {
     // Non-fatal — health endpoint will just show older values
-  }
-}
-
-function scheduleTokenExpiryRefresh(force = false): void {
-  const now = Date.now()
-  if (tokenExpiryRefreshInFlight) return
-  if (!force && now - lastTokenExpiryRefreshAtMs < TOKEN_EXPIRY_REFRESH_TTL_MS) return
-
-  tokenExpiryRefreshInFlight = refreshTokenExpiryState()
-    .catch(() => {
-      // Errors already swallowed inside refreshTokenExpiryState; keep the
-      // in-flight guard from hanging if that ever changes.
-    })
-    .finally(() => {
-      tokenExpiryRefreshInFlight = null
-      lastTokenExpiryRefreshAtMs = Date.now()
-    })
-}
-
-function startTokenExpiryRefreshLoop(): void {
-  if (stopTokenExpiryRefreshLoop) return
-  scheduleTokenExpiryRefresh(true)
-  const timer = setInterval(() => {
-    scheduleTokenExpiryRefresh()
-  }, TOKEN_EXPIRY_REFRESH_TTL_MS)
-  if (typeof timer.unref === 'function') timer.unref()
-  stopTokenExpiryRefreshLoop = () => {
-    clearInterval(timer)
-    stopTokenExpiryRefreshLoop = null
   }
 }
 
 function startHealthServer(): void {
   const port = Number(process.env.PORT ?? '8080') || 8080
-  startTokenExpiryRefreshLoop()
   const server = http.createServer((req, res) => {
-    const method = String(req.method ?? 'GET').toUpperCase()
-    const url = (req.url ?? '/').split('?')[0]
+    void (async () => {
+      const method = String(req.method ?? 'GET').toUpperCase()
+      const url = (req.url ?? '/').split('?')[0]
 
-    if (method !== 'GET' && method !== 'HEAD') {
-      res.writeHead(405, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }))
-      return
-    }
+      if (method !== 'GET' && method !== 'HEAD') {
+        res.writeHead(405, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }))
+        return
+      }
 
-    if (url === '/robots.txt') {
-      res.writeHead(200, {
-        'cache-control': 'public, max-age=3600',
-        'content-type': 'text/plain; charset=utf-8',
+      if (url === '/robots.txt') {
+        res.writeHead(200, {
+          'cache-control': 'public, max-age=3600',
+          'content-type': 'text/plain; charset=utf-8',
+        })
+        res.end('User-agent: *\nDisallow: /\n')
+        return
+      }
+
+      if (url !== '/healthz' && url !== '/readyz') {
+        res.writeHead(404, { 'content-type': 'text/plain' })
+        res.end('Not found')
+        return
+      }
+
+      // Kick a background refresh through the short TTL + single-flight cache.
+      // Probe responses stay memory-only and never block on DB/network work.
+      scheduleTokenExpiryRefresh()
+
+      if (readCounterTradeState) {
+        state.counterTrade = readCounterTradeState()
+      }
+      if (readInverseOpinionReconcilerState) {
+        state.inverseOpinionReconciler = readInverseOpinionReconcilerState()
+      }
+      if (readVirtualsAcpState) {
+        state.virtualsAcp = readVirtualsAcpState()
+      }
+      const ready = state.bridgeStarted
+      const status = url === '/readyz' && !ready ? 503 : 200
+      res.writeHead(status, {
+        'cache-control': 'no-store',
+        'content-type': 'application/json',
       })
-      res.end('User-agent: *\nDisallow: /\n')
-      return
-    }
-
-    if (url !== '/healthz' && url !== '/readyz') {
-      res.writeHead(404, { 'content-type': 'text/plain' })
-      res.end('Not found')
-      return
-    }
-
-    // Kick a background refresh when the TTL is stale, but never await DB
-    // work on the probe path — Railway liveness must stay memory-only.
-    scheduleTokenExpiryRefresh()
-
-    if (readCounterTradeState) {
-      state.counterTrade = readCounterTradeState()
-    }
-    if (readVirtualsAcpState) {
-      state.virtualsAcp = readVirtualsAcpState()
-    }
-    const ready = state.bridgeStarted
-    const status = url === '/readyz' && !ready ? 503 : 200
-    res.writeHead(status, {
-      'cache-control': 'no-store',
-      'content-type': 'application/json',
-    })
-    res.end(
-      JSON.stringify({
-        ok: status < 500,
-        service: 'hermit-alfaclub',
-        probe: url,
-        uptimeSeconds: Math.floor(process.uptime()),
-        earlyDiagnostics: earlyHermitDiagnostics,
-        ...state,
-      }),
-    )
+      res.end(
+        JSON.stringify({
+          ok: status < 500,
+          service: 'hermit-alfaclub',
+          probe: url,
+          uptimeSeconds: Math.floor(process.uptime()),
+          earlyDiagnostics: earlyHermitDiagnostics,
+          ...state,
+        }),
+      )
+    })()
   })
 
   server.listen(port, () => {
@@ -464,8 +444,8 @@ async function startRuntime(): Promise<void> {
         role: 'primary writer for alfaclub_runtime_secret (this Hermit instance owns token rotation)',
       })
 
-      // Capture initial token expiry for observability (non-blocking).
-      scheduleTokenExpiryRefresh(true)
+      // Capture initial token expiry for observability
+      void refreshTokenExpiryState()
     }
   } catch (error) {
     logger.warn('[hermit] AlfaClub Privy token refresher not started', {
@@ -503,6 +483,31 @@ async function startRuntime(): Promise<void> {
   } catch (error) {
     state.counterTradeTickerReason = asErrorMessage(error)
     logger.warn('[hermit] counter-trade ticker not started', {
+      error: asErrorMessage(error),
+    })
+  }
+
+  try {
+    const reconciler = startInverseOpinionTradeReconcilerTicker()
+    state.inverseOpinionReconcilerStarted = reconciler.started
+    state.inverseOpinionReconcilerReason = reconciler.started
+      ? null
+      : reconciler.reason ?? 'unknown'
+    if (reconciler.started) {
+      stopInverseOpinionReconciler = reconciler.stop
+      readInverseOpinionReconcilerState = reconciler.readState
+      state.inverseOpinionReconciler = reconciler.readState()
+      logger.info('[hermit] inverse opinion lifecycle reconciler started', {
+        role: 'single Railway Hermit lifecycle writer',
+      })
+    } else {
+      logger.info('[hermit] inverse opinion lifecycle reconciler not started', {
+        reason: reconciler.reason ?? 'unknown',
+      })
+    }
+  } catch (error) {
+    state.inverseOpinionReconcilerReason = 'ticker_start_failed'
+    logger.warn('[hermit] inverse opinion lifecycle reconciler not started', {
       error: asErrorMessage(error),
     })
   }
@@ -557,13 +562,13 @@ function shutdown(signal: string): void {
   logger.info('[hermit] shutting down', { signal })
   flushTickRollup(Date.now(), true)
   try {
-    stopTokenExpiryRefreshLoop?.()
-  } catch {}
-  try {
     stopVirtualsAcp?.()
   } catch {}
   try {
     stopCounterTradeTicker?.()
+  } catch {}
+  try {
+    stopInverseOpinionReconciler?.()
   } catch {}
   try {
     stopRefresher?.()

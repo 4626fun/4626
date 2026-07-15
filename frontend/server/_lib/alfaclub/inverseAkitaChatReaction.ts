@@ -9,13 +9,34 @@ import { validateArenaPair } from '../arena/arenaPairPolicy.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { logger } from '../infra/logger.js'
 import { deriveCounterSide, type CounterTradeSide } from './counterTradeConfig.js'
-import { formatInverseAkitaStakerPilotGateReply } from './inverseAkitaStakerPilot.js'
+import {
+  isInverseAkitaBotAuthoredChatText,
+  isRegisteredInverseAkitaBotOutboundText,
+  registerInverseAkitaBotOutboundText,
+  resetInverseAkitaBotOutboundTextRegistryForTests,
+} from './inverseAkitaBotAuthoredText.js'
+export {
+  isInverseAkitaBotAuthoredChatText,
+  isRegisteredInverseAkitaBotOutboundText,
+  registerInverseAkitaBotOutboundText,
+} from './inverseAkitaBotAuthoredText.js'
 import { getAllPerpMarkets, type HyperliquidPerpMarket } from './hyperliquid.js'
 import {
   INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
   isInverseAkitaChatReactionRoom,
   resolveInverseAkitaChatAuthorAccess,
 } from './inverseAkitaChatReactionPolicy.js'
+import {
+  claimInverseOpinionTradeIntent,
+  recordInverseOpinionTradeSubmitted,
+  recordInverseOpinionTradeTerminal,
+  recordInverseOpinionTradeUnknown,
+  type InverseOpinionParseMode,
+} from './inverseOpinionTradeRecorder.js'
+import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptureConfig.js'
+import { reconcileInverseOpinionTrades } from './inverseOpinionTradeReconciler.js'
+import { formatInverseOpinionSkipReply } from './inverseOpinionTerminalReplyFormatter.js'
+import type { OpinionTradeDecision } from './inverseOpinionTradeStore.js'
 import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -456,64 +477,8 @@ const PERP_MARKET_CACHE_MS = 5 * 60_000
 const DEFAULT_SENDER_COOLDOWN_MS = 90_000
 
 const senderCooldownUntilMs = new Map<string, number>()
-const inverseBotOutboundTextUntilMs = new Map<string, number>()
-const INVERSE_BOT_OUTBOUND_TEXT_TTL_MS = 15 * 60_000
-
-/** Bot-authored AlfaClub lines that must never re-trigger inverse parsing. */
-const INVERSE_AKITA_BOT_AUTHORED_TEXT_RES: RegExp[] = [
-  /^InverseAKITA pilot\b/i,
-  /^🧾 receipt:/,
-  /wanted to invert your take/i,
-  /trimmed anyway/i,
-  /i was already there/i,
-  /your call is my exit signal/i,
-  /tried to (?:long|short)\b/i,
-  /hyperliquid said no/i,
-  /execution said absolutely not/i,
-  /\[dry-run\]/i,
-  /kek (?:top|bottom) signal/i,
-  /sized up the (?:long|short)/i,
-  /stacked the (?:long|short)/i,
-  /increased .* (?:long|short)/i,
-  /took \$?\d+ off the/i,
-  /bearish cope is my buy signal/i,
-  /bullish fanfic noted/i,
-  /you sound bearish\. i sound longer/i,
-  /you said up only\. i said more short/i,
-]
 
 let cachedPerpMarkets: { fetchedAtMs: number; markets: HyperliquidPerpMarket[] } | null = null
-
-function normalizeInverseBotOutboundTextKey(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLowerCase()
-}
-
-function pruneInverseBotOutboundTextRegistry(nowMs: number): void {
-  for (const [key, untilMs] of inverseBotOutboundTextUntilMs) {
-    if (untilMs <= nowMs) inverseBotOutboundTextUntilMs.delete(key)
-  }
-}
-
-/** Remember InverseAKITA outbound chat lines so the bridge does not trade on its own copy. */
-export function registerInverseAkitaBotOutboundText(text: string, nowMs = Date.now()): void {
-  const key = normalizeInverseBotOutboundTextKey(text)
-  if (!key) return
-  pruneInverseBotOutboundTextRegistry(nowMs)
-  inverseBotOutboundTextUntilMs.set(key, nowMs + INVERSE_BOT_OUTBOUND_TEXT_TTL_MS)
-}
-
-export function isRegisteredInverseAkitaBotOutboundText(text: string, nowMs = Date.now()): boolean {
-  const key = normalizeInverseBotOutboundTextKey(text)
-  if (!key) return false
-  pruneInverseBotOutboundTextRegistry(nowMs)
-  return (inverseBotOutboundTextUntilMs.get(key) ?? 0) > nowMs
-}
-
-export function isInverseAkitaBotAuthoredChatText(text: string): boolean {
-  const normalized = text.trim()
-  if (!normalized) return false
-  return INVERSE_AKITA_BOT_AUTHORED_TEXT_RES.some((pattern) => pattern.test(normalized))
-}
 
 function readEnvFlag(name: string, fallback: boolean): boolean {
   const raw = String(process.env[name] ?? '').trim().toLowerCase()
@@ -617,6 +582,7 @@ export type InverseAkitaChatHistoryMessage = {
   date?: number | string | null
   sender?: string | null
   text?: string | null
+  username?: string | null
   isBot?: boolean | null
   replyId?: string | number | null
   reply_id?: string | null
@@ -677,9 +643,21 @@ export type InverseAkitaChatTradeIntentMessage = {
   date: number
   sender: string
   text: string
+  publicAuthorLabel?: string | null
   userSide: CounterTradeSide
   pair: string
+  ordinal?: number
+  parseMode?: InverseOpinionParseMode
   marketClarification?: InverseAkitaMarketClarification
+}
+
+function resolveInverseOpinionParseMode(text: string): InverseOpinionParseMode {
+  const trimmed = String(text ?? '').trim()
+  const normalized = normalizeChatTradeIntentText(trimmed)
+  if (CHAT_TRADE_INTENT_RE.test(normalized)) return 'strict'
+  if (QUALIFIED_TRADE_INTENT_RE.test(normalized)) return 'qualified'
+  if (/@[\w.-]+/.test(trimmed) && MENTION_LED_TRADE_INTENT_RE.test(normalized)) return 'mention'
+  return 'loose'
 }
 
 function isHexAddress(value: string): boolean {
@@ -726,7 +704,6 @@ export function collectInverseAkitaChatTradeIntents(params: {
   availableMarkets?: readonly HyperliquidPerpMarket[]
 }): InverseAkitaChatTradeIntentMessage[] {
   if (!isInverseAkitaChatReactionRoom(params.roomId)) return []
-  if (!isInverseAkitaChatReactionEnabledByEnv()) return []
 
   const self = String(params.selfAddress ?? '').trim().toLowerCase()
   const out: InverseAkitaChatTradeIntentMessage[] = []
@@ -760,8 +737,14 @@ export function collectInverseAkitaChatTradeIntents(params: {
       date: Number.isFinite(date) ? date : 0,
       sender,
       text,
+      publicAuthorLabel:
+        typeof message.username === 'string' && message.username.trim()
+          ? message.username.trim()
+          : null,
       userSide: parsed.userSide,
       pair: parsed.pair,
+      ordinal: 0,
+      parseMode: resolveInverseOpinionParseMode(text),
       marketClarification: parsed.marketClarification,
     })
   }
@@ -884,27 +867,8 @@ export function formatInverseAkitaThreadReceipt(params: {
 }
 
 export function formatInverseAkitaChatReactionSkipReply(skipReason: string): string | null {
-  switch (skipReason) {
-    case 'arena_trading_disabled':
-      return 'wanted to invert your take but arena trading is off on the server. operator skill issue.'
-    case 'missing_executor_wallet':
-      return 'wanted to invert your take but InverseAKITA has no executor wallet mapped yet.'
-    case 'insufficient_stake':
-      return formatInverseAkitaStakerPilotGateReply()
-    case 'stake_read_failed':
-      return 'wanted to invert your take but the room 1659 stake check failed. retry in a moment.'
-    case 'arena_room_blocked':
-      return 'wanted to invert your take but this room is not on the arena allowlist.'
-    case 'market_metadata_unavailable':
-      return 'wanted to invert your take but Hyperliquid market metadata is unavailable. retry in a moment.'
-    case 'market_not_listed':
-      return 'wanted to invert your take but that market is not currently listed on Hyperliquid.'
-    default:
-      if (skipReason.startsWith('pair_') || skipReason.includes('allowlist')) {
-        return `wanted to invert your take but that pair is blocked here (${skipReason}).`
-      }
-      return null
-  }
+  if (skipReason === 'sender_cooldown') return null
+  return formatInverseOpinionSkipReply(skipReason)
 }
 
 export function formatInverseAkitaMarketClarification(
@@ -959,7 +923,7 @@ export function __resetInverseAkitaChatReactionMarketCacheForTests(): void {
 
 /** For unit tests only. */
 export function __resetInverseAkitaBotOutboundTextRegistryForTests(): void {
-  inverseBotOutboundTextUntilMs.clear()
+  resetInverseAkitaBotOutboundTextRegistryForTests()
 }
 
 export type InverseAkitaChatReactionResult = {
@@ -974,11 +938,54 @@ export type InverseAkitaChatReactionResult = {
   pair: string
 }
 
+export function readInverseAkitaTerminalReply(
+  decision: Pick<OpinionTradeDecision, 'executionPhase' | 'terminalOutcome' | 'receiptSummary'>,
+): InverseAkitaChatReactionResult | null {
+  if (
+    decision.executionPhase !== 'resolved'
+    || (decision.terminalOutcome !== 'executed' && decision.terminalOutcome !== 'failed')
+  ) return null
+  const raw = decision.receiptSummary.terminalReply
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const value = raw as Record<string, unknown>
+  const replyText = typeof value.replyText === 'string' ? value.replyText : ''
+  const threadReceiptText =
+    value.threadReceiptText == null
+      ? null
+      : typeof value.threadReceiptText === 'string'
+        ? value.threadReceiptText
+        : null
+  const reactionEmoji = typeof value.reactionEmoji === 'string' ? value.reactionEmoji : ''
+  const counterSide = value.counterSide
+  const pair = typeof value.pair === 'string' ? value.pair : ''
+  if (
+    typeof value.ok !== 'boolean'
+    || !replyText.trim()
+    || replyText.length > 2_000
+    || (threadReceiptText != null && threadReceiptText.length > 2_000)
+    || !reactionEmoji
+    || reactionEmoji.length > 16
+    || (counterSide !== 'long' && counterSide !== 'short')
+    || !pair
+    || pair.length > 64
+  ) return null
+  return {
+    ok: value.ok,
+    replyText,
+    reactionEmoji,
+    threadReceiptText,
+    counterSide,
+    pair,
+  }
+}
+
 export async function executeInverseAkitaChatReaction(params: {
   roomId: string
   intent: InverseAkitaChatTradeIntentMessage
+  claimedDecision?: OpinionTradeDecision
 }): Promise<InverseAkitaChatReactionResult> {
   const roomId = String(params.roomId ?? '').trim()
+  const counterSide = deriveCounterSide(params.intent.userSide)
   if (!isInverseAkitaChatReactionRoom(roomId)) {
     return {
       ok: false,
@@ -986,57 +993,116 @@ export async function executeInverseAkitaChatReaction(params: {
       skipReason: 'wrong_room',
       replyText: '',
       reactionEmoji: '',
-      counterSide: 'short',
+      counterSide,
       pair: params.intent.pair,
     }
   }
+
+  const captureEnabled = isInverseOpinionTradeCaptureEnabled()
+  let decision: OpinionTradeDecision | null = captureEnabled
+    ? params.claimedDecision ?? null
+    : null
+  if (captureEnabled && !decision) {
+    try {
+      decision = await claimInverseOpinionTradeIntent({
+        roomId,
+        intent: params.intent,
+      })
+    } catch {
+      return {
+        ok: false,
+        skipped: true,
+        skipReason: 'attribution_store_unavailable',
+        replyText: '',
+        reactionEmoji: '',
+        counterSide,
+        pair: params.intent.pair,
+      }
+    }
+  }
+
+  let authorAccess: Awaited<ReturnType<typeof resolveInverseAkitaChatAuthorAccess>> | null = null
+  const resolveWithoutSubmission = async (
+    outcome: 'rejected' | 'blocked',
+    reasonCode: string,
+  ): Promise<void> => {
+    if (!decision) return
+    await recordInverseOpinionTradeTerminal({
+      decision,
+      outcome,
+      reasonCode,
+      receiptSummary: {
+        parseMode: params.intent.parseMode ?? 'loose',
+        authorAccess,
+      },
+    })
+  }
+
   if (!isInverseAkitaChatReactionEnabledByEnv()) {
+    await resolveWithoutSubmission('blocked', 'reaction_disabled')
     return {
       ok: false,
       skipped: true,
       skipReason: 'disabled',
       replyText: '',
       reactionEmoji: '',
-      counterSide: deriveCounterSide(params.intent.userSide),
+      counterSide,
       pair: params.intent.pair,
     }
   }
   if (!arenaCommandAllowedForRoom(INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID)) {
+    await resolveWithoutSubmission('blocked', 'arena_room_blocked')
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason: 'arena_room_blocked',
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
     )
   }
   if (isInverseAkitaChatReactionSenderCoolingDown(params.intent.sender)) {
+    await resolveWithoutSubmission('blocked', 'sender_cooldown')
     return {
       ok: false,
       skipped: true,
       skipReason: 'sender_cooldown',
       replyText: '',
       reactionEmoji: '',
-      counterSide: deriveCounterSide(params.intent.userSide),
+      counterSide,
       pair: params.intent.pair,
     }
   }
 
-  const authorAccess = await resolveInverseAkitaChatAuthorAccess({
-    senderAddress: params.intent.sender,
-    roomId,
-  })
+  try {
+    authorAccess = await resolveInverseAkitaChatAuthorAccess({
+      senderAddress: params.intent.sender,
+      roomId,
+    })
+  } catch {
+    await resolveWithoutSubmission('blocked', 'authority_check_failed')
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'authority_check_failed',
+        counterSide,
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
+  }
   if (!authorAccess.eligible) {
     const skipReason = authorAccess.reason
+    await resolveWithoutSubmission('rejected', skipReason)
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason,
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
@@ -1044,6 +1110,7 @@ export async function executeInverseAkitaChatReaction(params: {
   }
 
   if (params.intent.marketClarification) {
+    await resolveWithoutSubmission('rejected', 'market_ambiguous')
     return {
       ok: false,
       skipped: true,
@@ -1052,33 +1119,40 @@ export async function executeInverseAkitaChatReaction(params: {
         params.intent.marketClarification,
       ),
       reactionEmoji: resolveInverseAkitaChatReactionEmoji(params.intent.id),
-      counterSide: deriveCounterSide(params.intent.userSide),
+      counterSide,
       pair: params.intent.pair,
     }
   }
 
   const baseConfig = readArenaConfig()
   if (!baseConfig.enabled || !baseConfig.tradingEnabled) {
+    await resolveWithoutSubmission('blocked', 'arena_trading_disabled')
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason: 'arena_trading_disabled',
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
     )
   }
 
-  const markets = await loadInverseAkitaChatReactionMarkets()
+  let markets: HyperliquidPerpMarket[] | null
+  try {
+    markets = await loadInverseAkitaChatReactionMarkets()
+  } catch {
+    markets = null
+  }
   if (!markets) {
+    await resolveWithoutSubmission('blocked', 'market_metadata_unavailable')
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason: 'market_metadata_unavailable',
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
@@ -1086,12 +1160,13 @@ export async function executeInverseAkitaChatReaction(params: {
   }
   const listedPair = resolveListedMarketSymbol(params.intent.pair, markets)
   if (!listedPair) {
+    await resolveWithoutSubmission('blocked', 'market_not_listed')
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason: 'market_not_listed',
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
@@ -1100,25 +1175,55 @@ export async function executeInverseAkitaChatReaction(params: {
 
   const pairCheck = validateArenaPair(listedPair, baseConfig)
   if (!pairCheck.ok) {
+    await resolveWithoutSubmission('rejected', pairCheck.reason)
     return withInverseSkipReply(
       {
         ok: false,
         skipped: true,
         skipReason: pairCheck.reason,
-        counterSide: deriveCounterSide(params.intent.userSide),
+        counterSide,
         pair: params.intent.pair,
       },
       params.intent.id,
     )
   }
 
-  const identity = await resolveRoomDefaultArenaIdentity({
-    roomId: INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
-    baseConfig,
-  })
-  const counterSide = deriveCounterSide(params.intent.userSide)
+  let identity: Awaited<ReturnType<typeof resolveRoomDefaultArenaIdentity>>
+  try {
+    identity = await resolveRoomDefaultArenaIdentity({
+      roomId: INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
+      baseConfig,
+    })
+  } catch {
+    await resolveWithoutSubmission('blocked', 'executor_identity_unavailable')
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'missing_executor_wallet',
+        counterSide,
+        pair: pairCheck.normalizedPair,
+      },
+      params.intent.id,
+    )
+  }
   const sizeUsd = readInverseAkitaChatReactionSizeUsd()
-  const leverage = await resolveInverseAkitaChatReactionLeverage(pairCheck.normalizedPair)
+  let leverage: number
+  try {
+    leverage = await resolveInverseAkitaChatReactionLeverage(pairCheck.normalizedPair)
+  } catch {
+    await resolveWithoutSubmission('blocked', 'market_metadata_unavailable')
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'market_metadata_unavailable',
+        counterSide,
+        pair: pairCheck.normalizedPair,
+      },
+      params.intent.id,
+    )
+  }
   const executionConfig = {
     ...baseConfig,
     agentId: identity.agentId,
@@ -1127,6 +1232,7 @@ export async function executeInverseAkitaChatReaction(params: {
   }
 
   if (!executionConfig.agentWalletAddress) {
+    await resolveWithoutSubmission('blocked', 'missing_executor_wallet')
     return withInverseSkipReply(
       {
         ok: false,
@@ -1152,31 +1258,84 @@ export async function executeInverseAkitaChatReaction(params: {
     // Position lookup is best-effort — fresh-open copy if it fails.
   }
 
-  const trade =
+  const tradeRequest =
     positionAction === 'trim'
-      ? await runArenaTrade(
-          {
-            action: 'close',
-            pair: pairCheck.normalizedPair,
-            sizeUsd,
-          },
-          executionConfig,
-        )
-      : await runArenaTrade(
-          {
-            action: 'open',
-            pair: pairCheck.normalizedPair,
-            side: counterSide,
-            sizeUsd,
-            leverage,
-          },
-          executionConfig,
-        )
+      ? {
+          action: 'close' as const,
+          pair: pairCheck.normalizedPair,
+          sizeUsd,
+        }
+      : {
+          action: 'open' as const,
+          pair: pairCheck.normalizedPair,
+          side: counterSide,
+          sizeUsd,
+          leverage,
+        }
+
+  if (decision) {
+    const submissionClaimed = await recordInverseOpinionTradeSubmitted({
+      decision,
+      executorWallet: executionConfig.agentWalletAddress,
+      requestedParameters: {
+        ...tradeRequest,
+        sourceSide: params.intent.userSide,
+        inverseSide: counterSide,
+        positionAction,
+        existingSide,
+        agentId: executionConfig.agentId,
+        hlApiWalletAddress: executionConfig.hlApiWalletAddress,
+        authorAccess,
+      },
+      parseMode: params.intent.parseMode ?? 'loose',
+    })
+    if (!submissionClaimed) {
+      return {
+        ok: false,
+        skipped: true,
+        skipReason: 'decision_already_claimed',
+        replyText: '',
+        reactionEmoji: '',
+        counterSide,
+        pair: pairCheck.normalizedPair,
+      }
+    }
+  }
+
+  let trade: Awaited<ReturnType<typeof runArenaTrade>>
+  try {
+    trade = await runArenaTrade(tradeRequest, executionConfig)
+  } catch (error) {
+    if (decision) {
+      await recordInverseOpinionTradeUnknown({
+        decision,
+        reasonCode: 'arena_submit_unknown',
+        receiptSummary: {
+          errorKind: 'thrown',
+          authorAccess,
+        },
+      })
+    }
+    throw error
+  }
 
   markInverseAkitaChatReactionSenderCooldown(params.intent.sender)
 
   const reactionEmoji = resolveInverseAkitaChatReactionEmoji(params.intent.id)
   const failDetail = trade.ok ? null : summarizeInverseTradeFailureDetail(trade.run)
+  const fill = parseTradeFillFromOutput(String(trade.run?.stdout ?? ''))
+  const receiptSummary = {
+    arenaMessage: String(trade.message ?? '').slice(0, 240),
+    fill,
+    authorAccess,
+    run: trade.run
+      ? {
+          code: trade.run.code,
+          timedOut: trade.run.timedOut,
+          dryRun: trade.run.dryRun,
+        }
+      : null,
+  }
   const replyText = formatInverseAkitaChatReactionReply({
     seed: params.intent.id,
     userSide: params.intent.userSide,
@@ -1199,10 +1358,40 @@ export async function executeInverseAkitaChatReaction(params: {
     dryRun: baseConfig.dryRun,
     positionAction,
     existingSide,
-    fill: parseTradeFillFromOutput(String(trade.run?.stdout ?? '')),
+    fill,
     failDetail,
   })
-
+  if (decision && !trade.ok && trade.run?.timedOut) {
+    await recordInverseOpinionTradeUnknown({
+      decision,
+      reasonCode: 'arena_submit_unknown',
+      receiptSummary,
+    })
+  } else if (decision) {
+    await recordInverseOpinionTradeTerminal({
+      decision,
+      outcome: trade.ok ? 'executed' : 'failed',
+      reasonCode: trade.ok ? 'arena_execution_succeeded' : 'arena_execution_failed',
+      receiptSummary: {
+        ...receiptSummary,
+        terminalReply: {
+          ok: trade.ok,
+          replyText,
+          threadReceiptText,
+          reactionEmoji,
+          counterSide,
+          pair: pairCheck.normalizedPair,
+        },
+      },
+    })
+    if (trade.ok) {
+      void reconcileInverseOpinionTrades().catch(() => {
+        logger.warn('[inverse-opinion-reconciler] eager pass failed', {
+          reason: 'reconciliation_failed',
+        })
+      })
+    }
+  }
   logger.info('inverse_akita.chat_reaction', {
     roomId,
     messageId: params.intent.id,

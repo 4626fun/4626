@@ -91,6 +91,84 @@ and inspect `inverse_akita.chat_reaction` plus bridge skip logs. Set
 dry-run path. Immediate freeze remains `ARENA_TRADING_ENABLED=0`,
 `ARENA_ENABLED=0`, or `ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED=0`.
 
+## InverseAKITA trade-journal operations
+
+The journal is a separate read/analysis/publication lane. It does not replace
+the Railway reaction executor and must never provide an execution edge from a
+journal verdict.
+
+| Responsibility | Railway Hermit | Vercel |
+| --- | --- | --- |
+| Qualified-opinion capture and durable decision outcome | Owner | Must not run |
+| ACP execution receipt and Hyperliquid reconciliation | Owner | Read-only evidence refresh only |
+| Journal evidence, analysis, and dispatch claim | Must not run | Owner |
+| Room `1659` parent/revision publication | Must not run | Owner |
+
+Negative ownership checks are launch blockers: a Railway process with journal
+publication enabled or a Vercel process with opinion capture enabled is an
+ownership inversion. The journal destination is hard-pinned to room `1659`;
+rooms `2`, `1043`, `1484`, and `1660` remain opinion sources only.
+
+### Read-only health and production-equivalent smoke
+
+Run from an operator checkout with read-only database access:
+
+```bash
+pnpm -C frontend ops:inverse-akita:trade-journal -- --strict
+```
+
+This command performs database `SELECT`s and local source-boundary inspection
+only. It does not post to AlfaClub, invoke Arena/ACP, submit a Hyperliquid
+trade, force reconciliation, claim a dispatch, or alter lifecycle rows. Missing
+database access is a failure, never a healthy empty result.
+
+Output is count/age-only: decision outcomes, pending/unknown decisions,
+incomplete attribution, open lifecycles, reconciliation age, last successful
+dispatch age, and latest analysis failure/fallback state. It never prints
+source excerpts, direct message links, wallets, credentials, or record IDs.
+Strict failures are wrong-room dispatch, duplicate room/window or parent,
+legacy brief/journal overlap, ownership inversion, raw-text leakage,
+non-analysis-only rows, and analysis-to-execution reachability.
+
+Dispatch age, reconciliation lag, pending decisions, incomplete attribution,
+and fallback rate are observational during shadow operation. Record the sample
+window and a representative baseline before setting alerts; do not invent
+ratios from an empty or undersized sample. Without
+`ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_BASELINE_SAMPLE_SIZE` and
+`ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_BASELINE_CAPTURED_AT`, the verifier
+reports `baseline=unavailable`.
+
+### Cutover
+
+1. Apply and verify all three journal schema migrations.
+2. Deploy Railway capture with
+   `ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED=0`, then enable capture only
+   on Railway. Keep publication off.
+3. With publication still off, collect one full representative shadow
+   lifecycle set covering cross-window carry, close, partial or ambiguous fill,
+   retry, stale-data, no-activity, and first-run behavior. Existing exposure
+   without post-cutover lineage stays incomplete and is never attributed to a
+   creator.
+4. Run the strict read-only smoke and review an observational baseline. Verify
+   the public projection is only public label or shortened wallet, paraphrased
+   opinion, and source room—never raw quotes or direct message links.
+5. Keep `ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_PUBLISH_ENABLED=0` until the
+   shadow set and ownership checks pass. Then enable it on Vercel only. The
+   stable daily `/api/v1/alfaclub/daily-brief` dispatcher selects the journal
+   and suppresses the legacy room-`1659` brief.
+
+Manual regeneration is not a smoke mechanism. It requires an admin session,
+machine proof, a bounded 24-hour window, and explicit `REGENERATE`
+confirmation; it appends a revision beneath the existing parent.
+
+### Rollback
+
+Disable `ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_PUBLISH_ENABLED` on Vercel to
+restore the legacy daily dispatcher. Do not disable Railway capture or
+reconciliation, delete lifecycle/analysis/dispatch records, or backfill
+unproven creator attribution. Capture continues while publication is off so a
+publisher rollback does not create a lineage gap.
+
 ### dgclaw v2 CLI contract (June 2026)
 
 `Dockerfile.hermit` clones `dgclaw-skill@main` unpinned, so the container always carries upstream v2/v3 semantics. The arena client matches these:

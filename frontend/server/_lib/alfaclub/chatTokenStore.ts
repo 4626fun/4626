@@ -67,9 +67,14 @@ export type AlfaClubChatTokenMeta = {
 
 type TokenRow = {
   secret_value: string
+  has_token?: boolean
   updated_at: string
   expires_at: string | null
   updated_by: string | null
+}
+
+type TokenMetaRow = Omit<TokenRow, 'secret_value'> & {
+  has_token: boolean
 }
 
 function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
@@ -99,8 +104,8 @@ export function extractJwtExpiryIso(jwt: string): string | null {
   return new Date(exp * 1000).toISOString()
 }
 
-function toMeta(row: TokenRow | null): AlfaClubChatTokenMeta {
-  if (!row) {
+function toMeta(row: TokenRow | TokenMetaRow | null): AlfaClubChatTokenMeta {
+  if (!row || row.has_token === false) {
     return {
       hasToken: false,
       updatedAt: null,
@@ -115,7 +120,7 @@ function toMeta(row: TokenRow | null): AlfaClubChatTokenMeta {
       ? Date.parse(expiresAt) <= Date.now()
       : null
   return {
-    hasToken: true,
+    hasToken: row.has_token ?? true,
     updatedAt: row.updated_at ?? null,
     expiresAt,
     updatedBy: row.updated_by ?? null,
@@ -151,6 +156,12 @@ export async function readAlfaClubChatToken(): Promise<AlfaClubChatTokenRecord |
 }
 
 export async function readAlfaClubChatTokenMeta(): Promise<AlfaClubChatTokenMeta> {
+  return readSecretMeta(CHAT_TOKEN_KEY)
+}
+
+async function readSecretMeta(
+  secretKey: typeof CHAT_TOKEN_KEY | typeof CHAT_ACCESS_TOKEN_KEY | typeof CHAT_REFRESH_TOKEN_KEY,
+): Promise<AlfaClubChatTokenMeta> {
   const db = await getDb()
   if (!db) {
     return {
@@ -164,15 +175,15 @@ export async function readAlfaClubChatTokenMeta(): Promise<AlfaClubChatTokenMeta
   try {
     await ensureAlfaClubVigilanteSchema()
     const result = await db.sql`
-      SELECT secret_value,
+      SELECT TRUE AS has_token,
              updated_at::text AS updated_at,
              expires_at::text AS expires_at,
              updated_by
       FROM alfaclub_runtime_secret
-      WHERE secret_key = ${CHAT_TOKEN_KEY}
+      WHERE secret_key = ${secretKey}
       LIMIT 1;
     `
-    const row = ((result.rows ?? [])[0] ?? null) as TokenRow | null
+    const row = ((result.rows ?? [])[0] ?? null) as TokenMetaRow | null
     return toMeta(row)
   } catch {
     return {
@@ -359,6 +370,10 @@ async function upsertPrivySecret(
 
 export async function readAlfaClubPrivyAccessToken(): Promise<AlfaClubPrivySecretRecord | null> {
   return readPrivySecret(CHAT_ACCESS_TOKEN_KEY)
+}
+
+export async function readAlfaClubPrivyAccessTokenMeta(): Promise<AlfaClubChatTokenMeta> {
+  return readSecretMeta(CHAT_ACCESS_TOKEN_KEY)
 }
 
 export async function readAlfaClubPrivyRefreshToken(): Promise<AlfaClubPrivySecretRecord | null> {

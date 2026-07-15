@@ -7,6 +7,7 @@ import {
   listDailyBriefCommandRoomIds,
   listDailyBriefPostRoomIds,
   readAlfaClubDailyBriefSeparateFromBridge,
+  runAlfaClubDailyBrief,
   resolveDailyBriefRoomId,
   resolveAlfaClubBridgeRoomId,
   sendDailyBriefToCommandRooms,
@@ -67,6 +68,24 @@ describe('daily brief room resolution', () => {
   it('resolveAlfaClubBridgeRoomId defaults to 1043', () => {
     restoreEnv = applyEnv({ ALFACLUB_CHAT_ROOM_ID: undefined })
     expect(resolveAlfaClubBridgeRoomId()).toBe('1043')
+  })
+
+  it('rejects a legacy room-1659 brief while journal publication is enabled', async () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_INVERSE_AKITA_TRADE_JOURNAL_PUBLISH_ENABLED: '1',
+      ALFACLUB_DAILY_BRIEF_ROOM_ID: '1659',
+    })
+    const result = await runAlfaClubDailyBrief({
+      flags: {
+        enabled: true,
+        roomId: '1659',
+      } as ReturnType<typeof import('./dailyBrief.js').readAlfaClubDailyBriefFlags>,
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      sent: false,
+      reason: 'inverse_akita_trade_journal_publication_enabled',
+    })
   })
 
   it('sendDailyBriefToCommandRooms posts to every reachable command room', async () => {

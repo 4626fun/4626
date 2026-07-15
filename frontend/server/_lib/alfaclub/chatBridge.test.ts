@@ -12,6 +12,10 @@ const {
   relayRoomMessagesToXmtpMock,
   lookupEnabledRoomBindingMock,
   readTrustedAlfaClubCrossChannelIngressMock,
+  claimInverseOpinionTradeIntentMock,
+  executeInverseAkitaChatReactionMock,
+  deliverInverseOpinionTerminalReplyMock,
+  tryClaimCommandReplyMock,
 } = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
@@ -71,6 +75,10 @@ const {
       updatedAt: string
     } | null> => null,
   ),
+  claimInverseOpinionTradeIntentMock: vi.fn(),
+  executeInverseAkitaChatReactionMock: vi.fn(),
+  deliverInverseOpinionTerminalReplyMock: vi.fn(),
+  tryClaimCommandReplyMock: vi.fn(),
 }))
 
 vi.mock('./commandReplyLedger.js', () => ({
@@ -84,12 +92,32 @@ vi.mock('./commandReplyLedger.js', () => ({
   // tryClaimCommandReply is required by the live command path.
   // to commandReplyLedger.ts without updating this mock, so any test exercising the live
   // command path failed with "No tryClaimCommandReply export is defined on the mock".
-  tryClaimCommandReply: vi.fn(async ({ messageId }: { roomId: string; messageId: string }) => {
+  tryClaimCommandReply: tryClaimCommandReplyMock.mockImplementation(
+    async ({ messageId }: { roomId: string; messageId: string }) => {
     if (repliedCommandLedgerMock.has(messageId)) return false
     repliedCommandLedgerMock.add(messageId)
     return true
-  }),
+    },
+  ),
 }))
+
+vi.mock('./inverseOpinionTradeRecorder.js', () => ({
+  claimInverseOpinionTradeIntent: claimInverseOpinionTradeIntentMock,
+}))
+
+vi.mock('./inverseOpinionTerminalReplyDelivery.js', () => ({
+  deliverInverseOpinionTerminalReply: deliverInverseOpinionTerminalReplyMock,
+}))
+
+vi.mock('./inverseAkitaChatReaction.js', async () => {
+  const actual = await vi.importActual<typeof import('./inverseAkitaChatReaction.js')>(
+    './inverseAkitaChatReaction.js',
+  )
+  return {
+    ...actual,
+    executeInverseAkitaChatReaction: executeInverseAkitaChatReactionMock,
+  }
+})
 
 vi.mock('../infra/logger.js', () => ({
   logger: loggerMock,
@@ -136,6 +164,7 @@ import { applyEnv } from '../../../api/__tests__/helpers'
 import {
   collectAlfaClubCommandMessages,
   _ensureLiveCommandSocketForTests,
+  _executeInverseAkitaChatReactionBatchForTests,
   _getBridgeAuthStateForTests,
   _ingestLiveMessagesForTests,
   _resetAlfaClubChatBridgeStateForTests,
@@ -274,6 +303,31 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     upsertAlfaClubIngestMessagesMock.mockResolvedValue([])
     executeDeterministicCommandMock.mockReset()
     executeDeterministicCommandMock.mockResolvedValue({ responseText: '' })
+    claimInverseOpinionTradeIntentMock.mockReset()
+    claimInverseOpinionTradeIntentMock.mockResolvedValue({
+      decisionId: '11111111-1111-4111-8111-111111111111',
+      executionPhase: 'claimed',
+      executionClaimed: true,
+    })
+    executeInverseAkitaChatReactionMock.mockReset()
+    executeInverseAkitaChatReactionMock.mockResolvedValue({
+      ok: true,
+      replyText: '',
+      reactionEmoji: '',
+      counterSide: 'short',
+      pair: 'BTC',
+    })
+    deliverInverseOpinionTerminalReplyMock.mockReset()
+    deliverInverseOpinionTerminalReplyMock.mockResolvedValue({
+      created: 1,
+      claimed: 1,
+      sent: 1,
+      failed: 0,
+      sendUnknown: 0,
+      errors: 0,
+      backlog: {},
+    })
+    tryClaimCommandReplyMock.mockClear()
     repliedCommandLedgerMock.clear()
     getChatBridgeMessageOriginsMock.mockReset()
     getChatBridgeMessageOriginsMock.mockResolvedValue(new Map())
@@ -1166,6 +1220,209 @@ describe('AlfaClub chat bridge cron helpers', () => {
       }),
     ).toBe(false)
   })
+})
+
+describe('inverse opinion decision ordering', () => {
+  const intent = {
+    id: 'inverse-source-1',
+    date: Date.now(),
+    sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    publicAuthorLabel: '@creator',
+    text: 'long btc',
+    userSide: 'long' as const,
+    pair: 'BTC',
+    ordinal: 0,
+    parseMode: 'strict' as const,
+  }
+
+  beforeEach(() => {
+    process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED = '1'
+    repliedCommandLedgerMock.clear()
+    claimInverseOpinionTradeIntentMock.mockReset()
+    claimInverseOpinionTradeIntentMock.mockResolvedValue({
+      decisionId: '11111111-1111-4111-8111-111111111111',
+      executionPhase: 'claimed',
+      executionClaimed: true,
+    })
+    executeInverseAkitaChatReactionMock.mockReset()
+    executeInverseAkitaChatReactionMock.mockResolvedValue({
+      ok: true,
+      replyText: '',
+      reactionEmoji: '',
+      counterSide: 'short',
+      pair: 'BTC',
+    })
+    tryClaimCommandReplyMock.mockClear()
+  })
+
+  afterEach(() => {
+    delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+  })
+
+  it('claims durable attribution before Arena and delegates terminal delivery to the outbox', async () => {
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(claimInverseOpinionTradeIntentMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      intent,
+    })
+    expect(executeInverseAkitaChatReactionMock).toHaveBeenCalledWith(expect.objectContaining({
+      roomId: '1659',
+      intent,
+      claimedDecision: expect.objectContaining({
+        decisionId: '11111111-1111-4111-8111-111111111111',
+      }),
+    }))
+    expect(
+      claimInverseOpinionTradeIntentMock.mock.invocationCallOrder[0],
+    ).toBeLessThan(executeInverseAkitaChatReactionMock.mock.invocationCallOrder[0]!)
+    expect(tryClaimCommandReplyMock).not.toHaveBeenCalled()
+    expect(deliverInverseOpinionTerminalReplyMock).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+    )
+  })
+
+  it('does not claim a reply or execute when durable attribution is unavailable', async () => {
+    claimInverseOpinionTradeIntentMock.mockRejectedValueOnce(new Error('db_unavailable'))
+
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(executeInverseAkitaChatReactionMock).not.toHaveBeenCalled()
+    expect(tryClaimCommandReplyMock).not.toHaveBeenCalled()
+  })
+
+  it('resumes a reclaimed execution lease and delegates its result to durable delivery', async () => {
+    tryClaimCommandReplyMock.mockResolvedValueOnce(false)
+    claimInverseOpinionTradeIntentMock.mockResolvedValueOnce({
+      decisionId: '11111111-1111-4111-8111-111111111111',
+      executionPhase: 'claimed',
+      executionClaimed: true,
+      executionAttemptCount: 2,
+    })
+    executeInverseAkitaChatReactionMock.mockResolvedValueOnce({
+      ok: true,
+      replyText: 'stable reclaimed result',
+      reactionEmoji: '🔄',
+      counterSide: 'short',
+      pair: 'BTC',
+    })
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(executeInverseAkitaChatReactionMock).toHaveBeenCalledTimes(1)
+    expect(executeInverseAkitaChatReactionMock).toHaveBeenCalledWith(expect.objectContaining({
+      claimedDecision: expect.objectContaining({ executionClaimed: true }),
+    }))
+    expect(deliverInverseOpinionTerminalReplyMock).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+    )
+  })
+
+  it('recovers a persisted terminal result without history-dependent execution or WS delivery', async () => {
+    tryClaimCommandReplyMock.mockResolvedValue(false)
+    claimInverseOpinionTradeIntentMock.mockResolvedValue({
+      decisionId: '11111111-1111-4111-8111-111111111111',
+      executionPhase: 'resolved',
+      terminalOutcome: 'executed',
+      executionClaimed: false,
+      receiptSummary: {
+        terminalReply: {
+          ok: true,
+          replyText: 'stable terminal result',
+          threadReceiptText: 'stable terminal receipt',
+          reactionEmoji: '🔄',
+          counterSide: 'short',
+          pair: 'BTC',
+        },
+      },
+    })
+    const batch = {
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+        botToken: 'bot-token',
+        wsProxyHttpSendUrl: 'https://relay.test/ws-send',
+        wsProxySecret: 'proxy-secret',
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    }
+
+    await _executeInverseAkitaChatReactionBatchForTests(batch)
+    await _executeInverseAkitaChatReactionBatchForTests(batch)
+
+    expect(executeInverseAkitaChatReactionMock).not.toHaveBeenCalled()
+    expect(deliverInverseOpinionTerminalReplyMock).toHaveBeenCalledTimes(2)
+    expect(tryClaimCommandReplyMock).not.toHaveBeenCalled()
+  })
+
+  it('does not execute when another worker owns the durable execution lease', async () => {
+    claimInverseOpinionTradeIntentMock.mockResolvedValueOnce({
+      decisionId: '11111111-1111-4111-8111-111111111111',
+      executionPhase: 'claimed',
+      executionClaimed: false,
+    })
+
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(tryClaimCommandReplyMock).not.toHaveBeenCalled()
+    expect(executeInverseAkitaChatReactionMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps legacy reply and execution flow free of attribution calls when capture defaults off', async () => {
+    delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(claimInverseOpinionTradeIntentMock).not.toHaveBeenCalled()
+    expect(deliverInverseOpinionTerminalReplyMock).not.toHaveBeenCalled()
+    expect(tryClaimCommandReplyMock).toHaveBeenCalled()
+    expect(executeInverseAkitaChatReactionMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      intent,
+    })
+  })
+
 })
 
 describe('buildAlfaClubOutboundFrame reply/thread contract', () => {
