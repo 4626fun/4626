@@ -38,22 +38,26 @@ class MockVercelResponse {
   }
 }
 
-function makeRequest(req: VercelRequest, body: unknown): VercelRequest {
-  return {
-    ...req,
-    method: 'POST',
-    body,
-  } as VercelRequest
-}
-
 export async function invokeHandler<T = any>(params: {
   req: VercelRequest
   body: Record<string, unknown>
   handler: ApiHandler
 }): Promise<InvokeResult<T>> {
-  const mockReq = makeRequest(params.req, params.body)
+  // Mutate the live request instead of object-spreading it. Vercel/Node request
+  // headers (and other auth-bearing fields) are often non-enumerable, so
+  // `{ ...req, body }` drops Authorization and continue/advance see
+  // "Not authenticated" even when resume itself authenticated successfully.
+  const previousMethod = params.req.method
+  const previousBody = (params.req as { body?: unknown }).body
+  params.req.method = 'POST'
+  ;(params.req as { body?: unknown }).body = params.body
   const mockRes = new MockVercelResponse() as any
-  await params.handler(mockReq, mockRes)
+  try {
+    await params.handler(params.req, mockRes)
+  } finally {
+    params.req.method = previousMethod
+    ;(params.req as { body?: unknown }).body = previousBody
+  }
   return {
     statusCode: mockRes.statusCode ?? 500,
     payload: (mockRes.payload ?? null) as T | null,
