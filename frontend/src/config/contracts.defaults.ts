@@ -130,7 +130,7 @@ export const BASE_DEFAULTS = {
   universalBytecodeStore: addr('fa3e3b466635DAff910057f18749B93d56F9DE50'),
   /** Paired with `universalBytecodeStore` on live split batcher `0x02D7ab…`. */
   universalCreate2DeployerFromStore: addr('54660E61857a652753d805aD2c7b4f759C138bD5'),
-  vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
+  vaultAuxiliaryDeployBatcher: addr('de93AecaAd5A61dFC179703d522fBE9a5747D99b'),
 
   // AA helpers
   vaultActivationBatcher: addr('4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3'),
