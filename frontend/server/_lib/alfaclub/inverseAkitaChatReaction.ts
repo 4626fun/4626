@@ -27,6 +27,10 @@ import {
   resolveInverseAkitaChatAuthorAccess,
 } from './inverseAkitaChatReactionPolicy.js'
 import {
+  classifyInverseAkitaChatOpinion,
+  type InverseAkitaChatLlmClassifierConfig,
+} from './inverseAkitaChatLlmClassifier.js'
+import {
   claimInverseOpinionTradeIntent,
   recordInverseOpinionTradeSubmitted,
   recordInverseOpinionTradeTerminal,
@@ -697,15 +701,19 @@ function isCommandLikeChatText(text: string): boolean {
 }
 
 /** Collect casual trade-intent chat lines like "long btc" from configured inverse-reaction rooms. */
-export function collectInverseAkitaChatTradeIntents(params: {
+export async function collectInverseAkitaChatTradeIntents(params: {
   roomId: string
   messages: InverseAkitaChatHistoryMessage[]
   selfAddress?: string
   availableMarkets?: readonly HyperliquidPerpMarket[]
-}): InverseAkitaChatTradeIntentMessage[] {
+  llmConfig?: InverseAkitaChatLlmClassifierConfig
+  /** Test seam — defaults to Eliza-backed classifier. */
+  classifyOpinion?: typeof classifyInverseAkitaChatOpinion
+}): Promise<InverseAkitaChatTradeIntentMessage[]> {
   if (!isInverseAkitaChatReactionRoom(params.roomId)) return []
 
   const self = String(params.selfAddress ?? '').trim().toLowerCase()
+  const classifyOpinion = params.classifyOpinion ?? classifyInverseAkitaChatOpinion
   const out: InverseAkitaChatTradeIntentMessage[] = []
 
   for (const message of params.messages) {
@@ -725,10 +733,35 @@ export function collectInverseAkitaChatTradeIntents(params: {
     }
 
     const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
-    const parsed = parseInverseAkitaChatTradeIntent(text, {
-      allowLooseSentiment: replyId.length === 0,
+    const allowLooseSentiment = replyId.length === 0
+    const deterministic = parseInverseAkitaChatTradeIntent(text, {
+      allowLooseSentiment,
       availableMarkets: params.availableMarkets,
     })
+    let parsed = deterministic
+    let parseMode: InverseOpinionParseMode | undefined = deterministic
+      ? resolveInverseOpinionParseMode(text)
+      : undefined
+
+    // LLM only for top-level chatter (not quote-replies of bot trim/add copy).
+    if (allowLooseSentiment && (!deterministic || parseMode === 'loose')) {
+      const llm = await classifyOpinion({
+        text,
+        roomId: params.roomId,
+        availableMarkets: params.availableMarkets,
+        config: params.llmConfig,
+      })
+      if (llm.blocked) continue
+      if (llm.applied && llm.classification) {
+        if (llm.classification.verdict === 'skip') continue
+        parsed = {
+          userSide: llm.classification.userSide,
+          pair: llm.classification.pair,
+        }
+        parseMode = 'llm'
+      }
+    }
+
     if (!parsed) continue
 
     const date = Number(message.date)
@@ -744,7 +777,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
       userSide: parsed.userSide,
       pair: parsed.pair,
       ordinal: 0,
-      parseMode: resolveInverseOpinionParseMode(text),
+      parseMode: parseMode ?? resolveInverseOpinionParseMode(text),
       marketClarification: parsed.marketClarification,
     })
   }

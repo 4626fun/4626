@@ -10,7 +10,12 @@ import {
 
 const MAX_SOURCE_EXCERPT_CHARS = 280
 
-export type InverseOpinionParseMode = 'strict' | 'qualified' | 'mention' | 'loose'
+export type InverseOpinionParseMode =
+  | 'strict'
+  | 'qualified'
+  | 'mention'
+  | 'loose'
+  | 'llm'
 
 export type RecordableInverseOpinionIntent = {
   id: string

@@ -3084,24 +3084,27 @@ function ensureLiveCommandSocket(params: {
           isBot: message.isBot,
           reply_id: message.replyId,
         }))
-      const inverseIntents = collectInverseAkitaChatTradeIntents({
-        roomId: targetRoomId,
-        messages: roomMessages as InverseAkitaChatHistoryMessage[],
-        selfAddress: CANONICAL_CSW_ADDRESS,
-      })
-      if (inverseIntents.length > 0) {
-        void executeInverseAkitaChatReactionBatch({
+      void (async () => {
+        const inverseIntents = await collectInverseAkitaChatTradeIntents({
+          roomId: targetRoomId,
+          messages: roomMessages as InverseAkitaChatHistoryMessage[],
+          selfAddress: CANONICAL_CSW_ADDRESS,
+          availableMarkets:
+            (await loadInverseAkitaChatReactionMarkets()) ?? undefined,
+        })
+        if (inverseIntents.length === 0) return
+        await executeInverseAkitaChatReactionBatch({
           intents: inverseIntents,
           flags: params.flags,
           roomId: targetRoomId,
           jwt: params.jwt,
-        }).catch((error) => {
-          logger.warn('[alfaclub-chat] live_inverse_chat_reaction_failed', {
-            roomId: targetRoomId,
-            message: error instanceof Error ? error.message : String(error),
-          })
         })
-      }
+      })().catch((error) => {
+        logger.warn('[alfaclub-chat] live_inverse_chat_reaction_failed', {
+          roomId: targetRoomId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      })
     }
     const commandRoomIdSet = new Set(params.flags.hermitCommandRoomIds)
     const roomMessages = inboundMessages
@@ -4107,7 +4110,7 @@ async function runBridgeTick(
         roomId,
         flags.inverseAkitaChatReactionRoomIds,
       ) && recentMessages.length > 0
-        ? collectInverseAkitaChatTradeIntents({
+        ? await collectInverseAkitaChatTradeIntents({
             roomId,
             messages: recentMessages as InverseAkitaChatHistoryMessage[],
             selfAddress: CANONICAL_CSW_ADDRESS,
@@ -4177,7 +4180,7 @@ async function runBridgeTick(
   ) && unseenMessages.length > 0
     ? await loadInverseAkitaChatReactionMarkets()
     : null
-  const inverseChatIntents = collectInverseAkitaChatTradeIntents({
+  const inverseChatIntents = await collectInverseAkitaChatTradeIntents({
     roomId,
     messages: unseenMessages as InverseAkitaChatHistoryMessage[],
     selfAddress: CANONICAL_CSW_ADDRESS,

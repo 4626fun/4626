@@ -322,8 +322,8 @@ describe('inverseAkitaChatReaction', () => {
     expect(parseInverseAkitaChatTradeIntent('gm')).toBeNull()
   })
 
-  it('collects intents for room 1659 from any hex sender including operators', () => {
-    const intents = collectInverseAkitaChatTradeIntents({
+  it('collects intents for room 1659 from any hex sender including operators', async () => {
+    const intents = await collectInverseAkitaChatTradeIntents({
       roomId: '1659',
       messages: [
         {
@@ -347,13 +347,13 @@ describe('inverseAkitaChatReaction', () => {
     expect(intents[1]?.parseMode).toBe('qualified')
   })
 
-  it('collects configured owner-room opinions but ignores unsupported rooms', () => {
+  it('collects configured owner-room opinions but ignores unsupported rooms', async () => {
     vi.stubEnv(
       'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
       '1484,1660,2,1043,1659',
     )
     expect(
-      collectInverseAkitaChatTradeIntents({
+      await collectInverseAkitaChatTradeIntents({
         roomId: '1484',
         messages: [
           {
@@ -365,7 +365,7 @@ describe('inverseAkitaChatReaction', () => {
       }),
     ).toHaveLength(1)
     expect(
-      collectInverseAkitaChatTradeIntents({
+      await collectInverseAkitaChatTradeIntents({
         roomId: '9999',
         messages: [
           {
@@ -378,7 +378,7 @@ describe('inverseAkitaChatReaction', () => {
     ).toEqual([])
   })
 
-  it('ignores InverseAKITA outbound copy and quote-reply sentiment loops', () => {
+  it('ignores InverseAKITA outbound copy and quote-reply sentiment loops', async () => {
     const botTrimReply =
       'long SOL gang? i was already there. trimmed anyway ($50)'
     expect(isInverseAkitaBotAuthoredChatText(botTrimReply)).toBe(true)
@@ -389,7 +389,7 @@ describe('inverseAkitaChatReaction', () => {
     registerInverseAkitaBotOutboundText(botTrimReply)
     expect(isRegisteredInverseAkitaBotOutboundText(botTrimReply)).toBe(true)
 
-    const intents = collectInverseAkitaChatTradeIntents({
+    const intents = await collectInverseAkitaChatTradeIntents({
       roomId: '1659',
       messages: [
         {
@@ -421,18 +421,22 @@ describe('inverseAkitaChatReaction', () => {
     ).toEqual({ userSide: 'long', pair: 'SOL' })
   })
 
-  it('durably ignores marked journal prose after the in-memory registry expires', () => {
+  it('durably ignores marked journal prose after the in-memory registry expires', async () => {
     const journal =
       '<!-- inverse-akita-trade-journal:v1 -->\nBTC long creator opinion; InverseAKITA opened a short. Bullish and bearish evidence reviewed.'
     expect(isInverseAkitaBotAuthoredChatText(journal)).toBe(true)
-    expect(collectInverseAkitaChatTradeIntents({
-      roomId: '1659',
-      messages: [{
-        id: 'journal-parent',
-        sender: '0x1111111111111111111111111111111111111111',
-        text: journal,
-      }],
-    })).toEqual([])
+    await expect(
+      collectInverseAkitaChatTradeIntents({
+        roomId: '1659',
+        messages: [
+          {
+            id: 'journal-parent',
+            sender: '0x1111111111111111111111111111111111111111',
+            text: journal,
+          },
+        ],
+      }),
+    ).resolves.toEqual([])
   })
 
   it('uses 69% of Hyperliquid max leverage by default', () => {
@@ -1104,7 +1108,7 @@ describe('inverseAkitaChatReaction', () => {
 
   it('still captures an intent and records blocked when live reaction execution is disabled', async () => {
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED', '0')
-    const [intent] = collectInverseAkitaChatTradeIntents({
+    const [intent] = await collectInverseAkitaChatTradeIntents({
       roomId: '1659',
       messages: [{
         id: 'disabled-capture',

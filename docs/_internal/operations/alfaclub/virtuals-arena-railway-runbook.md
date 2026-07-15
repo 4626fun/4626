@@ -74,6 +74,16 @@ ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS=1484,1660,2,1043,1659
 - All configured reaction rooms (`1484`, `1660`, `2`, `1043`, `1659`): any
   author with ≥1 FriendKey staked in **any** of those rooms may trigger a
   trade (including accidental chat opinions). No room-owner gate.
+
+Loose chat opinions (not explicit `long BTC` / `short ETH`) can be classified by
+the Eliza LLM stack (`ALFACLUB_INVERSE_AKITA_CHAT_LLM_*`):
+- `ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED=1` — master switch (default off).
+- `ALFACLUB_INVERSE_AKITA_CHAT_LLM_MODE=classify|advisory` — `classify` uses the
+  model result for loose chatter; `advisory` only logs.
+- `ALFACLUB_INVERSE_AKITA_CHAT_LLM_FAIL_MODE=allow|block` — on LLM failure,
+  `allow` falls back to the regex lexicon; `block` skips.
+- Provider: same Eliza priority as Hermit (`VIRTUALS_API_KEY` → Kimi K2 first).
+
 - Opinions are inverted and execute through the shared room-1659 InverseAKITA
   identity (Arena profile `1213`, wallet `0x74ab...df96`). Trigger-room identity
   mappings cannot redirect this lane.
