@@ -1,0 +1,36 @@
+---
+description: Pre-edit checkpoint for wallet, auth, XMTP, deploy, and swap changes
+globs:
+  - frontend/src/wallet/**
+  - frontend/src/lib/privy/**
+  - frontend/src/lib/xmtp/**
+  - frontend/src/lib/auth/**
+  - frontend/server/_lib/wallet/**
+  - frontend/server/_lib/onboarding/**
+  - frontend/api/_handlers/auth/**
+  - frontend/api/_handlers/waitlist/**
+  - frontend/api/_handlers/deploy/session/**
+  - frontend/api/_handlers/paymaster/**
+  - frontend/src/lib/tx/**
+  - frontend/src/pages/Swap.tsx
+alwaysApply: false
+---
+
+# Wallet / auth checkpoint
+
+Before editing, summarize in response or plan:
+
+1. Exact invariant being changed or tested
+2. Files inspected (paths)
+3. Files proposed for modification
+4. Why smallest safe diff
+5. Test-only vs production code
+6. Targeted validation command first
+
+**Tracks (do not blur):**
+
+- User-initiated frontend: parent `profiles.csw_address` + embedded EOA → `canonical4337`
+- Deploy-session: creator's `profiles.csw_address` + temporary server owner
+- Railway/Keepr/ERC-8004: **`PROTOCOL_CSW_ADDRESS`** sender
+
+Deep wiring: `docs/agent-context/archives/wallet-identity.md`, `ERC-4337-Wallet-Invariants.mdc`, `csw-agent-lifecycle.mdc`.

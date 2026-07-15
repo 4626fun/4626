@@ -48,6 +48,51 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 
 ## Related
 
-- Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md)
+- Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md) and `.cursor/commands/` (deploy-cutover, waitlist-auth-debug, swap-bug, alfaclub-ops)
 - Account model authority: [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md)
 - Wallet policy code: `frontend/src/wallet/canonicalWalletPolicy.ts`
+- Sync Tier 1 into rule: `node scripts/sync-agent-context-rule.mjs`
+
+## Validation shortcuts per task type
+
+| Task | Command |
+|------|---------|
+| Swap / txRouter / paymaster | `pnpm -C frontend validate:swap` |
+| Waitlist / onboarding / auth | `pnpm -C frontend validate:waitlist` |
+| Deploy guards / CSW env drift | `pnpm -C frontend validate:deploy-guards` |
+| Quick agent gate (no full test) | `pnpm -C frontend validate:agent-quick` |
+
+Scoped single file: `pnpm -C frontend exec vitest run <path>`. Full suite: `pnpm -C frontend test` (~3.5 min).
+
+## MCP decision table
+
+| Symptom | MCP | When not to use |
+|---------|-----|-----------------|
+| Prod error / latency / incident | `tierzero_ask` | Local unit tests, doc-only edits |
+| Railway env / logs / deploy | `user-railway` | Never dump full `variables --json`; redact secrets |
+| Schema / data / migrations | `user-supabase` | Read-only unless explicitly migrating |
+| Browser repro / UI flow | `cursor-ide-browser` | Logic covered by unit tests |
+| Vercel deploy / runtime logs | `plugin-vercel-vercel` | Local Vite dev issues |
+
+## Curated repo skills
+
+Use these for 4626 work; ignore the 90+ global plugin skills unless the task explicitly needs them:
+
+| Skill | Use when |
+|-------|----------|
+| `deploy-vault-operator` | Vault deploy orchestration |
+| `vault-deployment` | Creator vault lifecycle |
+| `swap-integration` | Uniswap / swap wiring |
+| `creator-profile-enrichment` | Creator metadata pipelines |
+| `agents-memory-updater` | Transcript → Tier 1/archive updates |
+| `oft-chain-config` | LayerZero ShareOFT peers |
+| `lottery-vrf-ops` | Jackpot / VRF operations |
+| `yield-strategy-management` | Vault strategy config |
+| `farcaster-agent` | Farcaster agent surfaces |
+| `moltbook` | Moltbook integration |
+| `zora-cli` | Zora CLI operations |
+| `modern-python` | Python tooling in repo |
+
+## Operator settings (outside repo)
+
+Optional Cursor Settings tweaks: shorten global user rules, disable TierZero `alwaysApply` for non-prod sessions, prune installed plugin skills to the curated list above.

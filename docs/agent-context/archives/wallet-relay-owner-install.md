@@ -1,5 +1,7 @@
 # Wallet Relay & Owner Install (archived)
 
+Cross-cutting operator prefs: [preferences-active.md](../preferences-active.md).
+
 On-demand Tier 2 context. Migrated from `docs/agent-learned-facts.md` (July 2026 context budget split).
 Do not load by default — read when a task touches this domain.
 

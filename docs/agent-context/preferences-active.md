@@ -1,5 +1,7 @@
 # Active Agent Preferences (Tier 1)
 
+<!-- Synced into .cursor/rules/agent-context-budget.mdc — update both when editing. -->
+
 Always-on cross-cutting operator preferences. For domain depth, load matching archives from [INDEX.md](./INDEX.md).
 
 **Cap:** 80 lines. Continual-learning appends here only when a preference affects most sessions; otherwise use `archives/`.

@@ -1,0 +1,22 @@
+---
+description: Swap execution, paymaster, and txRouter invariants
+globs:
+  - frontend/src/lib/tx/**
+  - frontend/src/lib/swap/**
+  - frontend/src/lib/uniswap/**
+  - frontend/src/pages/Swap.tsx
+  - frontend/api/_handlers/paymaster/**
+alwaysApply: false
+---
+
+# Swap execution (path-scoped)
+
+- `executionMode`: `canonical` | `eoa` — user parent CSW is sender for canonical; external EOA for eoa track.
+- **No idle re-quote loops** on `/swap` — quote on input change; rebuild stale quotes at review/submit only.
+- **Paymaster:** batched wrap+approve+swap; CDP denies approve-only UserOps.
+- **canonical4337** required in production for sponsored CSW swaps — no silent fallback to direct gas sends when sponsorship denied.
+- `PROTOCOL_CSW_ADDRESS` is protocol agent only — user swap sender is `profiles.csw_address`.
+
+Incident detail: `docs/agent-context/archives/swap-execution.md`. Template: `.cursor/commands/swap-bug.md`.
+
+Validate: `pnpm -C frontend validate:swap`

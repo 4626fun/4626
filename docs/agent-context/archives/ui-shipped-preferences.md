@@ -1,5 +1,7 @@
 # Shipped UI Preferences (archived)
 
+Cross-cutting operator prefs: [preferences-active.md](../preferences-active.md).
+
 On-demand Tier 2 context. Migrated from `docs/agent-learned-facts.md` (July 2026 context budget split).
 Do not load by default — read when a task touches this domain.
 
@@ -28,8 +30,6 @@ Do not load by default — read when a task touches this domain.
 - Prefer aggressive simplification passes in large folders: identify and remove or archive unnecessary files (including `.ts`/`.tsx`), not just documentation, to reduce complexity.
 
 - During database/storage optimization sweeps, preserve real/raw data — remove only derived or regenerable artifacts (duplicate indexes, matviews, snapshot retention within approved windows, bloat). Data-loss levers such as dropping audit columns or pruning source rows require explicit user approval; default answer is no.
-
-- During broad cleanup/refactor sweeps, prefer sustained autonomous execution with minimal pause-and-confirm loops, and parallelize with subagents to expedite when the sweep spans many files or folders.
 
 - Do not rewrite or redesign the premium token icon renderer — keep the existing deterministic Sharp-based pipeline, composition, premium bezel, soft glow, and recessed inner chamber, and make targeted refinements only. Primary visual goal: **subject breakout over the bezel** — extend the inner-chamber silhouette/micro-pattern **outside** the frame, not a second rear card or background frame behind the icon. Preserve top headroom so breakout elements (hats, ears) are not clipped. Never let a rectangular crop block, white background patch, or broad banner escape the frame; keep the ticker/signature bottom-right in black and always inside the frame; optically center the subject inside the chamber without flattening its depth. In `premium-v2` experiments, use fujilab/rembg subject masks for segmentation and a darker in-chamber background; keep breakout fully opaque (no translucent halo); suppress decorative corner glow (especially bottom-right); prefer brand-blue frame aura over white when tuning outer glow.
 

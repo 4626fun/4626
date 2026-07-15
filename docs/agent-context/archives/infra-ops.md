@@ -1,5 +1,7 @@
 # Infrastructure Ops (archived)
 
+Cross-cutting operator prefs: [preferences-active.md](../preferences-active.md).
+
 On-demand Tier 2 context. Migrated from `docs/agent-learned-facts.md` (July 2026 context budget split).
 Do not load by default — read when a task touches this domain.
 
@@ -7,17 +9,9 @@ Do not load by default — read when a task touches this domain.
 
 - Nest optional substeps (for example extra channel binding) under the primary step with a compact expandable affordance instead of introducing separate numbered steps when the flow is still one phase.
 
-- After shipping requested changes, the user frequently expects immediate `commit` + `push` execution (and often asks for merge/PR follow-through) rather than stopping at a local diff summary.
-
 - When inspecting production envs or service variables (Railway, Vercel, Supabase, AlfaClub, etc.), avoid unredacted full dumps such as `railway variables --json`; query scoped keys or redact output, and rotate any secret material that was printed.
 
 - For continual-learning runs, the user expects the full `agents-memory-updater` flow with strict incremental transcript processing and index refresh (new/updated mtimes only), high-signal updates applied per `docs/agent-context/INDEX.md` routing (not bloating `AGENTS.md`), plus a concise run report.
-
-- **Vault taxonomy (arms vs legs):** **Legs** are vault yield strategies (Charm, Ajna) — calling legs "strategies" is fine. **Arms** extend ShareOFT (CCA launch, mesh LP, bridge, trade routing) — never label arms "strategies"; canonical CCA launch type is **`CCALaunchArm`** / **`ccaLaunchArm`** (not `ShareCcaLaunchArm`, `CCALaunchStrategy`, or `ccaStrategy`).
-
-- When stopping dev servers/processes in Cursor, say **"kill background jobs"** (or name specific processes) rather than **"kill all terminals"** — bulk-killing terminal PIDs can detach Cursor's PTY host and break the integrated terminal until dead tabs are closed and the window is reloaded.
-
-- For Hugging Face Inference Router as a local Cursor/Aider coding model, configure `OPENAI_API_BASE=https://router.huggingface.co/v1` and the HF token in shell profile or Cursor Settings only — do not add setup blocks to root `.env.example`, and never replace `frontend/.env` `OPENAI_API_KEY` (OpenAI image/Eliza lanes).
 
 - In user-facing communication for this workspace, avoid using the words "scrape" or "crawl" unless the user explicitly asks for those terms.
 
@@ -46,8 +40,6 @@ Do not load by default — read when a task touches this domain.
 - Feature flags are centralized in `frontend/src/lib/featureFlags.ts` using a typed `FeatureFlag<T>` registry (11 flags across 4 categories), with `FlagToolbarBridge` in Layout for Vercel Toolbar integration and `/api/flags/evaluate` + `/api/flags/discover` endpoints for Vercel Flags dashboard resolution.
 
 - **AMOE ZK prover assets for Vercel.** Bundle `amoe_eligibility.wasm` + `amoe_plonk_final.zkey` under `frontend/server/_lib/lottery/amoe-zk-assets/`; `defaultAmoeZkAssetPaths()` in `amoeSubmitZk.ts` resolves module-relative bundled paths (override with `AMOE_ZK_WASM_PATH` / `AMOE_ZK_ZKEY_PATH`); `frontend/vercel.json` `includeFiles` ships `server/_lib/lottery/amoe-zk-assets/**` on the catch-all API function.
-
-- **Hugging Face Inference Router is local-only assistant config.** Repo code does not read `OPENAI_API_BASE`; Cursor/Aider use `https://router.huggingface.co/v1` via user shell env or Cursor Settings. Primary coding-model candidate: `Qwen/Qwen2.5-Coder-32B-Instruct` (fallbacks: `deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct`, `bigcode/starcoder2-15b`). Unrelated repo HF usage stays on `HF_TOKEN` (e.g. `generate_akita_3d_hf.py`).
 
 - **Vercel cron and keeper routes must use `getDbForCron()`** (connect deadline + pool-generation rebind), not ad-hoc shared-pool `getDb()` — avoids `:00` cron pile-ups hanging 60s or poisoning the pool after reset. Runbook: `docs/operations/vercel-cron-production-fixes.md`; keep `POSTGRES_POOL_MAX=1` and Supabase transaction pooler (6543) on serverless.
 

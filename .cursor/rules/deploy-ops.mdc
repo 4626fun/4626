@@ -1,0 +1,22 @@
+---
+description: Deploy cutovers, bytecode store, and ops scripts
+globs:
+  - frontend/scripts/ops/**
+  - deployments/**
+  - script/**
+  - frontend/src/config/contracts.defaults.ts
+  - frontend/src/deploy/**
+alwaysApply: false
+---
+
+# Deploy ops (path-scoped)
+
+- Deploy status/preflight routes are **read-only** — no infra provisioning or onchain mutation as side effect.
+- Use epoch scripts: `run-greenfield-cutover`, `validate-greenfield-handoff`, `sync-greenfield-env-from-handoff`.
+- `msg.sender` / ERC-4337 sender must match execution track (user CSW vs deploy-session vs protocol CSW).
+- Regenerate bytecode manifests and re-seed `UniversalBytecodeStore` after lane-neutral contract changes.
+- Addresses SSoT: `docs/reference/addresses.md`, `contracts.defaults.ts`.
+
+Runbook detail: `docs/agent-context/archives/deploy-cutovers.md`. Template: `.cursor/commands/deploy-cutover.md`.
+
+Validate: `pnpm -C frontend validate:deploy-guards`

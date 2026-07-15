@@ -1,6 +1,6 @@
 ---
 description: Default builder workflow for product thinking, system design, and execution
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Product Builder Workflow
