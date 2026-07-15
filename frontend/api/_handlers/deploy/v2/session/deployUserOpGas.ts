@@ -22,6 +22,7 @@ import {
   createWalletClient,
   encodeFunctionData,
   http,
+  toHex,
   type Hex,
   type Transport,
 } from 'viem'
@@ -309,6 +310,9 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
 /**
  * Wrap a CDP bundler/paymaster HTTP transport so fat UserOps are self-bundled
  * via EntryPoint.handleOps instead of failing CDP's 14.5M total-gas precheck.
+ *
+ * Also short-circuit eth_estimateUserOperationGas: CDP rejects / mis-handles
+ * these oversized ops and viem's error path can throw "err.walk is not a function".
  */
 export function createDeploySessionBundlerTransport(
   url: string,
@@ -320,6 +324,13 @@ export function createDeploySessionBundlerTransport(
     return {
       ...upstreamTransport,
       async request(args, options) {
+        if (args.method === 'eth_estimateUserOperationGas') {
+          return {
+            callGasLimit: toHex(DEPLOY_SESSION_USEROP_GAS.callGasLimit),
+            verificationGasLimit: toHex(DEPLOY_SESSION_USEROP_GAS.verificationGasLimit),
+            preVerificationGas: toHex(DEPLOY_SESSION_USEROP_GAS.preVerificationGas),
+          }
+        }
         if (args.method !== 'eth_sendUserOperation') {
           return upstreamTransport.request(args, options)
         }
