@@ -76,6 +76,7 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 
 ## Related
 
+- **Open threads / next prompts:** [OPEN_THREADS.md](./OPEN_THREADS.md)
 - Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md) and `.cursor/commands/` (swap-bug, deploy-cutover, wallet-csw, waitlist-auth-debug, alfaclub-ops, fast-bugfix, contracts-test). SEO commands in `.cursor/commands/optional/`.
 - Account model authority: [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md)
 - Wallet policy code: `frontend/src/wallet/canonicalWalletPolicy.ts`
