@@ -18,6 +18,7 @@ import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
+import { DEPLOY_SESSION_USEROP_GAS } from './deployUserOpGas.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -1974,6 +1975,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           account,
           calls: fullCalls,
           paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        ...DEPLOY_SESSION_USEROP_GAS,
         })
       } catch (err) {
         if (!allowCleanupFallback) throw err
@@ -1984,6 +1986,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           account,
           calls,
           paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        ...DEPLOY_SESSION_USEROP_GAS,
         })
         payloadPatch = {
           [stageKey]: null,
@@ -2202,6 +2205,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         account,
         calls: fullCalls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+        ...DEPLOY_SESSION_USEROP_GAS,
       })
       await updateDeploySession({
         id: rec.id,
