@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetAlfaClubPublicClient, mockReadContract, mockResolveStakerAccess } = vi.hoisted(
-  () => ({
-    mockGetAlfaClubPublicClient: vi.fn(),
-    mockReadContract: vi.fn(),
-    mockResolveStakerAccess: vi.fn(),
-  }),
-)
+const {
+  mockGetAlfaClubPublicClient,
+  mockResolveStakingPoolAddress,
+  mockReadUserStakedKeys,
+} = vi.hoisted(() => ({
+  mockGetAlfaClubPublicClient: vi.fn(),
+  mockResolveStakingPoolAddress: vi.fn(),
+  mockReadUserStakedKeys: vi.fn(),
+}))
 
 vi.mock('../wallet/alfaclub.js', async () => {
   const actual = await vi.importActual<typeof import('../wallet/alfaclub.js')>(
@@ -18,19 +20,21 @@ vi.mock('../wallet/alfaclub.js', async () => {
   }
 })
 
-vi.mock('./inverseAkitaStakerPilot.js', () => ({
-  resolveInverseAkitaStakerPilotAccess: mockResolveStakerAccess,
+vi.mock('./alfaclubStakeReads.js', () => ({
+  resolveStakingPoolAddress: mockResolveStakingPoolAddress,
+  readUserStakedKeys: mockReadUserStakedKeys,
 }))
 
 import {
-  INVERSE_AKITA_OWNER_ONLY_ROOM_IDS,
+  INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS,
   isInverseAkitaChatReactionRoom,
   readInverseAkitaChatReactionRoomIds,
   resolveInverseAkitaChatAuthorAccess,
 } from './inverseAkitaChatReactionPolicy.js'
 
-const OWNER = '0x1111111111111111111111111111111111111111'
+const STAKER = '0x1111111111111111111111111111111111111111'
 const OTHER = '0x2222222222222222222222222222222222222222'
+const POOL = '0x3333333333333333333333333333333333333333'
 
 describe('inverseAkitaChatReactionPolicy', () => {
   beforeEach(() => {
@@ -39,13 +43,9 @@ describe('inverseAkitaChatReactionPolicy', () => {
       'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
       '1484,1660,2,1043,1659',
     )
-    mockGetAlfaClubPublicClient.mockResolvedValue({ readContract: mockReadContract })
-    mockReadContract.mockResolvedValue(OWNER)
-    mockResolveStakerAccess.mockResolvedValue({
-      eligible: true,
-      stakedKeys: 1,
-      reason: 'staker',
-    })
+    mockGetAlfaClubPublicClient.mockResolvedValue({})
+    mockResolveStakingPoolAddress.mockResolvedValue(POOL)
+    mockReadUserStakedKeys.mockResolvedValue(0)
   })
 
   afterEach(() => {
@@ -61,57 +61,78 @@ describe('inverseAkitaChatReactionPolicy', () => {
     expect(isInverseAkitaChatReactionRoom('9999')).toBe(false)
   })
 
-  it.each(INVERSE_AKITA_OWNER_ONLY_ROOM_IDS)(
-    'allows only the on-chain creator in owner-only room %s',
+  it.each(INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS)(
+    'allows a ≥1 staker in reaction room %s',
     async (roomId) => {
+      mockReadUserStakedKeys.mockResolvedValueOnce(1)
       await expect(
-        resolveInverseAkitaChatAuthorAccess({ roomId, senderAddress: OWNER }),
-      ).resolves.toEqual({ eligible: true, reason: 'owner', stakedKeys: null })
-      await expect(
-        resolveInverseAkitaChatAuthorAccess({ roomId, senderAddress: OTHER }),
+        resolveInverseAkitaChatAuthorAccess({ roomId, senderAddress: STAKER }),
       ).resolves.toEqual({
-        eligible: false,
-        reason: 'not_room_owner',
-        stakedKeys: null,
+        eligible: true,
+        reason: 'staker',
+        stakedKeys: 1,
+        stakeRoomId: roomId,
       })
-      expect(mockReadContract).toHaveBeenCalledWith(
-        expect.objectContaining({
-          functionName: 'creatorByTokenId',
-          args: [BigInt(roomId)],
-        }),
-      )
+      expect(mockResolveStakingPoolAddress).toHaveBeenCalledWith({}, BigInt(roomId))
     },
   )
 
-  it('fails closed when the room owner read fails', async () => {
-    mockReadContract.mockRejectedValueOnce(new Error('rpc unavailable'))
+  it('allows a sender staked in another configured room (cross-room unlock)', async () => {
+    // Message in 1484 with 0 stake there; ≥1 stake in 1659.
+    mockReadUserStakedKeys
+      .mockResolvedValueOnce(0) // 1484
+      .mockResolvedValueOnce(0) // 1660
+      .mockResolvedValueOnce(0) // 2
+      .mockResolvedValueOnce(0) // 1043
+      .mockResolvedValueOnce(2) // 1659
+
     await expect(
-      resolveInverseAkitaChatAuthorAccess({ roomId: '1484', senderAddress: OWNER }),
+      resolveInverseAkitaChatAuthorAccess({
+        roomId: '1484',
+        senderAddress: STAKER,
+      }),
+    ).resolves.toEqual({
+      eligible: true,
+      reason: 'staker',
+      stakedKeys: 2,
+      stakeRoomId: '1659',
+    })
+  })
+
+  it('rejects when the sender has no stake in any configured reaction room', async () => {
+    mockReadUserStakedKeys.mockResolvedValue(0)
+    await expect(
+      resolveInverseAkitaChatAuthorAccess({
+        roomId: '1484',
+        senderAddress: OTHER,
+      }),
     ).resolves.toEqual({
       eligible: false,
-      reason: 'owner_read_failed',
+      reason: 'insufficient_stake',
+      stakedKeys: 0,
+    })
+  })
+
+  it('fails closed when every stake read fails', async () => {
+    mockReadUserStakedKeys.mockResolvedValue(null)
+    await expect(
+      resolveInverseAkitaChatAuthorAccess({ roomId: '1484', senderAddress: STAKER }),
+    ).resolves.toEqual({
+      eligible: false,
+      reason: 'stake_read_failed',
       stakedKeys: null,
     })
   })
 
-  it('requires stake from the room-1659 owner with no owner bypass', async () => {
-    mockResolveStakerAccess.mockResolvedValueOnce({
-      eligible: false,
-      stakedKeys: 0,
-      reason: 'insufficient_stake',
-    })
+  it('requires stake in room 1659 with no owner bypass', async () => {
+    mockReadUserStakedKeys.mockResolvedValue(0)
     await expect(
-      resolveInverseAkitaChatAuthorAccess({ roomId: '1659', senderAddress: OWNER }),
+      resolveInverseAkitaChatAuthorAccess({ roomId: '1659', senderAddress: STAKER }),
     ).resolves.toEqual({
       eligible: false,
       reason: 'insufficient_stake',
       stakedKeys: 0,
     })
-    expect(mockResolveStakerAccess).toHaveBeenCalledWith({
-      senderAddress: OWNER,
-      roomId: '1659',
-      isTrustedOperator: false,
-    })
-    expect(mockReadContract).not.toHaveBeenCalled()
+    expect(mockResolveStakingPoolAddress).toHaveBeenCalled()
   })
 })

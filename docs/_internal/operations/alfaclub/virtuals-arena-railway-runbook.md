@@ -71,10 +71,9 @@ Casual opinions use a separate, narrower policy from `/arena` commands. Configur
 ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS=1484,1660,2,1043,1659
 ```
 
-- Rooms `1484`, `1660`, `2`, and `1043`: only the current on-chain
-  `FriendKey.creatorByTokenId(roomId)` address may trigger a trade.
-- Room `1659`: every author, including the room creator, must have at least one
-  room-1659 FriendKey staked in its FriendStake pool.
+- All configured reaction rooms (`1484`, `1660`, `2`, `1043`, `1659`): any
+  author with ≥1 FriendKey staked in **any** of those rooms may trigger a
+  trade (including accidental chat opinions). No room-owner gate.
 - Opinions are inverted and execute through the shared room-1659 InverseAKITA
   identity (Arena profile `1213`, wallet `0x74ab...df96`). Trigger-room identity
   mappings cannot redirect this lane.

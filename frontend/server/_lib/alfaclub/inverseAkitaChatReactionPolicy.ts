@@ -1,30 +1,27 @@
 import type { Address } from 'viem'
 
-import {
-  ALFACLUB,
-  FRIEND_KEY_ABI,
-  getAlfaClubPublicClient,
-  ZERO_ADDRESS,
-} from '../wallet/alfaclub.js'
-import { resolveInverseAkitaStakerPilotAccess } from './inverseAkitaStakerPilot.js'
+import { getAlfaClubPublicClient } from '../wallet/alfaclub.js'
+import { readUserStakedKeys, resolveStakingPoolAddress } from './alfaclubStakeReads.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 export const INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID = '1659'
-export const INVERSE_AKITA_OWNER_ONLY_ROOM_IDS = ['1484', '1660', '2', '1043'] as const
+/** Extra rooms Hermit may listen on for chat opinions (stake-gated like 1659). */
+export const INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS = ['1484', '1660', '2', '1043'] as const
+/** @deprecated Use INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS — rooms are stake-gated, not owner-only. */
+export const INVERSE_AKITA_OWNER_ONLY_ROOM_IDS = INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS
+
+const MIN_STAKED_KEYS = 1
 
 const SUPPORTED_REACTION_ROOM_IDS = new Set<string>([
-  ...INVERSE_AKITA_OWNER_ONLY_ROOM_IDS,
+  ...INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS,
   INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
 ])
 
 export type InverseAkitaChatAuthorAccessReason =
-  | 'owner'
   | 'staker'
   | 'insufficient_stake'
   | 'stake_read_failed'
-  | 'not_room_owner'
-  | 'owner_read_failed'
   | 'invalid_sender'
   | 'wrong_room'
 
@@ -32,6 +29,8 @@ export type InverseAkitaChatAuthorAccess = {
   eligible: boolean
   reason: InverseAkitaChatAuthorAccessReason
   stakedKeys: number | null
+  /** Room where the qualifying stake was found (when eligible). */
+  stakeRoomId?: string | null
 }
 
 function normalizeRoomId(value: string | null | undefined): string {
@@ -68,12 +67,34 @@ export function isInverseAkitaChatReactionRoom(
   return normalized.length > 0 && configuredRoomIds.includes(normalized)
 }
 
+async function readStakedKeysInRoom(
+  sender: Address,
+  roomId: string,
+): Promise<number | null> {
+  try {
+    const client = await getAlfaClubPublicClient()
+    const tokenId = BigInt(roomId)
+    const stakingPool = await resolveStakingPoolAddress(client, tokenId)
+    return await readUserStakedKeys(client, stakingPool, sender, { tokenId })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Eligible when the sender has ≥1 FriendKey staked in **any** configured
+ * reaction room (message room checked first). Accidental opinions from
+ * stakers count — there is no room-owner gate.
+ */
 export async function resolveInverseAkitaChatAuthorAccess(params: {
   roomId: string | null | undefined
   senderAddress: string
+  configuredRoomIds?: string[]
 }): Promise<InverseAkitaChatAuthorAccess> {
   const roomId = normalizeRoomId(params.roomId)
-  if (!isInverseAkitaChatReactionRoom(roomId)) {
+  const configuredRoomIds =
+    params.configuredRoomIds ?? readInverseAkitaChatReactionRoomIds()
+  if (!isInverseAkitaChatReactionRoom(roomId, configuredRoomIds)) {
     return { eligible: false, reason: 'wrong_room', stakedKeys: null }
   }
 
@@ -82,45 +103,36 @@ export async function resolveInverseAkitaChatAuthorAccess(params: {
     return { eligible: false, reason: 'invalid_sender', stakedKeys: null }
   }
 
-  if (roomId === INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID) {
-    const pilotAccess = await resolveInverseAkitaStakerPilotAccess({
-      senderAddress: sender,
-      roomId,
-      isTrustedOperator: false,
-    })
-    if (pilotAccess.eligible && pilotAccess.reason === 'staker') {
+  const roomsToCheck = [
+    roomId,
+    ...configuredRoomIds.filter((candidate) => candidate !== roomId),
+  ]
+
+  let sawSuccessfulRead = false
+  let maxStakedKeys = 0
+
+  for (const candidate of roomsToCheck) {
+    const stakedKeys = await readStakedKeysInRoom(sender, candidate)
+    if (stakedKeys == null) continue
+    sawSuccessfulRead = true
+    if (stakedKeys >= MIN_STAKED_KEYS) {
       return {
         eligible: true,
         reason: 'staker',
-        stakedKeys: pilotAccess.stakedKeys,
+        stakedKeys,
+        stakeRoomId: candidate,
       }
     }
+    if (stakedKeys > maxStakedKeys) maxStakedKeys = stakedKeys
+  }
+
+  if (sawSuccessfulRead) {
     return {
       eligible: false,
-      reason:
-        pilotAccess.reason === 'insufficient_stake'
-          ? 'insufficient_stake'
-          : 'stake_read_failed',
-      stakedKeys: pilotAccess.stakedKeys,
+      reason: 'insufficient_stake',
+      stakedKeys: maxStakedKeys,
     }
   }
 
-  try {
-    const client = await getAlfaClubPublicClient()
-    const creator = (await client.readContract({
-      address: ALFACLUB.friendKey,
-      abi: FRIEND_KEY_ABI,
-      functionName: 'creatorByTokenId',
-      args: [BigInt(roomId)],
-    })) as Address
-    const normalizedCreator = normalizeAddress(creator)
-    if (!normalizedCreator || normalizedCreator === ZERO_ADDRESS) {
-      return { eligible: false, reason: 'owner_read_failed', stakedKeys: null }
-    }
-    return normalizedCreator === sender
-      ? { eligible: true, reason: 'owner', stakedKeys: null }
-      : { eligible: false, reason: 'not_room_owner', stakedKeys: null }
-  } catch {
-    return { eligible: false, reason: 'owner_read_failed', stakedKeys: null }
-  }
+  return { eligible: false, reason: 'stake_read_failed', stakedKeys: null }
 }

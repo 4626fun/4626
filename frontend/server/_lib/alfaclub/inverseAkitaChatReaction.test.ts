@@ -808,21 +808,22 @@ describe('inverseAkitaChatReaction', () => {
     expect(mockRunArenaTrade).not.toHaveBeenCalled()
   })
 
-  it('uses the shared room-1659 executor for an eligible owner-room opinion', async () => {
+  it('uses the shared room-1659 executor for an eligible staker opinion in another room', async () => {
     vi.stubEnv(
       'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
       '1484,1660,2,1043,1659',
     )
     mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
       eligible: true,
-      stakedKeys: null,
-      reason: 'owner',
+      stakedKeys: 1,
+      reason: 'staker',
+      stakeRoomId: '1484',
     })
 
     const result = await executeInverseAkitaChatReaction({
       roomId: '1484',
       intent: {
-        id: 'owner-room-trade',
+        id: 'staker-room-trade',
         date: Date.now(),
         sender: '0x1111111111111111111111111111111111111111',
         text: 'btc looks bullish',
@@ -843,21 +844,21 @@ describe('inverseAkitaChatReaction', () => {
     )
   })
 
-  it('does not touch the executor when an owner-room author is unauthorized', async () => {
+  it('does not touch the executor when a non-staker posts in an extra reaction room', async () => {
     vi.stubEnv(
       'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',
       '1484,1660,2,1043,1659',
     )
     mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
       eligible: false,
-      stakedKeys: null,
-      reason: 'not_room_owner',
+      stakedKeys: 0,
+      reason: 'insufficient_stake',
     })
 
     const result = await executeInverseAkitaChatReaction({
       roomId: '1484',
       intent: {
-        id: 'non-owner-room-trade',
+        id: 'non-staker-room-trade',
         date: Date.now(),
         sender: '0x2222222222222222222222222222222222222222',
         text: 'btc looks bullish',
@@ -866,7 +867,7 @@ describe('inverseAkitaChatReaction', () => {
       },
     })
 
-    expect(result).toMatchObject({ skipped: true, skipReason: 'not_room_owner' })
+    expect(result).toMatchObject({ skipped: true, skipReason: 'insufficient_stake' })
     expect(mockResolveRoomDefaultArenaIdentity).not.toHaveBeenCalled()
     expect(mockRunArenaOpenPositions).not.toHaveBeenCalled()
     expect(mockRunArenaTrade).not.toHaveBeenCalled()
