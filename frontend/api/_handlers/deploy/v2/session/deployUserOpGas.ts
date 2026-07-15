@@ -8,14 +8,18 @@
  * pm_getPaymasterData. Do not pass gas into sendUserOperation args either:
  * pm_getPaymasterStubData runs before gas fill and expects zeroish gas.
  *
+ * Keep verification/preVerification close to normal sponsored sizes so total
+ * UserOp gas stays under CDP bundler caps (oversized totals return
+ * "Missing or invalid parameters" on eth_sendUserOperation).
+ *
  * Attach via account.userOperation.estimateGas so stub stays zeroish and the
  * EP0.6 gas trio skips the failing zero-seed estimate.
  */
 export const DEPLOY_SESSION_USEROP_GAS = {
-  // ~16.4M observed on phase2 executeBatch; leave headroom under common CDP caps.
-  callGasLimit: 17_000_000n,
-  verificationGasLimit: 3_000_000n,
-  preVerificationGas: 2_000_000n,
+  // ~16.4M observed on phase2 executeBatch; leave a small buffer.
+  callGasLimit: 16_750_000n,
+  verificationGasLimit: 800_000n,
+  preVerificationGas: 200_000n,
 } as const
 
 type AccountWithUserOpGas = {
