@@ -1,5 +1,5 @@
 /**
- * Fat deploy stages (esp. phase2 core CREATE2 fan-out) use ~10–16M execution gas.
+ * Fat deploy stages (esp. phase2 core CREATE2 fan-out) use multi-million execution gas.
  * Viem's default estimate path seeds callGasLimit=0, which reverts on these ops
  * before a real estimate can complete.
  *
@@ -9,8 +9,13 @@
  * pm_getPaymasterStubData runs before gas fill and expects zeroish gas.
  *
  * CDP bundler precheck rejects UserOps whose total gas (call + verification +
- * preVerification + paymaster overhead) exceeds 14_500_000. Phase2 core needs
- * ~16.4M call gas alone, so those ops must be self-bundled via EntryPoint.handleOps.
+ * preVerification + paymaster overhead) exceeds 14_500_000. Phase2 core is above
+ * that ceiling, so those ops must be self-bundled via EntryPoint.handleOps.
+ *
+ * Base RPC rejects eth_sendRawTransaction when tx.gas > 2^24 (16_777_216) even
+ * though block gasLimit is far higher — observed 2026-07-15 on mainnet.base.org
+ * and Matrixed. Outer handleOps gas and UserOp call+verification must fit under
+ * that per-tx cap.
  *
  * CDP paymaster validation is not reliable when the same UserOp is submitted via
  * our own handleOps (short-lived sponsorship windows / bundler-bound context).
@@ -33,11 +38,18 @@ import { entryPoint06Address, getUserOperationHash } from 'viem/account-abstract
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 
+/** Base mempool/RPC per-transaction gas ceiling (2^24). */
+export const BASE_MAX_TX_GAS = 16_777_216n
+
+/** Outer handleOps wrapper overhead reserved above call+verification. */
+const SELF_BUNDLE_HANDLE_OPS_OVERHEAD = 250_000n
+
 export const DEPLOY_SESSION_USEROP_GAS = {
-  // ~16.4M observed on phase2 executeBatch; leave a small buffer.
-  callGasLimit: 16_750_000n,
-  verificationGasLimit: 800_000n,
-  preVerificationGas: 200_000n,
+  // Fit under BASE_MAX_TX_GAS with verification + handleOps overhead.
+  // call (15.9M) + verification (500k) + overhead (250k) = 16_650_000 < 2^24.
+  callGasLimit: 15_900_000n,
+  verificationGasLimit: 500_000n,
+  preVerificationGas: 100_000n,
 } as const
 
 /** CDP eth_sendUserOperation precheck ceiling (observed 2026-07-15). */
@@ -284,9 +296,16 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       functionName: 'handleOps',
       args: [[opTuple], account.address],
     })
-    // Outer gas must cover EP validation + 16.75M callGasLimit execution.
-    // Keep under RPC "gas limit too high" (~25M observed) while above call gas.
-    const handleOpsGas = opTuple.callGasLimit + opTuple.verificationGasLimit + 500_000n
+    // Outer gas must cover EP validation + callGasLimit execution, but Base
+    // rejects eth_sendRawTransaction above BASE_MAX_TX_GAS (2^24).
+    const uncappedHandleOpsGas =
+      opTuple.callGasLimit + opTuple.verificationGasLimit + SELF_BUNDLE_HANDLE_OPS_OVERHEAD
+    if (uncappedHandleOpsGas > BASE_MAX_TX_GAS) {
+      throwSelfBundleError(
+        `deploy_session_self_bundle_gas_exceeds_base_tx_cap: need ${uncappedHandleOpsGas} gas for handleOps but Base RPC caps tx.gas at ${BASE_MAX_TX_GAS}`,
+      )
+    }
+    const handleOpsGas = uncappedHandleOpsGas
     const txHash = await walletClient.sendTransaction({
       to: entryPoint06Address,
       data: handleOpsData,
