@@ -3,16 +3,19 @@
  * Viem's default estimate path seeds callGasLimit=0, which reverts on these ops
  * before a real estimate can complete.
  *
- * Do NOT pass these gas fields into sendUserOperation args: pm_getPaymasterStubData
- * runs before gas fill and Coinbase CDP rejects non-zero / EP0.7 paymaster gas on stub.
- * Attach via account.userOperation.estimateGas so stub stays zeroish and estimation is skipped.
+ * Coinbase Smart Wallet uses EntryPoint 0.6. Do not attach EP0.7-only
+ * paymasterVerificationGasLimit / paymasterPostOpGasLimit — CDP rejects them on
+ * pm_getPaymasterData. Do not pass gas into sendUserOperation args either:
+ * pm_getPaymasterStubData runs before gas fill and expects zeroish gas.
+ *
+ * Attach via account.userOperation.estimateGas so stub stays zeroish and the
+ * EP0.6 gas trio skips the failing zero-seed estimate.
  */
 export const DEPLOY_SESSION_USEROP_GAS = {
-  callGasLimit: 20_000_000n,
+  // ~16.4M observed on phase2 executeBatch; leave headroom under common CDP caps.
+  callGasLimit: 17_000_000n,
   verificationGasLimit: 3_000_000n,
   preVerificationGas: 2_000_000n,
-  paymasterVerificationGasLimit: 500_000n,
-  paymasterPostOpGasLimit: 250_000n,
 } as const
 
 type AccountWithUserOpGas = {
