@@ -14,6 +14,10 @@ KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
 CURRENT_RELEASE="v1.19.0"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
+# During an immutable bytecode-epoch rollout, source may intentionally target
+# the next manifest while docs/defaults still describe the live release.
+SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.1}"
+SOURCE_MANIFEST="$ROOT_DIR/deployments/base/${SOURCE_RELEASE}-bytecode-manifest.json"
 
 load_env_key_if_unset() {
   local key="$1"
@@ -162,15 +166,19 @@ if command -v pnpm >/dev/null 2>&1; then
     echo "release target guard failed: missing ${CURRENT_MANIFEST}" >&2
     exit 1
   fi
+  if [[ ! -f "$SOURCE_MANIFEST" ]]; then
+    echo "release target guard failed: missing ${SOURCE_MANIFEST}" >&2
+    exit 1
+  fi
 
   source_manifest="$(mktemp)"
   trap 'rm -f "$source_manifest"' EXIT
   BYTECODE_MANIFEST_OUT="$source_manifest" \
-    "$ROOT_DIR/script/generate_bytecode_manifest.sh" "$CURRENT_RELEASE" >/dev/null
+    "$ROOT_DIR/script/generate_bytecode_manifest.sh" "$SOURCE_RELEASE" >/dev/null
   if ! diff -u \
     <(jq -S '.contracts | map_values(.codeId)' "$source_manifest") \
-    <(jq -S '.contracts | map_values(.codeId)' "$CURRENT_MANIFEST") >/dev/null; then
-    echo "release target guard failed: ${CURRENT_RELEASE} manifest does not match current source artifacts" >&2
+    <(jq -S '.contracts | map_values(.codeId)' "$SOURCE_MANIFEST") >/dev/null; then
+    echo "release target guard failed: ${SOURCE_RELEASE} manifest does not match current source artifacts" >&2
     exit 1
   fi
 

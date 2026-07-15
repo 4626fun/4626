@@ -12,14 +12,17 @@ Full architecture: `docs/4626-connection-methods.md` — three connection method
 ## Canonical account
 
 - The user's originally created Zora Coinbase Smart Wallet is the canonical **asset-holding account** (`profiles.csw_address`). This is what `basescan`, Zora, and the Coinbase app display, and it is the source of truth for asset checks, onchain owner index resolution, and canonical account views.
-- **`CANONICAL_CSW_ADDRESS`** (`frontend/src/wallet/canonicalWalletPolicy.ts`) is the policy pin for the **4626 canonical account's** `profiles.csw_address` (`0xAb6d5…967b5`). It is the **same wallet**, not a parallel "agent CSW." XMTP agent 4626 inbox, Railway Keepr ERC-4337 sender, AKITA vault owner, sponsored `canonical4337` swaps, and owner-install all use this address when that account is active. Hard cutover **2026-04-23** from legacy `XMTP_AGENT_CSW_*` env; use `CANONICAL_CSW_*` / optional `VITE_CANONICAL_CSW_ADDRESS` (`canonicalCswEnv.ts`). **CI guard:** `pnpm -C frontend guard:canonical-csw`.
+- **Two platform CSW pins** — do not conflate:
+  - **`PROTOCOL_CSW_ADDRESS`** (`0x793ca28123cba3ca3c20b9c6c67f37510c89c145`) — 4626 **protocol agent** identity: XMTP Agent 4626 inbox, Railway Keepr/Hermit ERC-4337 sender, ERC-8004 #2205, AMOE publishers. Env: `PROTOCOL_CSW_*`.
+  - **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5…967b5`) — **operator personal account** CSW: custody, sponsored swaps, AKITA vault owner, owner-install. Same architectural role as any account's `profiles.csw_address`.
+- Policy constants: `frontend/src/wallet/canonicalWalletPolicy.ts`. Runtime env: `canonicalCswEnv.ts`. Retired `XMTP_AGENT_CSW_*` env hard cutover **2026-04-23**; protocol/agent cutover **2026-07**. **CI guard:** `pnpm -C frontend guard:canonical-csw`.
 - Do not automatically create a new Coinbase Smart Wallet.
 - Do not silently switch the primary account to a Privy Smart Wallet.
 - Privy EOAs and Privy Smart Wallets are signer/owner identities only, not the canonical asset-holding account.
 - Deviation from the canonical wallet is allowed only with explicit product requirement or explicit user opt-in migration.
-- Role labels (XMTP agent, vault owner, swap sender) describe **what uses** the canonical CSW — not a second account. Do not reintroduce a split "agent wallet vs user wallet" model.
+- Protocol agent CSW and user custody CSW are **distinct addresses** with distinct execution tracks. Do not reintroduce a merged "one wallet does every agent role" model.
 
-Details: `.cursor/rules/csw-agent-lifecycle.mdc` § Canonical CSW owner allowlist.
+Details: `.cursor/rules/csw-agent-lifecycle.mdc` § Canonical CSW owner allowlist; `docs/agent-context/archives/wallet-identity.md`.
 
 ## Execution address depends on the execution track
 
@@ -28,11 +31,11 @@ The canonical asset-holding account above does not automatically equal the ERC-4
 - **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the default ERC-4337 `sender` / execution address for sponsored swaps is the parent CSW (`profiles.csw_address`) through `canonical4337`, with the Privy embedded EOA (`profiles.primary_embedded_eoa`) signing as a confirmed CSW owner. This is the first-class proven path for canonical custody and gas sponsorship.
 - **User-initiated frontend execution (external EOA, `executionMode === 'eoa'`)**: `msg.sender` is the user's EOA directly. `sendTransaction` is used; ERC-4337 UserOps do not apply to this track.
 - **Server-side ERC-4337 UserOps** — parent CSW as `sender`, Privy server wallet delegated via `addOwnerAddress` (see `.cursor/rules/csw-agent-lifecycle.mdc`):
-  - **Railway XMTP / Keepr / ERC-8004**: `sender` = canonical CSW (`CANONICAL_CSW_ADDRESS` === that account's `profiles.csw_address`).
+  - **Railway XMTP / Keepr / ERC-8004**: `sender` = **protocol CSW** (`PROTOCOL_CSW_ADDRESS`).
   - **Deploy-session automation**: `sender` = the **creator's** canonical CSW (`profiles.csw_address`) with a temporary delegated owner removed after deploy completes.
 ## Common rules across tracks
 
-- `msg.sender` MUST match the track — sponsored canonical swaps use the account's parent CSW; deploy-session uses the creator's parent CSW with a server delegated signer; Railway/Keepr uses the 4626 canonical CSW with its server delegated signer.
+- `msg.sender` MUST match the track — sponsored canonical swaps use the user's parent CSW; deploy-session uses the creator's parent CSW with a server delegated signer; Railway/Keepr uses **protocol CSW** (`PROTOCOL_CSW_ADDRESS`) with its server delegated signer.
 - Asset checks, balance reads, and owner index resolution always use the parent CSW (`profiles.csw_address`), regardless of which track is executing.
 - **`shouldApplyCanonicalEnforcement`** applies when the active canonical or execution wallet equals `CANONICAL_CSW_ADDRESS` (same address as that account's `profiles.csw_address`). Allowlisted admin EOAs operating a different account's CSW must not trigger 4626 policy gates.
 - If you are unsure which track applies to a code path, check whether the caller is a wagmi/Privy connector in the user's browser (user-initiated frontend) or a server/agent surface (server-side). When in doubt, do not fall back silently — surface the ambiguity.
@@ -42,7 +45,7 @@ The canonical asset-holding account above does not automatically equal the ERC-4
 When testing canonical CSW identity, distinguish three layers and prefer adding coverage at the layer that is currently untested:
 
 1. **Policy constants and allowlists** — `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_ALLOWED_OWNER_EOAS`, `isCanonicalCsw`, `isAllowedOwnerEoa`, `shouldApplyCanonicalEnforcement` (in `frontend/src/wallet/canonicalWalletPolicy.ts`).
-2. **Address resolvers** — client/server canonical CSW or XMTP inbox resolvers such as `resolveClientAgentXmtpAddress` (`frontend/src/lib/xmtp/agentXmtpAddress.ts`) and `resolveServerAgentInboxAddress` (`frontend/server/_lib/wallet/canonicalCswEnv.ts`).
+2. **Address resolvers** — client/server protocol CSW or XMTP inbox resolvers such as `resolveClientAgentXmtpAddress` (`frontend/src/lib/xmtp/agentXmtpAddress.ts`) and `resolveServerAgentInboxAddress` (`frontend/server/_lib/wallet/canonicalCswEnv.ts`).
 3. **Consumers** — chat identity (`getAgentIdentity` in `frontend/src/components/chat/agentIdentity.ts`), swap execution gates, deploy eligibility, and signer gates.
 
 If resolver tests already exist, prefer adding coverage at the consumer layer. The invariant under test is that the canonical CSW identity is never conflated with a delegated signer (Privy embedded EOA, Privy server wallet, or admin EOA). See `AGENTS.md` § Regression test quality for assertion-strength guidance.

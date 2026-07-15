@@ -6,6 +6,12 @@
 #     --dest /etc/4626/solana-keeper-orchestrator.env
 #
 # Preserves existing SOLANA_ORCHESTRATOR_API_KEY when dest already exists.
+#
+# LotteryManager migration notes (release-target guard anchors; do not restore Twin):
+# - Canonical: 0xB68F359e01626Ec5d15C624037311C70DacAba43
+# - Retired v1.13: 0x5c0115589d7F4930A0dc93417aE409f44186f4E7
+# - Superseded v1.18: 0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1
+# Normalize via kpr/utils/solanaCanonicalAddresses.ts (normalizeLotteryManager).
 
 set -euo pipefail
 

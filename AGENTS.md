@@ -185,13 +185,15 @@ Canonical architecture reference: `docs/_internal/4626-connection-methods.md` �
 
 Wallet-role model for user-facing docs and copy:
 
-- **Canonical CSW (parent) = identity + custody source of truth** (`profiles.csw_address`).
-- **Canonical CSW (parent) = primary execution sender for sponsored canonical swaps** (`canonical4337` + embedded EOA owner on that same address).
-- **One wallet, many roles** — for the 4626 canonical account, `profiles.csw_address` === `CANONICAL_CSW_ADDRESS`: XMTP agent 4626 inbox, Railway Keepr, AKITA vault owner, and swap/owner-install are **labels on the same CSW**, not separate accounts. Do not reintroduce "agent CSW" as a second wallet.
-- **Privy embedded EOA = primary signer for parent-CSW sponsored UserOps.**
+- **User canonical CSW (parent) = identity + custody source of truth** (`profiles.csw_address`).
+- **User canonical CSW (parent) = primary execution sender for sponsored canonical swaps** (`canonical4337` + embedded EOA owner on that same address).
+- **Two platform CSW pins** — do not conflate:
+  - **`PROTOCOL_CSW_ADDRESS`** (`0x793c…`) = 4626 **protocol agent** (XMTP Agent 4626 inbox, Railway Keepr/Hermit sender, ERC-8004 #2205, AMOE publishers). Policy: `canonicalWalletPolicy.ts`; env: `PROTOCOL_CSW_*`.
+  - **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5…`) = **operator personal account** (custody, swaps, AKITA vault owner) — same role as any account's `profiles.csw_address`, not the public agent identity.
+- **Privy embedded EOA = primary signer for user parent-CSW sponsored UserOps.**
 - **Connected external EOA = fallback/override signer lane.**
-- **Privy server wallet = delegated server-side signer for automation/deploy-session tracks** (signer identity, not the asset-holding CSW).
-- Keep this role split explicit in docs and UI copy; do not collapse signer role into canonical identity language.
+- **Privy server wallet = delegated server-side signer** for protocol agent UserOps and deploy-session automation (signer identity, not the user's asset-holding CSW).
+- Keep signer vs custody vs protocol-agent identity explicit in docs and UI copy.
 
 - **Verified email is the canonical 4626 identity and recovery key.**
 - **No 4626 account is considered fully created until email OTP verification completes.**
@@ -219,12 +221,15 @@ Wallet-role model for user-facing docs and copy:
 - **Website sign-in should use email OTP by default.** Do not assume Telegram is the primary website login flow unless product explicitly changes this rule later.
 - **Do not preserve legacy auth paths just for backward compatibility.** If an old path conflicts with these invariants, remove or migrate it.
 
-### Canonical CSW identity (one wallet per account)
+### CSW identity (user account vs protocol agent)
 
-- **`profiles.csw_address`** is the canonical parent Coinbase Smart Wallet for each 4626 account — identity, custody, and (when execution-ready) the default `canonical4337` sender.
-- **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5C10b03300326cd7fab7267ae192842967b5`) is the **same wallet** for the 4626 canonical account: policy in `frontend/src/wallet/canonicalWalletPolicy.ts`, runtime env via `frontend/server/_lib/wallet/canonicalCswEnv.ts`, client inbox via `frontend/src/lib/xmtp/agentXmtpAddress.ts`. XMTP agent 4626 inbox, Railway Keepr ERC-4337 sender, AKITA vault owner, sponsored swaps, and owner-install all use this address — not a parallel "agent CSW." Hard cutover **2026-04-23** from `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef`; retired env `XMTP_AGENT_CSW_*`, `XMTP_AGENT_PRIVY_WALLET_ID`, `VITE_AGENT_XMTP_ADDRESS` → `CANONICAL_CSW_*` and optional `VITE_CANONICAL_CSW_ADDRESS`. **Regression guard:** `pnpm -C frontend guard:canonical-csw` (CI); Railway `validateStartupEnv` **errors** on retired keys; doctor + Eliza early logs flag drift.
-- **Other accounts** (creators on 4626) have their **own** `profiles.csw_address` — same canonical-CSW role, different on-chain address. Deploy-session and creator flows use that row.
-- **`4626.base.eth`** resolves to operator **display** context (`0xB05Cf01231cF2fF99499682E64D3780d57c80FdD`), not the canonical CSW — do not use Basename resolution as custody or swap truth.
+- **`profiles.csw_address`** is each account's parent Coinbase Smart Wallet — identity, custody, and (when execution-ready) the default `canonical4337` sender for user-initiated swaps.
+- **`PROTOCOL_CSW_ADDRESS`** (`0x793ca28123cba3ca3c20b9c6c67f37510c89c145`) is the **4626 protocol agent** CSW: XMTP Agent 4626 inbox, Railway Keepr/Hermit ERC-4337 sender, ERC-8004 agent #2205 owner, AMOE publishers. Client agent inbox via `resolveClientAgentXmtpAddress()`; server via `resolveServerAgentInboxAddress()` in `canonicalCswEnv.ts`.
+- **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5C10b03300326cd7fab7267ae192842967b5`) is the **operator personal account** CSW — custody, sponsored swaps, AKITA vault owner, owner-install. Policy in `frontend/src/wallet/canonicalWalletPolicy.ts`. Not the public agent identity.
+- **Other accounts** (creators on 4626) have their **own** `profiles.csw_address` — same user-account role, different on-chain address. Deploy-session and creator flows use that row.
+- Retired env `XMTP_AGENT_CSW_*`, `XMTP_AGENT_PRIVY_WALLET_ID`, `VITE_AGENT_XMTP_ADDRESS` → `PROTOCOL_CSW_*` / `CANONICAL_CSW_*`. **Regression guard:** `pnpm -C frontend guard:canonical-csw` (CI). Re-verify cutover: `scripts/ops/verify-protocol-csw-cutover.ts`.
+- **`4626.base.eth`** resolves to operator **display** context (`0xB05Cf01231cF2fF99499682E64D3780d57c80FdD`), not custody or agent inbox truth.
+- Deep wiring: `docs/agent-context/archives/wallet-identity.md`, `docs/_internal/ACCOUNT_MODEL.md` §5.3.
 
 ### Canonical Lane Terminology
 
@@ -433,4 +438,11 @@ before finalize.
 
 ## Learned Facts & Preferences
 
-Accumulated workspace facts and user preferences have been moved to `docs/agent-learned-facts.md` to keep this file focused on authoritative repo instructions. Refer there for observational implementation notes, runtime quirks, and user design preferences.
+Accumulated workspace facts and user preferences are tiered under **`docs/agent-context/`**:
+
+- **Index:** [docs/agent-context/INDEX.md](docs/agent-context/INDEX.md)
+- **Always-on (Tier 1):** [docs/agent-context/preferences-active.md](docs/agent-context/preferences-active.md)
+- **On-demand archives:** [docs/agent-context/archives/](docs/agent-context/archives/)
+- **Prompt templates:** [docs/agent-context/prompt-templates.md](docs/agent-context/prompt-templates.md)
+
+The legacy path [docs/agent-learned-facts.md](docs/agent-learned-facts.md) redirects to the index. Do not bloat AGENTS.md with observational notes.

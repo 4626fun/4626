@@ -61,6 +61,7 @@ contract MockAuxiliaryCreatorToken {
 contract MockDeploymentBatcherCodeAllowlist {
     mapping(bytes32 => bool) public approvedCodeIds;
     bool public codeIdAllowlistEnabled = true;
+    bool public revertApprovalWithEmptyData;
 
     error CodeIdNotApproved(bytes32 codeId);
 
@@ -68,7 +69,16 @@ contract MockDeploymentBatcherCodeAllowlist {
         approvedCodeIds[codeId] = approved;
     }
 
+    function setRevertApprovalWithEmptyData(bool enabled) external {
+        revertApprovalWithEmptyData = enabled;
+    }
+
     function requireApprovedCodeId(bytes32 codeId) external view {
+        if (revertApprovalWithEmptyData) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
         if (!codeIdAllowlistEnabled) return;
         if (!approvedCodeIds[codeId]) revert CodeIdNotApproved(codeId);
     }
@@ -274,6 +284,41 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
             abi.encodeWithSelector(MockDeploymentBatcherCodeAllowlist.CodeIdNotApproved.selector, creatorRouterCodeId)
         );
         auxBatcher.deployPhase2Auxiliaries(params, codeIds);
+    }
+
+    function test_allowlistEmptyRevertFailsClosedWhenFeatureGetterExists() public {
+        VaultAuxiliaryDeployBatcher.Params memory params = _creatorParams();
+        VaultAuxiliaryDeployBatcher.CodeIds memory codeIds = _creatorCodeIds();
+        deploymentBatcher.setRevertApprovalWithEmptyData(true);
+
+        vm.expectRevert();
+        auxBatcher.deployPhase2Auxiliaries(params, codeIds);
+    }
+
+    /// @dev Live v1.19.0 DeploymentBatcher has no requireApprovedCodeId selector.
+    function test_legacyBatcherWithoutAllowlistStillDeploysWhenLaneCodeIdsMatch() public {
+        address legacyBatcher = makeAddr("legacyDeploymentBatcherNoAllowlist");
+        // Empty account: staticcall to missing selector returns ok=false, ret.length==0.
+        VaultAuxiliaryDeployBatcher legacyAware = new VaultAuxiliaryDeployBatcher(
+            address(create2),
+            address(store),
+            legacyBatcher,
+            protocolTreasury,
+            swapRouter,
+            burnStreamCodeId,
+            creatorRouterCodeId,
+            agentRouterCodeId,
+            creatorPolicyCodeId,
+            agentPolicyCodeId
+        );
+        vm.prank(protocolTreasury);
+        create2.setAuthorizedDeployer(address(legacyAware), true);
+
+        VaultAuxiliaryDeployBatcher.Result memory out =
+            legacyAware.deployPhase2Auxiliaries(_creatorParams(), _creatorCodeIds());
+        assertGt(out.burnStream.code.length, 0);
+        assertGt(out.revenueRouter.code.length, 0);
+        assertGt(out.revenuePolicyController.code.length, 0);
     }
 
     function test_rejectsUnownedVault() public {

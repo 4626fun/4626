@@ -1,0 +1,24 @@
+---
+description: Agent context tiering — load archives on demand, not by default
+alwaysApply: true
+---
+
+# Agent context budget
+
+Tier 1 active preferences live in `docs/agent-context/preferences-active.md` (~80 lines). Read that file's discipline when making cross-cutting decisions.
+
+**Do not** load `docs/agent-context/archives/*.md` unless the task touches that domain. Use [docs/agent-context/INDEX.md](docs/agent-context/INDEX.md) to pick the right archive.
+
+| Domain | Archive |
+|--------|---------|
+| Waitlist / Privy / auth | `archives/waitlist-auth.md` |
+| Swap / paymaster / txRouter | `archives/swap-execution.md` |
+| Deploy cutover / bytecode | `archives/deploy-cutovers.md` |
+| AlfaClub / Hermit | `archives/alfaclub-ops.md` |
+| Protocol vs operator CSW | `archives/wallet-identity.md` |
+| Relay / owner-install | `archives/wallet-relay-owner-install.md` |
+| Infra / Supabase / Vercel | `archives/infra-ops.md` |
+
+Copy-paste task templates: `docs/agent-context/prompt-templates.md`.
+
+Continual-learning: append to Tier 1 or domain archives per INDEX.md — never bloat AGENTS.md.

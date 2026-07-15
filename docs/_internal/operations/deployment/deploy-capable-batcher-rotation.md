@@ -27,8 +27,12 @@ cross-lane bytecode.
 - Deploy-session payloads contain no direct calls to
   `UniversalCreate2DeployerFromStore.deploy(...)`.
 - For `vaultKind=0` (Creator) / `vaultKind=1` (Agent), auxiliary `codeIds` must
-  equal the constructor-pinned lane set and must still be approved on
-  `DeploymentBatcher.approvedCodeIds`.
+  equal the constructor-pinned lane set.
+- When the active `DeploymentBatcher` exposes `requireApprovedCodeId` /
+  `approvedCodeIds`, those codeIds must also be treasury-approved. The live
+  v1.19.0 batcher (`0x02D7…1750`) does **not** include that allowlist surface;
+  the hardened aux helper soft-skips missing-selector reverts and still enforces
+  constructor-pinned lane binding.
 
 ## Hardened constructor inputs
 
@@ -105,8 +109,22 @@ pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 
 ### 2. Approve release codeIds on DeploymentBatcher (treasury Safe)
 
-Approve at least the five auxiliary codeIds (burn stream, creator/agent routers,
-creator/agent policy controllers), plus any other v1.19.1 deploy-consumed keys:
+**Preflight gate:** confirm allowlist selectors exist on the active batcher before
+submitting a Safe tx:
+
+```bash
+cast sig 'requireApprovedCodeId(bytes32)'
+cast code 0x02D7abC547F8B1e7E2D7a919D8D1005918361750 --rpc-url $BASE_RPC_URL \
+  | tr '[:upper:]' '[:lower:]' | grep -q ccda19ad && echo allowlist=YES || echo allowlist=NO
+```
+
+If `allowlist=NO` (current v1.19.0 live batcher): **skip this step**. Do not
+rotate `DEPLOYMENT_BATCHER` as part of auxiliary cutover. Re-run Safe approvals
+only after a separate DeploymentBatcher rotation that ships the allowlist.
+
+If `allowlist=YES`, approve at least the five auxiliary codeIds (burn stream,
+creator/agent routers, creator/agent policy controllers), plus any other
+v1.19.1 deploy-consumed keys:
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/execute-approve-release-codeids-safe.ts \

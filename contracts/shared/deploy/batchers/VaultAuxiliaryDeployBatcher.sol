@@ -16,6 +16,7 @@ interface IOwnableViewForAuxiliary {
 
 /// @dev AUDIT-2026-07-08-NEW-H — phase modules / aux batcher consult DeploymentBatcher for codeId allowlist.
 interface IDeploymentBatcherCodeAllowlist {
+    function codeIdAllowlistEnabled() external view returns (bool);
     function requireApprovedCodeId(bytes32 codeId) external view;
 }
 
@@ -217,10 +218,22 @@ contract VaultAuxiliaryDeployBatcher {
             revert CodeIdKindMismatch(expectedPolicy, codeIds.revenuePolicyController);
         }
 
-        IDeploymentBatcherCodeAllowlist allowlist = IDeploymentBatcherCodeAllowlist(deploymentBatcher);
-        allowlist.requireApprovedCodeId(codeIds.vaultShareBurnStream);
-        allowlist.requireApprovedCodeId(codeIds.revenueRouter);
-        allowlist.requireApprovedCodeId(codeIds.revenuePolicyController);
+        // Live DeploymentBatcher (v1.19.0 epoch) predates AUDIT-2026-07-08-NEW-H.
+        // Probe its paired feature getter once; when present, all approval failures
+        // (including empty revert data) remain fail-closed.
+        if (_supportsCodeIdAllowlist()) {
+            IDeploymentBatcherCodeAllowlist allowlist = IDeploymentBatcherCodeAllowlist(deploymentBatcher);
+            allowlist.requireApprovedCodeId(codeIds.vaultShareBurnStream);
+            allowlist.requireApprovedCodeId(codeIds.revenueRouter);
+            allowlist.requireApprovedCodeId(codeIds.revenuePolicyController);
+        }
+    }
+
+    function _supportsCodeIdAllowlist() internal view returns (bool) {
+        (bool ok, bytes memory ret) = deploymentBatcher.staticcall(
+            abi.encodeWithSelector(IDeploymentBatcherCodeAllowlist.codeIdAllowlistEnabled.selector)
+        );
+        return ok && ret.length == 32;
     }
 
     function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32) {
