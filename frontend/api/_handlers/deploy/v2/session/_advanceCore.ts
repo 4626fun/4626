@@ -1969,15 +1969,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       payloadPatch: { [stageKey]: null },
     })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
-    const { bundler, paymasterClient, account } = authedCtx
+    const { bundler, account } = authedCtx
     try {
       let nextHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageKey]: null }
       try {
+        // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
+        // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         nextHash = await sendUserOperation(bundler, {
           account: withDeploySessionUserOpGas(account),
           calls: fullCalls,
-          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
         })
       } catch (err) {
         if (!allowCleanupFallback) throw err
@@ -1987,7 +1988,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         nextHash = await sendUserOperation(bundler, {
           account: withDeploySessionUserOpGas(account),
           calls,
-          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
         })
         payloadPatch = {
           [stageKey]: null,
@@ -2200,12 +2200,13 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       expectedSessionId: rec.id,
     })
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
-    const { bundler, paymasterClient, account } = authedCtx
+    const { bundler, account } = authedCtx
     try {
+      // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
+      // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
       const nextHash = await sendUserOperation(bundler, {
         account: withDeploySessionUserOpGas(account),
         calls: fullCalls,
-        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
       await updateDeploySession({
         id: rec.id,

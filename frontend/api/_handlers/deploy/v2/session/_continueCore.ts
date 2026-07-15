@@ -4,7 +4,7 @@ import { decodeFunctionData, getAddress, isAddress, type Address, type Hex, type
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
-import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
+import { createBundlerClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import { createDeploySessionBundlerTransport, withDeploySessionUserOpGas } from './deployUserOpGas.js'
@@ -719,7 +719,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : undefined,
     )
 
-    const paymasterClient = createPaymasterClient({ transport })
+    // Fat deploy-session UserOps self-bundle without CDP paymaster sponsorship.
     const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
 
     const account = await toCoinbaseSmartAccount({
@@ -1044,10 +1044,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let lastUserOpHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageHashKey]: null }
       try {
+        // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
+        // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         lastUserOpHash = await sendUserOperation(bundlerClient, {
           account: withDeploySessionUserOpGas(account),
           calls,
-          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
         })
       } catch (err) {
         if (!allowCleanupFallback) throw err
@@ -1056,7 +1057,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastUserOpHash = await sendUserOperation(bundlerClient, {
           account: withDeploySessionUserOpGas(account),
           calls: stageCalls,
-          paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
         })
         payloadPatch = {
           [stageHashKey]: null,

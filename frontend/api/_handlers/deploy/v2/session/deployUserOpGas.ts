@@ -11,9 +11,16 @@
  * CDP bundler precheck rejects UserOps whose total gas (call + verification +
  * preVerification + paymaster overhead) exceeds 14_500_000. Phase2 core needs
  * ~16.4M call gas alone, so those ops must be self-bundled via EntryPoint.handleOps.
+ *
+ * CDP paymaster validation is not reliable when the same UserOp is submitted via
+ * our own handleOps (short-lived sponsorship windows / bundler-bound context).
+ * Fat self-bundled ops therefore omit the paymaster and pull gas from the
+ * sender's EntryPoint deposit (topped up by the self-bundle key when needed).
  */
 import {
+  createPublicClient,
   createWalletClient,
+  decodeErrorResult,
   http,
   type Hex,
   type Transport,
@@ -39,6 +46,12 @@ export const CDP_MAX_TOTAL_USEROP_GAS = 14_500_000n
  * self-bundle, leaving headroom for CDP paymaster overhead (~1.4–1.5M).
  */
 export const CDP_SELF_BUNDLE_EXPLICIT_GAS_SUM = 12_000_000n
+
+/**
+ * withDeploySessionUserOpGas forces limits above CDP_SELF_BUNDLE_EXPLICIT_GAS_SUM,
+ * so those UserOps always self-bundle. Call sites must omit CDP paymaster sponsorship.
+ */
+export const DEPLOY_SESSION_OMIT_PAYMASTER = true
 
 type AccountWithUserOpGas = {
   userOperation?: {
@@ -92,6 +105,28 @@ const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'depositTo',
+    stateMutability: 'payable',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'error',
+    name: 'FailedOp',
+    inputs: [
+      { name: 'opIndex', type: 'uint256' },
+      { name: 'reason', type: 'string' },
+    ],
+  },
 ] as const
 
 function readSelfBundlePrivateKey(): Hex | null {
@@ -113,7 +148,17 @@ function readSelfBundlePrivateKey(): Hex | null {
 function hexToBigInt(value: unknown): bigint {
   if (typeof value === 'bigint') return value
   if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value))
-  if (typeof value === 'string' && value.trim()) return BigInt(value.trim())
+  if (typeof value === 'string' && value.trim()) {
+    const s = value.trim()
+    // viem request dumps sometimes format fees as "0.014 gwei"
+    const gwei = /^([0-9]+(?:\.[0-9]+)?)\s*gwei$/i.exec(s)
+    if (gwei) {
+      const [whole, frac = ''] = gwei[1].split('.')
+      const fracPadded = (frac + '000000000').slice(0, 9)
+      return BigInt(whole) * 1_000_000_000n + BigInt(fracPadded)
+    }
+    return BigInt(s)
+  }
   return 0n
 }
 
@@ -130,6 +175,91 @@ function shouldSelfBundleUserOp(userOp: Record<string, unknown>): boolean {
   return userOpExplicitGasSum(userOp) > CDP_SELF_BUNDLE_EXPLICIT_GAS_SUM
 }
 
+function requiredPrefundWei(userOp: Record<string, unknown>): bigint {
+  const gas = userOpExplicitGasSum(userOp)
+  const maxFeePerGas = hexToBigInt(userOp.maxFeePerGas)
+  // EP0.6: requiredPrefund = (call+verification+preVerification) * maxFeePerGas
+  // Add 10% buffer for tip / rounding during validation.
+  return (gas * maxFeePerGas * 110n) / 100n
+}
+
+function formatFailedOpReason(err: unknown): string {
+  const candidates: unknown[] = [err]
+  if (err && typeof err === 'object') {
+    const e = err as { cause?: unknown; data?: unknown; details?: unknown; shortMessage?: unknown; message?: unknown }
+    if (e.cause) candidates.push(e.cause)
+    if (e.data) candidates.push(e.data)
+    if (typeof e.details === 'string') candidates.push(e.details)
+    if (typeof e.shortMessage === 'string') candidates.push(e.shortMessage)
+    if (typeof e.message === 'string') candidates.push(e.message)
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      if (typeof candidate === 'object' && candidate !== null && 'data' in candidate) {
+        const data = (candidate as { data?: unknown }).data
+        if (typeof data === 'string' && data.startsWith('0x') && data.length >= 10) {
+          const decoded = decodeErrorResult({
+            abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+            data: data as Hex,
+          })
+          if (decoded.errorName === 'FailedOp') {
+            return `FailedOp(${String(decoded.args?.[0])}, ${String(decoded.args?.[1])})`
+          }
+        }
+      }
+      if (typeof candidate === 'string' && candidate.includes('0x220266b6')) {
+        return candidate.slice(0, 400)
+      }
+    } catch {
+      // keep scanning
+    }
+  }
+
+  if (err instanceof Error) return err.message.slice(0, 400)
+  return String(err).slice(0, 400)
+}
+
+async function ensureSenderEntryPointDeposit(args: {
+  sender: `0x${string}`
+  requiredWei: bigint
+  walletClient: ReturnType<typeof createWalletClient>
+  publicClient: ReturnType<typeof createPublicClient>
+}): Promise<void> {
+  const { sender, requiredWei, walletClient, publicClient } = args
+  if (requiredWei <= 0n) return
+
+  const balance = (await publicClient.readContract({
+    address: entryPoint06Address,
+    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+    functionName: 'balanceOf',
+    args: [sender],
+  })) as bigint
+
+  if (balance >= requiredWei) return
+
+  const shortfall = requiredWei - balance
+  const funderBalance = await publicClient.getBalance({ address: walletClient.account!.address })
+  // Leave a small native reserve for the outer handleOps tx itself.
+  const outerTxReserve = 250_000n * 50_000_000n // ~0.0000125 ETH at 0.05 gwei
+  if (funderBalance <= shortfall + outerTxReserve) {
+    throw new Error(
+      `deploy_session_self_bundle_deposit_underfunded: need ${shortfall} wei EntryPoint deposit for ${sender}; ` +
+        `funder ${walletClient.account!.address} has ${funderBalance} wei`,
+    )
+  }
+
+  const txHash = await walletClient.writeContract({
+    address: entryPoint06Address,
+    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+    functionName: 'depositTo',
+    args: [sender],
+    value: shortfall,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+}
+
 async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
   const pk = readSelfBundlePrivateKey()
   if (!pk) {
@@ -139,11 +269,25 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
   }
 
   const account = privateKeyToAccount(pk)
+  const rpcUrl = resolveDeploySessionRpcUrl()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl, { timeout: 120_000 }),
+  })
   const walletClient = createWalletClient({
     account,
     chain: base,
-    transport: http(resolveDeploySessionRpcUrl(), { timeout: 120_000 }),
+    transport: http(rpcUrl, { timeout: 120_000 }),
   })
+
+  const paymasterAndData = ((userOp.paymasterAndData as Hex) || '0x') as Hex
+  if (paymasterAndData !== '0x' && paymasterAndData.length > 2) {
+    // Keep a clear signal if a call site still attaches CDP sponsorship to a fat op.
+    // Validation against Coinbase's paymaster is unreliable outside their bundler.
+    throw new Error(
+      'deploy_session_self_bundle_paymaster_not_supported: omit paymaster for UserOps above the CDP gas cap so EntryPoint deposit can sponsor gas',
+    )
+  }
 
   const opTuple = {
     sender: userOp.sender as `0x${string}`,
@@ -155,16 +299,28 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
     preVerificationGas: hexToBigInt(userOp.preVerificationGas),
     maxFeePerGas: hexToBigInt(userOp.maxFeePerGas),
     maxPriorityFeePerGas: hexToBigInt(userOp.maxPriorityFeePerGas),
-    paymasterAndData: (userOp.paymasterAndData as Hex) || '0x',
+    paymasterAndData: '0x' as Hex,
     signature: userOp.signature as Hex,
   }
 
-  const txHash = await walletClient.writeContract({
-    address: entryPoint06Address,
-    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
-    functionName: 'handleOps',
-    args: [[opTuple], account.address],
+  await ensureSenderEntryPointDeposit({
+    sender: opTuple.sender,
+    requiredWei: requiredPrefundWei(opTuple),
+    walletClient,
+    publicClient,
   })
+
+  let txHash: Hex
+  try {
+    txHash = await walletClient.writeContract({
+      address: entryPoint06Address,
+      abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+      functionName: 'handleOps',
+      args: [[opTuple], account.address],
+    })
+  } catch (err) {
+    throw new Error(`deploy_session_self_bundle_handleOps_failed: ${formatFailedOpReason(err)}`)
+  }
 
   // Deploy-session tracking expects a UserOp hash. Prefer computing it when possible;
   // fall back to the outer tx hash so resume can still confirm inclusion.
