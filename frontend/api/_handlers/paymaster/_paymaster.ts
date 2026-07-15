@@ -246,38 +246,57 @@ const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
 
 const SELECTOR_VAULT_AUXILIARY_DEPLOY_PHASE2 = '0x2c147792'
 
+// Phase1Params must include vaultKind (v1.19.1). Legacy pre-vaultKind overloads are
+// retained below so in-flight sessions with *_LEGACY selectors still ABI-decode.
+const PHASE1_PARAMS_COMPONENTS_V1191 = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vaultName', type: 'string' },
+  { name: 'vaultSymbol', type: 'string' },
+  { name: 'shareName', type: 'string' },
+  { name: 'shareSymbol', type: 'string' },
+  { name: 'version', type: 'string' },
+  { name: 'vaultKind', type: 'uint8' },
+] as const
+
+const PHASE1_PARAMS_COMPONENTS_LEGACY = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vaultName', type: 'string' },
+  { name: 'vaultSymbol', type: 'string' },
+  { name: 'shareName', type: 'string' },
+  { name: 'shareSymbol', type: 'string' },
+  { name: 'version', type: 'string' },
+] as const
+
+const PHASE1_CODE_IDS_COMPONENTS = [
+  { name: 'vault', type: 'bytes32' },
+  { name: 'wrapper', type: 'bytes32' },
+  { name: 'shareOFT', type: 'bytes32' },
+  { name: 'gauge', type: 'bytes32' },
+  { name: 'cca', type: 'bytes32' },
+  { name: 'oracle', type: 'bytes32' },
+  { name: 'oftBootstrap', type: 'bytes32' },
+] as const
+
 const DEPLOYMENT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'deployPhase1',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
     ],
     outputs: [],
   },
@@ -286,32 +305,19 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     name: 'deployPhase1WithSalt',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
       { name: 'shareOftSaltOverride', type: 'bytes32' },
     ],
     outputs: [],
@@ -321,32 +327,18 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     name: 'deployPhase1Core',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
     ],
     outputs: [],
   },
@@ -355,32 +347,19 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     name: 'deployPhase1CoreWithSalt',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1CoreWithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
       { name: 'shareOftSaltOverride', type: 'bytes32' },
     ],
     outputs: [],
@@ -390,32 +369,18 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     name: 'finalizePhase1',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
     ],
     outputs: [],
   },
@@ -424,32 +389,19 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
     name: 'finalizePhase1WithSalt',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vaultName', type: 'string' },
-          { name: 'vaultSymbol', type: 'string' },
-          { name: 'shareName', type: 'string' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_V1191 },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS_LEGACY },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
       { name: 'shareOftSaltOverride', type: 'bytes32' },
     ],
     outputs: [],
@@ -2454,6 +2406,12 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_WITH_SALT ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE1 ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE1_LEGACY ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT_LEGACY ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_LEGACY ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_WITH_SALT_LEGACY ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE1_LEGACY ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
@@ -2672,7 +2630,13 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_WITH_SALT ||
           selector === SELECTOR_BATCHER_FINALIZE_PHASE1 ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE1_LEGACY ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT_LEGACY ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_LEGACY ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_WITH_SALT_LEGACY ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE1_LEGACY ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT_LEGACY
         ) {
           mode = 'deploy_phase1'
         } else if (
