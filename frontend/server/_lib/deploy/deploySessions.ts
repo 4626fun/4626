@@ -415,6 +415,8 @@ export async function transitionDeploySession(params: {
   const hasArtifactsPatch = Boolean(artifactsPatch && typeof artifactsPatch === 'object')
   const derivedState = deriveStateFromStep(params.toStep)
   const hasPayloadPatch = Boolean(patch && typeof patch === 'object')
+  // Avoid nested db.sql fragments in the lock clause below: custom postgres.sql always
+  // parameterizes values, so a nested FALSE fragment becomes a Promise and serializes to "{}".
   const result =
     hasPayloadPatch || hasArtifactsPatch
       ? await db.sql`
@@ -453,7 +455,7 @@ export async function transitionDeploySession(params: {
               lock_owner IS NULL
               OR lock_expires_at IS NULL
               OR lock_expires_at < NOW()
-              OR ${params.lockOwner ? db.sql`lock_owner = ${params.lockOwner}` : db.sql`FALSE`}
+              OR (${Boolean(params.lockOwner)} AND lock_owner = ${params.lockOwner ?? null})
             )
           RETURNING id;
         `
@@ -485,7 +487,7 @@ export async function transitionDeploySession(params: {
               lock_owner IS NULL
               OR lock_expires_at IS NULL
               OR lock_expires_at < NOW()
-              OR ${params.lockOwner ? db.sql`lock_owner = ${params.lockOwner}` : db.sql`FALSE`}
+              OR (${Boolean(params.lockOwner)} AND lock_owner = ${params.lockOwner ?? null})
             )
           RETURNING id;
         `
