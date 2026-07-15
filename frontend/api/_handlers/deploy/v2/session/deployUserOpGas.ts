@@ -41,14 +41,19 @@ import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 /** Base mempool/RPC per-transaction gas ceiling (2^24). */
 export const BASE_MAX_TX_GAS = 16_777_216n
 
-/** Outer handleOps wrapper overhead reserved above call+verification. */
-const SELF_BUNDLE_HANDLE_OPS_OVERHEAD = 250_000n
+/**
+ * EntryPoint 0.6 AA95: before running an op it requires
+ * `gasleft() * 63 / 64 >= callGasLimit + verificationGasLimit`.
+ * Always submit handleOps with the full Base tx gas cap, and keep
+ * call+verification under that 63/64 budget (with a small safety margin).
+ */
+const SELF_BUNDLE_AA95_SAFETY = 50_000n
 
 export const DEPLOY_SESSION_USEROP_GAS = {
-  // Fit under BASE_MAX_TX_GAS with verification + handleOps overhead.
-  // call (15.9M) + verification (500k) + overhead (250k) = 16_650_000 < 2^24.
-  callGasLimit: 15_900_000n,
-  verificationGasLimit: 500_000n,
+  // BASE_MAX * 63/64 ≈ 16_515_072; leave SAFETY, then reserve 800k verification.
+  // call 15.5M + verification 800k = 16.3M < 16_465_072.
+  callGasLimit: 15_500_000n,
+  verificationGasLimit: 800_000n,
   preVerificationGas: 100_000n,
 } as const
 
@@ -296,16 +301,16 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       functionName: 'handleOps',
       args: [[opTuple], account.address],
     })
-    // Outer gas must cover EP validation + callGasLimit execution, but Base
-    // rejects eth_sendRawTransaction above BASE_MAX_TX_GAS (2^24).
-    const uncappedHandleOpsGas =
-      opTuple.callGasLimit + opTuple.verificationGasLimit + SELF_BUNDLE_HANDLE_OPS_OVERHEAD
-    if (uncappedHandleOpsGas > BASE_MAX_TX_GAS) {
+    // Use the full Base per-tx gas cap. EP0.6 AA95 requires
+    // gasleft()*63/64 >= call+verification before the op runs.
+    const handleOpsGas = BASE_MAX_TX_GAS
+    const opExecutionGas = opTuple.callGasLimit + opTuple.verificationGasLimit
+    const aa95Budget = (handleOpsGas * 63n) / 64n - SELF_BUNDLE_AA95_SAFETY
+    if (opExecutionGas > aa95Budget) {
       throwSelfBundleError(
-        `deploy_session_self_bundle_gas_exceeds_base_tx_cap: need ${uncappedHandleOpsGas} gas for handleOps but Base RPC caps tx.gas at ${BASE_MAX_TX_GAS}`,
+        `deploy_session_self_bundle_gas_exceeds_aa95_budget: call+verification=${opExecutionGas} exceeds EntryPoint AA95 budget ${aa95Budget} under Base tx gas cap ${BASE_MAX_TX_GAS}`,
       )
     }
-    const handleOpsGas = uncappedHandleOpsGas
     const txHash = await walletClient.sendTransaction({
       to: entryPoint06Address,
       data: handleOpsData,
@@ -316,7 +321,9 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
     if (receipt.status !== 'success') {
-      throwSelfBundleError(`deploy_session_self_bundle_handleOps_reverted: tx=${txHash}`)
+      throwSelfBundleError(
+        `deploy_session_self_bundle_handleOps_reverted: tx=${txHash} gasUsed=${receipt.gasUsed}`,
+      )
     }
 
     try {
