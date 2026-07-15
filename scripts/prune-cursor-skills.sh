@@ -12,9 +12,7 @@ ALLOWLIST=(
   gh-address-comments
   supabase
   supabase-postgres-best-practices
-  swap-integration
   use-railway
-  vercel-deploy
 )
 
 GLOBAL_ROOTS=(

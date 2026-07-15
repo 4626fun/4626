@@ -1,6 +1,8 @@
 ---
 name: modern-python
-description: Apply Trail of Bits “modern python” conventions (uv, ruff, ty, pytest, prek, pyproject.toml-first). Use when editing/adding Python code in this repo or when the user asks to modernize Python tooling. Avoid reformatting vendored Python under lib/** unless explicitly requested.
+description: Python tooling conventions (uv, ruff, pytest) for first-party repo Python.
+paths: programs/**, scripts/**/*.py, **/*.py
+disable-model-invocation: true
 ---
 
 # Modern Python (Trail of Bits style)

@@ -1,6 +1,7 @@
 ---
 name: lottery-vrf-ops
-description: Operate the 4626 lottery randomness system (Chainlink VRF 2.5 hub on Base + LayerZero cross-chain integrator). Use when the user mentions VRF, subscriptionId, keyHash, VRF coordinator, callback gas limit, pending responses, cross-chain randomness, or lottery randomness/payout failures.
+description: Chainlink VRF 2.5 + LayerZero lottery randomness operations on 4626.
+paths: contracts/**/Lottery**, contracts/**/VRF**, kpr/**, frontend/**/lottery**
 ---
 
 ## Quick Start (most common)

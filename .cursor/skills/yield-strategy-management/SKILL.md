@@ -1,6 +1,7 @@
 ---
 name: yield-strategy-management
-description: Manage CreatorOVault yield strategies (add/remove strategies, set weights, set idle reserves, deploy idle assets, rebalance, report). Use when the user mentions strategy allocation, deployToStrategies, minimumTotalIdle, addStrategy, Ajna/Charm strategies, keeper operations, or vault performance monitoring.
+description: CreatorOVault strategy weights, idle reserves, rebalance, and keeper ops.
+paths: contracts/**/strategies/**, contracts/**/CreatorOVault**, kpr/**
 ---
 
 ## Quick Start (most common)

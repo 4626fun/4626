@@ -1,9 +1,7 @@
 ---
 name: zora-cli
-version: 1.0.0
-description: Zora CLI integration for coin discovery, profile lookups, and optional trade execution with JSON output.
-homepage: https://cli.zora.com/skill
-metadata: {"zora":{"category":"protocol","cli":"npx @zoralabs/cli"}}
+description: Zora CLI for coin discovery and profile lookups (slash-invoke only).
+disable-model-invocation: true
 ---
 
 # Zora CLI

@@ -35,3 +35,8 @@ cache/
 **/.foundry/
 **/broadcast/**
 frontend/pnpm-lock.yaml
+.cursor/skills/swap-integration/references/uniswap-generic-archived.md
+.cursor/skills/moltbook/**
+.cursor/skills/farcaster-agent/**
+docs/security/**
+**/*.jsonl

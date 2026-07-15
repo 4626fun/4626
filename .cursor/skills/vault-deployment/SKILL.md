@@ -1,6 +1,7 @@
 ---
 name: vault-deployment
-description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrapper, ShareOFT, gauge, CCA strategy, oracle) and optionally post-deploy strategies/payout routing. Use when the user mentions deploy vault, DeployInfrastructure, account abstraction (ERC-4337), Privy deploy flow, deployment-batcher phases, or strategy batch deployment.
+description: Deploy 4626 vault infra — CreatorOVault, ShareOFT, gauge, CCA, DeploymentBatcher.
+paths: contracts/**, frontend/src/pages/deploy/**, script/**
 ---
 
 ## Quick Start (choose the deployment path)

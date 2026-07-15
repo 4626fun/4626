@@ -1,6 +1,7 @@
 ---
 name: oft-chain-config
-description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, endpoints, chain/EID mappings, and OFT deployment bootstrapping). Use when the user mentions LayerZero, OFT, setPeer, endpoint, EID, cross-chain send, or ShareOFT configuration across chains.
+description: LayerZero ShareOFT peers, EIDs, and cross-chain wiring for 4626.
+paths: contracts/**/ShareOFT**, contracts/**/Registry4626**, frontend/**/oft**, frontend/**/layerzero**
 ---
 
 ## Quick Start (most common)

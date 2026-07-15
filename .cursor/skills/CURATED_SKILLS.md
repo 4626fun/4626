@@ -1,31 +1,32 @@
-# Curated skills for 4626 (12)
+# Curated skills for 4626
 
-Only these project skills under `.cursor/skills/` are intended for routine 4626 work. Global skills were pruned by `scripts/prune-cursor-skills.sh`.
+Project skills under `.cursor/skills/`. Prune globals: `bash scripts/prune-cursor-skills.sh`.
 
-**Auto-prune:** `bash scripts/prune-cursor-skills.sh` (disables global `SKILL.md` outside allowlist)  
-**Restore:** `bash scripts/prune-cursor-skills.sh --restore`
+## Active (9)
 
-## Project skills (always on for 4626)
+| Skill | Scoping |
+|-------|---------|
+| swap-integration | `paths` — Swap.tsx, tx/, uniswap/, paymaster |
+| deploy-vault-operator | `paths` — deploy handlers, ops scripts, batchers |
+| vault-deployment | `paths` — contracts/, deploy UI |
+| creator-profile-enrichment | `paths` — reputation lib |
+| oft-chain-config | `paths` — ShareOFT, Registry4626, LZ |
+| lottery-vrf-ops | `paths` — lottery/VRF contracts, kpr |
+| yield-strategy-management | `paths` — strategies, CreatorOVault, kpr |
+| zora-cli | slash-only (`disable-model-invocation`) |
+| modern-python | slash-only + `paths` for `**/*.py` |
 
-| Skill | Use when |
-|-------|----------|
-| deploy-vault-operator | Vault deploy orchestration |
-| vault-deployment | Creator vault lifecycle |
-| swap-integration | Uniswap / swap wiring |
-| creator-profile-enrichment | Creator metadata |
-| agents-memory-updater | Transcript → agent-context updates |
-| oft-chain-config | LayerZero ShareOFT peers |
-| lottery-vrf-ops | Jackpot / VRF |
-| yield-strategy-management | Vault strategies |
-| farcaster-agent | Farcaster surfaces |
-| moltbook | Moltbook integration |
-| zora-cli | Zora CLI |
-| modern-python | Python tooling in repo |
+## Disabled (no code in repo / archived)
 
-## Global skills kept (7)
+| Skill | Reason |
+|-------|--------|
+| moltbook | `SKILL.md.disabled` — no moltbook integration |
+| farcaster-agent | `SKILL.md.disabled` — no farcaster code paths |
 
-`gh-fix-ci`, `gh-address-comments`, `supabase`, `supabase-postgres-best-practices`, `swap-integration`, `use-railway`, `vercel-deploy`
+Generic Uniswap reference: `swap-integration/references/uniswap-generic-archived.md` (~59KB, not auto-loaded).
 
-All other global Codex/Agents skills are `SKILL.md.disabled` (re-run prune script after adding new global skills).
+## Global skills kept (5)
 
-`agents-memory-updater` is a **cursor-team-kit subagent** (not a skill file) — use for transcript → agent-context updates.
+`gh-fix-ci`, `gh-address-comments`, `supabase`, `supabase-postgres-best-practices`, `use-railway`
+
+Operator setup: [docs/agent-context/OPERATOR_CURSOR.md](../../docs/agent-context/OPERATOR_CURSOR.md)

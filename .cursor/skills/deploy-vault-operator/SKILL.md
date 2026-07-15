@@ -1,6 +1,7 @@
 ---
 name: deploy-vault-operator
-description: Operator runbook for 4626 1-click deployment (deploy-session + temporary owner + server-continue phases). Use when asked to automate or operate deploys end-to-end with minimal manual steps.
+description: Operator runbook for 4626 deploy-session automation and cutover scripts.
+paths: frontend/api/_handlers/deploy/**, frontend/scripts/ops/**, contracts/helpers/batchers/**
 ---
 
 # Deploy Vault Operator

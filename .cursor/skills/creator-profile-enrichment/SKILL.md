@@ -1,6 +1,7 @@
 ---
 name: creator-profile-enrichment
-description: Enrich creator profiles and onchain reputation by aggregating Talent Protocol, Guild.xyz, Basenames, Zora, and DeBank portfolio signals. Use when the user mentions creator discovery/ranking, onchain reputation, Talent API, Guild roles, Basename/ENS data, Zora profiles, or DeBank/portfolio activity.
+description: Creator reputation aggregation — Talent, Guild, Basename, Zora, DeBank.
+paths: frontend/src/lib/reputation/**
 ---
 
 ## Quick Start (most common)

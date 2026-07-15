@@ -109,24 +109,27 @@ Use these for 4626 work; ignore the 90+ global plugin skills unless the task exp
 
 | Skill | Use when |
 |-------|----------|
-| `deploy-vault-operator` | Vault deploy orchestration |
-| `vault-deployment` | Creator vault lifecycle |
-| `swap-integration` | Uniswap / swap wiring |
+| `deploy-vault-operator` | Vault deploy orchestration (path-scoped) |
+| `vault-deployment` | Creator vault lifecycle (path-scoped) |
+| `swap-integration` | **4626 thin skill** — txRouter/paymaster; not generic Uniswap |
 | `creator-profile-enrichment` | Creator metadata pipelines |
-| `agents-memory-updater` | Transcript → Tier 1/archive updates |
 | `oft-chain-config` | LayerZero ShareOFT peers |
 | `lottery-vrf-ops` | Jackpot / VRF operations |
 | `yield-strategy-management` | Vault strategy config |
-| `farcaster-agent` | Farcaster agent surfaces |
-| `moltbook` | Moltbook integration |
-| `zora-cli` | Zora CLI operations |
-| `modern-python` | Python tooling in repo |
+| `zora-cli` | Zora CLI — slash-only |
+| `modern-python` | Python tooling — slash-only |
+
+`agents-memory-updater` is a cursor-team-kit **subagent**, not a project skill file.
+
+## Disabled / optional skills
+
+`moltbook`, `farcaster-agent` — disabled (`SKILL.md.disabled`). Generic Uniswap doc archived under `swap-integration/references/`.
 
 ## Operator settings (outside repo)
 
-Applied in-repo for 4626:
+See [OPERATOR_CURSOR.md](./OPERATOR_CURSOR.md). Summary:
 
-- `.cursor/settings.json` — TierZero, continual-learning, and heavy plugins **disabled**; supabase/vercel/cursor-team-kit on
+- `.cursor/settings.json` — third-party import **off**; supabase + cursor-team-kit on; vercel/tierzero/continual-learning/create-plugin off
 - `.cursor/mcp.json` — **empty** (optional servers in `.cursor/mcp.optional.json`)
 - `.cursor/rules/tierzero-incident-only.mdc` — blocks proactive TierZero when plugin re-enabled
 - Global `~/.cursor/mcp.json` — pruned to **railway + supabase** (backup: `mcp.json.backup-*`)
