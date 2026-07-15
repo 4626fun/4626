@@ -162,8 +162,6 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
     abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
     functionName: 'handleOps',
     args: [[opTuple], account.address],
-    // Outer handleOps pays L2 gas from the bundler EOA; keep generous for fat ops.
-    gas: 25_000_000n,
   })
 
   // Deploy-session tracking expects a UserOp hash. Prefer computing it when possible;
