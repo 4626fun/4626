@@ -1,0 +1,38 @@
+# alfaclub-ops preferences
+
+Cross-cutting operator prefs: [preferences-active.md](../preferences-active.md).
+Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only**.
+
+## Learned User Preferences
+
+- For Hermit/AlfaChat creative commands, prefer clean replacement over legacy aliases — `/meme` replaces `/hermitimg`, and old Hermit command surfaces should be removed rather than kept as compatibility shims unless product explicitly asks for a staged transition. AlfaClub Hermit replies with GIFs/images should post the media in-thread (WebSocket-first; bot-token paths must not drop attachments) and use threaded `reply_id`; when cross-posting to X, follow with a Twitter hyperlink so previews render — avoid generic fallback GIF spam on failed routes.
+
+- Use **`ALFACLUB_API_KEY` as the single canonical AlfaClub bot credential** in `frontend/.env` and production env — do not keep parallel `ALFACLUB_BOT_TOKEN` or `WENAKITA_ALFACLUB_API_KEY` lines that can shadow the primary key (`apiAuth.ts` reads `ALFACLUB_API_KEY` first). AlfaClub daily-brief/cron posts must appear as the **Hermit4626 bot** via this key — a shadowed WENAKITA or duplicate bot token makes digests post from the wrong account.
+
+- **AlfaClub daily brief copy** should stay compact and scannable: plain-language section headers, bullet movers, relatable room economics (trading fund USD, key buy/sell, implied payout/key), creator handles on top rooms (e.g. `@Flip_Research`), and an explicit note when platform-wide FriendKey creator counts differ from a single room ID — not dense operator-style walls of text. Default to a parent message plus thread section replies when room threads are enabled (`ALFACLUB_DAILY_BRIEF_THREADS=1`).
+
+- **InverseAKITA room 1659 counter-trade paired-leg model** — On member **add/reduce**, do **not** mirror the same direction: run **harvest-and-dip** rebalancing (trim the **winning** leg, add to the **losing** leg) scaled by user position-change % × `inverseRebalanceScalePct` (env `ALFACLUB_COUNTER_TRADE_INVERSE_REBALANCE_PCT`; room override via DB). **Entry/close** still open/close the opposite leg. Room-wallet execution needs the HL agent key — user-silo defense without it is alert-only. Optional `ARENA_ASSET_ALLOWLIST` narrows symbols; **unset = all HL perps + HIP-3 markets** the executor can trade.
+
+- **Room 1659 inverse chat reactions** (Hermit `inverseAkitaChatReaction.ts`, separate from counter-trade ticker): gate on **≥1 FriendKey staked in room 1659** via FriendStake pool read (`stakingPoolByTokenId(1659)` + `readUserStakedKeys` in `resolveInverseAkitaStakerPilotAccess`) — **no Hermit operator/allowlist skip**; non-stakers get the pilot gate reply. Position-aware HL execution: **add** when inverse side matches the open leg, **trim** (`close --size` partial close) when inverse side conflicts with the open leg (preferred over same-direction stacking), **open** when flat. **Do not trade on the bot's own chat** — skip bot-authored trim/add/pilot copy, register outbound replies (~15m) so echoed text is ignored, disable loose sentiment on quote-replies, and skip bridge self senders (canonical CSW + JWT identity). Same optional `ARENA_ASSET_ALLOWLIST` gate at execution (`asset_not_allowlisted` in-chat reply when set).
+
+- **AlfaClub Hermit trading/Arena commands** use **`/h` as the only supported public entrypoint** (no legacy `/arena`, `/strategy`, `/strategies`, or flat remaps like `/in` or `/rules`); unified overview is `/h status`, Virtuals positions via `/h pos` / `/h positions`, Arena controls via `/h arena …`. Member-facing copy must stay plain-language — not operator dumps; trusted operator writes still post **Room update** announcements.
+
+- **AlfaClub `/h pos` position intel** should use compact Phanes-style tree lists: multiline agent header (`◆` name · wallet), one `├ Margin … Account … uPnL` summary line with margin-use bar, `Positions` sibling leg rows with cushion bars, then an **Actions** tree footer (`├ [2] risk` … `└ [5] pnl`). Prefer agent profile name hyperlinked to `degen.virtuals.io/agents/{id}` when profile id is known; consistent `+$`/ `-$` PnL signs; entry→mark prices on each leg. **Follow-ups require slash commands** — use `/h 2`–`/h 5` or `/h pos risk|activity|account|pnl` (not bare `2`–`5` or quote-reply numbers). Duplicate `/h pos` replies are prevented by claiming the command message in `command_reply_ledger` before execute/send (`tryClaimCommandReply`) and avoiding WS+bot-token double-send fallthrough. **Margin/Account `n/a`** usually means the formatter only read raw HL `marginSummary` — `readAccountSummary()` must also accept normalized clearinghouse enrichment (`accountValueUsd`, `totalNtlPosUsd`, `withdrawableUsd`) from `getClearinghouseState()`.
+
+- When users hesitate to attach an AlfaClub **operator EOA** to the same 4626 profile as a Telegram link because that EOA may already be a **Zora CSW owner**, lead with compartmentalization: profile/Telegram linkage is **identity + notification only** (read-only HL alert monitoring), not private-key access, Hermit signing, or automatic CSW execution — on-chain CSW owner status is independent of profile linking.
+
+- For Pinata OpenClaw agents stuck on `starting`, try the Pinata UI recovery path first (`openai/gpt-4.1-mini` → Save → Restart Gateway → retry the target model); delete/recreate only if that fails. The Pinata lane is migrating from Hermit to a fresh **AKITA agent** — a new agent id forces re-wiring Pinata/`HERMIT_PINATA_*` env on Vercel and in local `.env`.
+
+- When explaining multi-bot/agent topology (Hermit, Keepr, InverseAKITA, Virtuals, Eliza), prefer a concise ownership table mapping runtime host, transport (AlfaClub/Telegram/XMTP), model lane, and purpose before proposing architectural changes.
+
+- For Hermit4626 / AlfaClub bot command replies, prefer **inline action buttons** on the response card (AlfaClub `/ca`-style chips such as follow-up actions on stats cards) over plain text-only command output when the transport supports it.
+
+- On `/alfaclub/key-safety`, render **attacker-net** series (line, dots, tooltip, metric cards) in **red**; keep the hostile-takeover bonding-curve chart driven by scenario inputs (fund growth / keys-to-66%) and surface **USD payout per key** plus break-even fund size for a solo 66% distribute attack — do not leave attacker-net in a non-loss color or show a stale/incorrect trading pot.
+
+- Bring the full **Arena** product surface (`/arena`, backtest, related trading UI) under **`alfaclub.4626.fun`** after the AlfaClub host cutover — do not leave Arena as an app-host-only section once AlfaClub is the trading product shell.
+
+- AlfaClub Creator Coin / FriendKey LP initial liquidity should be **imbalanced** (FriendKey / ERC-1155-heavy relative to Creator Coin ERC-20) so the secondary AMM better tracks the AlfaClub bonding curve — not single-sided and not naive balanced xy=k.
+
+- When Hermit/counter-trade fires a live InverseAKITA entry, have **Hermit4626 post the advisory/analysis in-room** (not only the hidden `INV_AKITA_ENTRY_ADVISORY` shadow canary) so AlfaClub users see the signal when the trade triggers.
+
+- On AlfaClub `/rooms` overview, keep the **Who controls this room** ownership sunburst (`KeyOwnershipSunburst`) **above** the Room overview panel — not below it.

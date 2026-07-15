@@ -45,7 +45,11 @@
     ],
     "docs/agent-context/preferences-active.md": [
       "node scripts/guard-tier1-line-budget.mjs",
-      "node scripts/sync-agent-context-rule.mjs"
+      "node scripts/sync-agent-context-rule.mjs",
+      "node scripts/guard-agent-context-sync.mjs"
+    ],
+    ".cursor/rules/agent-context-budget.mdc": [
+      "node scripts/guard-agent-context-sync.mjs"
     ],
     "*.{ts,tsx,js,mjs,json,md,yml,yaml,sol,toml}": [
       "bash scripts/lint-staged-gitleaks.sh"

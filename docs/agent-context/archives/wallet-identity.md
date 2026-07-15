@@ -51,7 +51,7 @@ The bullets below were migrated from the monolithic `agent-learned-facts.md`. Pr
 
 ## Learned Workspace Facts
 
-- After `addOwnerAddress` on either CSW, update allowlists per `.cursor/rules/csw-agent-lifecycle.mdc` § Canonical CSW owner allowlist.
+- After `addOwnerAddress` on either CSW, update allowlists per `wallet-csw-lifecycle.md` archive + compact rule.
 
 - AKITA vault **owner** = operator `CANONICAL_CSW_ADDRESS` (grandfathered vault, not in Registry4626).
 

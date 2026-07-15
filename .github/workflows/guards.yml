@@ -54,6 +54,14 @@ on:
       - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
       - 'amoe/tools/ci/check_lottery_amoe_failures.py'
       - '.github/workflows/guards.yml'
+      # agent-context budget
+      - 'AGENTS.md'
+      - 'docs/agent-context/**'
+      - '.cursor/rules/agent-context-budget.mdc'
+      - 'scripts/guard-agents-line-budget.mjs'
+      - 'scripts/guard-tier1-line-budget.mjs'
+      - 'scripts/guard-agent-context-sync.mjs'
+      - 'scripts/sync-agent-context-rule.mjs'
   # No push-to-main re-run — PR path filters already gated the change.
   workflow_dispatch:
     inputs:
@@ -85,6 +93,7 @@ jobs:
       env-example: ${{ steps.filter.outputs.env-example }}
       protocol-assets: ${{ steps.filter.outputs.protocol-assets }}
       zk: ${{ steps.filter.outputs.zk }}
+      agent-context: ${{ steps.filter.outputs.agent-context }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -138,6 +147,26 @@ jobs:
               - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
               - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
               - 'amoe/tools/ci/check_lottery_amoe_failures.py'
+            agent-context:
+              - 'AGENTS.md'
+              - 'docs/agent-context/**'
+              - '.cursor/rules/agent-context-budget.mdc'
+              - 'scripts/guard-agents-line-budget.mjs'
+              - 'scripts/guard-tier1-line-budget.mjs'
+              - 'scripts/guard-agent-context-sync.mjs'
+              - 'scripts/sync-agent-context-rule.mjs'
+
+  agent-context-budget-guard:
+    needs: changes
+    if: needs.changes.outputs.agent-context == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Agent context line budgets + sync structure
+        run: |
+          node scripts/guard-agents-line-budget.mjs
+          node scripts/guard-tier1-line-budget.mjs
+          node scripts/guard-agent-context-sync.mjs
 
   verify-builder-codes:
     needs: changes

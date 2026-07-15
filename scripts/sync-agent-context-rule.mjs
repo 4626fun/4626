@@ -22,6 +22,7 @@ const COMPACT = `## Tier 1 active preferences (compact)
 - **Infra:** no Vercel PR previews (\`main\` only); hard cutover when user says continue/fix all; lane-neutral naming when no live vaults; arms ≠ strategies (legs = Charm/Ajna).
 - **UI/docs:** shadcn brand palette on waitlist; no /swap IA redesign; token icon targeted refinements only; public docs exclude \`docs/_internal/\`.
 - **Learning:** append to \`docs/agent-context/\` not AGENTS.md; Tier 1 cap 80 lines in preferences-active.md.
+- **Search:** built-in codebase Grep is unreliable here — use shell \`rg\` scoped to \`frontend/src\`, \`frontend/server\`, or \`contracts/\` (never unscoped over repo root).
 
 Full editable source: \`docs/agent-context/preferences-active.md\`.
 

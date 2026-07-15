@@ -18,7 +18,7 @@ Optional: XMTP Keepr (`frontend/server/agents/eliza/`), KPR (`kpr/`), Solana hoo
 - `ERC-4337-Wallet-Invariants.mdc` — wallet/account + pre-edit checkpoint (path-scoped)
 - `csw-agent-lifecycle.mdc` — server CSW delegation, XMTP, deploy-session
 - `agent-context-budget.mdc` — compact Tier 1 + archive routing
-- `swap-execution.mdc`, `deploy-ops.mdc`, `telegram-mini-app.mdc`, `token-identity.mdc`
+- `swap-execution.mdc`, `deploy-ops.mdc`, `contracts-scope.mdc`, `alfaclub-ops.mdc`, `telegram-mini-app.mdc`, `token-identity.mdc`
 - `waitlist-onboarding-simplicity.mdc`, `frontend-seo-*.mdc`, `product-builder-workflow.mdc`
 
 Account model: `docs/_internal/ACCOUNT_MODEL.md`. Context index: `docs/agent-context/INDEX.md`.

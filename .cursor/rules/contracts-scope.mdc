@@ -1,0 +1,22 @@
+---
+description: Foundry contracts scope — rebalance exclusion and lane terminology
+globs:
+  - contracts/**
+  - script/**
+  - test/**
+  - deployments/**
+  - foundry.toml
+alwaysApply: false
+---
+
+# Contracts scope (path-scoped)
+
+- Scope unrelated validation: `forge test --no-match-path 'test/vault/strategies/CreatorOVaultStrategies.Rebalance.*'`
+- ~65 pre-existing Rebalance failures on main — do not treat as regressions from unrelated edits.
+- Use lane-neutral interface names (`*4626` suffix) per `guard:registry4626-naming`.
+- Arms = ShareOFT mesh (CCA, LP); legs = yield strategies (Charm, Ajna) — never call arms "strategies".
+- Deploy status/preflight scripts are read-only — no onchain mutation as side effect.
+
+Validate: `pnpm -C frontend validate:contracts` or `forge test --match-path test/<area>/`.
+
+Archive: `docs/agent-context/archives/deploy-cutovers-core.md`.

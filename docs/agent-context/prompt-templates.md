@@ -129,7 +129,7 @@ Env (Railway Hermit, scoped): ARENA_*, ALFACLUB_COUNTER_TRADE_*, ALFACLUB_API_KE
 Validate:
 pnpm -C frontend exec vitest run {alfaclub|hermit test glob}
 
-Load archive: docs/agent-context/archives/alfaclub-ops.md
+Load archive: docs/agent-context/archives/alfaclub-ops-core.md
 
 MCP: tierzero_ask "{service} last 2h {symptom}"
 

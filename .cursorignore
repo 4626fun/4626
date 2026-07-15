@@ -26,3 +26,12 @@ agent-hermit-*/
 .cursor/hooks/state/continual-learning-index.json
 kpr/node_modules/
 apps/docs-site/.next/
+docs/agent-context/archives/ui-shipped-preferences.md
+test/vault/strategies/**
+contracts/out/
+contracts/cache/
+cache/
+**/forge-cache/
+**/.foundry/
+**/broadcast/**
+frontend/pnpm-lock.yaml

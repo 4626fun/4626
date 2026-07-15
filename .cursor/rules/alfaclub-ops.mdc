@@ -1,0 +1,22 @@
+---
+description: AlfaClub Hermit, rooms, counter-trade, and /h command invariants
+globs:
+  - frontend/server/_lib/alfaclub/**
+  - frontend/server/agents/hermit/**
+  - frontend/server/agents/eliza/**
+  - frontend/src/pages/AlfaClub*
+  - frontend/src/features/alfaclub/**
+alwaysApply: false
+---
+
+# AlfaClub ops (path-scoped)
+
+- **`ALFACLUB_API_KEY` only** — no shadow bot tokens (`WENAKITA_*`, duplicate bot keys).
+- Command replies: **Privy JWT WebSocket lane**; ingress via authenticated API (do not delete API path).
+- **`/h` is the sole public Hermit entrypoint** — no legacy `/arena` flat remaps.
+- Room 1659 inverse: FriendKey stake gate; no bot-self-trade; harvest-and-dip on add/reduce.
+- Product shell: **`alfaclub.4626.fun`**; chat API proxy stays on `relay.4626.fun`.
+
+Validate: `pnpm -C frontend validate:alfaclub`. Template: `.cursor/commands/alfaclub-ops.md`.
+
+Archive index: `docs/agent-context/archives/alfaclub-ops.md` → core / ops / prefs (one only).
