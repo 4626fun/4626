@@ -19,6 +19,9 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 |-------|--------------|-----------|
 | [waitlist-auth.md](./archives/waitlist-auth.md) | [core](./archives/waitlist-auth-core.md) · [ui](./archives/waitlist-auth-ui.md) · [ops](./archives/waitlist-auth-ops.md) | Privy, OTP, session, bootstrap, `/waitlist` |
 | [deploy-cutovers.md](./archives/deploy-cutovers.md) | [core](./archives/deploy-cutovers-core.md) · [vault](./archives/deploy-cutovers-vault.md) · [prefs](./archives/deploy-cutovers-prefs.md) | Cutover scripts, DeployVault, bytecode store |
+| [vault-deployment-ops.md](./archives/vault-deployment-ops.md) | — | Foundry/AA/batcher deploy runbook |
+| [deploy-vault-operator.md](./archives/deploy-vault-operator.md) | — | Deploy-session autopilot |
+| [lottery-vrf-ops.md](./archives/lottery-vrf-ops.md) | — | VRF hub, integrator, lottery manager |
 | [swap-execution.md](./archives/swap-execution.md) | — | `/swap`, paymaster, txRouter |
 | [alfaclub-ops.md](./archives/alfaclub-ops.md) | [core](./archives/alfaclub-ops-core.md) · [ops](./archives/alfaclub-ops-ops.md) · [prefs](./archives/alfaclub-ops-prefs.md) | Hermit, `/h`, room 1659, counter-trade |
 | [wallet-identity.md](./archives/wallet-identity.md) | — | PROTOCOL vs CANONICAL CSW |
@@ -37,6 +40,9 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | Collision merge, localhost Privy, grep zero hits | `waitlist-auth-ops.md` |
 | Greenfield cutover, bytecode store, epoch script | `deploy-cutovers-core.md` |
 | DeployVault, strategy features, Phase 3 | `deploy-cutovers-vault.md` |
+| DeploymentBatcher / Foundry deploy paths | `vault-deployment-ops.md` |
+| Deploy-session autopilot / continue | `deploy-vault-operator.md` |
+| VRF, lottery randomness, integrator | `lottery-vrf-ops.md` |
 | AA25, paymaster, txRouter, canonical4337 | `swap-execution.md` |
 | `/h pos`, counter-trade, room 1659, Hermit | `alfaclub-ops-core.md` |
 | Railway Hermit health, daily brief bot | `alfaclub-ops-ops.md` |
@@ -123,7 +129,7 @@ Use these for 4626 work; ignore the 90+ global plugin skills unless the task exp
 
 ## Disabled / optional skills
 
-`moltbook`, `farcaster-agent` — disabled (`SKILL.md.disabled`). Generic Uniswap doc archived under `swap-integration/references/`.
+Removed from repo: `moltbook`, `farcaster-agent` (no integration). Generic Uniswap doc removed from git — recover via `git show 0fb1b733f:.cursor/skills/swap-integration/references/uniswap-generic-archived.md` if needed.
 
 ## Operator settings (outside repo)
 
