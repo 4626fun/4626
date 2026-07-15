@@ -4,7 +4,6 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
 import {
-  ALFACLUB_INVERSE_AKITA_PATH,
   ALFACLUB_POOLS_PATH,
   ALFACLUB_ROOMS_PATH,
   ALFACLUB_SAFETY_PATH,
@@ -16,7 +15,6 @@ import { isCurrentWindowUrl } from '@/lib/env/host'
 import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
-  AlfaClubInverseAkita,
   AlfaClubTradingRooms,
   LazyAccessBoundary,
   LazyGuardedOutlet,
@@ -90,7 +88,6 @@ export function AlfaClubHostApp() {
           <Route element={<AlfaClubLayout />}>
             <Route index element={<RedirectPreserve to={ALFACLUB_ROOMS_PATH} />} />
             <Route path={ALFACLUB_ROOMS_PATH} element={<AlfaClubTradingRooms />} />
-            <Route path={ALFACLUB_INVERSE_AKITA_PATH} element={<AlfaClubInverseAkita />} />
             <Route path={ALFACLUB_SAFETY_PATH} element={<AlfaClubHubRedirect />} />
             <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubHubRedirect />} />
 

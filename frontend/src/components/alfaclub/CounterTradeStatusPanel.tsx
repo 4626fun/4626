@@ -18,7 +18,7 @@ export function CounterTradeStatusPanel({ showArenaLinks = false }: { showArenaL
           <p className="text-xs text-zinc-500">Inverse / counter-trade status</p>
           <h2 className="mt-1 text-sm font-medium text-zinc-200">Room 1659 strategy state</h2>
           <p className="mt-1 text-[11px] text-zinc-500">
-            In-room command: <span className="font-mono text-zinc-300">/h status</span>
+            In-room command: <span className="font-mono text-zinc-300">/strategy status</span>
           </p>
         </div>
         <button

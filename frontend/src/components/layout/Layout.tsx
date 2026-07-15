@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowLeftRight, Bot, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
+import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -58,7 +58,6 @@ const navItemsAlfaClub: MobileNavItem[] = [
     label: 'Rooms',
     activePrefixes: ['/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
   },
-  { path: '/inverseakita', icon: Bot, label: 'InverseAKITA', activePrefixes: ['/inverseakita'] },
   { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
 

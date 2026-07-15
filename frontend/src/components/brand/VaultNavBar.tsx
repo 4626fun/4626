@@ -43,10 +43,6 @@ const NAV_ITEMS_ALFACLUB: NavItem[] = [
     to: '/rooms',
     activePrefixes: ['/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
   },
-  {
-    label: 'InverseAKITA',
-    to: '/inverseakita',
-  },
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'Admin', to: '/admin/waitlist', activePrefixes: ['/admin'] }
