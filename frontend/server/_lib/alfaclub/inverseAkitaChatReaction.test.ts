@@ -347,6 +347,46 @@ describe('inverseAkitaChatReaction', () => {
     expect(intents[1]?.parseMode).toBe('qualified')
   })
 
+  it('hard-skips Hermit/self senders and /h rules help copy', async () => {
+    vi.stubEnv(
+      'ALFACLUB_INVERSE_AKITA_CHAT_SELF_SENDERS',
+      '0x8719fa7be10533fd69885b124a8c84f9c51071af',
+    )
+    const rulesText = [
+      '**InverseAKITA**',
+      'Autonomous Hyperliquid bot for this room. It trades on its own wallet; stakers with **≥1** FriendKey staked here can open/close on that same wallet.',
+      'Share any market take in chat — ticker + directional lean — and InverseAKITA mirrors the inverse on its wallet lol.',
+    ].join('\n')
+
+    expect(isInverseAkitaBotAuthoredChatText(rulesText)).toBe(true)
+    expect(
+      parseInverseAkitaChatTradeIntent(rulesText, { allowLooseSentiment: true }),
+    ).toBeNull()
+
+    const intents = await collectInverseAkitaChatTradeIntents({
+      roomId: '1659',
+      messages: [
+        {
+          id: 'hermit-self',
+          sender: '0x8719fa7be10533fd69885b124a8c84f9c51071af',
+          username: 'hermit4626',
+          text: 'should i short btc?',
+        },
+        {
+          id: 'rules-copy',
+          sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+          text: rulesText,
+        },
+        {
+          id: 'human',
+          sender: '0x1111111111111111111111111111111111111111',
+          text: 'btc looking bullish today',
+        },
+      ],
+    })
+    expect(intents.map((entry) => entry.id)).toEqual(['human'])
+  })
+
   it('collects configured owner-room opinions but ignores unsupported rooms', async () => {
     vi.stubEnv(
       'ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS',

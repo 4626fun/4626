@@ -153,7 +153,7 @@ export function formatInverseAkitaPilotRules(params: {
   const lines = [
     '**InverseAKITA**',
     'Autonomous Hyperliquid bot for this room. It trades on its own wallet; stakers with **≥1** FriendKey staked here can open/close on that same wallet.',
-    'Drop any market take in chat — **long btc**, **eth looking cooked**, **sol gonna pump**, **should i short btc?** — and InverseAKITA does the **opposite** on its wallet lol.',
+    'Share any market take in chat — ticker + directional lean — and InverseAKITA mirrors the inverse on its wallet lol.',
     '',
     formatInverseAkitaPilotEligibilityLine(params.pilotAccess),
     '',

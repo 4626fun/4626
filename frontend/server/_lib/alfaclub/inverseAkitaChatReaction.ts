@@ -41,7 +41,10 @@ import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptur
 import { reconcileInverseOpinionTrades } from './inverseOpinionTradeReconciler.js'
 import { formatInverseOpinionSkipReply } from './inverseOpinionTerminalReplyFormatter.js'
 import type { OpinionTradeDecision } from './inverseOpinionTradeStore.js'
-import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import {
+  isInverseAkitaChatSelfSender,
+  isInverseAkitaChatSelfUsername,
+} from './inverseAkitaChatSelfSenders.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -672,20 +675,23 @@ function isInvalidInverseChatReactionSender(senderLower: string): boolean {
   return !isHexAddress(senderLower)
 }
 
-function isBridgeSelfChatSender(senderLower: string, selfAddressLower: string): boolean {
-  if (selfAddressLower && senderLower === selfAddressLower) return true
-  return senderLower === CANONICAL_CSW_ADDRESS.toLowerCase()
-}
-
 function shouldSkipInverseChatReactionHistoryMessage(params: {
   senderLower: string
   text: string
+  username?: string | null
   isBot?: boolean | null
   selfAddressLower: string
 }): boolean {
   if (params.isBot === true) return true
   if (isInvalidInverseChatReactionSender(params.senderLower)) return true
-  if (isBridgeSelfChatSender(params.senderLower, params.selfAddressLower)) return true
+  if (isInverseAkitaChatSelfUsername(params.username)) return true
+  if (
+    isInverseAkitaChatSelfSender(params.senderLower, [
+      params.selfAddressLower,
+    ])
+  ) {
+    return true
+  }
   if (isInverseAkitaBotAuthoredChatText(params.text)) return true
   if (isRegisteredInverseAkitaBotOutboundText(params.text)) return true
   return false
@@ -725,6 +731,7 @@ export async function collectInverseAkitaChatTradeIntents(params: {
       shouldSkipInverseChatReactionHistoryMessage({
         senderLower: sender,
         text,
+        username: message.username,
         isBot: message.isBot,
         selfAddressLower: self,
       })
