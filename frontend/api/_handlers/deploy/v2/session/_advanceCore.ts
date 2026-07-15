@@ -18,7 +18,7 @@ import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
-import { withDeploySessionUserOpGas } from './deployUserOpGas.js'
+import { createDeploySessionBundlerTransport, withDeploySessionUserOpGas } from './deployUserOpGas.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -1688,7 +1688,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   const origin = getCanonicalOrigin(req)
   const bundlerEndpoint = getBundlerEndpoint(origin)
-  const transport = http(bundlerEndpoint.url)
+  const transport = createDeploySessionBundlerTransport(bundlerEndpoint.url)
 
   const publicClient = createPublicClient({
     chain: base,
@@ -1877,16 +1877,19 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
     const deployToken = rec.deployToken
     const deploySig = signDeployToken(deployToken)
-    const authedTransport = http(bundlerEndpoint.url, bundlerEndpoint.viaProxy
-      ? {
-          fetchOptions: {
-            headers: {
-              'X-CV-Deploy-Session': deployToken,
-              'X-CV-Deploy-Session-Signature': deploySig,
+    const authedTransport = createDeploySessionBundlerTransport(
+      bundlerEndpoint.url,
+      bundlerEndpoint.viaProxy
+        ? {
+            fetchOptions: {
+              headers: {
+                'X-CV-Deploy-Session': deployToken,
+                'X-CV-Deploy-Session-Signature': deploySig,
+              },
             },
-          },
-        }
-      : undefined)
+          }
+        : undefined,
+    )
     const paymasterClient = createPaymasterClient({ transport: authedTransport })
     const bundler = createBundlerClient({ client: publicClient as any, transport: authedTransport })
     const account = await toCoinbaseSmartAccount({
