@@ -2,6 +2,7 @@ import { ALFACLUB_ORIGIN } from '@/lib/env/host'
 
 /** Canonical hub and retained alias paths on alfaclub.4626.fun. */
 export const ALFACLUB_ROOMS_PATH = '/rooms'
+export const ALFACLUB_INVERSE_AKITA_PATH = '/inverseakita'
 export const ALFACLUB_SAFETY_PATH = '/safety'
 export const ALFACLUB_POOLS_PATH = '/pools'
 

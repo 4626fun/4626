@@ -417,6 +417,12 @@ export async function transitionDeploySession(params: {
   const hasPayloadPatch = Boolean(patch && typeof patch === 'object')
   // Avoid nested db.sql fragments in the lock clause below: custom postgres.sql always
   // parameterizes values, so a nested FALSE fragment becomes a Promise and serializes to "{}".
+  //
+  // Lease exclusivity is enforced by claimDeploySessionLease. Step CAS remains the
+  // transition concurrency control. When callers omit lockOwner (continue/advance under a
+  // workflow lease), do not block on the active lease. When lockOwner is supplied, still
+  // require a match (or a free/expired lock).
+  const assertLockOwner = Boolean(params.lockOwner)
   const result =
     hasPayloadPatch || hasArtifactsPatch
       ? await db.sql`
@@ -452,10 +458,11 @@ export async function transitionDeploySession(params: {
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
             AND (
-              lock_owner IS NULL
+              ${!assertLockOwner}
+              OR lock_owner IS NULL
               OR lock_expires_at IS NULL
               OR lock_expires_at < NOW()
-              OR (${Boolean(params.lockOwner)} AND lock_owner = ${params.lockOwner ?? null})
+              OR (${assertLockOwner} AND lock_owner = ${params.lockOwner ?? null})
             )
           RETURNING id;
         `
@@ -484,10 +491,11 @@ export async function transitionDeploySession(params: {
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
             AND (
-              lock_owner IS NULL
+              ${!assertLockOwner}
+              OR lock_owner IS NULL
               OR lock_expires_at IS NULL
               OR lock_expires_at < NOW()
-              OR (${Boolean(params.lockOwner)} AND lock_owner = ${params.lockOwner ?? null})
+              OR (${assertLockOwner} AND lock_owner = ${params.lockOwner ?? null})
             )
           RETURNING id;
         `

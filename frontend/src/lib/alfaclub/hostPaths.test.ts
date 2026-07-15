@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ALFACLUB_INVERSE_AKITA_PATH,
   ALFACLUB_POOLS_PATH,
   ALFACLUB_ROOMS_PATH,
   ALFACLUB_SAFETY_PATH,
@@ -24,6 +25,7 @@ describe('resolveAlfaClubCanonicalPath', () => {
   it('returns null for unrelated paths', () => {
     expect(resolveAlfaClubCanonicalPath('/swap')).toBeNull()
     expect(resolveAlfaClubCanonicalPath('/rooms')).toBeNull()
+    expect(ALFACLUB_INVERSE_AKITA_PATH).toBe('/inverseakita')
   })
 })
 
