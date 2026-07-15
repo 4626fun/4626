@@ -321,7 +321,7 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.19.0'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.19.1'
 
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true

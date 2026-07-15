@@ -12,7 +12,7 @@ POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
 VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
-CURRENT_RELEASE="v1.19.0"
+CURRENT_RELEASE="v1.19.1"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
 # During an immutable bytecode-epoch rollout, source may intentionally target
 # the next manifest while docs/defaults still describe the live release.
@@ -71,7 +71,7 @@ deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e0
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00|0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1|0x700b4BBAf965c013123bAd02a6562FBa487aC0f1|0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae'
 
 require_rg 'new per-creator launches use the' "$ADDRESSES_DOC" 'addresses doc partial-refresh title'
-require_rg '**v1.19.0** bytecode/CREATE2 epoch.' "$ADDRESSES_DOC" 'addresses doc v1.19.0 epoch'
+require_rg '**v1.19.1** bytecode/CREATE2 epoch.' "$ADDRESSES_DOC" 'addresses doc v1.19.1 epoch'
 require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current infrastructure heading'
 require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
 require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
@@ -86,7 +86,7 @@ require_rg "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC"
 require_rg "DeploymentBatcherShareMeshHelper | \`$share_mesh_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherShareMeshHelper address'
 require_rg "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherUtilsHelper address'
 
-require_rg '`v1.19.0` bytecode/CREATE2 target for new per-creator vaults.' "$INVENTORY_DOC" 'inventory v1.19.0 scope'
+require_rg '`v1.19.1` bytecode/CREATE2 target for new per-creator vaults.' "$INVENTORY_DOC" 'inventory v1.19.1 scope'
 require_rg "\`lotteryManager\` | \`$lottery_manager\`" "$INVENTORY_DOC" 'inventory LotteryManager4626 address'
 require_rg "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" 'inventory bytecodeStore address'
 require_rg "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" 'inventory create2DeployerFromStore address'

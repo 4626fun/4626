@@ -25,20 +25,14 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 
 ## Open — product / ops
 
-### 1. v1.19.1 aux batcher cutover (highest priority)
+### 1. v1.19.1 Creator + Agent canaries (highest priority)
 
-**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 prep (not cut over)**.
+**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 live** (aux helper
+`0xde93…D99b` authorized; bytecode store fully seeded; `VITE_DEPLOYMENT_VERSION=v1.19.1`).
 
-**Preflight script:** `pnpm -C frontend ops:prepare-v1191-aux-cutover` (supports `--report-only`)
-
-**Live preflight (2026-07-15):** `pnpm -C frontend ops:prepare-v1191-aux-cutover -- --report-only` → **blocked** on `AgentRevenuePolicyController` not seeded in bytecode store (all other aux keys OK).
-
-**Next on-chain steps** (from script `nextActions`):
-1. Seed missing `AgentRevenuePolicyController` bytecode if preflight fails
-2. Treasury Safe codeId approvals (if allowlist supported)
-3. Deploy hardened `VaultAuxiliaryDeployBatcher`
-4. Authorize on CREATE2 → then env/`contracts.defaults.ts` cutover
-5. Creator + Agent canaries
+**Outstanding:** one Creator and one Agent canary via `/deploy`. Confirm no
+`auxiliary_batcher_selector_not_allowed`, `batcher_aux_codeids_mismatch`,
+`CodeIdKindMismatch`, `InvalidCodeId`, or `CODE_NOT_FOUND`.
 
 **Paste into new chat:**
 
@@ -46,18 +40,15 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 /deploy-cutover
 
 RELEASE: v1.19.1
-Goal: Fix prepare-v1191-aux-batcher-cutover.ts duplicate script bug, run preflight, report blockingFailures only.
+Goal: Run Creator + Agent production canaries against hardened VaultAuxiliaryDeployBatcher 0xde93AecaAd5A61dFC179703d522fBE9a5747D99b.
 
-@frontend/scripts/ops/prepare-v1191-aux-batcher-cutover.ts
-@deployments/base/v1.19.1-bytecode-manifest.json
 @docs/reference/addresses.md
+@docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md
 
 Load archive: docs/agent-context/archives/deploy-cutovers-core.md
 
-Run: pnpm -C frontend ops:prepare-v1191-aux-cutover
-Validate: bash test/current-release-target-guard.sh && pnpm -C frontend guard:registry4626-naming
-
-Read-only until I say execute onchain. Report every exit code.
+Validate: bash test/current-release-target-guard.sh
+Report every exit code. Do not rotate DeploymentBatcher.
 ```
 
 ### 2. `validate:deploy-guards` (pre-existing)

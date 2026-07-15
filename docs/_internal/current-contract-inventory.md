@@ -5,19 +5,18 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Updated on: 2026-07-12
+Updated on: 2026-07-15
 Scope: current live v1.18.0 Base shared infrastructure plus the canonical
-`v1.19.0` bytecode/CREATE2 target for new per-creator vaults.
+`v1.19.1` bytecode/CREATE2 target for new per-creator vaults.
 
 ## Sources
 
 1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.19.0-bytecode-manifest.json`
+2. Bytecode / codeId manifest: `deployments/base/v1.19.1-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.18.0-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
-6. Prepared next epoch (not live): `deployments/base/v1.19.1-bytecode-manifest.json` +
-   hardened aux batcher rotation in
+6. Aux rotation runbook:
    `docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md`
 
 ## Canonical Base Infrastructure

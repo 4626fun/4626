@@ -7,14 +7,13 @@ sidebar_position: 1
 
 Canonical deployed contract addresses for 4626 on Base mainnet. Shared
 infrastructure is the **v1.18.0** stack; new per-creator launches use the
-**v1.19.0** bytecode/CREATE2 epoch.
+**v1.19.1** bytecode/CREATE2 epoch.
 
-> **v1.19.1 aux helper rotated (2026-07-15):** hardened
-> `VaultAuxiliaryDeployBatcher` `0xde93Aeca…D99b` is live and CREATE2-authorized;
-> `AgentRevenuePolicyController` is seeded. Do **not** flip
-> `CURRENT_RELEASE` / `VITE_DEPLOYMENT_VERSION` until remaining v1.19.1 store
-> seeds + Creator/Agent canaries complete. Safe codeId approvals skipped
-> (live `DeploymentBatcher` has no allowlist). Runbook:
+> **v1.19.1 cutover (2026-07-15):** hardened `VaultAuxiliaryDeployBatcher`
+> `0xde93Aeca…D99b` is live and CREATE2-authorized; v1.19.1 bytecode store
+> is fully seeded (including `AgentRevenuePolicyController`). Safe codeId
+> approvals skipped (live `DeploymentBatcher` has no allowlist). Creator +
+> Agent canaries remain the outstanding gate. Runbook:
 > [`deploy-capable-batcher-rotation.md`](../_internal/operations/deployment/deploy-capable-batcher-rotation.md).
 
 > **v1.19 partial refresh:** release packet:
@@ -58,11 +57,9 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | VaultAuxiliaryDeployBatcher | `0xde93AecaAd5A61dFC179703d522fBE9a5747D99b` (hardened v1.19.1; authorized) |
 
 Notes:
-- **v1.18.0** remains the shared/global infrastructure epoch. **v1.19.0** is
+- **v1.18.0** remains the shared/global infrastructure epoch. **v1.19.1** is
   the per-creator bytecode and CREATE2 namespace for new launches.
-- **v1.19.1** aux helper is rotated onchain; release target /
-  `VITE_DEPLOYMENT_VERSION` stay on **v1.19.0** until remaining store seeds
-  and canaries complete.
+- Hardened aux helper `0xde93Aeca…D99b` is live and CREATE2-authorized.
 - Prior pre-hardening helper `0xa3986F2F…eb88` is superseded; leave it
   deauthorized on CREATE2.
 - `RegistryBootstrap4626` is an authorized factory on Registry4626 for ad hoc /
@@ -122,7 +119,7 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
 5. Confirm signed AMOE messages embed `Lottery Manager: 0xB68F359e01626Ec5d15C624037311C70DacAba43` (nonce API reads live `LOTTERY_MANAGER` env).
 
-## Environment for v1.19.0 launches
+## Environment for v1.19.1 launches
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
@@ -138,8 +135,9 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
 | `DEPLOYMENT_BATCHER` | `VITE_DEPLOYMENT_BATCHER` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | `DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| `VAULT_AUXILIARY_DEPLOY_BATCHER` | `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER` | `0xde93AecaAd5A61dFC179703d522fBE9a5747D99b` |
 | `LOTTERY_AMOE_ROUTER` | — | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` |
-| — | `VITE_DEPLOYMENT_VERSION` | `v1.19.0` |
+| — | `VITE_DEPLOYMENT_VERSION` | `v1.19.1` |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
