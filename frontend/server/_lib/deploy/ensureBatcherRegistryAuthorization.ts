@@ -1,7 +1,7 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
-/** Base mainnet Registry4626 — see docs/reference/addresses.md (v1.18.0-greenfield) */
-export const BASE_MAINNET_REGISTRY_4626 = '0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0' as const
+/** Base mainnet Registry4626 — see docs/reference/addresses.md (v1.19.1-greenfield) */
+export const BASE_MAINNET_REGISTRY_4626 = '0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2' as const
 
 const REGISTRY_4626_ABI = [
   {

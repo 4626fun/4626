@@ -25,14 +25,17 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 
 ## Open — product / ops
 
-### 1. v1.19.1 Creator + Agent canaries (highest priority)
+### 1. v1.19.1 Creator + Agent /deploy canaries (highest priority)
 
-**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 live** (aux helper
-`0xde93…D99b` authorized; bytecode store fully seeded; `VITE_DEPLOYMENT_VERSION=v1.19.1`).
+**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 greenfield live** (Registry
+`0x1365e9…`, batcher `0xa18169…`, store `0xF96226…`, aux `0xaA9229…`, AMOE
+`0x630c37…`). Pipe-A shell readiness **PASS**. Allowlist roots 73–75 republished
+on the new router.
 
-**Outstanding:** one Creator and one Agent canary via `/deploy`. Confirm no
+**Outstanding:** one Creator and one Agent production canary via `/deploy` after
+the Vercel build that includes this cutover commit is Ready. Confirm no
 `auxiliary_batcher_selector_not_allowed`, `batcher_aux_codeids_mismatch`,
-`CodeIdKindMismatch`, `InvalidCodeId`, or `CODE_NOT_FOUND`.
+`CodeIdKindMismatch`, `InvalidCodeId`, `InvalidModuleAddress`, or `CODE_NOT_FOUND`.
 
 **Paste into new chat:**
 
@@ -40,7 +43,7 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 /deploy-cutover
 
 RELEASE: v1.19.1
-Goal: Run Creator + Agent production canaries against hardened VaultAuxiliaryDeployBatcher 0xde93AecaAd5A61dFC179703d522fBE9a5747D99b.
+Goal: Run Creator + Agent production canaries against greenfield batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 and aux 0xaA9229c1649a7eC6DA85a76097E0910B24F9408e.
 
 @docs/reference/addresses.md
 @docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md
@@ -48,8 +51,9 @@ Goal: Run Creator + Agent production canaries against hardened VaultAuxiliaryDep
 Load archive: docs/agent-context/archives/deploy-cutovers-core.md
 
 Validate: bash test/current-release-target-guard.sh
-Report every exit code. Do not rotate DeploymentBatcher.
+Report every exit code.
 ```
+
 
 ### 2. `validate:deploy-guards` (pre-existing)
 

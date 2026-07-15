@@ -85,9 +85,9 @@ interface ICreatorGaugeControllerForRewards {
  *   VE_NAME / VE_SYMBOL
  */
 contract DeployRewardsEcosystem is Script {
-    // v1.18.0-greenfield (docs/reference/addresses.md) — not historical v1.14 defaults
-    address constant DEFAULT_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
-    address constant DEFAULT_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
+    // v1.19.1-greenfield (docs/reference/addresses.md) — not historical v1.14 defaults
+    address constant DEFAULT_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xB45E68a5867935a5734E4185977F81c528006650;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     function run() external {

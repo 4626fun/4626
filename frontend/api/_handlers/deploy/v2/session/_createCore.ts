@@ -198,7 +198,7 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
 ])
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
-const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['OVaultModuleStorage.v3']))
+const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['OVaultModuleStorage.v4']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['OVaultModule.strategies']))
 const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['OVaultModule.admin']))
 const DEFAULT_FREE_VAULT_VANITY_PREFIX = '4626'

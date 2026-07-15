@@ -6,41 +6,39 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Updated on: 2026-07-15
-Scope: current live v1.18.0 Base shared infrastructure plus the canonical
-`v1.19.1` bytecode/CREATE2 target for new per-creator vaults.
+Scope: current live `v1.19.1` greenfield shared infrastructure.
 
 ## Sources
 
-1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md`
+1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
 2. Bytecode / codeId manifest: `deployments/base/v1.19.1-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
-4. Handoff env: `tmp/base-v1.18.0-handoff.env`
+4. Handoff env: `tmp/base-v1.19.1-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
-6. Aux rotation runbook:
-   `docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md`
+6. Greenfield cutover runbook: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
 
 ## Canonical Base Infrastructure
 
 | Contract / Field | Address |
 |---|---|
-| `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| `registry` | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
 | `registryBootstrap` | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
-| `ovaultFactory` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
-| `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
-| `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
-| `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
-| `bytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
-| `create2DeployerFromStore` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
-| `ovaultCoreModule` | `0xE5C1de158Cb66ffCE15b26BE6F40f598c642EF43` |
-| `ovaultStrategiesModule` | `0x8757065daf34D8B536FC35BdfE3001D43FAbAA7e` |
-| `ovaultAdminModule` | `0x506400ce30228378Ee4682cfcBD55625154Bc063` |
-| `deploymentBatcher` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
-| `deploymentBatcherPhase1Module` | `0x808fC8e83629019e29df79E592237B4603F9D1b5` |
-| `deploymentBatcherPhase2Module` | `0x9845D8d412DA4686FE8b1886F314Ef8b288b8D71` |
-| `deploymentBatcherPhase3Helper` | `0xB8c10FE668d59E2DEb5771298133c2a3DBFc9bB3` |
-| `deploymentBatcherShareMeshHelper` | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
-| `deploymentBatcherUtilsHelper` | `0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52` |
-| `vaultAuxiliaryDeployBatcher` | `0xa3986F2F812a80a4Ee4A33646bE5248D9e22eb88` (pre-hardening; rotate before Agent aux hard cutover) |
+| `ovaultFactory` | `0xCAb65a066A4D52DD29ffB418B319819176b89610` |
+| `vaultActivationBatcher` | `0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA` |
+| `lotteryManager` | `0xB45E68a5867935a5734E4185977F81c528006650` |
+| `vrfConsumer` | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670` |
+| `bytecodeStore` | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
+| `create2DeployerFromStore` | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
+| `ovaultCoreModule` | `0x5Ed463138D7bdC6566AFf5c65Dca721406973898` |
+| `ovaultStrategiesModule` | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165` |
+| `ovaultAdminModule` | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
+| `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
+| `deploymentBatcherPhase1Module` | `0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc` |
+| `deploymentBatcherPhase2Module` | `0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460` |
+| `deploymentBatcherPhase3Helper` | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
+| `deploymentBatcherShareMeshHelper` | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
+| `deploymentBatcherUtilsHelper` | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
+| `vaultAuxiliaryDeployBatcher` | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` (hardened v1.19.1; authorized) |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
@@ -50,14 +48,14 @@ From `frontend/src/config/contracts.defaults.ts`:
 
 | Key | Address |
 |---|---|
-| `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
-| `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
-| `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
-| `universalBytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
-| `universalCreate2DeployerFromStore` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
-| `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
-| `deploymentBatcher` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
-| `deploymentBatcherAutoHandoff` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| `registry` | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
+| `lotteryManager` | `0xB45E68a5867935a5734E4185977F81c528006650` |
+| `vrfConsumer` | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670` |
+| `universalBytecodeStore` | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
+| `universalCreate2DeployerFromStore` | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
+| `vaultActivationBatcher` | `0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA` |
+| `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
+| `deploymentBatcherAutoHandoff` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 
 ## Active Deployment Snapshots
 
@@ -88,11 +86,11 @@ before `finalizePhase2`; there is no adapter or global-peer fallback.
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase1Module=0x808fC8e83629019e29df79E592237B4603F9D1b5`
-- `DeploymentBatcherPhase2Module=0x9845D8d412DA4686FE8b1886F314Ef8b288b8D71`
-- `DeploymentBatcherPhase3Helper=0xB8c10FE668d59E2DEb5771298133c2a3DBFc9bB3`
-- `DeploymentBatcherShareMeshHelper=0x9C965724f6B3387433D82bf67632Bf06470a8988`
-- `DeploymentBatcherUtilsHelper=0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52`
+- `DeploymentBatcherPhase1Module=0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc`
+- `DeploymentBatcherPhase2Module=0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460`
+- `DeploymentBatcherPhase3Helper=0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`
+- `DeploymentBatcherShareMeshHelper=0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`
+- `DeploymentBatcherUtilsHelper=0x8833225A423f4B1BB071702CB68d71fA4af434f2`
 
 Historical v1.16.1 batcher child addresses (deprecated): Phase3 `0xE0971a…`, ShareMesh `0xD2c68F…`, Utils `0xE41231…`
 
@@ -105,8 +103,8 @@ Pre-v1.14.1 batcher (deprecated for new greenfield deploys): `0xa99058f424FB3ACC
 Versioning verifier (repo defaults + live getters + store seed):
 
 ```bash
-BYTECODE_MANIFEST=../../deployments/base/v1.18.0-bytecode-manifest.json \
-  UNIVERSAL_BYTECODE_STORE=0xfa3e3b466635DAff910057f18749B93d56F9DE50 \
+BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json \
+  UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 ```
 
@@ -114,7 +112,7 @@ BYTECODE_MANIFEST=../../deployments/base/v1.18.0-bytecode-manifest.json \
 
 Primary release manifest:
 
-- `deployments/base/v1.18.0-bytecode-manifest.json`
+- `deployments/base/v1.19.1-bytecode-manifest.json`
 
 Historical reference manifests:
 
@@ -146,11 +144,11 @@ The active bytecode manifest must include all three entries.
 1. Run `bash test/current-release-target-guard.sh`.
 2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
 3. Run `forge test --match-contract SeedRegistry4626ConfigTest`.
-4. Confirm live batcher wiring onchain (`0x02D7abC547F8B1e7E2D7a919D8D1005918361750`):
-   - `cast call 0x02D7abC547F8B1e7E2D7a919D8D1005918361750 "phase1Module()(address)"`
-   - `cast call 0x808fC8e83629019e29df79E592237B4603F9D1b5 "create2Deployer()(address)"`
-   - `cast call 0x808fC8e83629019e29df79E592237B4603F9D1b5 "vaultCoreModule()(address)"`
-   - `cast call 0x808fC8e83629019e29df79E592237B4603F9D1b5 "vaultStrategiesModule()(address)"`
-   - `cast call 0x808fC8e83629019e29df79E592237B4603F9D1b5 "vaultAdminModule()(address)"`
-5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.18.0-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xfa3e3b466635DAff910057f18749B93d56F9DE50`.
+4. Confirm live batcher wiring onchain (`0xa18169caf37fa0347285B16aAFC2B09eCB43F145`):
+   - `cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "phase1Module()(address)"`
+   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "create2Deployer()(address)"`
+   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultCoreModule()(address)"`
+   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultStrategiesModule()(address)"`
+   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultAdminModule()(address)"`
+5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36`.
 6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).

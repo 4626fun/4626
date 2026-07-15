@@ -14,9 +14,14 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
   encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']),
 ) as Hex
 
-/** Impairment-side-pocket module stack (not yet paired with v1.13.0 deploy bytecode). */
+/** Impairment-side-pocket / pre-v4 module stack (grandfathered). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V3 = keccak256(
   encodePacked(['string'], ['OVaultModuleStorage.v3']),
+) as Hex
+
+/** Current module stack (matches contracts/shared/vault/modules/OVaultModuleConstants.sol). */
+export const CREATOR_OVAULT_MODULE_STORAGE_V4 = keccak256(
+  encodePacked(['string'], ['OVaultModuleStorage.v4']),
 ) as Hex
 
 /** Pre-v1.12.1 modules still on-chain for grandfathered vaults only. */
@@ -25,10 +30,10 @@ export const CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT = keccak256(
 ) as Hex
 
 /** Must match live mainnet CreatorOVault module deployments wired on the split Phase-1 batcher. */
-export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = CREATOR_OVAULT_MODULE_STORAGE_V3
+export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = CREATOR_OVAULT_MODULE_STORAGE_V4
 
 /** Fingerprint embedded in frontend deploy bytecode (CreatorOVault creation code). */
-export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V3
+export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V4
 
 const MODULE_IDENTITY_ABI = [
   {
@@ -106,13 +111,22 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
   }
 
   if (moduleReports.toLowerCase() !== vaultExpects.toLowerCase()) {
+    const expectsV4 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V4.toLowerCase()
     const expectsV3 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
     const moduleIsLegacyCurrent =
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT.toLowerCase()
     const moduleIsV2 =
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
+    const moduleIsV3 =
+      moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
     const hint =
-      expectsV3 && moduleIsV2
+      expectsV4 && moduleIsV3
+        ? ' Deploy bytecode expects OVaultModuleStorage.v4 but the live batcher still wires v3 modules. ' +
+          'Rotate Phase1Module / core modules to the v1.19.1 v4 stack, or re-seed deploy bytecode.'
+        : expectsV4 && moduleIsV2
+          ? ' Deploy bytecode expects OVaultModuleStorage.v4 but the live batcher still wires v2 modules. ' +
+            'Rotate to the v1.19.1 v4 Phase1Module/modules before greenfield deploy.'
+        : expectsV3 && moduleIsV2
         ? ' Deploy bytecode expects OVaultModuleStorage.v3 (v1.14.0) but the live batcher Phase1Module still wires v2 modules. ' +
           'Protocol ops must call setPhase1Module with the v1.14.0 v3 Phase1Module before greenfield deploy. ' +
           'Hard-refresh the app so CREATE2 prediction reads Phase1Module immutables (not batcher-shell getters).'
