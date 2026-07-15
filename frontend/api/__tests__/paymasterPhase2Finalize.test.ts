@@ -205,7 +205,7 @@ function configureMockReadContract(overrides: ReadContractOverrides = {}): void 
     if (functionName === 'getWrapperForToken') return Promise.resolve(wrapper)
     if (functionName === 'getShareOFTForToken') return Promise.resolve(shareOFT)
 
-    if (address === wrapper && functionName === 'vaultToken') return Promise.resolve(resolved.wrapperCreatorCoin)
+    if (address === wrapper && functionName === 'vaultToken') return Promise.resolve(resolved.wrapperVault)
     if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(resolved.wrapperCreatorCoin)
     if (address === wrapper && functionName === 'agentToken') return Promise.resolve(null)
     if (address === wrapper && functionName === 'vault') return Promise.resolve(resolved.wrapperVault)

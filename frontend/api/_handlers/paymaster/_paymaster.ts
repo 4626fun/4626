@@ -1029,9 +1029,9 @@ const ERC4626_ASSET_ABI = [
 ] as const
 
 const WRAPPER_VIEW_ABI = [
-  // Lane-neutral asset getter (CreatorOVaultWrapper + AgentOVaultWrapper).
+  // vaultToken() returns address(vault) (vault shares), not the underlying asset.
   { type: 'function', name: 'vaultToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  // Legacy Creator-only getter kept for older wrappers during transition.
+  // Underlying asset getters are lane-specific.
   { type: 'function', name: 'creatorCoin', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'agentToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'vault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -3219,8 +3219,11 @@ async function validateInnerCalls(params: {
         ]
       if (!wrapperVault || getAddress(wrapperVault) !== expectedVault) throw new Error('wrapper_vault_mismatch')
       if (!wrapperShare || getAddress(wrapperShare) !== expectedShareOFT) throw new Error('wrapper_shareoft_mismatch')
+      // vaultToken() is address(vault); underlying asset is creatorCoin/agentToken.
+      if (wrapperVaultToken && isAddress(wrapperVaultToken) && getAddress(wrapperVaultToken) !== expectedVault) {
+        throw new Error('wrapper_vault_token_mismatch')
+      }
       const wrapperAsset =
-        (wrapperVaultToken && isAddress(wrapperVaultToken) ? getAddress(wrapperVaultToken) : null) ??
         (wrapperCreatorCoin && isAddress(wrapperCreatorCoin) ? getAddress(wrapperCreatorCoin) : null) ??
         (wrapperAgentToken && isAddress(wrapperAgentToken) ? getAddress(wrapperAgentToken) : null)
       if (!wrapperAsset || wrapperAsset !== getAddress(expectedCreatorToken as Address)) {
