@@ -1,7 +1,7 @@
 import { encodePacked, keccak256, type Hex } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
-import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
+import { DEPLOY_BYTECODE } from '../../deploy/bytecode.generated.js'
+import type { VaultKind } from '../onchain/agentTokenIntegration.js'
 
 export type OnchainVaultKind = 0 | 1
 

@@ -11,7 +11,7 @@ import {
   type Hex,
 } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
+import { DEPLOY_BYTECODE } from '../../deploy/bytecode.generated.js'
 import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '@/config/contracts.defaults'
 import { ROBINHOOD_REMOTE_SHARE_OFT } from '../../config/remoteShareOftChains.js'
 import type { ShareBridgeReadClient } from './shareBridgeReadClient.js'

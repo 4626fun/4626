@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { keccak256, type Hex } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
+import { DEPLOY_BYTECODE } from '../../deploy/bytecode.generated.js'
 
 import {
   fromOnchainVaultKind,

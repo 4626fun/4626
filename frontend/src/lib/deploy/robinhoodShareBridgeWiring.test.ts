@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { concatHex, encodeAbiParameters, getAddress, type Address } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
+import { DEPLOY_BYTECODE } from '../../deploy/bytecode.generated.js'
 import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '@/config/contracts.defaults'
 import {
   BASE_HUB_EID,

@@ -1,6 +1,6 @@
 import { getAddress, type Address, type Hex } from 'viem'
 
-import bundledManifest from '@/deploy/perVaultVanityPreseedManifest.json'
+import bundledManifest from '../../deploy/perVaultVanityPreseedManifest.json'
 import {
   deriveShareOftSaltFromVersion,
   predictCreate2AddressFromInitCode,

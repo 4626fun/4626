@@ -9,7 +9,7 @@ import {
   type Hex,
 } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
+import { DEPLOY_BYTECODE } from '../../deploy/bytecode.generated.js'
 import type { CreatorVaultBatcherInfra } from '@/lib/deploy/deploymentBatcherInfra'
 import {
   resolveDeployLaneGaugeBytecode,
