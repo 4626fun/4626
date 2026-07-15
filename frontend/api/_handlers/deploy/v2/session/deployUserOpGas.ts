@@ -18,6 +18,7 @@
  * sender's EntryPoint deposit (topped up by the self-bundle key when needed).
  */
 import {
+  BaseError,
   createPublicClient,
   createWalletClient,
   encodeFunctionData,
@@ -185,10 +186,16 @@ function safeErrorMessage(err: unknown): string {
   }
 }
 
+function throwSelfBundleError(message: string): never {
+  // sendUserOperation wraps transport errors with getBundlerError, which calls
+  // err.walk(). Plain Error throws "err.walk is not a function"; BaseError is required.
+  throw new BaseError(message)
+}
+
 async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
   const pk = readSelfBundlePrivateKey()
   if (!pk) {
-    throw new Error(
+    throwSelfBundleError(
       'deploy_session_self_bundle_key_missing: set DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY (or KPR_PRIVATE_KEY / PRIVATE_KEY) for UserOps above the CDP 14.5M gas cap',
     )
   }
@@ -209,7 +216,7 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
   if (paymasterAndData !== '0x' && paymasterAndData.length > 2) {
     // Keep a clear signal if a call site still attaches CDP sponsorship to a fat op.
     // Validation against Coinbase's paymaster is unreliable outside their bundler.
-    throw new Error(
+    throwSelfBundleError(
       'deploy_session_self_bundle_paymaster_not_supported: omit paymaster for UserOps above the CDP gas cap so EntryPoint deposit can sponsor gas',
     )
   }
@@ -247,7 +254,7 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
         // Leave a small native reserve for the outer handleOps tx itself.
         const outerTxReserve = 250_000n * 50_000_000n // ~0.0000125 ETH at 0.05 gwei
         if (funderBalance <= shortfall + outerTxReserve) {
-          throw new Error(
+          throwSelfBundleError(
             `deploy_session_self_bundle_deposit_underfunded: need ${shortfall} wei EntryPoint deposit for ${opTuple.sender}; ` +
               `funder ${account.address} has ${funderBalance} wei`,
           )
@@ -261,6 +268,12 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
           to: entryPoint06Address,
           data: depositData,
           value: shortfall,
+          // Explicit gas/fees skip eth_estimateGas; some RPC revert shapes are not
+          // viem BaseErrors and trip getNodeError's err.walk assumption.
+          gas: 120_000n,
+          maxFeePerGas: opTuple.maxFeePerGas > 0n ? opTuple.maxFeePerGas * 2n : 50_000_000n,
+          maxPriorityFeePerGas:
+            opTuple.maxPriorityFeePerGas > 0n ? opTuple.maxPriorityFeePerGas : 1_000_000n,
         })
         await publicClient.waitForTransactionReceipt({ hash: depositTx, timeout: 120_000 })
       }
@@ -271,13 +284,20 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       functionName: 'handleOps',
       args: [[opTuple], account.address],
     })
+    // Outer gas must cover EP validation + 16.75M callGasLimit execution.
+    // Keep under RPC "gas limit too high" (~25M observed) while above call gas.
+    const handleOpsGas = opTuple.callGasLimit + opTuple.verificationGasLimit + 500_000n
     const txHash = await walletClient.sendTransaction({
       to: entryPoint06Address,
       data: handleOpsData,
+      gas: handleOpsGas,
+      maxFeePerGas: opTuple.maxFeePerGas > 0n ? opTuple.maxFeePerGas * 2n : 50_000_000n,
+      maxPriorityFeePerGas:
+        opTuple.maxPriorityFeePerGas > 0n ? opTuple.maxPriorityFeePerGas : 1_000_000n,
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
     if (receipt.status !== 'success') {
-      throw new Error(`deploy_session_self_bundle_handleOps_reverted: tx=${txHash}`)
+      throwSelfBundleError(`deploy_session_self_bundle_handleOps_reverted: tx=${txHash}`)
     }
 
     try {
@@ -303,7 +323,10 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       return txHash
     }
   } catch (err) {
-    throw new Error(`deploy_session_self_bundle_failed: ${safeErrorMessage(err)}`)
+    if (err instanceof BaseError && String(err.message || '').includes('deploy_session_self_bundle_')) {
+      throw err
+    }
+    throwSelfBundleError(`deploy_session_self_bundle_failed: ${safeErrorMessage(err)}`)
   }
 }
 
