@@ -82,6 +82,21 @@ export function getCanonicalOrigin(req?: VercelRequest): string {
   const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
   const allow = new Set<string>([...DEFAULT_LOCAL_ORIGINS, ...getAllowedOriginsFromEnv()])
 
+  // Prefer the request's custom domain over VERCEL_URL. Deployment URLs are often
+  // SSO-protected; deploy session start/resume proxies must call the public app
+  // origin (e.g. https://app.4626.fun), not https://*.vercel.app.
+  const forwarded = getForwardedOrigin(req)
+  if (forwarded) {
+    try {
+      const hostname = new URL(forwarded).hostname.toLowerCase()
+      if (hostname && !hostname.endsWith('.vercel.app') && !isLoopbackHostname(hostname)) {
+        return forwarded
+      }
+    } catch {
+      // ignore malformed forwarded origin
+    }
+  }
+
   const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
   if (vercelUrl) {
     const candidate = normalizeOrigin(`https://${vercelUrl.replace(/\/+$/, '')}`)

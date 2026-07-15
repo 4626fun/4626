@@ -33,6 +33,24 @@ describe('origin resolution', () => {
     expect(getCanonicalOrigin()).toBe('https://app-4626.vercel.app')
   })
 
+  it('prefers custom-domain forwarded host over SSO-protected VERCEL_URL', () => {
+    restoreEnv = applyEnv({
+      APP_ORIGIN: undefined,
+      VERCEL_URL: '4626-9nycickva-akita-llc.vercel.app',
+      NODE_ENV: 'production',
+      CORS_ALLOWED_ORIGINS: undefined,
+    })
+
+    const req = createMockReq({
+      headers: {
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'app.4626.fun',
+      },
+    })
+
+    expect(getCanonicalOrigin(req)).toBe('https://app.4626.fun')
+  })
+
   it('allows local forwarded host in non-production when explicit origins are unset', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,

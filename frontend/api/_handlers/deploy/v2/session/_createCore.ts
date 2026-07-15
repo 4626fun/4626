@@ -50,6 +50,7 @@ import { ensureWaitlistSchema } from '../../../../../server/_lib/onboarding/wait
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../../server/_lib/db/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/wallet/creatorAgentWallets.js'
+import { getWalletById } from '../../../../../server/_lib/wallet/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../../server/_lib/deploy/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
@@ -3231,12 +3232,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Managed deploy signer wallet is unavailable (agent_wallet_id_missing). Please retry shortly.',
       )
     }
-    const sessionSigner = getAddress(agentWallet.address)
-    const deploySignerAddress = getAddress(agentWallet.address)
+    // After CSW unification, getOrCreateCreatorAgentWallet().address is the creator
+    // CSW (execution identity). Deploy sessions still need the Privy owner EOA as
+    // sessionSigner so UserOps can be signed and (when needed) temporarily installed.
+    // Legacy/test callers may still return a distinct EOA address — keep that path.
+    const managedAddress = getAddress(agentWallet.address)
+    const usedManagedCswSigner = managedAddress.toLowerCase() === smartWallet.toLowerCase()
+    let sessionSigner: Address
+    if (usedManagedCswSigner) {
+      try {
+        const privyWallet = await getWalletById(deploySignerWalletId)
+        sessionSigner = getAddress(privyWallet.address)
+      } catch (e: any) {
+        const reason = e?.message ? String(e.message) : 'privy_wallet_lookup_failed'
+        throw new DeploySessionRequestError(
+          503,
+          `Managed deploy signer wallet is unavailable (${reason}). Please retry shortly.`,
+        )
+      }
+    } else {
+      sessionSigner = managedAddress
+    }
+    const deploySignerAddress = sessionSigner
 
     const now = Date.now()
     const expiresAt = new Date(now + readDeploySessionTtlMs())
-    const persistSessionOwner = shouldPersistManagedSessionOwner()
+    // Managed CSW path uses the durable Privy owner — never schedule removeOwner cleanup.
+    const persistSessionOwner = shouldPersistManagedSessionOwner() || usedManagedCswSigner
 
     const cleanupGrantCall = {
       to: smartWallet,
