@@ -26,14 +26,14 @@ Redeploy production after setting the variable so the app shows **Verify on Dune
 
 ## Canonical contract addresses (Base)
 
-Use [Contract addresses](/reference/addresses) as source of truth. Current greenfield infrastructure (**v1.14.1**) includes:
+Use [Contract addresses](/reference/addresses) as source of truth. Current greenfield infrastructure (**v1.19.1**) includes:
 
 | Contract | Address |
 |----------|---------|
-| DeploymentBatcher | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
-| CreatorRegistry | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
-| CreatorOVaultFactory | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
-| CreatorLotteryManager | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
+| DeploymentBatcher | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
+| CreatorRegistry | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
+| CreatorOVaultFactory | `0xCAb65a066A4D52DD29ffB418B319819176b89610` |
+| CreatorLotteryManager | `0xB45E68a5867935a5734E4185977F81c528006650` |
 | Zora factory (coin creates) | `0x777777751622c0d3258f214f9df38e35bf45baf3` |
 
 Deprecated batchers (`0xa99058…`, `0x16aEA8…`) — use `02-legacy-batcher-tx-volume.sql` for historical charts only.
@@ -56,7 +56,7 @@ SELECT
   date_trunc('day', block_time) AS day,
   count(*) AS tx_count
 FROM base.transactions
-WHERE "to" = 0x660b251f2feb28f61a8e23e65c66f9b917ee61c1
+WHERE "to" = 0xa18169caf37fa0347285b16aafc2b09ecb43f145
   AND block_time >= now() - interval '90' day
 GROUP BY 1
 ORDER BY 1

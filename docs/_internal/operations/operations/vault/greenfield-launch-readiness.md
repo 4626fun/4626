@@ -1,6 +1,6 @@
 # Greenfield launch readiness
 
-> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
+> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 
 Repeatable gate for **new vault deploys** (not grandfather migrations). Policy:
 [solana-share-mesh-lottery-policy.md](../solana/solana-share-mesh-lottery-policy.md).
@@ -23,7 +23,7 @@ Run before opening deploy to creators:
 | Check | Command / URL |
 |-------|----------------|
 | Batcher OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` → hub + EID `30168` + `true` |
-| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750` → exit 0 |
+| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145` → exit 0 |
 | Per-creator route | LZ OFT store/mint exists and `Registry4626.getRemoteOFTPeerBytes32(creatorToken, 30168)` is non-zero before finalize |
 | Orchestrator | `curl https://orchestrator.4626.fun/healthz` → `ok: true` |
 | Release target | `bash test/current-release-target-guard.sh` |
@@ -33,7 +33,7 @@ Run before opening deploy to creators:
 
 | Variable | Purpose |
 |----------|---------|
-| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.19.0 batcher `0x02D7…1750` |
+| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.19.1 batcher `0xa181…F145` |
 | Batcher onchain config | Non-zero destination + enabled OVault runtime (Solana EID `30168`) |
 | Registry per-creator config | Explicit `setRemoteOFTPeerBytes32` before finalize |
 
@@ -99,7 +99,7 @@ and creator-SPL/Alpha-Vault grain are not greenfield routes.
 ## Ops helpers
 
 ```bash
-# Generate the unsigned 11-operation v1.19.0 Safe packet
+# Historical v1.19.0 packet audit only; do not execute for v1.19.1
 pnpm -C frontend exec tsx scripts/ops/execute-v1190-registration-plane-safe.ts --dry-run
 
 # Read-only Pipe A readiness gate

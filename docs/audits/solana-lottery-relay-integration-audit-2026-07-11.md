@@ -4,6 +4,8 @@ Date: 2026-07-11
 Scope: source, tests, docs, and read-only production state  
 Safety posture: no deployment, provisioning, registration, transaction submission, pool creation, program upgrade, relay enablement, or boost activation occurred.
 
+> **Superseded snapshot:** v1.18 adapter and LotteryManager statements below are dated evidence from the 2026-07-11 audit epoch. Current v1.19.1 values are maintained in [Contract addresses](/reference/addresses).
+
 ## Verdict
 
 `Solana personal veLottery boost safe to enable: NO`

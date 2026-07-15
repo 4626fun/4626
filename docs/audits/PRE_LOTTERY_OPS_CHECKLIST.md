@@ -3,6 +3,9 @@
 **Purpose:** Close remaining **ops** and **product** gates after code remediation (2026-07-09).  
 **Source of truth for open IDs:** [OPEN_FINDINGS_BOARD.md](./OPEN_FINDINGS_BOARD.md)
 
+> **Superseded snapshot:** dated v1.18.0 / v1.19.0 addresses below remain as
+> historical evidence. Current actionable release checks target v1.19.1.
+
 Code remediation for July-2 stack + contract mediums is largely complete. Do **not** enable lottery traffic or Solana B2 `relay_entries` until the items below are done (or explicitly waived with an alert).
 
 ---
@@ -10,12 +13,16 @@ Code remediation for July-2 stack + contract mediums is largely complete. Do **n
 ## 0. Canary order (2026-07)
 
 Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).  
-Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — remediation LM live; boost sources `0x0`, `singleVaultJackpotOnly=true`, deferred VRF queue `0`.
+Historical Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — observed the then-remediation LM with boost sources `0x0`, `singleVaultJackpotOnly=true`, and deferred VRF queue `0`.
 
-v1.19.0 is a partial refresh: the v1.18 shared infrastructure remains live,
-while new creator launches use the v1.19 manifest/codeIds and CREATE2
-namespace. Before traffic, verify the active Phase2 module and
-SolanaBridgeAdapter both point to remediation LM `0xB68F359e…`.
+v1.19.1 is the canonical live release. Before traffic, verify the active
+Batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` Phase2 module has
+`lotteryManager() == 0xB45E68a5867935a5734E4185977F81c528006650`, and verify the retired
+Twin SolanaBridgeAdapter is absent from active config and is not rewired; verify Registry
+`0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2`, Factory
+`0xCAb65a066A4D52DD29ffB418B319819176b89610`, store
+`0xF9622613682a12E46b914c7498716F42E44c4d36`, and CREATE2 deployer
+`0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` against the v1.19.1 manifest.
 
 | Phase | Intent |
 |-------|--------|
@@ -34,7 +41,7 @@ SolanaBridgeAdapter both point to remediation LM `0xB68F359e…`.
 | 1.2 | Authorize hub ShareOFT forwarders (H-06) | `authorizedHubShareOftForwarders[shareOft] == true` for each hub |
 | 1.3 | Confirm R-H05 mode | Default **single-vault** (`singleVaultJackpotOnly == true`). Multi-vault only after public disclosure |
 | 1.4 | Drain any deferred VRF after pauses | `processDeferredVrfBatch(16)` until `deferredVrfQueueLength() == 0` (M2-07) |
-| 1.5 | Verify v1.19 deploy wiring | active `phase2Module().lotteryManager()` and `SolanaBridgeAdapter.lotteryManager()` both equal `0xB68F359e…`; v1.19 codeIds seeded/approved |
+| 1.5 | Verify v1.19.1 deploy wiring | active `DeploymentBatcher.phase2Module().lotteryManager() == 0xB45E68a5867935a5734E4185977F81c528006650`; retired Twin SolanaBridgeAdapter absent from active config and not rewired; v1.19.1 codeIds seeded/approved |
 
 API helpers:
 
@@ -107,7 +114,7 @@ Upgrade runbook: AGENTS.md Solana program deployment section.
 - [ ] B2 relay_entries still off  
 - [ ] Env fail-closed confirmed on Vercel + Railway + Vultr orchestrator  
 - [ ] Public docs match R-H05 mode actually deployed
-- [ ] v1.19 Phase2 module, adapter LM, store codeIds, and CREATE2 namespace verified
+- [ ] v1.19.1 Phase2 module LM, retired Twin adapter absence, store codeIds, and CREATE2 namespace verified
 
 ---
 

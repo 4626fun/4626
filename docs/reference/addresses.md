@@ -16,12 +16,17 @@ infrastructure is the **v1.19.1** full greenfield epoch; new per-creator launche
 > Creator + Agent canaries remain the outstanding gate. Runbook:
 > [`v1.19.1-greenfield.md`](../_internal/deployment-releases-legacy/v1.19.1-greenfield.md).
 
-> **v1.19 partial refresh:** release packet:
+> **Historical / superseded — v1.19.0 partial refresh:** release packet:
 > [`v1.19.0-partial-refresh.md`](../_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md).
 > This reuses the v1.18 shared addresses and changes only bytecode/codeIds,
-> Phase2 module wiring, lottery configuration, and the launch namespace.
+> Phase2 module wiring, lottery configuration, and the launch namespace. It is
+> superseded by the v1.19.1 greenfield epoch above.
 
-> **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager (updated **2026-07-11** to remediation LM `0xB68F359e…`), bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
+> **Historical / superseded — 2026-07-08 cutover:** treasury Safe wiring, AMOE
+> router `0x18D180…` on manager (updated **2026-07-11** to remediation LM
+> `0xB68F359e…`), bytecode store seeding, env sync, and the legacy v1.16.1
+> manager kill-switch were completed for that epoch. These router and manager
+> addresses are not current; v1.19.1 superseded this cutover on 2026-07-15.
 
 > **Abandoned:** v1.17.0 partial broadcast (orphan infra only). Handoff: `tmp/base-v1.17.0-handoff.env`.
 
@@ -115,13 +120,19 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 | Allowlist + ledger publisher | `0x793ca28123cba3ca3c20b9c6c67f37510c89c145` | Protocol CSW (`PROTOCOL_CSW_ADDRESS`) — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. Operator personal CSW `0xAb6d5…` is no longer the AMOE publisher. |
 | Protocol AMOE creator coin (AKITA) | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Default target for protocol-entry AMOE flows. |
 
-**Cutover checklist (production):**
+**Post-cutover verification (production):**
 
-1. Deploy fresh `LotteryAmoeRouter` via `script/DeployLotteryAmoeRouter.s.sol` (PLONK v3).
-2. Verify the live router points to `0xB68F359e…`, that manager authorizes the router, and that publishers resolve to protocol CSW (`0x793c…`). The v1.16.1 wiring script is historical and must not be reused.
-3. Set `LOTTERY_AMOE_ROUTER=<new router>` on Vercel (`production`, `preview`, `development`) and redeploy.
-4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
-5. Confirm signed AMOE messages embed `Lottery Manager: 0xB45E68a5867935a5734E4185977F81c528006650` (nonce API reads live `LOTTERY_MANAGER` env).
+1. Verify `LOTTERY_AMOE_ROUTER` resolves to
+   `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` in production and that the
+   deployed app reports the same router.
+2. Verify the router points to manager `0xB45E68a5867935a5734E4185977F81c528006650`,
+   that the manager authorizes the router, and that publishers resolve to
+   protocol CSW (`0x793c…`).
+3. Verify allowlist and points-ledger Merkle roots are present for the active
+   epoch. Roots are **one-shot per epoch** on each router address.
+4. Confirm signed AMOE messages embed
+   `Lottery Manager: 0xB45E68a5867935a5734E4185977F81c528006650`
+   (nonce API reads live `LOTTERY_MANAGER` env).
 
 ## Environment for v1.19.1 launches
 
@@ -151,6 +162,12 @@ Solana has no EVM contract address for the Base `CreatorShareOFT`. Each creator
 has a distinct Solana SPL mint pubkey and OFT Store pubkey. LayerZero peer
 wiring connects that creator's Base ShareOFT to the Solana OFT Store as one
 omnichain supply.
+
+| Env key | Current value |
+|---------|---------------|
+| `SOLANA_DESTINATION` | `0x5f38e34ec3b546c53e682f2cf84d35d2edcbd15b498367651835942416f8d4d1` |
+| `OVAULT_HUB_COMPOSER` | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
+| `OVAULT_SOLANA_EID` | `30168` |
 
 Before every creator finalize, seed the non-zero OFT Store peer explicitly:
 

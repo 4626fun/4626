@@ -30,7 +30,7 @@ cross-lane bytecode.
   equal the constructor-pinned lane set.
 - When the active `DeploymentBatcher` exposes `requireApprovedCodeId` /
   `approvedCodeIds`, those codeIds must also be treasury-approved. The live
-  v1.19.0 batcher (`0x02D7…1750`) does **not** include that allowlist surface;
+  v1.19.1 batcher (`0xa181…F145`) does **not** include that allowlist surface;
   the hardened aux helper soft-skips missing-selector reverts and still enforces
   constructor-pinned lane binding.
 
@@ -54,8 +54,7 @@ Pinned codeIds are immutable getters. Calldata for
 with `CodeIdKindMismatch(expected, actual)` on lane mismatch and consults
 `DeploymentBatcher.requireApprovedCodeId` so treasury revocation still works.
 
-Current live default `0xa3986F2F812a80a4Ee4A33646bE5248D9e22eb88` is the
-pre-hardening helper and should be treated as stale until replaced.
+Current live default `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` is the hardened v1.19.1 helper.
 
 ## Ordered production rotation (do not skip)
 
@@ -65,30 +64,30 @@ step.
 
 ### 0. Read-only preflight
 
-Confirm active infra (v1.18 shared / v1.19.1 bytecode epoch):
+Confirm active v1.19.1 infra:
 
 ```bash
-cast call 0x02D7abC547F8B1e7E2D7a919D8D1005918361750 "bytecodeStore()(address)" --rpc-url $BASE_RPC_URL
-cast call 0x02D7abC547F8B1e7E2D7a919D8D1005918361750 "create2Deployer()(address)" --rpc-url $BASE_RPC_URL
+cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "bytecodeStore()(address)" --rpc-url $BASE_RPC_URL
+cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "create2Deployer()(address)" --rpc-url $BASE_RPC_URL
 
 # AgentRevenuePolicyController seeded?
 AGENT_POLICY_CODE_ID=$(cast keccak "$(forge inspect AgentRevenuePolicyController bytecode)")
-cast call 0xfa3e3b466635DAff910057f18749B93d56F9DE50 \
+cast call 0xF9622613682a12E46b914c7498716F42E44c4d36 \
   "pointers(bytes32)(address)" $AGENT_POLICY_CODE_ID --rpc-url $BASE_RPC_URL
 ```
 
 Expected paired infra:
 
-- Store: `0xfa3e3b466635DAff910057f18749B93d56F9DE50`
-- Create2: `0x54660E61857a652753d805aD2c7b4f759C138bD5`
-- Batcher: `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`
+- Store: `0xF9622613682a12E46b914c7498716F42E44c4d36`
+- Create2: `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2`
+- Batcher: `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`
 
 ### 1. Seed v1.19.1 bytecode (includes AgentRevenuePolicyController)
 
 ```bash
 export BASE_RPC_URL=<paid Base RPC>
 export PRIVATE_KEY=<bytecode store owner>
-export UNIVERSAL_BYTECODE_STORE=0xfa3e3b466635DAff910057f18749B93d56F9DE50
+export UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36
 export DEPLOYMENT_EPOCH_TAG=v1.19.1
 
 forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
@@ -102,7 +101,7 @@ Verify:
 
 ```bash
 BYTECODE_MANIFEST=deployments/base/v1.19.1-bytecode-manifest.json \
-UNIVERSAL_BYTECODE_STORE=0xfa3e3b466635DAff910057f18749B93d56F9DE50 \
+UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
 BASE_RPC_URL=$BASE_RPC_URL \
 pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 ```
@@ -114,11 +113,11 @@ submitting a Safe tx:
 
 ```bash
 cast sig 'requireApprovedCodeId(bytes32)'
-cast code 0x02D7abC547F8B1e7E2D7a919D8D1005918361750 --rpc-url $BASE_RPC_URL \
+cast code 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 --rpc-url $BASE_RPC_URL \
   | tr '[:upper:]' '[:lower:]' | grep -q ccda19ad && echo allowlist=YES || echo allowlist=NO
 ```
 
-If `allowlist=NO` (current v1.19.0 live batcher): **skip this step**. Do not
+If `allowlist=NO` (current v1.19.1 live batcher): **skip this step**. Do not
 rotate `DEPLOYMENT_BATCHER` as part of auxiliary cutover. Re-run Safe approvals
 only after a separate DeploymentBatcher rotation that ships the allowlist.
 
@@ -146,9 +145,9 @@ forge create contracts/shared/deploy/batchers/VaultAuxiliaryDeployBatcher.sol:Va
   --legacy \
   --broadcast \
   --constructor-args \
-    0x54660E61857a652753d805aD2c7b4f759C138bD5 \
-    0xfa3e3b466635DAff910057f18749B93d56F9DE50 \
-    0x02D7abC547F8B1e7E2D7a919D8D1005918361750 \
+    0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2 \
+    0xF9622613682a12E46b914c7498716F42E44c4d36 \
+    0xa18169caf37fa0347285B16aAFC2B09eCB43F145 \
     0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 \
     0x2626664c2603336E57B271c5C0b26F421741e481 \
     $BURN \
@@ -166,7 +165,7 @@ Only the create2 deployer owner may call this. Without it,
 `deployPhase2Auxiliaries` reverts with `NotAuthorizedDeployer`.
 
 ```bash
-cast send 0x54660E61857a652753d805aD2c7b4f759C138bD5 \
+cast send 0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2 \
   "setAuthorizedDeployer(address,bool)" <NEW_AUX_BATCHER> true \
   --rpc-url $BASE_RPC_URL \
   --private-key <CREATE2_DEPLOYER_OWNER_KEY>
@@ -203,7 +202,7 @@ cast call <NEW_AUX_BATCHER> "creatorRevenueRouterCodeId()(bytes32)" --rpc-url $B
 cast call <NEW_AUX_BATCHER> "agentRevenueRouterCodeId()(bytes32)" --rpc-url $BASE_RPC_URL
 cast call <NEW_AUX_BATCHER> "creatorRevenuePolicyControllerCodeId()(bytes32)" --rpc-url $BASE_RPC_URL
 cast call <NEW_AUX_BATCHER> "agentRevenuePolicyControllerCodeId()(bytes32)" --rpc-url $BASE_RPC_URL
-cast call 0x54660E61857a652753d805aD2c7b4f759C138bD5 \
+cast call 0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2 \
   "authorizedDeployers(address)(bool)" <NEW_AUX_BATCHER> --rpc-url $BASE_RPC_URL
 ```
 
@@ -244,7 +243,7 @@ If the auxiliary helper fails preflight:
 5. Optionally deauthorize the failed helper:
    `setAuthorizedDeployer(<NEW_OR_FAILED_AUX>, false)`.
 
-Retiring the old pre-hardening helper after cutover:
+Historical v1.19.0 retirement command (audit only; do not run against the v1.19.1 infra):
 
 ```bash
 cast send 0x54660E61857a652753d805aD2c7b4f759C138bD5 \

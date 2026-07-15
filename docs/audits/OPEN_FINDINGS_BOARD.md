@@ -4,6 +4,9 @@ Sources: contracts re-audit (`2026-07-08-contracts-reaudit/`), Aristotle tracker
 
 **Critical open: 0**
 
+> **Superseded snapshot:** v1.18.0 addresses remain where they document dated
+> findings. Current actionable checks use the canonical v1.19.1 release.
+
 Update statuses in place as work lands. Prefer linking a PR or commit when closing an ID.
 
 **Last code pass:** 2026-07-09 — contracts + stack mediums closed; R-H05 launch default single-vault; ops checklist at [PRE_LOTTERY_OPS_CHECKLIST.md](./PRE_LOTTERY_OPS_CHECKLIST.md).
@@ -84,7 +87,7 @@ Update statuses in place as work lands. Prefer linking a PR or commit when closi
 | **L2-01** | Finalized phase-1 reset (overlaps M-15) | **Fixed** (with M-15) | Contracts |
 | **L2-03** | PayoutRouter `minOut == 0` (overlaps M-NEW-01) | **Fixed** (with M-NEW-01) | Contracts |
 
-**Gate:** Solana **B2 `relay_entries` stays off**. M2-12/13 and pool verification are not sufficient. The source-event identity, durable inbox, keeper-Twin transport, token/pool compatibility, and live adapter→current-LM wiring gates in [the 2026-07-11 integration audit](./solana-lottery-relay-integration-audit-2026-07-11.md) must also close.
+**Gate:** Solana **B2 `relay_entries` stays off**. M2-12/13 and pool verification are not sufficient. The source-event identity, durable inbox, keeper-Twin transport, and token/pool compatibility gates in [the 2026-07-11 integration audit](./solana-lottery-relay-integration-audit-2026-07-11.md) must also close; the retired Twin adapter must remain out of active config.
 
 ### Solana lottery relay integration (2026-07-11)
 
@@ -92,7 +95,7 @@ Update statuses in place as work lands. Prefer linking a PR or commit when closi
 |----|--------|------|
 | SOL-P0-01 | Mitigated / transport open | KPR fails closed; build reviewed Solana→Base keeper-Twin attached-call transport |
 | SOL-P0-02 | Open | Finalized `(genesis, program, signature, event index)` identity + durable atomic inbox |
-| SOL-P0-03 | Open (live ops) | v1.18 adapter must point to current `0xB68F…` LM; no mutation authorized by audit |
+| SOL-P0-03 | Closed / superseded | Adapter wiring gate superseded by retirement; retired Twin adapter must remain out of active config |
 | SOL-P0-04 | Open | Resolve standard SPL vs Token-2022 TransferHook pool incompatibility |
 | SOL-P1-01 | Open | Durable atomic inbox/cursor and crash-after-submit recovery |
 | SOL-P1-02 | Open | Event-log ingestion must replace lossy 256-entry ring buffer as canonical source |

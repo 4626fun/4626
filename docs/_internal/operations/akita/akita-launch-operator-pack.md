@@ -5,7 +5,7 @@
 > [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md) and
 > `frontend/scripts/ops/complete-akita-deploy-ops.ts`.
 >
-> Release truth: v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`.
+> Release truth: v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 > Share mesh mint (reused): `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` (`■AKITA`).
 > Batcher default Solana share peer: `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f`.
 > Hub composer: `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1`.
@@ -48,7 +48,7 @@ If any gate fails, stop and fix per the blocker table in
 ### PRE-3. Is ≥50M AKITA balance/approval ready?
 
 Creator coin: `0x5b674196812451b7cec024fe9d22d2c0b172fa75`. Need ≥ 50,000,000 tokens
-held by the deploying CSW and approved for the vault deposit (spender = v1.14.1 batcher).
+held by the deploying CSW and approved for the vault deposit (spender = v1.19.1 batcher).
 `BASE_RPC_URL` comes from `frontend/.env` (export it or inline it).
 
 ```bash
@@ -59,7 +59,7 @@ cast call 0x5b674196812451b7cec024fe9d22d2c0b172fa75 \
 # allowance to the batcher
 cast call 0x5b674196812451b7cec024fe9d22d2c0b172fa75 \
   'allowance(address,address)(uint256)' <YOUR_CSW> \
-  0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1 --rpc-url $BASE_RPC_URL
+  0xa18169caf37fa0347285B16aAFC2B09eCB43F145 --rpc-url $BASE_RPC_URL
 ```
 
 Semantics: the **balance** check is a hard gate. The **allowance** check is advisory —
@@ -117,7 +117,7 @@ it prints the manual env lines instead.
 falls back to the OLD `AKITA_DEFAULTS` addresses — the state JSON will then record the
 previous stack's gauge/cca/oracle as if they were new, and a later `--write-defaults`
 will no-op on them. If the deploy UI doesn't show these three, pull them from the Phase 1
-transaction logs on Basescan (batcher `0x660B251F…61c1` internal deployments) or the
+transaction logs on Basescan (batcher `0xa18169ca…F145` internal deployments) or the
 deploy-session events **before** running post-finalize. Do not proceed with defaults-inherited
 values.
 

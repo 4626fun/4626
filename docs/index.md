@@ -50,7 +50,7 @@ hide_table_of_contents: true
 <div class="home-links">
   <a class="home-links__item" href="https://app.4626.fun/deploy/vault">Launch app</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
-  <a class="home-links__item" href="/reference/addresses">Addresses (v1.14.1)</a>
+  <a class="home-links__item" href="/reference/addresses">Addresses (v1.19.1)</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/fable/findings-summary">Executive summary</a>
   <span class="home-links__sep" aria-hidden="true">·</span>

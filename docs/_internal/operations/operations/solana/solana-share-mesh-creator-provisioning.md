@@ -1,6 +1,6 @@
 # Solana share mesh — per-creator provisioning
 
-> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
+> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 
 > **Retired:** Twin wrap-token / `registerSolanaBridgeToken` and batcher-global
 > `solanaShareOftPeer` / `setSolanaShareOftPeer`. Every creator needs an explicit
@@ -31,7 +31,7 @@ the OFT Store identity, while Meteora and wallet displays use the mint pubkey.
 ## Prerequisites
 
 - [ ] Creator paid **`vault_full_deploy`** (includes `solana_ovault_mesh`) — row in `creator_strategy_features`
-- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750` → exit **0** (destination + OVault runtime; peers are per-creator)
+- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145` → exit **0** (destination + OVault runtime; peers are per-creator)
 - [ ] `SOLANA_PRIVATE_KEY` funded on mainnet (~4+ SOL Path 1 per creator; see budget doc)
 - [ ] Paid Solana RPC (`SOLANA_RPC_URL` / `RPC_URL_SOLANA_TESTNET` for rehearsal)
 

@@ -34,10 +34,10 @@ user lottery / Pipe A. For that, read:
 - [solana-share-mesh-budget-paths.md](../../solana/solana-share-mesh-budget-paths.md)
 - [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md)
 
-For active v1.19.0 launches, provision a distinct LZ OFT store/mint, seed
+For active v1.19.1 launches, provision a distinct LZ OFT store/mint, seed
 `Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)` before
 finalize, and create Meteora against that LZ mint. The batcher
-`0x02D7abC547F8B1e7E2D7a919D8D1005918361750` stores destination + OVault
+`0xa18169caf37fa0347285B16aAFC2B09eCB43F145` stores destination + OVault
 runtime only. Never add adapter or batcher-global-peer operations to the
 unsigned 11-operation registration Safe packet.
 
@@ -238,7 +238,7 @@ use the per-creator LZ OFT runbook instead.
 The last canonical Twin grain used
 **`0x700b4BBAf965c013123bAd02a6562FBa487aC0f1`**
 (see [`docs/reference/addresses.md`](/reference/addresses)). It is not part of
-the active v1.19.0 registration or per-creator share-mesh plane. The
+the active v1.19.1 registration or per-creator share-mesh plane. The
 `0x653326dD…` deployment above is historical context for the AKITA
 strict-parity migration; do not treat it as the active default.
 

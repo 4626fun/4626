@@ -10,7 +10,7 @@ Plain-language names used in public docs, with internal or onchain identifiers w
 ## Quick definitions
 
 **New vault launch** *(internal: **greenfield**)*  
-A **brand-new** vault deployed on the **current** release (v1.14.1 today) — not a patch or migration of an older vault (e.g. AKITA). Engineers say “greenfield” to mean “fresh deploy on the latest contracts and batcher,” as opposed to **legacy vaults** still tied to retired infrastructure.
+A **brand-new** vault deployed on the **current** release (v1.19.1 today) — not a patch or migration of an older vault (e.g. AKITA). Engineers say “greenfield” to mean “fresh deploy on the latest contracts and batcher,” as opposed to **legacy vaults** still tied to retired infrastructure.
 
 **Solana share bridge at finalize** *(internal: **Pipe A**, `solana_ovault_mesh`)*  
 During **activation**, when you finalize Phase 2, about **30%** of tradable `■` shares are **automatically** bridged to Solana (LayerZero). You do not buy or enable this separately — it is part of the standard new-vault path included in the launch bundle. “Pipe A” is an internal label for this **finalize-time bridge** (replacing an older, retired Solana routing model). Base trading and the fair-launch auction do not wait for Solana; the bridge runs in the same activation session.
@@ -23,7 +23,7 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 | Public name (docs & app) | Internal / onchain | Notes |
 |--------------------------|-------------------|--------|
 | **Launch bundle ($499 USDC)** | `vault_full_deploy` | Unlocks deploy; includes Charm + Ajna + Solana mesh + Meteora |
-| **New vault launch** | *Greenfield* | New deploy on current release (v1.14.1), not legacy vaults |
+| **New vault launch** | *Greenfield* | New deploy on current release (v1.19.1), not legacy vaults |
 | **Solana bridge at finalize (~30% of ■)** | *Pipe A*, `solana_ovault_mesh` | Automatic LayerZero bridge in Phase 2 finalize — not a separate purchase |
 | **Fair-launch auction** | CCA | Uniswap V4 price discovery at activation |
 | **Auction schedule** | Thursday 00:00 UTC epoch | CCA bids open on the next weekly epoch after `launchDeferredAuction` |
@@ -121,4 +121,4 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 
 **Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
 
-**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from v1.14.1 new-vault path.
+**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from v1.19.1 new-vault path.

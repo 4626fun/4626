@@ -1,5 +1,10 @@
 # Rewards ecosystem canary (2026-07)
 
+> **Superseded snapshot:** this canary was written against v1.18.0 (Registry
+> `0xDb8570Dd…`, LotteryManager `0xB68F359e…`, Factory `0x70d0D241…`, Batcher
+> `0x02D7abC5…`). Those values are retained as historical evidence; executable
+> checks below now target the canonical v1.19.1 release.
+
 **Goal:** Deploy ve■4626 + gauge voting + bribes + partner streams + optional surface registry on Base **without** enabling lottery personal boost or gauge probability boost on day one.
 
 **Companion:** [lottery-canary-checklist-2026-07.md](./lottery-canary-checklist-2026-07.md) (LM must keep `boostManager` / `vaultGaugeVoting` at `0x0` until lottery Phase 3).  
@@ -34,19 +39,21 @@
 
 ## Phase A — Preflight (read-only)
 
-### A.1 Infra pins (v1.18.0)
+### A.1 Current infra pins (v1.19.1)
 
 | Role | Address (Base) |
 |------|----------------|
-| Registry4626 | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
-| LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
+| Registry4626 | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
+| LotteryManager4626 | `0xB45E68a5867935a5734E4185977F81c528006650` |
 | Protocol treasury Safe | `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
-| OVaultFactory4626 | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
-| DeploymentBatcher | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| OVaultFactory4626 | `0xCAb65a066A4D52DD29ffB418B319819176b89610` |
+| DeploymentBatcher | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
+| UniversalBytecodeStoreV2 | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
+| CREATE2 deployer | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
 
 ```bash
 export BASE_RPC_URL="${BASE_RPC_URL:-https://mainnet.base.org}"
-export LM=0xB68F359e01626Ec5d15C624037311C70DacAba43
+export LM=0xB45E68a5867935a5734E4185977F81c528006650
 
 # Lottery must still be fail-closed on boost/gauge for this canary
 cast call $LM "boostManager()(address)" --rpc-url $BASE_RPC_URL
@@ -96,8 +103,8 @@ export BASE_RPC_URL="https://mainnet.base.org"   # or private RPC
 export PRIVATE_KEY=0x...
 export OWNER=0x...                               # ops owner
 export WRAPPED_SHARE_OFT=0x...                   # ■4626
-export REGISTRY=0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0
-export LOTTERY_MANAGER=0xB68F359e01626Ec5d15C624037311C70DacAba43
+export REGISTRY=0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2
+export LOTTERY_MANAGER=0xB45E68a5867935a5734E4185977F81c528006650
 export PROTOCOL_TREASURY=0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
 export STREAM_OWNER=$OWNER
 export DEPOT_OWNER=$OWNER              # BribeDepot Ownable (not the factory)
@@ -191,7 +198,7 @@ delist **burns** that share of the 69,420 PPM boost budget — see
 ```bash
 SURF=$GAUGE_SURFACE_REGISTRY_4626
 VOTING=$VE4626_GAUGE_VOTING
-FACTORY=$OVAULT_FACTORY   # 0x70d0D241…
+FACTORY=$OVAULT_FACTORY   # 0xCAb65a06…
 
 # 1) Registrar FIRST — factory (and any ops bot) must be authorized before surfaceRegistry is set
 cast send $SURF "setRegistrar(address,bool)" $FACTORY true \
@@ -235,7 +242,7 @@ If factory is live but lanes unset:
 1. Deploy `CreatorOvaultLane` / `AgentOvaultLane` with owner
 2. `setCodeIds` from current bytecode store ids
 3. `factory.setLane(Creator|Agent, lane)`
-4. `factory.setDeploymentBatcher(0x02D7abC5…)`
+4. `factory.setDeploymentBatcher(0xa18169ca…)`
 5. Batcher treasury: `setAuthorizedPhaseCaller(factory, true)`
 
 See [ovault-factory-lanes.md](../contracts/deploy/ovault-factory-lanes.md).

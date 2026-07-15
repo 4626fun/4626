@@ -2,6 +2,8 @@
 
 > **Historical canary record.** Twin adapter checks and KPR entry/winner relay
 > steps below are retired and must not be used as current operations guidance.
+> The v1.19.0 partial-refresh checks are also superseded by canonical v1.19.1;
+> prior LotteryManager `0xB68F359e…` references remain only as dated evidence.
 
 **Branch context:** `docs/post-solana-hook-upgrade` (ve utilities + Curve boost + LM size cut).  
 **Companion:** [PRE_LOTTERY_OPS_CHECKLIST.md](../audits/PRE_LOTTERY_OPS_CHECKLIST.md), [post-solana-hook-upgrade-checklist.md](./post-solana-hook-upgrade-checklist.md).

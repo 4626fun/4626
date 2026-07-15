@@ -1,6 +1,6 @@
 # AKITA full-stack redeploy — pre-launch checklist
 
-> **Release truth:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
+> **Release truth:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 
 Use this before **you** launch AKITA’s new vault stack on `https://app.4626.fun/deploy/vault`. Platform ops can finish everything here; the deploy session itself stays with the creator/operator wallet.
 
@@ -70,7 +70,7 @@ That inserts `vault_full_deploy` (bundles Charm + Ajna + Solana mesh + Meteora e
 
 | Check | Expect |
 |-------|--------|
-| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | Release target | `bash test/current-release-target-guard.sh` |
 | Hook bytecode | `ops:verify-hook-mainnet-bytecode` → **PASS (canonical)** |
 
@@ -123,7 +123,7 @@ with the new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
 
 | Variable | Expected |
 |----------|----------|
-| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | Batcher onchain runtime | destination + OVault runtime enabled; no adapter/global peer |
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | matches Vultr `/etc/4626/solana-keeper-orchestrator.env` |

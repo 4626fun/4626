@@ -11,7 +11,7 @@ Guides for deploying 4626 infrastructure on Base.
 
 | Guide | Description |
 |-------|-------------|
-| [Current release (v1.14.1)](/operations/deployment/releases/current) | Active greenfield deploy target |
+| [Current release (v1.19.1)](/operations/deployment/releases/current) | Active greenfield deploy target |
 | [Greenfield launch readiness](/operations/vault/greenfield-launch-readiness) | Pre-deploy readiness gate |
 | [Deploy dry-run (local fork)](/operations/deployment/deploy-dry-run-local-fork-invariants) | Local Anvil fork invariants |
 | [Pipe A batcher cutover](/operations/deployment/batcher-pipe-a-cutover) | Payable finalize + ShareOFT peer wiring |

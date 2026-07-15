@@ -19,7 +19,7 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (current: `v1.19.0`)
+- `DEPLOYMENT_EPOCH_TAG` (current: `v1.19.1`)
 
 Optional:
 
@@ -30,10 +30,10 @@ Optional:
 ## 1) Choose Epoch Tag
 
 Pick an immutable epoch token and keep it in release notes. New production
-launches use `v1.19.0`.
+launches use `v1.19.1`.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.19.0"
+export DEPLOYMENT_EPOCH_TAG="v1.19.1"
 ```
 
 Deployment scripts derive `base-release:*` salt tags from this epoch automatically unless raw `INFRA_*_SALT` values are provided.
@@ -76,8 +76,8 @@ The batcher shell stores only:
 Do not configure a Twin `SolanaBridgeAdapter` or batcher-global
 `solanaShareOftPeer`. Those are retired grains.
 
-Generate the current unsigned v1.19.0 Safe packet and confirm it has exactly 11
-operations before execution:
+Historical audit only: the named v1.19.0 Safe packet has exactly 11 operations.
+Do not execute it for v1.19.1:
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/execute-v1190-registration-plane-safe.ts \
@@ -112,7 +112,7 @@ Repeat for:
 
 Record the release hash snapshot after regenerating deploy bytecode:
 
-- `deployments/base/v1.19.0-bytecode-manifest.json`
+- `deployments/base/v1.19.1-bytecode-manifest.json`
 
 ## 6) App/API Cutover
 
@@ -139,7 +139,7 @@ are in [Contract addresses](/reference/addresses#environment-for-v1190-launches)
   - `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF`
   - `VITE_LOTTERY_MANAGER`
 - bump deploy namespace:
-  - `VITE_DEPLOYMENT_VERSION` (`v1.19.0` for the current CREATE2 namespace)
+  - `VITE_DEPLOYMENT_VERSION` (`v1.19.1` for the current CREATE2 namespace)
 
 Apply these in both local env files (`/.env`, `frontend/.env`) and Vercel project env scopes (`production`, `preview`, `development`) before traffic cutover. **Redeploy** after Vercel env updates — bundled `VITE_*` values are baked at build time unless the route uses runtime config (`/api/deploy/config`).
 

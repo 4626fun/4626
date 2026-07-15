@@ -5,7 +5,7 @@ status: historical
 
 # Pipe A cutover — historical notes
 
-Audit trail for v1.11.x → v1.14.1 batcher epochs. **Do not use for new greenfield deploys.** Current target: [v1.14.1 release](/operations/deployment/releases/current).
+Audit trail for v1.11.x → v1.14.1 batcher epochs. **Do not use for new greenfield deploys.** Current target: [v1.19.1 release](/operations/deployment/releases/current).
 
 ## Pre-cutover (deprecated)
 

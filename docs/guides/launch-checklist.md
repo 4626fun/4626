@@ -6,7 +6,7 @@ slug: /guides/launch-checklist
 
 # Launch checklist
 
-End-to-end checklist for a **new vault on Base** (v1.14.1). For **legacy vaults** (older releases, e.g. AKITA), infrastructure may differ. See [Glossary — new vault launch](/reference/glossary#quick-definitions).
+End-to-end checklist for a **new vault on Base** (v1.19.1). For **legacy vaults** (older releases, e.g. AKITA), infrastructure may differ. See [Glossary — new vault launch](/reference/glossary#quick-definitions).
 
 <div class="docs-at-a-glance">
 
@@ -66,7 +66,7 @@ Details: [Solana share bridge](/overview/solana-share-mesh)
 ## Contracts
 
 - Per-creator stack: [Registry4626](/contracts/core/creator-registry)
-- Shared infra: [Addresses](/reference/addresses) (v1.14.1)
+- Shared infra: [Addresses](/reference/addresses) (v1.19.1)
 
 ## Related
 

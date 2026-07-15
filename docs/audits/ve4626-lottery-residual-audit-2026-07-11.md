@@ -3,11 +3,16 @@
 Date: 2026-07-11  
 Scope: source, tests, deployment tooling, and operating docs only. No live write was authorized or performed.
 
+> **Superseded snapshot:** all “live” state and v1.18.0 addresses below record the
+> 2026-07-11 audit epoch. Current v1.19.1 LotteryManager is
+> `0xB45E68a5867935a5734E4185977F81c528006650`; retain the prior manager and
+> codehash as historical audit evidence.
+
 ## Launch verdict
 
 **Safe to keep boost unwired for main launch: YES.**
 
-Live Base `LotteryManager4626` remains `0xB68F359e01626Ec5d15C624037311C70DacAba43` with:
+At audit time, Base `LotteryManager4626` was `0xB68F359e01626Ec5d15C624037311C70DacAba43` with:
 
 - `boostManager() == address(0)`
 - `vaultGaugeVoting() == address(0)`
@@ -64,7 +69,7 @@ Do not execute these steps during main launch.
 1. Re-run all validation listed below and resolve VLR-10 by publishing/verifying source.
 2. Deploy `ve4626`, `ve4626Utility`, `ve4626BoostManager`, and `ve4626GaugeVoting` with `DeployRewardsEcosystem`; verify it did not mutate LM.
 3. Verify lock asset = ■4626, BoostManager utility = deployed utility, GaugeVoting utility = deployed utility, and `ve4626.boostManager` = deployed BoostManager.
-4. Verify live LM still has both boost sources at zero and the source timelock is unarmed.
+4. Verify current LM `0xB45E68a5867935a5734E4185977F81c528006650` still has both boost sources at zero and the source timelock is unarmed.
 5. Freeze/review the final BoostManager and GaugeVoting addresses and owner controls.
 6. Arm `armBoostSourceTimelock()` while both sources are still zero.
 7. Propose both final source addresses. Record proposal events/effective timestamps.

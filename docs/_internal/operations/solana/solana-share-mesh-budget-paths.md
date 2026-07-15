@@ -1,6 +1,6 @@
 # Solana share mesh — budget & runbook
 
-> **Release truth:** v1.19.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`.
+> **Release truth:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 
 > **Retired:** Twin wrap-token / batcher-global `setSolanaShareOftPeer`. Per-creator peers
 > use `Registry4626.setRemoteOFTPeerBytes32`. Batcher shell: `setSolanaDestination` +
@@ -8,7 +8,7 @@
 
 Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md). Current batcher: `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` (v1.14/v1.16 batchers are historical only). The v1.19.0 registration Safe packet is 11 operations and contains destination + OVault runtime, never adapter/global-peer operations.
+Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md). Current batcher: `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` (v1.14/v1.16/v1.19.0 batchers are historical only). The named v1.19.0 registration Safe packet is 11 operations and contains destination + OVault runtime, never adapter/global-peer operations.
 
 ## Scope
 
@@ -109,7 +109,7 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
 3. **Verify batcher shell** (destination + OVault runtime — not a global peer):
    ```bash
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-     --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
+     --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145
    ```
 4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks. `finalizePhase2` bridges 30% ShareOFT.
 5. Optional maintenance uses only currently supported orchestrator actions such as `settle_fees` and `price_monitor`.
@@ -190,7 +190,7 @@ is historical only and contains no active provisioning procedure.
 
 | Role | Address |
 |------|---------|
-| DeploymentBatcher (v1.19.0 active launch plane) | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| DeploymentBatcher (v1.19.1 active launch plane) | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
 | creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (upgrade: [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md)) |

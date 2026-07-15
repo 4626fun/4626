@@ -1,5 +1,10 @@
 # Lottery canary Phase 0 status — 2026-07-11
 
+> **Superseded snapshot:** the v1.18.0 addresses and read-only results below are
+> retained as evidence from 2026-07-11. Current operations use v1.19.1:
+> LotteryManager `0xB45E68a5867935a5734E4185977F81c528006650` and Registry
+> `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2`.
+
 ## Cutover complete
 
 | Item | Value |
@@ -11,7 +16,7 @@
 | Old LM `0xbE87AD…` | `isActive=false` |
 | Deploy script | `script/DeployLotteryManagerCreate2V1180.s.sol` |
 
-**Probe:** `pnpm -C frontend ops:verify-lottery-canary-phase0`
+**Historical probe:** `pnpm -C frontend ops:verify-lottery-canary-phase0`
 
 ### Phase 0 after cutover
 

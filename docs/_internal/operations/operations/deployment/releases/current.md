@@ -1,23 +1,21 @@
 ---
-title: Current release (v1.19.0)
+title: Current release (v1.19.1)
 sidebar_position: 1
 ---
 
-# Current release — v1.19.0
+# Current release — v1.19.1
 
-**Status:** release artifacts generated; bounded Base change window and staged traffic sign-off in progress.
+**Status:** active new-vault release.
 
-This is the published release note for **new vault launches** on Base mainnet (`8453`). Live addresses and inventory live in [Contract addresses](/reference/addresses) — when anything disagrees, **that page wins**.
+This is the operational release note for **new vault launches** on Base mainnet (`8453`). The values below are the active v1.19.1 deployment target.
 
 Historical release packet: [`v1.19.0-partial-refresh.md`](../../../../deployment-releases-legacy/v1.19.0-partial-refresh.md)
 
-## What v1.19.0 is
+## What v1.19.1 is
 
-v1.19.0 is the active per-creator bytecode and CREATE2 epoch on the existing
-v1.18.0 shared infrastructure. Registry, factory, batcher shell, Phase1/Phase3
-helpers, store, CREATE2 deployer, and VRF addresses are reused. The replaceable
-Phase2 module is rotated so new gauges use remediation LotteryManager
-`0xB68F359e…`.
+v1.19.1 is the active infrastructure, per-creator bytecode, and CREATE2 epoch.
+New launches use the registry, factory, batcher, auxiliary batcher, store,
+CREATE2 deployer, and LotteryManager listed below.
 
 The active deployment plane is LayerZero ShareOFT. Twin
 `SolanaBridgeAdapter` registration and a batcher-global Solana peer are legacy
@@ -25,38 +23,31 @@ grain and are not part of a new-vault launch.
 
 | Role | Address |
 |------|---------|
-| Registry4626 | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
-| RegistryBootstrap4626 | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
-| OVaultFactory4626 | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
-| DeploymentBatcher | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
-| Phase1Module | `0x808fC8e83629019e29df79E592237B4603F9D1b5` |
-| Phase2Module | See [Contract addresses](/reference/addresses) after the bounded rotation |
-| ShareMeshHelper | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
-| Bytecode store | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
-| CREATE2 deployer | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
-| LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
-
-The immutable `DeploymentBatcher.lotteryManager()` shell getter remains
-historical and non-authoritative. New Phase2 execution is governed by the
-active module's immutable LotteryManager.
+| Registry4626 | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
+| OVaultFactory4626 | `0xCAb65a066A4D52DD29ffB418B319819176b89610` |
+| DeploymentBatcher | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
+| VaultAuxiliaryDeployBatcher | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` |
+| Bytecode store | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
+| CREATE2 deployer | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
+| LotteryManager4626 | `0xB45E68a5867935a5734E4185977F81c528006650` |
 
 ## CREATE2 namespace
 
 `VITE_DEPLOYMENT_VERSION` is the **salt namespace** for per-creator CREATE2.
-New production launches use `v1.19.0`; dry runs may use an explicit
-`v1.19.0-*` suffix.
+New production launches use `v1.19.1`; dry runs may use an explicit
+`v1.19.1-*` suffix.
 
-Bytecode manifest: `deployments/base/v1.19.0-bytecode-manifest.json`
+Bytecode manifest: `deployments/base/v1.19.1-bytecode-manifest.json`
 
 ## Preflight / validation
 
 ```bash
 forge build --skip test --skip script
-./script/generate_bytecode_manifest.sh v1.19.0
+./script/generate_bytecode_manifest.sh v1.19.1
 ./script/generate_frontend_deploy_bytecode.sh
 pnpm -C frontend typecheck
-BYTECODE_MANIFEST=../../deployments/base/v1.19.0-bytecode-manifest.json \
-  UNIVERSAL_BYTECODE_STORE=0xfa3e3b466635DAff910057f18749B93d56F9DE50 \
+BYTECODE_MANIFEST=../deployments/base/v1.19.1-bytecode-manifest.json \
+  UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 bash test/current-release-target-guard.sh
 pnpm -C frontend guard:registry4626-naming
@@ -66,7 +57,7 @@ pnpm -C frontend guard:registry4626-naming
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-  --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
+  --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145
 ```
 
 The batcher shell is configured with the Solana destination and OVault runtime
@@ -74,19 +65,19 @@ only. Before each creator is finalized, provision that creator's LayerZero OFT
 store/mint and seed
 `Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)`.
 
-## Bounded change window
+## Post-cutover verification
 
-1. Seed and approve v1.19 deploy-consumed codeIds on the existing store.
-2. Deploy the replacement Phase2 module with explicit LM `0xB68F359e…`.
-3. In one Safe transaction, approve its runtime codehash and set it active.
-4. Regenerate the unsigned 11-operation registration Safe packet from the
-   current handoff and manifest. Never reuse a packet containing adapter or
-   batcher-global-peer operations.
-5. Verify destination + OVault runtime pointers and deploy with
-   `VITE_DEPLOYMENT_VERSION=v1.19.0`.
+1. Verify v1.19.1 deploy-consumed codeIds on `0xF9622613682a12E46b914c7498716F42E44c4d36`.
+2. Verify the active DeploymentBatcher and Phase2 module use LotteryManager
+   `0xB45E68a5867935a5734E4185977F81c528006650`.
+3. Verify the active module runtime codehash is Safe-approved and selected.
+4. Verify the v1.19.1 registration state against the current handoff and
+   manifest. Do not reuse the v1.19.0 registration packet.
+5. Verify destination + OVault runtime pointers and the active environment has
+   `VITE_DEPLOYMENT_VERSION=v1.19.1`.
 6. For each Solana-enabled creator, provision the LZ OFT store/mint and seed
    the explicit registry peer before finalize.
-7. Run AKITA base-odds soak, then a separate v1.19 greenfield lifecycle.
+7. Run AKITA base-odds soak, then a separate v1.19.1 greenfield lifecycle.
 
 ## Related runbooks
 

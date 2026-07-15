@@ -7,7 +7,7 @@ doc_template: runbook
 
 Payable `finalizePhase2` + ShareOFT auto-bridge for greenfield vaults.
 
-**Live batcher (v1.19.0):** `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` — [current release](/operations/deployment/releases/current).
+**Live batcher (v1.19.1):** `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` — [current release](/operations/deployment/releases/current).
 
 Policy: [share mesh lottery](/operations/solana/solana-share-mesh-lottery-policy) · Budget: [share mesh budget paths](/operations/solana/solana-share-mesh-budget-paths)
 
@@ -28,7 +28,7 @@ Pipe A requires live batcher bytecode with:
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-  --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
+  --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145
 ```
 
 Exit `0` = batcher shell ready (destination + OVault runtime + modules + registry auth + salt).

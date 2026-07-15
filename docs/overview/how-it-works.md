@@ -91,7 +91,7 @@ Base is the **primary chain** for deploy, auction, and lottery. **Solana is stil
 
 ## Core contracts
 
-Shared infrastructure: [Addresses](/reference/addresses) (v1.14.1). Per creator:
+Shared infrastructure: [Addresses](/reference/addresses) (v1.19.1). Per creator:
 
 | Contract | Role |
 |----------|------|

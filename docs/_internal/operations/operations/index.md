@@ -13,7 +13,7 @@ Operator runbooks for deploy, keepers, wallet/signing, Solana, and platform infr
 
 | Topic | Link |
 |-------|------|
-| Current release | [v1.14.1](/operations/deployment/releases/current) |
+| Current release | [v1.19.1](/operations/deployment/releases/current) |
 | Live addresses | [Addresses](/reference/addresses) |
 | Greenfield gate | [Launch readiness](/operations/vault/greenfield-launch-readiness) |
 | Keepers | [Keeper HTTP API](/operations/automation/keeper-http-api) |
