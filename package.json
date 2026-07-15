@@ -40,6 +40,13 @@
     "frontend/**/*.{ts,tsx}": [
       "bash -c 'cd frontend && pnpm eslint --max-warnings 0 --no-warn-ignored'"
     ],
+    "AGENTS.md": [
+      "node scripts/guard-agents-line-budget.mjs"
+    ],
+    "docs/agent-context/preferences-active.md": [
+      "node scripts/guard-tier1-line-budget.mjs",
+      "node scripts/sync-agent-context-rule.mjs"
+    ],
     "*.{ts,tsx,js,mjs,json,md,yml,yaml,sol,toml}": [
       "bash scripts/lint-staged-gitleaks.sh"
     ]

@@ -7,23 +7,25 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | Tier | File(s) | Always-on? | When to load |
 |------|---------|-------------|--------------|
 | **0** | [AGENTS.md](../AGENTS.md), `.cursor/rules/*.mdc` | Yes | Every session (automatic) |
-| **1** | [preferences-active.md](./preferences-active.md) | Yes | Every session (via `agent-context-budget.mdc`) |
+| **1** | [preferences-active.md](./preferences-active.md) | Compact only | Full source editable; always-on copy is compact bullets in `agent-context-budget.mdc` |
 | **2** | [archives/](./archives/) | No | When task touches that domain — `@` mention or explicit "load archive" |
 | **3** | [prompt-templates.md](./prompt-templates.md) | No | User pastes template into chat |
 
 ## Archives (Tier 2)
 
-| Archive | Load when |
-|---------|-----------|
-| [waitlist-auth.md](./archives/waitlist-auth.md) | Privy, OTP, OAuth, session, bootstrap, `/waitlist`, accounts link |
-| [swap-execution.md](./archives/swap-execution.md) | `/swap`, `canonical4337`, paymaster, AA25, Permit2, txRouter |
-| [deploy-cutovers.md](./archives/deploy-cutovers.md) | Greenfield cutover, bytecode store, DeploymentBatcher, vault deploy |
-| [alfaclub-ops.md](./archives/alfaclub-ops.md) | Hermit, `/h`, room 1659, counter-trade, daily brief |
-| [wallet-identity.md](./archives/wallet-identity.md) | PROTOCOL vs CANONICAL CSW, XMTP agent inbox, ERC-8004 |
-| [wallet-relay-owner-install.md](./archives/wallet-relay-owner-install.md) | Relay Part 1/2, Base App UserOp, owner-install |
-| [infra-ops.md](./archives/infra-ops.md) | Supabase, Vercel, Railway, Solana, indexer, cron |
-| [ui-shipped-preferences.md](./archives/ui-shipped-preferences.md) | UI polish already implemented — reference only |
-| [historical-audits.md](./archives/historical-audits.md) | Past audit passes, retired epoch history |
+**Load the index file first, then one sub-archive only** — never load full split sets.
+
+| Index | Sub-archives | Load when |
+|-------|--------------|-----------|
+| [waitlist-auth.md](./archives/waitlist-auth.md) | [core](./archives/waitlist-auth-core.md) · [ui](./archives/waitlist-auth-ui.md) · [ops](./archives/waitlist-auth-ops.md) | Privy, OTP, session, bootstrap, `/waitlist` |
+| [deploy-cutovers.md](./archives/deploy-cutovers.md) | [core](./archives/deploy-cutovers-core.md) · [vault](./archives/deploy-cutovers-vault.md) · [prefs](./archives/deploy-cutovers-prefs.md) | Cutover scripts, DeployVault, bytecode store |
+| [swap-execution.md](./archives/swap-execution.md) | — | `/swap`, paymaster, txRouter |
+| [alfaclub-ops.md](./archives/alfaclub-ops.md) | — | Hermit, `/h`, room 1659 |
+| [wallet-identity.md](./archives/wallet-identity.md) | — | PROTOCOL vs CANONICAL CSW |
+| [wallet-relay-owner-install.md](./archives/wallet-relay-owner-install.md) | — | Relay, owner-install |
+| [infra-ops.md](./archives/infra-ops.md) | — | Supabase, Vercel, Railway, Solana |
+| [ui-shipped-preferences.md](./archives/ui-shipped-preferences.md) | — | **Reference only — do not load for new work** |
+| [historical-audits.md](./archives/historical-audits.md) | — | Retired epoch history |
 
 ## Continual-learning routing (`agents-memory-updater`)
 
@@ -48,7 +50,7 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 
 ## Related
 
-- Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md) and `.cursor/commands/` (deploy-cutover, waitlist-auth-debug, swap-bug, alfaclub-ops)
+- Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md) and `.cursor/commands/` (deploy-cutover, waitlist-auth-debug, swap-bug, alfaclub-ops, wallet-csw, fast-bugfix, contracts-test)
 - Account model authority: [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md)
 - Wallet policy code: `frontend/src/wallet/canonicalWalletPolicy.ts`
 - Sync Tier 1 into rule: `node scripts/sync-agent-context-rule.mjs`
@@ -58,9 +60,15 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 | Task | Command |
 |------|---------|
 | Swap / txRouter / paymaster | `pnpm -C frontend validate:swap` |
-| Waitlist / onboarding / auth | `pnpm -C frontend validate:waitlist` |
+| Waitlist / onboarding (full) | `pnpm -C frontend validate:waitlist` |
+| Waitlist smoke (fast) | `pnpm -C frontend validate:waitlist:smoke` |
+| Wallet / CSW identity | `pnpm -C frontend validate:wallet` |
+| Contracts (scoped) | `pnpm -C frontend validate:contracts` |
+| AlfaClub server | `pnpm -C frontend validate:alfaclub` |
+| Telegram handlers | `pnpm -C frontend validate:telegram` |
 | Deploy guards / CSW env drift | `pnpm -C frontend validate:deploy-guards` |
 | Quick agent gate (no full test) | `pnpm -C frontend validate:agent-quick` |
+| Context line budgets | `pnpm -C frontend guard:agent-context` |
 
 Scoped single file: `pnpm -C frontend exec vitest run <path>`. Full suite: `pnpm -C frontend test` (~3.5 min).
 

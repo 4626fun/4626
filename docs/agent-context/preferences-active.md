@@ -1,6 +1,6 @@
 # Active Agent Preferences (Tier 1)
 
-<!-- Synced into .cursor/rules/agent-context-budget.mdc — update both when editing. -->
+<!-- Synced as COMPACT into .cursor/rules/agent-context-budget.mdc via scripts/sync-agent-context-rule.mjs -->
 
 Always-on cross-cutting operator preferences. For domain depth, load matching archives from [INDEX.md](./INDEX.md).
 

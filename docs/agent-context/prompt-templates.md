@@ -37,7 +37,7 @@ Validate (in order):
 3. pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 4. Scoped forge if contracts touched
 
-Load archive: docs/agent-context/archives/deploy-cutovers.md
+Load archive: docs/agent-context/archives/deploy-cutovers-core.md (vault sub-archive if DeployVault-only)
 
 MCP: Railway/Vercel env — scoped keys only, redact secrets.
 
@@ -68,7 +68,7 @@ Inspect first:
 Validate:
 pnpm -C frontend exec vitest run {waitlist|privy|auth test file}
 
-Load archive: docs/agent-context/archives/waitlist-auth.md
+Load archive: docs/agent-context/archives/waitlist-auth-core.md (or ui/ops sub-archive if UX-only)
 
 Done: smallest safe diff. commit + push.
 ```

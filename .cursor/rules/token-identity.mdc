@@ -1,0 +1,16 @@
+---
+description: Creator Coin vs Share token identity in UI and image pipelines
+globs:
+  - frontend/src/**/token/**
+  - frontend/src/components/**/Token*
+  - frontend/src/lib/**/token*
+  - frontend/src/pages/**/Explore*
+alwaysApply: false
+---
+
+# Token identity (path-scoped)
+
+- Creator Coin address != Share token address — explicit lookup required.
+- Creator Coin UI uses creator-coin artwork; Share token UI may use vault-branded renders.
+- Pass explicit token kind (`creator` vs `share`) in image pipelines and search/dedup.
+- Never apply Share-token branding to Creator Coin rows or quote surfaces.
