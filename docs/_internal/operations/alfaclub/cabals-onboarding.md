@@ -134,6 +134,25 @@ wallet at `GET https://degen.virtuals.io/api/agents/1213`. The response fields
 `data.agentAddress`, `data.acpAgent.walletAddress`, and `data.hlAddress` must
 agree. Do not reuse the retired `0x30068c6bccf43e9eb5cdb68fb978f32f744d870c`.
 
+## Cabals HL builder attribution (Arena fills)
+
+InverseAKITA Arena/ACP trades are attributed on Virtuals by wallet
+(`0x74ab91cd845ff0d2006404440af49c3bc8c1df96`). Cabals competition volume uses
+Hyperliquid **builder fees**, so the Hermit `patches/dgclaw/trade.ts` path can
+attach Cabals as builder when enabled:
+
+- Builder: `0x6D4D5e0bFF83a0f2C1278b94e141809d5597D356`
+- Fee: `0.05%` (`feeTenthsOfBps=50`)
+- Env (Railway Hermit): `ARENA_CABALS_BUILDER_ENABLED=1`
+- Optional overrides: `ARENA_CABALS_BUILDER_ADDRESS`,
+  `ARENA_CABALS_BUILDER_FEE_TENTHS_BPS`, `ARENA_CABALS_BUILDER_MAX_FEE_RATE`
+- One-time approve (on Hermit ACP volume):
+  `cd /app/dgclaw-skill && npx tsx scripts/trade.ts approve-cabals-builder`
+- Status probe: `pnpm -C frontend ops:cabals:builder-status`
+
+This is Hyperliquid builder attribution only — it does **not** call Cabals'
+private web API and does not change the automation gate below.
+
 ## Automation gate
 
 Cabals currently documents no public service-account or agent API. Its Terms

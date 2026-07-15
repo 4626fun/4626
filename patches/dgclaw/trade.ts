@@ -9,8 +9,91 @@ import { HttpTransport, ExchangeClient, InfoClient } from '@nktkas/hyperliquid';
 
 const HL_API_URL = 'https://api.hyperliquid.xyz';
 
+/**
+ * Cabals.com Hyperliquid builder (from Cabals web client orderWire).
+ * Orders that include this builder pay Cabals' 0.05% builder fee and count
+ * toward Cabals competition / membership builder_volume. Arena attribution
+ * remains wallet-based and is unaffected.
+ */
+const CABALS_HL_BUILDER_ADDRESS_DEFAULT =
+  '0x6D4D5e0bFF83a0f2C1278b94e141809d5597D356' as const
+/** 50 × 0.1 bps = 5 bps = 0.05% (Cabals documented fee). */
+const CABALS_HL_BUILDER_FEE_TENTHS_BPS_DEFAULT = 50
+const CABALS_HL_BUILDER_MAX_FEE_RATE_DEFAULT = '0.05%'
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACP_DIR = process.env.ACP_CLI_DIR || resolve(__dirname, '..', '..', 'acp-cli');
+
+type CabalsBuilderConfig = {
+  address: `0x${string}`
+  feeTenthsOfBps: number
+  maxFeeRate: `${string}%`
+}
+
+function envFlagEnabled(name: string): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function readCabalsBuilderConfig(): CabalsBuilderConfig | null {
+  if (!envFlagEnabled('ARENA_CABALS_BUILDER_ENABLED')) return null
+
+  const addressRaw = String(
+    process.env.ARENA_CABALS_BUILDER_ADDRESS ?? CABALS_HL_BUILDER_ADDRESS_DEFAULT,
+  )
+    .trim()
+    .toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(addressRaw)) {
+    console.error(
+      'ARENA_CABALS_BUILDER_ENABLED is set but ARENA_CABALS_BUILDER_ADDRESS is invalid',
+    )
+    process.exit(1)
+  }
+
+  const feeRaw = String(
+    process.env.ARENA_CABALS_BUILDER_FEE_TENTHS_BPS ??
+      CABALS_HL_BUILDER_FEE_TENTHS_BPS_DEFAULT,
+  ).trim()
+  const feeTenthsOfBps = Number(feeRaw)
+  if (
+    !Number.isInteger(feeTenthsOfBps) ||
+    feeTenthsOfBps < 0 ||
+    feeTenthsOfBps > 1000
+  ) {
+    console.error(
+      'ARENA_CABALS_BUILDER_FEE_TENTHS_BPS must be an integer in [0, 1000]',
+    )
+    process.exit(1)
+  }
+
+  const maxFeeRateRaw = String(
+    process.env.ARENA_CABALS_BUILDER_MAX_FEE_RATE ??
+      CABALS_HL_BUILDER_MAX_FEE_RATE_DEFAULT,
+  ).trim()
+  if (!/^[0-9]+(\.[0-9]+)?%$/.test(maxFeeRateRaw)) {
+    console.error(
+      'ARENA_CABALS_BUILDER_MAX_FEE_RATE must look like "0.05%"',
+    )
+    process.exit(1)
+  }
+
+  return {
+    address: addressRaw as `0x${string}`,
+    feeTenthsOfBps,
+    maxFeeRate: maxFeeRateRaw as `${string}%`,
+  }
+}
+
+function withOptionalCabalsBuilder<T extends Record<string, unknown>>(
+  params: T,
+  builder: CabalsBuilderConfig | null,
+): T & { builder?: { b: `0x${string}`; f: number } } {
+  if (!builder) return params
+  return {
+    ...params,
+    builder: { b: builder.address, f: builder.feeTenthsOfBps },
+  }
+}
 
 function getAcpBin(): string {
   const fromEnv = String(process.env.ACP_BIN ?? process.env.ARENA_ACP_BIN ?? '').trim()
@@ -64,6 +147,8 @@ Commands:
   balance     Show account balance (spot + perp)
   tickers     List available trading pairs
   transfer    Move USDC between spot and perp accounts (--amount, --to)
+  approve-cabals-builder
+              One-time Hyperliquid approveBuilderFee for Cabals attribution
 
 Note: For deposits, use ACP job (see SKILL.md). For withdrawals, use scripts/withdraw.ts.
 
@@ -91,6 +176,15 @@ Environment:
   HL_AGENT_PRIVATE_KEY  Approved HL API-wallet private key (enables local signing; requires HL_MASTER_ADDRESS)
   HL_SUBACCOUNT_ADDRESS Optional Hyperliquid subaccount address for strategy sleeve routing.
   ACP_CLI_DIR           Path to acp-cli repo (auto-detected as sibling dir if unset)
+  ARENA_CABALS_BUILDER_ENABLED
+                        When 1/true, attach Cabals HL builder on open/close/modify orders
+                        so fills count toward Cabals builder_volume (0.05% fee).
+  ARENA_CABALS_BUILDER_ADDRESS
+                        Override Cabals builder (default 0x6D4D5e0b…D356).
+  ARENA_CABALS_BUILDER_FEE_TENTHS_BPS
+                        Builder fee in 0.1bps units (default 50 = 0.05%).
+  ARENA_CABALS_BUILDER_MAX_FEE_RATE
+                        Max fee string for approve-cabals-builder (default 0.05%).
 
 Examples:
   npx tsx scripts/trade.ts open --pair ETH --side long --size 500 --leverage 5
@@ -232,6 +326,7 @@ async function openPosition(
   exchange: ExchangeClient,
   info: InfoClient,
   args: TradeArgs,
+  cabalsBuilder: CabalsBuilderConfig | null,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
   if (!args.side) { console.error('--side is required'); process.exit(1); }
@@ -273,18 +368,28 @@ async function openPosition(
   const sz = formatSize(parseFloat(args.size), midPrice, meta.szDecimals);
 
   console.log(`Opening ${args.side} ${args.pair} — size: ${sz} ($${args.size}), price: ${orderPrice}, leverage: ${leverage}x`);
+  if (cabalsBuilder) {
+    console.log(
+      `Cabals builder attached: ${cabalsBuilder.address} feeTenthsOfBps=${cabalsBuilder.feeTenthsOfBps}`,
+    )
+  }
 
-  const result = await exchange.order({
-    orders: [{
-      a: assetId,
-      b: isBuy,
-      r: false,
-      p: orderPrice,
-      s: sz,
-      t: { limit: { tif } },
-    }],
-    grouping: 'na',
-  });
+  const result = await exchange.order(
+    withOptionalCabalsBuilder(
+      {
+        orders: [{
+          a: assetId,
+          b: isBuy,
+          r: false,
+          p: orderPrice,
+          s: sz,
+          t: { limit: { tif } },
+        }],
+        grouping: 'na' as const,
+      },
+      cabalsBuilder,
+    ),
+  );
 
   console.log(JSON.stringify(result, null, 2));
   assertOrderAccepted(result, `Open ${args.pair}`);
@@ -292,45 +397,55 @@ async function openPosition(
   // Place TP/SL trigger orders if specified
   if (args.takeProfit) {
     console.log(`Setting take profit at ${args.takeProfit}...`);
-    const tpResult = await exchange.order({
-      orders: [{
-        a: assetId,
-        b: !isBuy,
-        r: true,
-        p: args.takeProfit,
-        s: sz,
-        t: {
-          trigger: {
-            triggerPx: args.takeProfit,
-            isMarket: true,
-            tpsl: 'tp',
-          },
+    const tpResult = await exchange.order(
+      withOptionalCabalsBuilder(
+        {
+          orders: [{
+            a: assetId,
+            b: !isBuy,
+            r: true,
+            p: args.takeProfit,
+            s: sz,
+            t: {
+              trigger: {
+                triggerPx: args.takeProfit,
+                isMarket: true,
+                tpsl: 'tp' as const,
+              },
+            },
+          }],
+          grouping: 'na' as const,
         },
-      }],
-      grouping: 'na',
-    });
+        cabalsBuilder,
+      ),
+    );
     console.log('Take profit set:', JSON.stringify(tpResult, null, 2));
   }
 
   if (args.stopLoss) {
     console.log(`Setting stop loss at ${args.stopLoss}...`);
-    const slResult = await exchange.order({
-      orders: [{
-        a: assetId,
-        b: !isBuy,
-        r: true,
-        p: args.stopLoss,
-        s: sz,
-        t: {
-          trigger: {
-            triggerPx: args.stopLoss,
-            isMarket: true,
-            tpsl: 'sl',
-          },
+    const slResult = await exchange.order(
+      withOptionalCabalsBuilder(
+        {
+          orders: [{
+            a: assetId,
+            b: !isBuy,
+            r: true,
+            p: args.stopLoss,
+            s: sz,
+            t: {
+              trigger: {
+                triggerPx: args.stopLoss,
+                isMarket: true,
+                tpsl: 'sl' as const,
+              },
+            },
+          }],
+          grouping: 'na' as const,
         },
-      }],
-      grouping: 'na',
-    });
+        cabalsBuilder,
+      ),
+    );
     console.log('Stop loss set:', JSON.stringify(slResult, null, 2));
   }
 }
@@ -340,6 +455,7 @@ async function closePosition(
   info: InfoClient,
   args: TradeArgs,
   accountAddressForReads: string,
+  cabalsBuilder: CabalsBuilderConfig | null,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
 
@@ -385,18 +501,28 @@ async function closePosition(
   }
 
   console.log(`Closing ${args.pair} position (${closeKind}) — size: ${sz} of ${fullSize}, price: ${orderPrice}`);
+  if (cabalsBuilder) {
+    console.log(
+      `Cabals builder attached: ${cabalsBuilder.address} feeTenthsOfBps=${cabalsBuilder.feeTenthsOfBps}`,
+    )
+  }
 
-  const result = await exchange.order({
-    orders: [{
-      a: assetId,
-      b: isBuy,
-      r: true,
-      p: orderPrice,
-      s: sz,
-      t: { limit: { tif: 'Ioc' } },
-    }],
-    grouping: 'na',
-  });
+  const result = await exchange.order(
+    withOptionalCabalsBuilder(
+      {
+        orders: [{
+          a: assetId,
+          b: isBuy,
+          r: true,
+          p: orderPrice,
+          s: sz,
+          t: { limit: { tif: 'Ioc' as const } },
+        }],
+        grouping: 'na' as const,
+      },
+      cabalsBuilder,
+    ),
+  );
 
   console.log(JSON.stringify(result, null, 2));
   assertOrderAccepted(result, `Close ${args.pair}`);
@@ -407,6 +533,7 @@ async function modifyPosition(
   info: InfoClient,
   args: TradeArgs,
   accountAddressForReads: string,
+  cabalsBuilder: CabalsBuilderConfig | null,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
   if (!args.leverage && !args.stopLoss && !args.takeProfit) {
@@ -457,47 +584,104 @@ async function modifyPosition(
 
   if (args.takeProfit) {
     console.log(`Setting take profit at ${args.takeProfit}...`);
-    const tpResult = await exchange.order({
-      orders: [{
-        a: assetId,
-        b: !isBuy,
-        r: true,
-        p: args.takeProfit,
-        s: sz,
-        t: {
-          trigger: {
-            triggerPx: args.takeProfit,
-            isMarket: true,
-            tpsl: 'tp',
-          },
+    const tpResult = await exchange.order(
+      withOptionalCabalsBuilder(
+        {
+          orders: [{
+            a: assetId,
+            b: !isBuy,
+            r: true,
+            p: args.takeProfit,
+            s: sz,
+            t: {
+              trigger: {
+                triggerPx: args.takeProfit,
+                isMarket: true,
+                tpsl: 'tp' as const,
+              },
+            },
+          }],
+          grouping: 'na' as const,
         },
-      }],
-      grouping: 'na',
-    });
+        cabalsBuilder,
+      ),
+    );
     console.log('Take profit set:', JSON.stringify(tpResult, null, 2));
   }
 
   if (args.stopLoss) {
     console.log(`Setting stop loss at ${args.stopLoss}...`);
-    const slResult = await exchange.order({
-      orders: [{
-        a: assetId,
-        b: !isBuy,
-        r: true,
-        p: args.stopLoss,
-        s: sz,
-        t: {
-          trigger: {
-            triggerPx: args.stopLoss,
-            isMarket: true,
-            tpsl: 'sl',
-          },
+    const slResult = await exchange.order(
+      withOptionalCabalsBuilder(
+        {
+          orders: [{
+            a: assetId,
+            b: !isBuy,
+            r: true,
+            p: args.stopLoss,
+            s: sz,
+            t: {
+              trigger: {
+                triggerPx: args.stopLoss,
+                isMarket: true,
+                tpsl: 'sl' as const,
+              },
+            },
+          }],
+          grouping: 'na' as const,
         },
-      }],
-      grouping: 'na',
-    });
+        cabalsBuilder,
+      ),
+    );
     console.log('Stop loss set:', JSON.stringify(slResult, null, 2));
   }
+}
+
+async function approveCabalsBuilder(
+  exchange: ExchangeClient,
+  info: InfoClient,
+  masterAddress: string,
+  builder: CabalsBuilderConfig,
+) {
+  const approved = await info.maxBuilderFee({
+    user: masterAddress as `0x${string}`,
+    builder: builder.address,
+  })
+  console.log(
+    JSON.stringify(
+      {
+        user: masterAddress,
+        builder: builder.address,
+        maxFeeRate: builder.maxFeeRate,
+        currentMaxBuilderFeeTenthsOfBps: approved,
+      },
+      null,
+      2,
+    ),
+  )
+  if (typeof approved === 'number' && approved >= builder.feeTenthsOfBps) {
+    console.log('Cabals builder already approved at sufficient max fee; skipping.')
+    return
+  }
+
+  const result = await exchange.approveBuilderFee({
+    maxFeeRate: builder.maxFeeRate,
+    builder: builder.address,
+  })
+  console.log(JSON.stringify(result, null, 2))
+  const after = await info.maxBuilderFee({
+    user: masterAddress as `0x${string}`,
+    builder: builder.address,
+  })
+  if (typeof after !== 'number' || after < builder.feeTenthsOfBps) {
+    console.error(
+      `approveBuilderFee completed but maxBuilderFee is still insufficient (got ${String(after)})`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `Cabals builder approved: ${builder.address} maxFeeRate=${builder.maxFeeRate} (tenthsOfBps=${after})`,
+  )
 }
 
 async function showPositions(info: InfoClient, accountAddressForReads: string) {
@@ -725,10 +909,32 @@ async function main() {
         transport,
         ...(subaccountAddress ? { defaultVaultAddress: subaccountAddress as `0x${string}` } : {}),
       } as any);
-      if (args.command === 'open') await openPosition(exchange, info, args);
-      else if (args.command === 'close') await closePosition(exchange, info, args, accountAddressForReads);
-      else await modifyPosition(exchange, info, args, accountAddressForReads);
+      const cabalsBuilder = readCabalsBuilderConfig();
+      if (args.command === 'open') {
+        await openPosition(exchange, info, args, cabalsBuilder);
+      } else if (args.command === 'close') {
+        await closePosition(exchange, info, args, accountAddressForReads, cabalsBuilder);
+      } else {
+        await modifyPosition(exchange, info, args, accountAddressForReads, cabalsBuilder);
+      }
       break;
+    }
+    case 'approve-cabals-builder': {
+      // Approve must be signed by the master HL account (ACP agent wallet), not
+      // an API-wallet key — same constraint as usdClassTransfer.
+      const builder =
+        readCabalsBuilderConfig() ??
+        ({
+          address: CABALS_HL_BUILDER_ADDRESS_DEFAULT.toLowerCase() as `0x${string}`,
+          feeTenthsOfBps: CABALS_HL_BUILDER_FEE_TENTHS_BPS_DEFAULT,
+          maxFeeRate: CABALS_HL_BUILDER_MAX_FEE_RATE_DEFAULT,
+        } satisfies CabalsBuilderConfig)
+      const exchange = new ExchangeClient({
+        wallet: makeAcpWallet(masterAddress) as any,
+        transport,
+      } as any)
+      await approveCabalsBuilder(exchange, info, masterAddress, builder)
+      break
     }
     case 'transfer': {
       // usdClassTransfer is a user-signed action: Hyperliquid moves funds on

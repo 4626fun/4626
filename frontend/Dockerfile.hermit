@@ -119,10 +119,11 @@ RUN git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli
 RUN npm install -g @virtuals-protocol/acp-cli
 
 # Overlay repo-patched dgclaw scripts on top of the upstream clone.
-# trade.ts adds partial close (`close --size <usd>`, reduce-only) used by the
-# counter-trade liquidation-defense loop. Sourced from patches/ (repo-native)
-# rather than the dgclaw-skill submodule so the Railway build context does not
-# depend on submodule checkout state.
+# trade.ts adds: partial close (`close --size <usd>`, reduce-only) for the
+# counter-trade / inverse chat / liquidation-defense loop; optional Cabals HL
+# builder attachment (`ARENA_CABALS_BUILDER_ENABLED`) so Arena fills can count
+# on Cabals. Sourced from patches/ (repo-native) rather than the dgclaw-skill
+# submodule so the Railway build context does not depend on submodule checkout.
 COPY patches/dgclaw/trade.ts /app/dgclaw-skill/scripts/trade.ts
 
 # Health check port

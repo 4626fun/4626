@@ -43,6 +43,7 @@ Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only*
 
 - **AlfaClub daily brief** lives in `frontend/server/_lib/alfaclub/dailyBrief.ts`; Vercel cron hits `GET /api/v1/alfaclub/daily-brief`; posts fail closed unless `ALFACLUB_API_KEY` is set (Hermit4626 bot lane, not Privy JWT).
 
+- **InverseAKITA Cabals builder attribution:** when Railway Hermit sets `ARENA_CABALS_BUILDER_ENABLED=1`, `patches/dgclaw/trade.ts` attaches Cabals HL builder `0x6D4D5e0bFF83a0f2C1278b94e141809d5597D356` (0.05%) on open/close/modify so Arena wallet fills count as Cabals `builder_volume`. One-time `approve-cabals-builder` via ACP; probe `pnpm -C frontend ops:cabals:builder-status`. Does not use Cabals private API.
 - **InverseAKITA Cabals:** public Cabal `https://cabals.com/cabal/inverseakita` (reward/Arena wallet `0x74ab91cd845ff0d2006404440af49c3bc8c1df96` = Virtuals agent `1213`); referral join `https://cabals.com/join/ELUSIVEPRIEST` for new Cabals accounts only. Do **not** use retired wallet `0x30068c6bccf43e9eb5cdb68fb978f32f744d870c`. Cabals embedded account wallet `0x563ed20b…809d` is separate and is not Arena execution. No Cabals private API/automation from repo code (Terms); branding uses Arena InverseAKITA art. Runbook: `docs/_internal/operations/alfaclub/cabals-onboarding.md`.
 
 - **AlfaClub `/h pos` agent header:** when `ARENA_AGENT_ID` is an ACP UUID, set `ARENA_DEGEN_PROFILE_ID` (numeric degen profile id, e.g. `1213`) so position intel fetches `degen.virtuals.io/api/agents/{id}` and links the header to the Arena agent page.
