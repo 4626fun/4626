@@ -20,7 +20,7 @@
 import {
   createPublicClient,
   createWalletClient,
-  decodeErrorResult,
+  encodeFunctionData,
   http,
   type Hex,
   type Transport,
@@ -78,7 +78,7 @@ export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(accou
   }
 }
 
-const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
+const ENTRY_POINT_V06_ABI = [
   {
     type: 'function',
     name: 'handleOps',
@@ -118,14 +118,6 @@ const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    type: 'error',
-    name: 'FailedOp',
-    inputs: [
-      { name: 'opIndex', type: 'uint256' },
-      { name: 'reason', type: 'string' },
-    ],
   },
 ] as const
 
@@ -183,81 +175,13 @@ function requiredPrefundWei(userOp: Record<string, unknown>): bigint {
   return (gas * maxFeePerGas * 110n) / 100n
 }
 
-function formatFailedOpReason(err: unknown): string {
-  const candidates: unknown[] = [err]
-  if (err && typeof err === 'object') {
-    const e = err as { cause?: unknown; data?: unknown; details?: unknown; shortMessage?: unknown; message?: unknown }
-    if (e.cause) candidates.push(e.cause)
-    if (e.data) candidates.push(e.data)
-    if (typeof e.details === 'string') candidates.push(e.details)
-    if (typeof e.shortMessage === 'string') candidates.push(e.shortMessage)
-    if (typeof e.message === 'string') candidates.push(e.message)
+function safeErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message.slice(0, 500)
+  try {
+    return String(err).slice(0, 500)
+  } catch {
+    return 'unknown_error'
   }
-
-  for (const candidate of candidates) {
-    if (!candidate) continue
-    try {
-      if (typeof candidate === 'object' && candidate !== null && 'data' in candidate) {
-        const data = (candidate as { data?: unknown }).data
-        if (typeof data === 'string' && data.startsWith('0x') && data.length >= 10) {
-          const decoded = decodeErrorResult({
-            abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
-            data: data as Hex,
-          })
-          if (decoded.errorName === 'FailedOp') {
-            return `FailedOp(${String(decoded.args?.[0])}, ${String(decoded.args?.[1])})`
-          }
-        }
-      }
-      if (typeof candidate === 'string' && candidate.includes('0x220266b6')) {
-        return candidate.slice(0, 400)
-      }
-    } catch {
-      // keep scanning
-    }
-  }
-
-  if (err instanceof Error) return err.message.slice(0, 400)
-  return String(err).slice(0, 400)
-}
-
-async function ensureSenderEntryPointDeposit(args: {
-  sender: `0x${string}`
-  requiredWei: bigint
-  walletClient: ReturnType<typeof createWalletClient>
-  publicClient: ReturnType<typeof createPublicClient>
-}): Promise<void> {
-  const { sender, requiredWei, walletClient, publicClient } = args
-  if (requiredWei <= 0n) return
-
-  const balance = (await publicClient.readContract({
-    address: entryPoint06Address,
-    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
-    functionName: 'balanceOf',
-    args: [sender],
-  })) as bigint
-
-  if (balance >= requiredWei) return
-
-  const shortfall = requiredWei - balance
-  const funderBalance = await publicClient.getBalance({ address: walletClient.account!.address })
-  // Leave a small native reserve for the outer handleOps tx itself.
-  const outerTxReserve = 250_000n * 50_000_000n // ~0.0000125 ETH at 0.05 gwei
-  if (funderBalance <= shortfall + outerTxReserve) {
-    throw new Error(
-      `deploy_session_self_bundle_deposit_underfunded: need ${shortfall} wei EntryPoint deposit for ${sender}; ` +
-        `funder ${walletClient.account!.address} has ${funderBalance} wei`,
-    )
-  }
-
-  const txHash = await walletClient.writeContract({
-    address: entryPoint06Address,
-    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
-    functionName: 'depositTo',
-    args: [sender],
-    value: shortfall,
-  })
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
 }
 
 async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
@@ -303,48 +227,82 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
     signature: userOp.signature as Hex,
   }
 
-  await ensureSenderEntryPointDeposit({
-    sender: opTuple.sender,
-    requiredWei: requiredPrefundWei(opTuple),
-    walletClient,
-    publicClient,
-  })
-
-  let txHash: Hex
+  // Prefer encode+sendTransaction over writeContract: writeContract's getContractError
+  // path assumes viem BaseError.walk() and can throw "err.walk is not a function"
+  // on some RPC revert shapes for FailedOp.
   try {
-    txHash = await walletClient.writeContract({
-      address: entryPoint06Address,
-      abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+    const requiredWei = requiredPrefundWei(opTuple)
+    if (requiredWei > 0n) {
+      const balance = (await publicClient.readContract({
+        address: entryPoint06Address,
+        abi: ENTRY_POINT_V06_ABI,
+        functionName: 'balanceOf',
+        args: [opTuple.sender],
+      })) as bigint
+
+      if (balance < requiredWei) {
+        const shortfall = requiredWei - balance
+        const funderBalance = await publicClient.getBalance({ address: account.address })
+        // Leave a small native reserve for the outer handleOps tx itself.
+        const outerTxReserve = 250_000n * 50_000_000n // ~0.0000125 ETH at 0.05 gwei
+        if (funderBalance <= shortfall + outerTxReserve) {
+          throw new Error(
+            `deploy_session_self_bundle_deposit_underfunded: need ${shortfall} wei EntryPoint deposit for ${opTuple.sender}; ` +
+              `funder ${account.address} has ${funderBalance} wei`,
+          )
+        }
+        const depositData = encodeFunctionData({
+          abi: ENTRY_POINT_V06_ABI,
+          functionName: 'depositTo',
+          args: [opTuple.sender],
+        })
+        const depositTx = await walletClient.sendTransaction({
+          to: entryPoint06Address,
+          data: depositData,
+          value: shortfall,
+        })
+        await publicClient.waitForTransactionReceipt({ hash: depositTx, timeout: 120_000 })
+      }
+    }
+
+    const handleOpsData = encodeFunctionData({
+      abi: ENTRY_POINT_V06_ABI,
       functionName: 'handleOps',
       args: [[opTuple], account.address],
     })
-  } catch (err) {
-    throw new Error(`deploy_session_self_bundle_handleOps_failed: ${formatFailedOpReason(err)}`)
-  }
-
-  // Deploy-session tracking expects a UserOp hash. Prefer computing it when possible;
-  // fall back to the outer tx hash so resume can still confirm inclusion.
-  try {
-    return getUserOperationHash({
-      chainId: base.id,
-      entryPointAddress: entryPoint06Address,
-      entryPointVersion: '0.6',
-      userOperation: {
-        sender: opTuple.sender,
-        nonce: opTuple.nonce,
-        initCode: opTuple.initCode,
-        callData: opTuple.callData,
-        callGasLimit: opTuple.callGasLimit,
-        verificationGasLimit: opTuple.verificationGasLimit,
-        preVerificationGas: opTuple.preVerificationGas,
-        maxFeePerGas: opTuple.maxFeePerGas,
-        maxPriorityFeePerGas: opTuple.maxPriorityFeePerGas,
-        paymasterAndData: opTuple.paymasterAndData,
-        signature: opTuple.signature,
-      },
+    const txHash = await walletClient.sendTransaction({
+      to: entryPoint06Address,
+      data: handleOpsData,
     })
-  } catch {
-    return txHash
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
+    if (receipt.status !== 'success') {
+      throw new Error(`deploy_session_self_bundle_handleOps_reverted: tx=${txHash}`)
+    }
+
+    try {
+      return getUserOperationHash({
+        chainId: base.id,
+        entryPointAddress: entryPoint06Address,
+        entryPointVersion: '0.6',
+        userOperation: {
+          sender: opTuple.sender,
+          nonce: opTuple.nonce,
+          initCode: opTuple.initCode,
+          callData: opTuple.callData,
+          callGasLimit: opTuple.callGasLimit,
+          verificationGasLimit: opTuple.verificationGasLimit,
+          preVerificationGas: opTuple.preVerificationGas,
+          maxFeePerGas: opTuple.maxFeePerGas,
+          maxPriorityFeePerGas: opTuple.maxPriorityFeePerGas,
+          paymasterAndData: opTuple.paymasterAndData,
+          signature: opTuple.signature,
+        },
+      })
+    } catch {
+      return txHash
+    }
+  } catch (err) {
+    throw new Error(`deploy_session_self_bundle_failed: ${safeErrorMessage(err)}`)
   }
 }
 
