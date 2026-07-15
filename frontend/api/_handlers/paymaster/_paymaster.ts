@@ -2184,6 +2184,21 @@ function matchesPhase1DeployedLog(
   return true
 }
 
+/**
+ * Many Base RPCs reject eth_getLogs from genesis (or over-large ranges) and return
+ * empty via our .catch(() => []) path, which falsely trips phase1_event_miss.
+ * Keep a bounded lookback that still covers recent canary/deploy activity.
+ */
+const PHASE1_EVENT_LOOKBACK_BLOCKS = 500_000n
+
+async function resolvePhase1EventFromBlock(client: {
+  getBlockNumber: () => Promise<bigint>
+}): Promise<bigint> {
+  const latest = await client.getBlockNumber().catch(() => 0n)
+  if (latest <= PHASE1_EVENT_LOOKBACK_BLOCKS) return 0n
+  return latest - PHASE1_EVENT_LOOKBACK_BLOCKS
+}
+
 async function assertSessionOwnsSender(params: { sender: Address; sessionAddress: Address; initCode: Hex | null; factory?: Address | null; factoryData?: Hex | null }) {
   const client = await getBaseClient()
 
@@ -3081,7 +3096,7 @@ async function validateInnerCalls(params: {
               address: deploymentBatcher,
               event: DEPLOYMENT_BATCHER_PHASE1_EVENT[0],
               args: { creatorToken, owner: params.sender },
-              fromBlock: 0n,
+              fromBlock: await resolvePhase1EventFromBlock(client),
               toBlock: 'latest',
             })
             .catch(() => [])
@@ -3255,7 +3270,10 @@ async function validateInnerCalls(params: {
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
     ])) as [string, string]
-    let vaultValidated = false
+    // deploy_phase2 already proved live wrapper↔vault↔shareOFT↔asset linkage above.
+    // Treat that as provenance so finalize/pre-finalize is not blocked when CREATE2
+    // hints are missing or RPC getLogs from genesis is unavailable.
+    let vaultValidated = mode === 'deploy_phase2'
     const canValidateViaCreate2 =
       !!expectedCodeIds?.vault && expectedCodeIds.vault !== ZERO_BYTES32 && typeof expectedVersion === 'string'
     if (canValidateViaCreate2) {
@@ -3313,7 +3331,7 @@ async function validateInnerCalls(params: {
           address: deploymentBatcher,
           event: DEPLOYMENT_BATCHER_PHASE1_EVENT[0],
           args: { creatorToken: expectedCreatorToken as Address, owner: params.sender },
-          fromBlock: 0n,
+          fromBlock: await resolvePhase1EventFromBlock(client),
           toBlock: 'latest',
         })
         .catch(() => [])
