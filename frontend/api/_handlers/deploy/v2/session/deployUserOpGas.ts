@@ -95,10 +95,12 @@ const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
 ] as const
 
 function readSelfBundlePrivateKey(): Hex | null {
+  // Prefer an explicitly funded deploy bundler key, then the ops Safe owner key
+  // (PRIVATE_KEY), before KPR automation which is often gas-poor on Base.
   for (const key of [
     'DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY',
-    'KPR_PRIVATE_KEY',
     'PRIVATE_KEY',
+    'KPR_PRIVATE_KEY',
   ]) {
     const raw = String(process.env[key] ?? '').trim()
     if (!raw) continue
