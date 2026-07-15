@@ -796,26 +796,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasPhase4,
     })
 
-    // FIX: FINDING-08 — re-validate all calls from the DB payload against the paymaster
-    // selector allowlist. The payload was validated at session creation, but a gap in grant
-    // validation could allow broader calls than intended; defense-in-depth re-check here.
-    const allReconstructedCalls = [
-      ...phase1Calls,
-      ...phase2CoreCalls,
-      ...phase2PreFinalizeCalls,
-      ...phase2FinalizeCalls,
-      ...phase3Calls,
-      ...phase4Calls,
+    // FIX: FINDING-08 — re-validate payload calls against the paymaster allowlist/semantics.
+    // Paymaster validation is phase-scoped: concatenating phase1+phase2+aux locks mode on
+    // phase1 and then fails aux with missing_expected_addresses. Later stages also need the
+    // vault from prior stages to exist. Validate each stage group independently; skip
+    // "vault not ready yet" failures here — sendStage re-validates before broadcast.
+    const stageGroupsForRevalidation = [
+      phase1Calls,
+      phase2CoreCalls,
+      phase2PreFinalizeCalls,
+      phase2FinalizeCalls,
+      phase3Calls,
+      phase4Calls,
     ]
-    if (allReconstructedCalls.length > 0) {
+    const vaultNotReadyRevalidationErrors = new Set([
+      'vault_not_deployed',
+      'missing_vault',
+      'missing_expected_addresses',
+      'missing_wrapper_or_shareoft',
+      'missing_wrapper_or_shareoft_for_payout_router',
+      'missing_primary_call',
+    ])
+    for (const stageCalls of stageGroupsForRevalidation) {
+      if (stageCalls.length === 0) continue
       try {
         await validateSponsoredSmartWalletCalls({
           sender: getAddress(rec.smartWallet),
-          calls: allReconstructedCalls,
+          calls: stageCalls,
           sessionAddress: getAddress(rec.sessionAddress),
         })
       } catch (validationErr) {
-        throw new Error(`payload_revalidation_failed: ${validationErr instanceof Error ? validationErr.message : 'unknown'}`)
+        const msg = validationErr instanceof Error ? validationErr.message : 'unknown'
+        if (
+          vaultNotReadyRevalidationErrors.has(msg) ||
+          msg.startsWith('vault_address_mismatch') ||
+          msg.startsWith('missing_primary_call')
+        ) {
+          continue
+        }
+        throw new Error(`payload_revalidation_failed: ${msg}`)
       }
     }
 

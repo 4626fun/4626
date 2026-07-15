@@ -2690,6 +2690,40 @@ async function validateInnerCalls(params: {
     }
   }
 
+  // Aux-only phase2 pre-finalize UserOps have no DeploymentBatcher call. Establish
+  // deploy_phase2 mode from the auxiliary batcher calldata so CREATE2 expectations and
+  // pass-2 aux checks can run (vault must already exist from prior stages).
+  if ((!mode || !expectedCreatorToken) && vaultAuxiliaryDeployBatcher) {
+    for (const c of innerCalls) {
+      if (c.target !== vaultAuxiliaryDeployBatcher) continue
+      if (getSelector(c.data) !== SELECTOR_VAULT_AUXILIARY_DEPLOY_PHASE2) {
+        throw new Error('auxiliary_batcher_selector_not_allowed')
+      }
+      let decodedAux: any
+      try {
+        decodedAux = decodeFunctionData({ abi: VAULT_AUXILIARY_DEPLOY_BATCHER_ABI as any, data: c.data })
+      } catch {
+        throw new Error('batcher_aux_decode_failed')
+      }
+      const p = decodedAux?.args?.[0]
+      const assetTokenArg = p && isAddress(p.assetToken) ? getAddress(p.assetToken) : null
+      const ownerArg = p && isAddress(p.owner) ? getAddress(p.owner) : null
+      const vaultArg = p && isAddress(p.vault) ? getAddress(p.vault) : null
+      const shareOftArg = p && isAddress(p.shareOFT) ? getAddress(p.shareOFT) : null
+      const wrapperArg = p && isAddress(p.wrapper) ? getAddress(p.wrapper) : null
+      if (!assetTokenArg || !ownerArg || !vaultArg || !shareOftArg || !wrapperArg) {
+        throw new Error('batcher_aux_decode_failed')
+      }
+      if (ownerArg !== params.sender) throw new Error('batcher_aux_owner_mismatch')
+      mode = 'deploy_phase2'
+      expectedCreatorToken = assetTokenArg
+      expectedVault = vaultArg
+      expectedShareOFT = shareOftArg
+      expectedWrapper = wrapperArg
+      break
+    }
+  }
+
   if (!mode || !expectedCreatorToken) {
     const isSelfcallOnly =
       innerCalls.length > 0 &&
