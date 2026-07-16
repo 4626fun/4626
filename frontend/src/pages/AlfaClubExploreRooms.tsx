@@ -9,9 +9,10 @@ import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
   type AlfaClubRoomSort,
-  formatRoomPoints,
+  formatRoomPct,
   formatRoomType,
   formatRoomUsd,
+  pnlToneClassName,
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
@@ -42,7 +43,8 @@ const ROOM_TIER_OPTIONS: Array<{ value: RoomTierFilter; label: string }> = [
 ]
 
 const ROOM_SORT_OPTIONS: Array<{ value: AlfaClubRoomSort; label: string }> = [
-  { value: 'points', label: 'Room points' },
+  { value: 'volume', label: 'Volume' },
+  { value: 'pnl', label: 'PnL (all-time)' },
   { value: 'keys', label: 'Key supply' },
   { value: 'updated', label: 'Recently updated' },
 ]
@@ -90,7 +92,9 @@ function normalizeRoomTier(value: string | null): RoomTierFilter {
 }
 
 function normalizeRoomSort(value: string | null): AlfaClubRoomSort {
-  return value === 'keys' || value === 'updated' ? value : 'points'
+  if (value === 'keys' || value === 'updated' || value === 'pnl' || value === 'volume') return value
+  if (value === 'points') return 'volume'
+  return 'volume'
 }
 
 export function AlfaClubExploreRooms() {
@@ -141,7 +145,7 @@ export function AlfaClubExploreRooms() {
       (key === 'q' && value === '') ||
       (key === 'type' && value === 'all') ||
       (key === 'tier' && value === 'all') ||
-      (key === 'sort' && value === 'points')
+      (key === 'sort' && (value === 'volume' || value === 'points'))
     if (defaultValue) next.delete(key)
     else next.set(key, value)
     setSearchParams(next, { replace: true })
@@ -151,7 +155,7 @@ export function AlfaClubExploreRooms() {
     <div className="relative min-h-[70vh] pb-20">
       <PageMeta
         title="Explore AlfaClub Rooms"
-        description="Search and compare AlfaClub Trading and Social Rooms by activity, keys, holders, and bonding-curve tier."
+        description="Search and compare AlfaClub Trading and Social Rooms by volume, key quote, fund PnL, and bonding-curve tier."
         canonicalPath="/explore/rooms"
       />
       <div
@@ -214,18 +218,16 @@ export function AlfaClubExploreRooms() {
 
         <section className="overflow-hidden rounded-2xl bg-black/30 ring-1 ring-white/[0.08]" aria-label="AlfaClub room results">
           <div className="overflow-x-auto scrollbar-hide">
-            <div className="min-w-[1280px]">
-              <div className="grid grid-cols-[minmax(280px,1.5fr)_110px_90px_100px_100px_100px_100px_100px_80px_80px_120px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
+            <div className="min-w-[1100px]">
+              <div className="grid grid-cols-[minmax(280px,1.6fr)_100px_80px_120px_100px_100px_130px_70px_110px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
                 <span>Room</span>
                 <span className="text-center">Type</span>
                 <span className="text-center">Tier</span>
                 <span className="text-right">Key price</span>
                 <span className="text-right">Volume</span>
-                <span className="text-right">Fees</span>
                 <span className="text-right">Trading fund</span>
-                <span className="text-right">Points</span>
+                <span className="text-right">PnL</span>
                 <span className="text-right">Keys</span>
-                <span className="text-right">Holders</span>
                 <span className="text-right">Updated</span>
               </div>
 
@@ -333,7 +335,7 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
   return (
     <Link
       to={`/rooms?roomId=${encodeURIComponent(room.roomId)}`}
-      className="group grid grid-cols-[minmax(280px,1.5fr)_110px_90px_100px_100px_100px_100px_100px_80px_80px_120px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
+      className="group grid grid-cols-[minmax(280px,1.6fr)_100px_80px_120px_100px_100px_130px_70px_110px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
     >
       <div className="flex min-w-0 items-center gap-3 pr-4">
         {room.imageUrl ? (
@@ -367,26 +369,31 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
       </div>
       <span className="text-center text-zinc-300">{formatRoomType(room.roomType)}</span>
       <span className="text-center capitalize text-zinc-400">{room.tier ?? '—'}</span>
-      <span className="text-right font-medium tabular-nums text-zinc-100">
-        {formatRoomUsd(room.keyPriceUsdc)}
+      <span className="text-right">
+        <span className="block font-medium tabular-nums text-zinc-100">
+          {formatRoomUsd(room.keyPriceUsdc)}
+        </span>
+        <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-zinc-500">
+          ↑ {formatRoomUsd(room.buyPriceUsdc)} · ↓ {formatRoomUsd(room.sellPriceUsdc)}
+        </span>
       </span>
       <span className="text-right tabular-nums text-zinc-200">
         {formatRoomUsd(room.volumeUsdc)}
       </span>
       <span className="text-right tabular-nums text-zinc-200">
-        {formatRoomUsd(room.feesGeneratedUsdc)}
-      </span>
-      <span className="text-right tabular-nums text-zinc-200">
         {formatRoomUsd(room.tradingFundUsdc)}
       </span>
-      <span className="text-right tabular-nums text-zinc-400">
-        {formatRoomPoints(room.roomPoints)}
+      <span className="text-right">
+        <span className={cn('block font-medium tabular-nums', pnlToneClassName(room.pnlUsdc))}>
+          {formatRoomUsd(room.pnlUsdc)}
+          <span className="ml-1 text-[10px]">{formatRoomPct(room.pnlPctAllTime)}</span>
+        </span>
+        <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-zinc-500">
+          7D {formatRoomPct(room.pnlPct7d)} · 30D {formatRoomPct(room.pnlPct30d)}
+        </span>
       </span>
       <span className="text-right tabular-nums text-zinc-300">
         {room.keySupply?.toLocaleString() ?? '—'}
-      </span>
-      <span className="text-right tabular-nums text-zinc-300">
-        {room.uniqueHolders?.toLocaleString() ?? '—'}
       </span>
       <span className="flex items-center justify-end gap-2 text-right text-zinc-500">
         {formatUpdatedAt(room.ingestedAt)}

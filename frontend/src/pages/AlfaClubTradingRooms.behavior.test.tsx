@@ -94,11 +94,17 @@ describe('AlfaClub room hub behavior', () => {
               roomType: 'trading',
               tier: 'club',
               keySupply: 100,
-              roomPoints: 2500,
-    keyPriceUsdc: null,
-    volumeUsdc: null,
-    feesGeneratedUsdc: null,
-    tradingFundUsdc: null,
+              roomPoints: 3490.65,
+              keyPriceUsdc: 100.8125,
+              buyPriceUsdc: 102.4,
+              sellPriceUsdc: 99.225,
+              volumeUsdc: 3490.65,
+              feesGeneratedUsdc: 69.711,
+              tradingFundUsdc: 628.23,
+              pnlUsdc: 1131.57,
+              pnlPct7d: 11.16,
+              pnlPct30d: 34.51,
+              pnlPctAllTime: 25.99,
               imageUrl: 'https://project.storage.supabase.co/room-1659',
               description: 'Trading and community room',
               featured: true,
@@ -114,10 +120,16 @@ describe('AlfaClub room hub behavior', () => {
               tier: 'casual',
               keySupply: 10,
               roomPoints: 100,
-    keyPriceUsdc: null,
-    volumeUsdc: null,
-    feesGeneratedUsdc: null,
-    tradingFundUsdc: null,
+              keyPriceUsdc: null,
+              buyPriceUsdc: null,
+              sellPriceUsdc: null,
+              volumeUsdc: 100,
+              feesGeneratedUsdc: null,
+              tradingFundUsdc: null,
+              pnlUsdc: null,
+              pnlPct7d: null,
+              pnlPct30d: null,
+              pnlPctAllTime: null,
               imageUrl: null,
               description: 'A social room',
               featured: false,
@@ -202,11 +214,12 @@ describe('AlfaClub room hub behavior', () => {
     })
   })
 
-  it('presents Room Points without USD formatting and exposes canonical room categories', async () => {
+  it('presents scaled volume and stacked key/PnL signals with canonical room categories', async () => {
     await renderHub('/rooms?roomId=1659')
 
-    expect(await screen.findAllByText('2.5K pts')).not.toHaveLength(0)
-    expect(screen.queryByText('$2,500')).toBeNull()
+    expect(await screen.findAllByText('$3,491')).not.toHaveLength(0)
+    expect(screen.getAllByText(/↑ \$102\.40 · ↓ \$99\.23/)).not.toHaveLength(0)
+    expect(screen.getAllByText(/7D \+11\.2% · 30D \+34\.5%/)).not.toHaveLength(0)
     expect(screen.getAllByText('Trading Room')).not.toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: /Filters/ }))
@@ -287,7 +300,7 @@ describe('AlfaClub room hub behavior', () => {
 
     expect(
       await screen.findByRole('button', {
-        name: /Room Nine Social Room · casual · 100 pts Change/i,
+        name: /Room Nine.*Social Room.*casual.*\$100(?:\.00)?.*Change/i,
       }),
     ).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Room liquidity' })).toBeNull()

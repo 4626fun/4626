@@ -8,15 +8,23 @@ export type AlfaClubRoomDirectoryItem = {
   roomType: AlfaRoomType
   tier: AlfaRoomTier | null
   keySupply: number | null
+  /** @deprecated Scaled volume kept for sort/compat; prefer volumeUsdc. */
   roomPoints: number | null
-  /** Current key mid/buy price in USD. */
+  /** Mid key price in USD (falls back to buy). */
   keyPriceUsdc: number | null
+  buyPriceUsdc: number | null
+  sellPriceUsdc: number | null
   /** Lifetime key-trade volume in USD. */
   volumeUsdc: number | null
   /** Creator fees / rewards accrued in USD. */
   feesGeneratedUsdc: number | null
   /** Reported trading-fund size in USD (spot + Hyperliquid + Polymarket). */
   tradingFundUsdc: number | null
+  /** All-time trading-fund PnL in USD. */
+  pnlUsdc: number | null
+  pnlPct7d: number | null
+  pnlPct30d: number | null
+  pnlPctAllTime: number | null
   imageUrl: string | null
   description: string | null
   featured: boolean
@@ -24,7 +32,7 @@ export type AlfaClubRoomDirectoryItem = {
   ingestedAt: string
 }
 
-export type AlfaClubRoomSort = 'points' | 'keys' | 'updated'
+export type AlfaClubRoomSort = 'points' | 'keys' | 'updated' | 'volume' | 'pnl'
 export type AlfaClubRoomTypeFilter = 'all' | AlfaRoomType
 export type AlfaClubRoomTierFilter = 'all' | AlfaRoomTier
 
@@ -48,17 +56,29 @@ export function formatRoomUsd(value: number | null | undefined): string {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: abs >= 1000 ? 0 : abs >= 1 ? 2 : 4,
+    signDisplay: value < 0 ? 'always' : 'auto',
   })
+}
+
+export function formatRoomPct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(Math.abs(value) >= 10 ? 1 : 2)}%`
 }
 
 /**
  * AlfaClub snapshot prices/volumes are typically USDC with 6 decimals.
- * Values already in plain USD (e.g. fund_size) pass through unchanged.
+ * Values already in plain USD (e.g. fund_size, pnl) pass through unchanged.
  */
 export function normalizeAlfaClubUsdc(raw: number | null | undefined): number | null {
   if (raw == null || !Number.isFinite(raw)) return null
-  if (raw >= 1_000_000) return raw / 1_000_000
+  if (Math.abs(raw) >= 1_000_000) return raw / 1_000_000
   return raw
+}
+
+export function pnlToneClassName(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value === 0) return 'text-zinc-300'
+  return value > 0 ? 'text-emerald-300' : 'text-rose-300'
 }
 
 /**
@@ -96,7 +116,10 @@ export function sortAlfaClubRooms(
   return [...rooms].sort((a, b) => {
     switch (sort) {
       case 'points':
-        return (b.roomPoints ?? -1) - (a.roomPoints ?? -1)
+      case 'volume':
+        return (b.volumeUsdc ?? b.roomPoints ?? -1) - (a.volumeUsdc ?? a.roomPoints ?? -1)
+      case 'pnl':
+        return (b.pnlPctAllTime ?? Number.NEGATIVE_INFINITY) - (a.pnlPctAllTime ?? Number.NEGATIVE_INFINITY)
       case 'keys':
         return (b.keySupply ?? -1) - (a.keySupply ?? -1)
       case 'updated':

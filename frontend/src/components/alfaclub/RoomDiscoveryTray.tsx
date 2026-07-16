@@ -25,7 +25,7 @@ import {
   type AlfaClubRoomSort,
   type AlfaClubRoomTierFilter,
   type AlfaClubRoomTypeFilter,
-  formatRoomPoints,
+  formatRoomUsd,
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
@@ -62,7 +62,7 @@ const DEFAULT_FILTERS: RoomDiscoveryFilters = {
   search: '',
   roomType: 'all',
   tier: 'all',
-  sort: 'points',
+  sort: 'volume',
 }
 
 const TIER_OPTIONS: Array<{ id: AlfaClubRoomTierFilter; label: string }> = [
@@ -79,7 +79,8 @@ const TYPE_OPTIONS: Array<{ id: AlfaClubRoomTypeFilter; label: string }> = [
 ]
 
 const SORT_OPTIONS: Array<{ id: AlfaClubRoomSort; label: string }> = [
-  { id: 'points', label: 'Points' },
+  { id: 'volume', label: 'Volume' },
+  { id: 'pnl', label: 'PnL' },
   { id: 'keys', label: 'Keys' },
   { id: 'updated', label: 'Recent' },
 ]
@@ -662,7 +663,7 @@ function RoomRow({
             {room.roomType === 'trading' && room.tier ? `, ${room.tier} curve` : ''}
           </span>
           <span className="flex min-w-0 items-center justify-end gap-2 font-mono tabular-nums">
-            <span className="truncate">{formatRoomPoints(room.roomPoints)}</span>
+            <span className="truncate">{formatRoomUsd(room.volumeUsdc)}</span>
             <span
               className="flex shrink-0 items-center gap-0.5"
               aria-label={`${room.keySupply?.toLocaleString() ?? 'Unknown'} keys`}

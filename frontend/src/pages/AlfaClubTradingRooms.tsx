@@ -35,9 +35,10 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
-  formatRoomPoints,
+  formatRoomPct,
   formatRoomType,
   formatRoomUsd,
+  pnlToneClassName,
   readRecentRoomIds,
   rememberRecentRoom,
   roomCurveTierRingClassName,
@@ -102,9 +103,9 @@ function readStoredRoomFilters(): RoomDiscoveryFilters {
       tier: ['all', 'casual', 'club', 'exclusive'].includes(parsed.tier ?? '')
         ? (parsed.tier as RoomDiscoveryFilters['tier'])
         : 'all',
-      sort: ['points', 'keys', 'updated'].includes(parsed.sort ?? '')
-        ? (parsed.sort as RoomDiscoveryFilters['sort'])
-        : 'points',
+      sort: ['points', 'volume', 'pnl', 'keys', 'updated'].includes(parsed.sort ?? '')
+        ? ((parsed.sort === 'points' ? 'volume' : parsed.sort) as RoomDiscoveryFilters['sort'])
+        : 'volume',
     }
   } catch {
     return DEFAULT_FILTERS
@@ -469,7 +470,7 @@ export function AlfaClubTradingRooms() {
             {selectedRoom ? (
               <span className="mt-0.5 block truncate font-mono text-[10px] capitalize text-zinc-400">
                 {formatRoomType(selectedRoom.roomType)} · {selectedRoom.tier ?? 'unknown'} ·{' '}
-                {formatRoomPoints(selectedRoom.roomPoints)}
+                {formatRoomUsd(selectedRoom.volumeUsdc)}
               </span>
             ) : null}
           </span>
@@ -689,7 +690,7 @@ function RoomHeader({
               {selectedHandle ? <p className="mt-1 text-sm text-zinc-400">by @{selectedHandle}</p> : null}
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-2 text-right sm:grid-cols-3 xl:grid-cols-6">
+          <dl className="grid grid-cols-2 gap-3 text-right sm:grid-cols-3 xl:grid-cols-5">
             <HeaderStat
               label="Key price"
               value={
@@ -697,9 +698,9 @@ function RoomHeader({
                   ? formatRoomUsd(safetySummary.pricing.currentUsdc)
                   : formatRoomUsd(room?.keyPriceUsdc)
               }
+              detail={`↑ ${formatRoomUsd(room?.buyPriceUsdc)} · ↓ ${formatRoomUsd(room?.sellPriceUsdc)}`}
             />
             <HeaderStat label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
-            <HeaderStat label="Fees generated" value={formatRoomUsd(room?.feesGeneratedUsdc)} />
             <HeaderStat
               label="Trading fund"
               value={
@@ -708,7 +709,12 @@ function RoomHeader({
                   : formatRoomUsd(room?.tradingFundUsdc)
               }
             />
-            <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
+            <HeaderStat
+              label="PnL"
+              value={`${formatRoomUsd(room?.pnlUsdc)} · ${formatRoomPct(room?.pnlPctAllTime)}`}
+              detail={`7D ${formatRoomPct(room?.pnlPct7d)} · 30D ${formatRoomPct(room?.pnlPct30d)}`}
+              valueClassName={pnlToneClassName(room?.pnlUsdc)}
+            />
             <HeaderStat label="Safety" value={safetySummary?.label ?? 'Open tab'} />
           </dl>
         </div>
@@ -763,7 +769,7 @@ function DiscoveryLanding({
           Select a room from the discovery rail
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-400">
-          Scan Trading and Social Rooms by points, keys, or freshness. Your filters and
+          Scan Trading and Social Rooms by volume, PnL, keys, or freshness. Your filters and
           position stay intact while you move through the workspace.
         </p>
         <dl className="mt-8 grid max-w-2xl grid-cols-3 divide-x divide-white/[0.07] border-y border-white/[0.07] py-4">
@@ -819,7 +825,7 @@ function DiscoveryLanding({
                   </div>
                   <ArrowRight className="size-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-sky-300" aria-hidden />
                 </div>
-                <p className="mt-3 font-mono text-xs text-zinc-400">{formatRoomPoints(room.roomPoints)}</p>
+                <p className="mt-3 font-mono text-xs text-zinc-400">{formatRoomUsd(room.volumeUsdc)}</p>
               </button>
             ))}
           </div>
@@ -916,9 +922,9 @@ function OverviewPanel({
             value={
               pricing ? formatUsd(pricing.currentUsdc) : formatRoomUsd(room?.keyPriceUsdc)
             }
+            detail={`↑ ${formatRoomUsd(room?.buyPriceUsdc)} · ↓ ${formatRoomUsd(room?.sellPriceUsdc)}`}
           />
           <FactCard label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
-          <FactCard label="Fees generated" value={formatRoomUsd(room?.feesGeneratedUsdc)} />
           <FactCard
             label="Trading fund"
             value={
@@ -926,6 +932,19 @@ function OverviewPanel({
                 ? formatUsd(pricing.treasuryUsdc)
                 : formatRoomUsd(room?.tradingFundUsdc)
             }
+            detail={
+              pricing
+                ? `Reported ${formatUsd(pricing.reportedFundUsdc)}`
+                : room?.feesGeneratedUsdc != null
+                  ? `Fees ${formatRoomUsd(room.feesGeneratedUsdc)}`
+                  : undefined
+            }
+          />
+          <FactCard
+            label="PnL (all-time)"
+            value={`${formatRoomUsd(room?.pnlUsdc)} · ${formatRoomPct(room?.pnlPctAllTime)}`}
+            detail={`7D ${formatRoomPct(room?.pnlPct7d)} · 30D ${formatRoomPct(room?.pnlPct30d)}`}
+            valueClassName={pnlToneClassName(room?.pnlUsdc)}
           />
           <FactCard label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
           <FactCard label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
@@ -934,10 +953,9 @@ function OverviewPanel({
           <FactCard label="Last updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
         </dl>
         {pricing ? (
-          <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <FactCard label="Buy next key" value={formatUsd(pricing.buyUsdc)} />
             <FactCard label="Sell 1 key" value={formatUsd(pricing.sellUsdc)} />
-            <FactCard label="Reported fund" value={formatUsd(pricing.reportedFundUsdc)} />
             <FactCard label={pricing.treasuryLabel} value={formatUsd(pricing.treasuryUsdc)} />
           </dl>
         ) : null}
@@ -947,11 +965,26 @@ function OverviewPanel({
   )
 }
 
-function FactCard({ label, value }: { label: string; value: string }) {
+function FactCard({
+  label,
+  value,
+  detail,
+  valueClassName,
+}: {
+  label: string
+  value: string
+  detail?: string
+  valueClassName?: string
+}) {
   return (
     <div className="rounded-xl bg-black/30 px-3 py-2.5">
       <dt className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 truncate text-base font-medium capitalize text-zinc-100">{value}</dd>
+      <dd className={cn('mt-0.5 truncate text-base font-medium tabular-nums text-zinc-100', valueClassName)}>
+        {value}
+      </dd>
+      {detail ? (
+        <dd className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-zinc-500">{detail}</dd>
+      ) : null}
     </div>
   )
 }
@@ -1010,11 +1043,26 @@ function TierBadge({ tier }: { tier: AlfaRoomTier | null }) {
   )
 }
 
-function HeaderStat({ label, value }: { label: string; value: string }) {
+function HeaderStat({
+  label,
+  value,
+  detail,
+  valueClassName,
+}: {
+  label: string
+  value: string
+  detail?: string
+  valueClassName?: string
+}) {
   return (
     <div className="min-w-24 border-l border-white/[0.08] px-3 py-1">
       <dt className="text-[9px] uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 truncate text-xs font-medium capitalize text-zinc-200">{value}</dd>
+      <dd className={cn('mt-0.5 truncate text-xs font-medium tabular-nums text-zinc-200', valueClassName)}>
+        {value}
+      </dd>
+      {detail ? (
+        <dd className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-zinc-500">{detail}</dd>
+      ) : null}
     </div>
   )
 }

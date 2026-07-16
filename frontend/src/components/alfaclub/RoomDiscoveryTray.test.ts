@@ -32,6 +32,12 @@ function room(
     volumeUsdc: null,
     feesGeneratedUsdc: null,
     tradingFundUsdc: null,
+    buyPriceUsdc: null,
+    sellPriceUsdc: null,
+    pnlUsdc: null,
+    pnlPct7d: null,
+    pnlPct30d: null,
+    pnlPctAllTime: null,
     imageUrl: null,
     description: null,
     featured,
@@ -44,7 +50,7 @@ const filters: RoomDiscoveryFilters = {
   search: '',
   roomType: 'all',
   tier: 'all',
-  sort: 'points',
+  sort: 'volume',
 }
 
 describe('RoomDiscoveryTray grouping', () => {
@@ -163,7 +169,7 @@ describe('RoomDiscoveryTray grouping', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Filters/ }))
     expect((screen.getByRole('combobox', { name: 'Sort by' }) as HTMLSelectElement).value).toBe(
-      'points',
+      'volume',
     )
     expect((screen.getByRole('combobox', { name: 'Room type' }) as HTMLSelectElement).value).toBe(
       'social',

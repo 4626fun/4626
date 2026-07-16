@@ -12,9 +12,15 @@ export type AlfaClubRoomDirectoryItem = {
   keySupply: number | null
   roomPoints: number | null
   keyPriceUsdc: number | null
+  buyPriceUsdc: number | null
+  sellPriceUsdc: number | null
   volumeUsdc: number | null
   feesGeneratedUsdc: number | null
   tradingFundUsdc: number | null
+  pnlUsdc: number | null
+  pnlPct7d: number | null
+  pnlPct30d: number | null
+  pnlPctAllTime: number | null
   imageUrl: string | null
   description: string | null
   featured: boolean
@@ -34,9 +40,14 @@ export type AlfaClubRoomSnapshotRow = {
   supply_col_raw: string | null
   supply_raw: string | null
   buy_price_raw: string | null
+  sell_price_raw: string | null
   mid_price_raw: string | null
   fund_size_raw: string | null
   creator_reward_raw: string | null
+  pnl_raw: string | null
+  pnl_pct_7d_raw: string | null
+  pnl_pct_30d_raw: string | null
+  pnl_pct_all_raw: string | null
   image_url: string | null
   room_description: string | null
   featured: boolean | null
@@ -55,10 +66,10 @@ function parseNumber(raw: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Snapshot prices/volumes are usually USDC×1e6; fund_size is already USD. */
+/** Snapshot prices/volumes are usually USDC×1e6; fund_size/pnl are already USD. */
 function normalizeUsdc(raw: number | null): number | null {
   if (raw == null || !Number.isFinite(raw)) return null
-  if (raw >= 1_000_000) return raw / 1_000_000
+  if (Math.abs(raw) >= 1_000_000) return raw / 1_000_000
   return raw
 }
 
@@ -82,7 +93,10 @@ export function rowToAlfaClubRoomDirectoryItem(
     cachedDisplayLabel: row.cached_display_label,
   })
   const volumeRaw = parseNumber(row.volume_col_raw) ?? parseNumber(row.volume_raw)
-  const keyPriceRaw = parseNumber(row.mid_price_raw) ?? parseNumber(row.buy_price_raw)
+  const volumeUsdc = normalizeUsdc(volumeRaw)
+  const buyPriceUsdc = normalizeUsdc(parseNumber(row.buy_price_raw))
+  const sellPriceUsdc = normalizeUsdc(parseNumber(row.sell_price_raw))
+  const midPriceUsdc = normalizeUsdc(parseNumber(row.mid_price_raw))
   return {
     roomId: row.room_id,
     roomName: labels.roomName,
@@ -91,11 +105,18 @@ export function rowToAlfaClubRoomDirectoryItem(
     roomType: parseRoomType(row.room_type),
     tier: parseTier(row.tier),
     keySupply: parseNumber(row.supply_col_raw) ?? parseNumber(row.supply_raw),
-    roomPoints: volumeRaw,
-    keyPriceUsdc: normalizeUsdc(keyPriceRaw),
-    volumeUsdc: normalizeUsdc(volumeRaw),
+    // Scaled volume for legacy "points" sort/compat — not loyalty points.
+    roomPoints: volumeUsdc,
+    keyPriceUsdc: midPriceUsdc ?? buyPriceUsdc,
+    buyPriceUsdc,
+    sellPriceUsdc,
+    volumeUsdc,
     feesGeneratedUsdc: normalizeUsdc(parseNumber(row.creator_reward_raw)),
     tradingFundUsdc: parseNumber(row.fund_size_raw),
+    pnlUsdc: parseNumber(row.pnl_raw),
+    pnlPct7d: parseNumber(row.pnl_pct_7d_raw),
+    pnlPct30d: parseNumber(row.pnl_pct_30d_raw),
+    pnlPctAllTime: parseNumber(row.pnl_pct_all_raw),
     imageUrl: row.image_url,
     description: row.room_description,
     featured: row.featured === true,
@@ -153,9 +174,14 @@ export async function listAlfaClubRoomsDirectory(
         nullif(s.raw->'room'->>'totalSupply', '')
       ) as supply_raw,
       s.buy_price::text as buy_price_raw,
+      s.sell_price::text as sell_price_raw,
       s.mid_price::text as mid_price_raw,
       s.fund_size::text as fund_size_raw,
       nullif(s.raw->'room'->>'creatorReward', '') as creator_reward_raw,
+      s.pnl::text as pnl_raw,
+      s.pnl_percentage_7d::text as pnl_pct_7d_raw,
+      s.pnl_percentage_30d::text as pnl_pct_30d_raw,
+      s.pnl_percentage_all_time::text as pnl_pct_all_raw,
       s.image_url,
       s.room_description,
       s.featured,
