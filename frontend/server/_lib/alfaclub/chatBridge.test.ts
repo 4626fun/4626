@@ -1403,6 +1403,7 @@ describe('inverse opinion decision ordering', () => {
 
   it('keeps legacy reply and execution flow free of attribution calls when capture defaults off', async () => {
     delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+    tryClaimCommandReplyMock.mockResolvedValueOnce(true)
 
     await _executeInverseAkitaChatReactionBatchForTests({
       intents: [intent],
@@ -1425,7 +1426,8 @@ describe('inverse opinion decision ordering', () => {
 
   it('does not re-trade when legacy reply claim is already owned after redeploy replay', async () => {
     delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
-    tryClaimCommandReplyMock.mockResolvedValueOnce(false)
+    tryClaimCommandReplyMock.mockReset()
+    tryClaimCommandReplyMock.mockResolvedValue(false)
 
     await _executeInverseAkitaChatReactionBatchForTests({
       intents: [intent],
