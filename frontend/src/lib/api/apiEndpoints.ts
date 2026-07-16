@@ -55,6 +55,7 @@ export const API_ENDPOINTS = {
   },
   alfaclub: {
     counterTradeStatus: '/api/v1/alfaclub/counter-trade-status',
+    hermitRuntime: '/api/v1/alfaclub/hermit-runtime',
     keySafetyRoom: '/api/v1/alfaclub/key-safety-room',
     keySafetyClubRisk: '/api/v1/alfaclub/key-safety-club-risk',
     keySafetySummary: '/api/v1/alfaclub/key-safety-summary',

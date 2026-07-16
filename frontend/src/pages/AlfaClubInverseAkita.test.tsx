@@ -12,6 +12,10 @@ vi.mock('@/components/alfaclub/CounterTradeStatusPanel', () => ({
   CounterTradeStatusPanel: () => <div data-testid="strategy-status">Live strategy status</div>,
 }))
 
+vi.mock('@/components/alfaclub/HermitRuntimePanel', () => ({
+  HermitRuntimePanel: () => <div data-testid="hermit-runtime-status">Hermit runtime status</div>,
+}))
+
 import { AlfaClubInverseAkita } from './AlfaClubInverseAkita'
 
 describe('AlfaClubInverseAkita', () => {
@@ -26,6 +30,7 @@ describe('AlfaClubInverseAkita', () => {
     expect(screen.getByRole('heading', { name: 'How the inverse loop works' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Where InverseAKITA lives' })).toBeTruthy()
     expect(screen.getByTestId('strategy-status')).toBeTruthy()
+    expect(screen.getByTestId('hermit-runtime-status')).toBeTruthy()
     expect(screen.getByAltText('InverseAKITA holographic Akita').getAttribute('src')).toContain(
       'acpcdn-prod.s3.ap-southeast-1.amazonaws.com',
     )

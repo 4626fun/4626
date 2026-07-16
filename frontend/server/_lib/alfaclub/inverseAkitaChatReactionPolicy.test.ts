@@ -52,13 +52,13 @@ describe('inverseAkitaChatReactionPolicy', () => {
     vi.unstubAllEnvs()
   })
 
-  it('defaults to room 1659 and drops unsupported configured room ids', () => {
+  it('defaults to room 1659 and accepts explicit numeric room ids', () => {
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '')
     expect(readInverseAkitaChatReactionRoomIds()).toEqual(['1659'])
 
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1484,9999,1659,1484')
-    expect(readInverseAkitaChatReactionRoomIds()).toEqual(['1484', '1659'])
-    expect(isInverseAkitaChatReactionRoom('9999')).toBe(false)
+    expect(readInverseAkitaChatReactionRoomIds()).toEqual(['1484', '9999', '1659'])
+    expect(isInverseAkitaChatReactionRoom('9999')).toBe(true)
   })
 
   it.each(INVERSE_AKITA_EXTRA_REACTION_ROOM_IDS)(

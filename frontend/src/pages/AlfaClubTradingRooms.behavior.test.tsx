@@ -39,6 +39,10 @@ vi.mock('@/components/alfaclub/CounterTradeStatusPanel', () => ({
   CounterTradeStatusPanel: () => <div data-testid="inverse-panel">Inverse status</div>,
 }))
 
+vi.mock('@/components/alfaclub/HermitRuntimePanel', () => ({
+  HermitRuntimePanel: () => <div data-testid="hermit-runtime-panel">Hermit runtime panel</div>,
+}))
+
 vi.mock('@/components/alfaclub/CreatorCoinLinkPanel', () => ({
   CreatorCoinLinkPanel: ({ roomId }: { roomId: string }) => (
     <div data-testid="creator-coin-link-panel">Creator Coin linking for {roomId}</div>

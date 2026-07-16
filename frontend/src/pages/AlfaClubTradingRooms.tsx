@@ -19,6 +19,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 
 import { CounterTradeStatusPanel } from '@/components/alfaclub/CounterTradeStatusPanel'
+import { HermitRuntimePanel } from '@/components/alfaclub/HermitRuntimePanel'
 import { CreatorCoinLinkPanel } from '@/components/alfaclub/CreatorCoinLinkPanel'
 import { KeyOwnershipSunburst } from '@/components/alfaclub/KeyOwnershipSunburst'
 import { keySafetyStatusMeta, type KeySafetyStatus } from '@/components/alfaclub/KeySafetyStatusHero'
@@ -596,9 +597,10 @@ export function AlfaClubTradingRooms() {
                   role="tabpanel"
                   id="room-panel-inverse"
                   aria-labelledby="room-tab-inverse"
-                  className="border-b border-white/[0.07] pb-10"
+                  className="space-y-4 border-b border-white/[0.07] pb-10"
                 >
                   <CounterTradeStatusPanel showArenaLinks />
+                  <HermitRuntimePanel />
                 </section>
               ) : null}
             </div>

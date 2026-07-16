@@ -9,6 +9,7 @@ import {
 import { Link } from 'react-router-dom'
 
 import { CounterTradeStatusPanel } from '@/components/alfaclub/CounterTradeStatusPanel'
+import { HermitRuntimePanel } from '@/components/alfaclub/HermitRuntimePanel'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { cn } from '@/lib/shared/utils'
 
@@ -307,7 +308,10 @@ export function AlfaClubInverseAkita() {
               </p>
             </div>
           </div>
-          <CounterTradeStatusPanel />
+          <div className="space-y-4">
+            <CounterTradeStatusPanel />
+            <HermitRuntimePanel />
+          </div>
         </section>
 
         <section className="py-16 sm:py-20" aria-labelledby="boundaries">

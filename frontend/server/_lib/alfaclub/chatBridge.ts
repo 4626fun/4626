@@ -66,7 +66,9 @@ import {
 } from './inverseAkitaChatReaction.js'
 import {
   isInverseAkitaChatReactionRoom,
+  resolveInverseAkitaRuntimeReactionRoomIds,
   readInverseAkitaChatReactionRoomIds,
+  setInverseAkitaRuntimeReactionRoomIds,
 } from './inverseAkitaChatReactionPolicy.js'
 import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptureConfig.js'
 import { claimInverseOpinionTradeIntent } from './inverseOpinionTradeRecorder.js'
@@ -4212,7 +4214,15 @@ async function runBridgeTick(
 }
 
 export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBridgeTickOnceResult> {
-  const flags = readAlfaClubChatBridgeFlagsForCronTick()
+  const baseFlags = readAlfaClubChatBridgeFlagsForCronTick()
+  const runtimeReactionRoomIds = await resolveInverseAkitaRuntimeReactionRoomIds(
+    baseFlags.inverseAkitaChatReactionRoomIds,
+  )
+  setInverseAkitaRuntimeReactionRoomIds(runtimeReactionRoomIds)
+  const flags: AlfaClubChatBridgeFlags = {
+    ...baseFlags,
+    inverseAkitaChatReactionRoomIds: runtimeReactionRoomIds,
+  }
   if (shouldSuppressVercelBridgeCron()) {
     return {
       ok: false,
@@ -4283,7 +4293,7 @@ export function startAlfaClubChatBridge(opts?: {
   onTick?: (result: AlfaClubChatBridgeTickResult) => void
   onError?: (error: unknown) => void
 }): StartAlfaClubChatBridgeResult {
-  const flags = readAlfaClubChatBridgeFlags()
+  const baseFlags = readAlfaClubChatBridgeFlags()
   const stop = (): void => {
     if (activeHandle !== null) {
       clearInterval(activeHandle)
@@ -4298,21 +4308,21 @@ export function startAlfaClubChatBridge(opts?: {
     return {
       started: false,
       reason: 'already_running',
-      intervalMs: flags.pollIntervalMs,
-      roomId: flags.roomId,
+      intervalMs: baseFlags.pollIntervalMs,
+      roomId: baseFlags.roomId,
       stop,
     }
   }
-  if (flags.killSwitch) {
+  if (baseFlags.killSwitch) {
     return {
       started: false,
       reason: 'kill_switch',
-      intervalMs: flags.pollIntervalMs,
-      roomId: flags.roomId,
+      intervalMs: baseFlags.pollIntervalMs,
+      roomId: baseFlags.roomId,
       stop,
     }
   }
-  if (shouldBlockRailwayBridge(flags)) {
+  if (shouldBlockRailwayBridge(baseFlags)) {
     logger.warn('[alfaclub-chat] bridge disabled on Railway (Vercel cron is canonical)', {
       flag: 'ALFACLUB_CHAT_BRIDGE_ENABLED',
       overrideFlag: 'ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY',
@@ -4320,27 +4330,27 @@ export function startAlfaClubChatBridge(opts?: {
     return {
       started: false,
       reason: 'railway_blocked',
-      intervalMs: flags.pollIntervalMs,
-      roomId: flags.roomId,
+      intervalMs: baseFlags.pollIntervalMs,
+      roomId: baseFlags.roomId,
       stop,
     }
   }
-  if (!flags.enabled) {
+  if (!baseFlags.enabled) {
     return {
       started: false,
       reason: 'disabled',
-      intervalMs: flags.pollIntervalMs,
-      roomId: flags.roomId,
+      intervalMs: baseFlags.pollIntervalMs,
+      roomId: baseFlags.roomId,
       stop,
     }
   }
-  const pollRoomIds = resolveAlfaClubBridgePollRoomIds(flags)
-  if (pollRoomIds.length === 0) {
+  const initialPollRoomIds = resolveAlfaClubBridgePollRoomIds(baseFlags)
+  if (initialPollRoomIds.length === 0) {
     return {
       started: false,
       reason: 'env_missing',
-      intervalMs: flags.pollIntervalMs,
-      roomId: flags.roomId,
+      intervalMs: baseFlags.pollIntervalMs,
+      roomId: baseFlags.roomId,
       stop,
     }
   }
@@ -4360,8 +4370,17 @@ export function startAlfaClubChatBridge(opts?: {
     if (activeTickPromise !== null) return
     const tickPromise = (async () => {
       try {
+        const runtimeReactionRoomIds = await resolveInverseAkitaRuntimeReactionRoomIds(
+          baseFlags.inverseAkitaChatReactionRoomIds,
+        )
+        setInverseAkitaRuntimeReactionRoomIds(runtimeReactionRoomIds)
+        const runtimeFlags: AlfaClubChatBridgeFlags = {
+          ...baseFlags,
+          inverseAkitaChatReactionRoomIds: runtimeReactionRoomIds,
+        }
+        const pollRoomIds = resolveAlfaClubBridgePollRoomIds(runtimeFlags)
         for (const pollRoomId of pollRoomIds) {
-          const result = await runBridgeTick(flags, { pollRoomId })
+          const result = await runBridgeTick(runtimeFlags, { pollRoomId })
           opts?.onTick?.(result)
         }
       } catch (error) {
@@ -4378,7 +4397,7 @@ export function startAlfaClubChatBridge(opts?: {
 
   activeHandle = setInterval(() => {
     void runTick()
-  }, flags.pollIntervalMs)
+  }, baseFlags.pollIntervalMs)
 
   if (typeof (activeHandle as { unref?: () => void }).unref === 'function') {
     ;(activeHandle as { unref: () => void }).unref()
@@ -4390,8 +4409,8 @@ export function startAlfaClubChatBridge(opts?: {
 
   return {
     started: true,
-    intervalMs: flags.pollIntervalMs,
-    roomId: flags.roomId,
+    intervalMs: baseFlags.pollIntervalMs,
+    roomId: baseFlags.roomId,
     stop,
   }
 }

@@ -489,6 +489,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/v1/alfaclub/key-safety-club-risk': apiImport('./api/_handlers/v1/alfaclub/_key-safety-club-risk'),
         '/api/v1/alfaclub/key-safety-summary': apiImport('./api/_handlers/v1/alfaclub/_key-safety-summary'),
         '/api/v1/alfaclub/trading-rooms': apiImport('./api/_handlers/v1/alfaclub/_trading-rooms'),
+        '/api/v1/alfaclub/hermit-runtime': apiImport('./api/_handlers/v1/alfaclub/_hermit-runtime'),
         '/api/wallet/friend-key-holdings': apiImport('./api/_handlers/wallet/_friendKeyHoldings'),
 
       }
