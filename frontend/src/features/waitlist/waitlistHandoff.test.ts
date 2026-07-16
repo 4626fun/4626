@@ -106,11 +106,11 @@ describe('waitlist handoff helpers', () => {
     apiFetchMock.mockResolvedValueOnce(
       jsonResponse({
         success: true,
-        data: { code: 'handoff-code-123', expiresAt: '2099-01-01T00:00:00.000Z' },
+        data: { code: '11'.repeat(32), expiresAt: '2099-01-01T00:00:00.000Z' },
       }),
     )
 
-    await expect(createAuthHandoffCode({ privyToken: 'privy-token-123' })).resolves.toBe('handoff-code-123')
+    await expect(createAuthHandoffCode({ privyToken: 'privy-token-123' })).resolves.toBe('11'.repeat(32))
 
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/auth/handoff/create',
@@ -151,9 +151,9 @@ describe('waitlist handoff helpers', () => {
       resolveAppContinueNavigationTarget({
         appBaseUrl: APP_ORIGIN,
         currentOrigin: 'https://4626.fun',
-        handoffCode: 'fresh-app-handoff',
+        handoffCode: 'a'.repeat(64),
       }),
-    ).toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
+    ).toBe(`${APP_ORIGIN}/swap?cv_handoff=${'a'.repeat(64)}`)
   })
 
   it('same-origin Continue bridges the session and skips handoff create', async () => {
@@ -198,14 +198,14 @@ describe('waitlist handoff helpers', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           success: true,
-          data: { code: 'fresh-app-handoff', expiresAt: '2099-01-01T00:00:00.000Z' },
+          data: { code: 'ab'.repeat(32), expiresAt: '2099-01-01T00:00:00.000Z' },
         }),
       )
 
     try {
       await expect(
         createAppAuthHandoffTarget({ privyToken: 'privy-token-123' }),
-      ).resolves.toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
+      ).resolves.toBe(`${APP_ORIGIN}/swap?cv_handoff=${'ab'.repeat(32)}`)
 
       expect(apiFetchMock.mock.calls.map(([path]) => path)).toEqual([
         '/api/auth/privy',
@@ -248,7 +248,7 @@ describe('waitlist handoff helpers', () => {
     apiFetchMock.mockResolvedValueOnce(
       jsonResponse({
         success: true,
-        data: { code: 'handoff-code-123', expiresAt: '2099-01-01T00:00:00.000Z' },
+        data: { code: '22'.repeat(32), expiresAt: '2099-01-01T00:00:00.000Z' },
       }),
     )
 
@@ -257,7 +257,7 @@ describe('waitlist handoff helpers', () => {
         returnPath: '/rooms?roomId=1659&tab=liquidity',
       }),
     ).resolves.toBe(
-      'https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=handoff-code-123',
+      `https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=${'22'.repeat(32)}`,
     )
     expect(apiFetchMock).toHaveBeenCalledTimes(1)
     expect(apiFetchMock).toHaveBeenCalledWith(
@@ -291,7 +291,7 @@ describe('waitlist handoff helpers', () => {
     apiFetchMock.mockResolvedValueOnce(
       jsonResponse({
         success: true,
-        data: { code: 'cookie-handoff', expiresAt: '2099-01-01T00:00:00.000Z' },
+        data: { code: '33'.repeat(32), expiresAt: '2099-01-01T00:00:00.000Z' },
       }),
     )
 
@@ -300,7 +300,7 @@ describe('waitlist handoff helpers', () => {
         returnPath: '/rooms?roomId=1659&tab=liquidity',
       }),
     ).resolves.toBe(
-      'https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=cookie-handoff',
+      `https://alfaclub.4626.fun/rooms?roomId=1659&tab=liquidity&cv_handoff=${'33'.repeat(32)}`,
     )
     expect(apiFetchMock).toHaveBeenCalledTimes(1)
     expect(apiFetchMock).toHaveBeenCalledWith(

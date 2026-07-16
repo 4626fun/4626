@@ -16,6 +16,7 @@ import {
 } from '@4626/server-core'
 
 import { consumeHandoffCode, ensureHandoffSchema } from '../../../server/auth/_handoff.js'
+import { resolveAuthorizedWalletProfile } from '../../../server/_lib/wallet/canonicalWalletResolver.js'
 
 
 
@@ -113,7 +114,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Invalid or expired handoff code' } satisfies ApiEnvelope<never>)
     }
 
-    const sessionToken = makeSessionToken({ address: consumed.address })
+    // Re-check live authority before minting a 7-day session. Create already
+    // preferred the canonical CSW; redeem must not revive a revoked principal.
+    const authority = await resolveAuthorizedWalletProfile(consumed.address)
+    if (!authority) {
+      recordGlobalHandoffFailure()
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired handoff code',
+      } satisfies ApiEnvelope<never>)
+    }
+    const sessionAddress = (
+      authority.canonicalSmartWalletAddress ??
+      authority.activeOwnerWalletAddress ??
+      consumed.address
+    ).toLowerCase()
+
+    const sessionToken = makeSessionToken({ address: sessionAddress })
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
     // FIX: FINDING-02 — do not return sessionToken or privyToken in response body;
@@ -121,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
-        address: consumed.address,
+        address: sessionAddress,
       } satisfies HandoffRedeemResponse,
     } satisfies ApiEnvelope<HandoffRedeemResponse>)
   } catch {

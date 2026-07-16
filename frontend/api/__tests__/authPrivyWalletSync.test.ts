@@ -230,13 +230,37 @@ describe('auth privy wallet sync', () => {
       id: 'wallet-id',
       address: '0x00000000000000000000000000000000000000dd',
     })
-    syncUserWalletsMock.mockResolvedValue({
-      profileId: 1,
-      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
-      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
-      embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
-      connectedWallets: [],
-      primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
+    syncUserWalletsMock.mockImplementation(async () => {
+      const result = {
+        profileId: 1,
+        canonicalSmartWallet: {
+          address: CANONICAL_ADDRESS,
+          provider: 'coinbase_wallet',
+        },
+        activeOwnerWallet: {
+          address: EMBEDDED_ADDRESS,
+          provider: 'privy',
+          walletType: 'embedded_eoa',
+        },
+        embeddedEoa: {
+          address: EMBEDDED_ADDRESS,
+          chainType: 'evm',
+          clientType: 'embedded',
+        },
+        connectedWallets: [],
+        primaryWalletAddress: CANONICAL_ADDRESS,
+      }
+      // Mirror production: sync mutates persisted authority before the handler re-reads it.
+      setPersistedAuthority({
+        canonical: result.canonicalSmartWallet.address,
+        primary: result.primaryWalletAddress,
+        embedded: result.embeddedEoa.address,
+        roleWallets: [
+          result.canonicalSmartWallet.address,
+          result.embeddedEoa.address,
+        ],
+      })
+      return result
     })
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',

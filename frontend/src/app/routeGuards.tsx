@@ -63,8 +63,13 @@ function HandoffOnMount(props: { to: string }) {
             // Establishes the cv_auth_session cookie on this origin via
             // FINDING-02 cookie-only contract; createAuthHandoffCode then
             // authenticates with that cookie via `withCredentials: true`.
-            await bridgePrivySession(privyToken)
-            const handoffCode = await createAuthHandoffCode({ privyToken })
+            const bridge = await bridgePrivySession(privyToken)
+            const handoffCode = bridge.ok
+              ? await createAuthHandoffCode({
+                  privyToken: null,
+                  expectedAddress: bridge.address,
+                })
+              : ''
             if (handoffCode) {
               const parsed = new URL(target)
               parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
