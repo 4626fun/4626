@@ -914,14 +914,38 @@ async function readPhase2ReplayState(params: {
     }
   }
 
-  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
+  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner, vaultGauge] = await Promise.all([
     hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
     hasRuntimeCode(params.publicClient, finalizeInfo.ccaLaunchArm),
     hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
     readOwnableOwner(params.publicClient, finalizeInfo.vault),
+    params.publicClient
+      .readContract({
+        address: finalizeInfo.vault,
+        abi: [
+          {
+            type: 'function',
+            name: 'gaugeController',
+            stateMutability: 'view',
+            inputs: [],
+            outputs: [{ type: 'address' }],
+          },
+        ] as const,
+        functionName: 'gaugeController',
+      })
+      .catch(() => null),
   ])
 
-  const phase2CoreAlreadyDeployed = gaugeDeployed && ccaDeployed && oracleDeployed
+  // CREATE2 addresses alone are not enough: ops may pre-create gauge/cca/oracle
+  // under Base's AA95 gas cap, then run deployPhase2Core for wiring only.
+  const vaultGaugeWired =
+    typeof vaultGauge === 'string' &&
+    isAddress(vaultGauge) &&
+    getAddress(vaultGauge as Address).toLowerCase() ===
+      getAddress(finalizeInfo.gaugeController).toLowerCase()
+
+  const phase2CoreAlreadyDeployed =
+    gaugeDeployed && ccaDeployed && oracleDeployed && vaultGaugeWired
   const phase2FinalizeAlreadyCompleted =
     Boolean(finalizeInfo.owner) &&
     Boolean(vaultOwner) &&

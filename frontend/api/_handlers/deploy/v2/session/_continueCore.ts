@@ -398,14 +398,35 @@ async function readPhase2ReplayState(params: {
       phase2FinalizeAlreadyCompleted: false,
     }
   }
-  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
+  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner, vaultGauge] = await Promise.all([
     hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
     hasRuntimeCode(params.publicClient, finalizeInfo.ccaLaunchArm),
     hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
     readOwnableOwner(params.publicClient, finalizeInfo.vault),
+    params.publicClient
+      .readContract({
+        address: finalizeInfo.vault,
+        abi: [
+          {
+            type: 'function',
+            name: 'gaugeController',
+            stateMutability: 'view',
+            inputs: [],
+            outputs: [{ type: 'address' }],
+          },
+        ] as const,
+        functionName: 'gaugeController',
+      })
+      .catch(() => null),
   ])
+  const vaultGaugeWired =
+    typeof vaultGauge === 'string' &&
+    isAddress(vaultGauge) &&
+    getAddress(vaultGauge as Address).toLowerCase() ===
+      getAddress(finalizeInfo.gaugeController).toLowerCase()
   return {
-    phase2CoreAlreadyDeployed: gaugeDeployed && ccaDeployed && oracleDeployed,
+    phase2CoreAlreadyDeployed:
+      gaugeDeployed && ccaDeployed && oracleDeployed && vaultGaugeWired,
     phase2FinalizeAlreadyCompleted:
       Boolean(finalizeInfo.owner) &&
       Boolean(vaultOwner) &&
