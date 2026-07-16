@@ -1,12 +1,13 @@
 import { getAddress, type Address, type Hex } from 'viem'
 
+import { CURRENT_DEPLOYMENT_BATCHER_SELECTORS } from './deploymentBatcherSelectors.js'
 import { isShareOftSaltOverrideDisabledBatcher } from '@/config/contracts.defaults'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { resolveAlignedPhase1DeployDeps } from '@/lib/deploy/phase1ModuleDeploy'
 
-const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
-const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
-const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
+const BATCHER_PHASE1_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt.slice(2)
+const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2)
+const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt.slice(2)
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 
 const BATCHER_VIEW_ABI = [

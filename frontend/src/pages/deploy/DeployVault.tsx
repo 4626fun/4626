@@ -5,6 +5,7 @@ import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, u
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
+import { CURRENT_DEPLOYMENT_BATCHER_SELECTORS } from '@/lib/deploy/deploymentBatcherSelectors'
 import {
   ZERO_BYTES32,
   encodeUniswapV3Path,
@@ -286,13 +287,13 @@ const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const DEFAULT_VAULT_VANITY_PREFIX = '4626'
 const DEFAULT_VAULT_VANITY_MAX_TRIES = 250_000
 const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
-const BATCHER_PHASE1_SELECTOR = '3c51ca4e'
-const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
-const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
-const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
-const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
-const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
-const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
+const BATCHER_PHASE1_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1.slice(2)
+const BATCHER_PHASE1_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt.slice(2)
+const BATCHER_PHASE1_CORE_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1Core.slice(2)
+const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2)
+const BATCHER_PHASE1_FINALIZE_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1.slice(2)
+const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt.slice(2)
+const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase2WithPermit2.slice(2)
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
@@ -2454,7 +2455,11 @@ function DeployVaultBatcher({
     queryKey: ['deploymentBatcher', 'infra', batcherAddress],
     enabled: !!publicClient && !!batcherAddress,
     staleTime: 300_000,
-    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    // Infra helpers intentionally convert failed reads into user-facing
+    // compatibility errors, so the original RPC error is no longer available
+    // to `isTransientRpcFailure`. Retry the small read-only preflight twice;
+    // persistent configuration mismatches still fail closed.
+    retry: (failureCount) => failureCount < 2,
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
     queryFn: async () => {
       const result = await readCreatorVaultBatcherInfra({
@@ -6341,6 +6346,18 @@ function DeployVaultBatcher({
   const expectedError = expectedQueryIsError
     ? ((expectedQueryError as any)?.message || 'Failed to compute deployment addresses.')
     : null
+  const addressPreviewError = batcherInfraError ?? expectedError
+  const retryAddressPreview = async () => {
+    if (batcherInfraQuery.isError || !batcherInfraQuery.data) {
+      await batcherInfraQuery.refetch()
+      return
+    }
+    if (vanityPlanQuery.isError || !vanityPlanQuery.data) {
+      await vanityPlanQuery.refetch()
+      return
+    }
+    await expectedAddressesQuery.refetch()
+  }
   const vanityCustomPaidNotice =
     vaultVanityIsCustom || shareVanityIsCustom
       ? `Custom vanity requested (paid):${
@@ -6687,6 +6704,30 @@ function DeployVaultBatcher({
             </>
           ) : null}
         </div>
+
+        {addressPreviewError ? (
+          <div
+            role="alert"
+            className="flex flex-col gap-2 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <div className="text-[11px] font-medium text-amber-200/90">Contract preview unavailable</div>
+              <div className="break-words text-[10px] leading-relaxed text-amber-100/60">{addressPreviewError}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void retryAddressPreview()}
+              className="shrink-0 self-start rounded-md border border-amber-300/20 px-2.5 py-1 text-[10px] font-medium text-amber-100 transition-colors hover:bg-amber-300/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300/70 sm:self-auto"
+            >
+              Retry preview
+            </button>
+          </div>
+        ) : expectedQueryLoading ? (
+          <div aria-live="polite" className="flex items-center gap-2 rounded-lg bg-white/[0.025] px-3 py-2 text-[10px] text-zinc-500">
+            <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-blue-300/70 motion-reduce:animate-none" />
+            Computing deterministic contract addresses…
+          </div>
+        ) : null}
 
         <DeploymentOverview
           completedPhases={phaseProgressSummary.completed}

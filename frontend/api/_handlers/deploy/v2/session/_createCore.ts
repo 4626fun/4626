@@ -73,6 +73,7 @@ import {
   validateFeatureCompatibility,
 } from '../../../../../server/_lib/deploy/featurePolicy/policy.js'
 import { hasContractBytecode } from '../../../../../shared/wallet/bytecode.js'
+import { CURRENT_DEPLOYMENT_BATCHER_SELECTORS } from '../../../../../src/lib/deploy/deploymentBatcherSelectors.js'
 import {
   isDeprecatedDeploymentBatcherAddress,
 } from '../../../../../src/config/contracts.defaults.js'
@@ -185,12 +186,12 @@ type OwnershipCheck = {
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
-const PHASE1_SELECTOR_DEPLOY = '0x3c51ca4e'
-const PHASE1_SELECTOR_CORE = '0x1331378b'
-const PHASE1_SELECTOR_FINALIZE = '0xa98ec9d8'
-const PHASE1_SELECTOR_DEPLOY_WITH_SALT = '0x297cb1e6'
-const PHASE1_SELECTOR_CORE_WITH_SALT = '0x4154f24e'
-const PHASE1_SELECTOR_FINALIZE_WITH_SALT = '0x3bc09a8b'
+const PHASE1_SELECTOR_DEPLOY = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1
+const PHASE1_SELECTOR_CORE = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1Core
+const PHASE1_SELECTOR_FINALIZE = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1
+const PHASE1_SELECTOR_DEPLOY_WITH_SALT = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt
+const PHASE1_SELECTOR_CORE_WITH_SALT = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt
+const PHASE1_SELECTOR_FINALIZE_WITH_SALT = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt
 const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23'
 const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
   PHASE1_SELECTOR_DEPLOY_WITH_SALT,
