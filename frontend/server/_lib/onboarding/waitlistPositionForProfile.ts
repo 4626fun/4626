@@ -107,30 +107,7 @@ export async function readWaitlistPositionForSignupId(
 
   const inviteRankQ = await db.sql`
     WITH point_totals AS (
-      SELECT
-        signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          ),
-          0
-        )::int AS total_points
-      FROM points
-      GROUP BY signup_id
+      SELECT signup_id, points_total AS total_points FROM waitlist_point_totals
     ),
     eligible AS (
       SELECT id
@@ -184,30 +161,7 @@ export async function readWaitlistPositionForSignupId(
 
   const totalRankQ = await db.sql`
     WITH point_totals AS (
-      SELECT
-        signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          ),
-          0
-        )::int AS total_points
-      FROM points
-      GROUP BY signup_id
+      SELECT signup_id, points_total AS total_points FROM waitlist_point_totals
     ),
     eligible AS (
       SELECT id

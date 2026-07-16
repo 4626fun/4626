@@ -120,6 +120,12 @@ export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): nu
   return 0
 }
 
+/**
+ * Live rollup view for waitlist totals (supabase migration waitlist_point_totals_view).
+ * Leaderboard / position / Airtable SQL should join this instead of inlining the CASE.
+ */
+export const WAITLIST_POINT_TOTALS_VIEW = 'waitlist_point_totals'
+
 /** SQL `CASE` for `SUM(...)` over `points.source` / `points.amount`. Mirrors `weightedWaitlistPoints`. */
 export const WAITLIST_POINTS_WEIGHT_CASE_SQL = `
   CASE
