@@ -4,7 +4,6 @@ import { assertValidSignupId } from './profileSignupId.js'
  * Canonical waitlist score from Supabase `public.points` (see `waitlistPoints.ts`).
  * Used by leaderboard, `/api/waitlist/position`, and referrer lookups.
  *
- * Not tied to Airtable — that sync is an optional ops mirror when configured.
  * AMOE lottery bookkeeping (`amoe_entry_spend`, `amoe_twitter_daily`, …) is
  * excluded from waitlist surfaces per `amoeWaitlistPoints.ts`; only `amoe_checkin`
  * counts toward waitlist rank when written on a canonical profile.
@@ -122,7 +121,7 @@ export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): nu
 
 /**
  * Live rollup view for waitlist totals (supabase migration waitlist_point_totals_view).
- * Leaderboard / position / Airtable SQL should join this instead of inlining the CASE.
+ * Leaderboard / position SQL should join this instead of inlining the CASE.
  */
 export const WAITLIST_POINT_TOTALS_VIEW = 'waitlist_point_totals'
 
