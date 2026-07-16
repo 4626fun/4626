@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AnimatePresence,
@@ -589,6 +589,7 @@ function SkippedStepReminder({
 
 export function WaitlistFlow(props: WaitlistFlowProps) {
   const sectionId = props.sectionId ?? 'waitlist-page'
+  const navigate = useNavigate()
   const onRequestWalletSignIn = props.onRequestWalletSignIn ?? noop
   const onCancelWalletSignIn = props.onCancelWalletSignIn ?? noop
   const onClearWalletSignInError = props.onClearWalletSignInError ?? noop
@@ -939,6 +940,12 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       if (!target) {
         throw new Error('Your secure session needs to be refreshed. Sign out, verify your email, then try again.')
       }
+      // Same-origin Continue returns `/swap` — SPA navigate so Privy localStorage
+      // survives (hard reload on localhost drops embedded-signer auth).
+      if (target.startsWith('/')) {
+        navigate(target)
+        return
+      }
       window.location.replace(target)
     } catch (continueError) {
       setError(
@@ -948,7 +955,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       )
       setContinueBusy(false)
     }
-  }, [continueBusy, getPrivyAccessToken])
+  }, [continueBusy, getPrivyAccessToken, navigate])
 
   const handleSignInWithLinkedWallet = useCallback(() => {
     if (signupInFlightRef.current || walletSignInPending) return

@@ -621,8 +621,27 @@ export function Swap() {
     if (bridged) return
     await signIn({ method: 'privy' })
   }, [authBusy, ensureCanonicalSession, privyClientStatus, signIn])
-  // Keep canonical-session recovery user-driven. Auto-attempt loops can feel
-  // like repeated sign-outs when Privy client/session wiring is unstable.
+  // One-shot after waitlist Continue / hard reload: 4626 cookie can land while
+  // Privy is still signed out. Try token bridge first; open email login only if
+  // needed. Do not loop — user can retry via the banner CTA.
+  // Skip `embedded-wallet-missing` here — that path is authenticated already and
+  // `useSwapEmbeddedEoa` / ensureEmbeddedWallet owns hydration.
+  const privyCanonicalAuthRestoreAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (canonicalSignerGate.code !== 'privy-auth-required') return
+    if (!hasSession || !sessionHydrated) return
+    if (authBusy || privyClientStatus !== 'ready') return
+    if (privyCanonicalAuthRestoreAttemptedRef.current) return
+    privyCanonicalAuthRestoreAttemptedRef.current = true
+    void handlePrivyCanonicalSignIn()
+  }, [
+    authBusy,
+    canonicalSignerGate.code,
+    handlePrivyCanonicalSignIn,
+    hasSession,
+    privyClientStatus,
+    sessionHydrated,
+  ])
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&

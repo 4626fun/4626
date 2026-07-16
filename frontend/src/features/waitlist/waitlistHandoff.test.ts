@@ -6,10 +6,12 @@ import {
   createAlfaClubAuthHandoffTarget,
   createAppAuthHandoffTarget,
   createAuthHandoffCode,
+  resolveAppContinueNavigationTarget,
 } from './waitlistHandoff'
 
 const apiFetchMock = vi.fn()
 const writeStoredSessionTokenMock = vi.fn()
+const getAppBaseUrlMock = vi.fn(() => APP_ORIGIN)
 
 vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
@@ -18,6 +20,14 @@ vi.mock('@/lib/api/apiBase', () => ({
 vi.mock('@/hooks/useSiweAuth', () => ({
   writeStoredSessionToken: (...args: unknown[]) => writeStoredSessionTokenMock(...args),
 }))
+
+vi.mock('@/lib/env/host', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/env/host')>('@/lib/env/host')
+  return {
+    ...actual,
+    getAppBaseUrl: () => getAppBaseUrlMock(),
+  }
+})
 
 function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -30,6 +40,8 @@ describe('waitlist handoff helpers', () => {
   beforeEach(() => {
     apiFetchMock.mockReset()
     writeStoredSessionTokenMock.mockReset()
+    getAppBaseUrlMock.mockReset()
+    getAppBaseUrlMock.mockReturnValue(APP_ORIGIN)
   })
 
   it('returns true when Privy auth successfully sets the session cookie', async () => {
@@ -124,7 +136,58 @@ describe('waitlist handoff helpers', () => {
     await expect(createAuthHandoffCode({ privyToken: 'privy-token-123' })).resolves.toBe('')
   })
 
+  it('resolves same-origin Continue to a relative /swap path (no hard reload)', () => {
+    expect(
+      resolveAppContinueNavigationTarget({
+        appBaseUrl: 'http://localhost:5174',
+        currentOrigin: 'http://localhost:5174',
+        handoffCode: 'unused-on-same-origin',
+      }),
+    ).toBe('/swap')
+  })
+
+  it('resolves cross-origin Continue to an absolute handoff URL', () => {
+    expect(
+      resolveAppContinueNavigationTarget({
+        appBaseUrl: APP_ORIGIN,
+        currentOrigin: 'https://4626.fun',
+        handoffCode: 'fresh-app-handoff',
+      }),
+    ).toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
+  })
+
+  it('same-origin Continue bridges the session and skips handoff create', async () => {
+    getAppBaseUrlMock.mockReturnValue('http://localhost:5174')
+    const originalLocation = globalThis.location
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { origin: 'http://localhost:5174', href: 'http://localhost:5174/waitlist' },
+    })
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        success: true,
+        data: { address: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9' },
+      }),
+    )
+
+    try {
+      await expect(createAppAuthHandoffTarget({ privyToken: 'privy-token-123' })).resolves.toBe('/swap')
+      expect(apiFetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/auth/privy'])
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      })
+    }
+  })
+
   it('refreshes the canonical Privy session before creating the app handoff', async () => {
+    getAppBaseUrlMock.mockReturnValue(APP_ORIGIN)
+    const originalLocation = globalThis.location
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { origin: 'https://4626.fun', href: 'https://4626.fun/waitlist' },
+    })
     apiFetchMock
       .mockResolvedValueOnce(
         jsonResponse({
@@ -139,23 +202,30 @@ describe('waitlist handoff helpers', () => {
         }),
       )
 
-    await expect(
-      createAppAuthHandoffTarget({ privyToken: 'privy-token-123' }),
-    ).resolves.toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
+    try {
+      await expect(
+        createAppAuthHandoffTarget({ privyToken: 'privy-token-123' }),
+      ).resolves.toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
 
-    expect(apiFetchMock.mock.calls.map(([path]) => path)).toEqual([
-      '/api/auth/privy',
-      '/api/auth/handoff/create',
-    ])
-    expect(apiFetchMock).toHaveBeenLastCalledWith(
-      '/api/auth/handoff/create',
-      expect.objectContaining({
-        body: JSON.stringify({
-          privyToken: null,
-          expectedAddress: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
+      expect(apiFetchMock.mock.calls.map(([path]) => path)).toEqual([
+        '/api/auth/privy',
+        '/api/auth/handoff/create',
+      ])
+      expect(apiFetchMock).toHaveBeenLastCalledWith(
+        '/api/auth/handoff/create',
+        expect.objectContaining({
+          body: JSON.stringify({
+            privyToken: null,
+            expectedAddress: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
+          }),
         }),
-      }),
-    )
+      )
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      })
+    }
   })
 
   it('does not transfer a stale cookie-only identity to the app host', async () => {

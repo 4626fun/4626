@@ -125,10 +125,36 @@ export async function createAuthHandoffCode(params: {
 }
 
 /**
+ * Same-origin Continue must return a relative `/swap` path (no hard reload).
+ * Localhost Privy localStorage sessions do not survive `window.location.replace`,
+ * which otherwise leaves `/swap` with an active 4626 cookie but
+ * `privyAuthenticated: false` ("Privy sign-in required for canonical swaps").
+ */
+export function resolveAppContinueNavigationTarget(params: {
+  appBaseUrl: string
+  currentOrigin: string
+  handoffCode: string
+}): string {
+  try {
+    const appOrigin = new URL(params.appBaseUrl).origin
+    if (appOrigin === params.currentOrigin) return '/swap'
+  } catch {
+    // Fall through to absolute handoff URL.
+  }
+  const target = new URL('/swap', params.appBaseUrl)
+  target.searchParams.set('cv_handoff', params.handoffCode)
+  return target.toString()
+}
+
+/**
  * Refresh the waitlist session from the currently verified Privy identity
  * before transferring it to the app host. This replaces historical cookies
  * whose address is still linked to the profile but is no longer an authorized
  * canonical/active signer.
+ *
+ * Same-origin (local dry-run / app-hosted waitlist): bridge the cookie, then
+ * return `/swap` for SPA navigation so Privy does not remount via hard reload.
+ * Cross-origin (4626.fun → app.4626.fun): mint a one-time handoff code.
  */
 export async function createAppAuthHandoffTarget(params: {
   privyToken: string | null
@@ -139,15 +165,31 @@ export async function createAppAuthHandoffTarget(params: {
   const bridge = await bridgePrivySession(token)
   if (!bridge.ok) return ''
 
+  const appBaseUrl = getAppBaseUrl()
+  const currentOrigin =
+    typeof globalThis !== 'undefined' &&
+    typeof (globalThis as { location?: { origin?: unknown } }).location?.origin === 'string'
+      ? String((globalThis as { location: { origin: string } }).location.origin)
+      : ''
+  if (currentOrigin) {
+    try {
+      if (new URL(appBaseUrl).origin === currentOrigin) return '/swap'
+    } catch {
+      // Fall through to cross-origin handoff.
+    }
+  }
+
   const code = await createAuthHandoffCode({
     privyToken: null,
     expectedAddress: bridge.address,
   })
   if (!code) return ''
 
-  const target = new URL('/swap', getAppBaseUrl())
-  target.searchParams.set('cv_handoff', code)
-  return target.toString()
+  return resolveAppContinueNavigationTarget({
+    appBaseUrl,
+    currentOrigin,
+    handoffCode: code,
+  })
 }
 
 export async function createAlfaClubAuthHandoffTarget(params: {
