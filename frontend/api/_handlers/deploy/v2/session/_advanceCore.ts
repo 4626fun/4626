@@ -15,10 +15,16 @@ import { decodeEventLog, decodeFunctionData, getAddress, isAddress, type Address
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
-import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
+import { createBundlerClient, createPaymasterClient, entryPoint06Address, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
-import { createDeploySessionBundlerTransport, withDeploySessionUserOpGas } from './deployUserOpGas.js'
+import {
+  createDeploySessionBundlerTransport,
+  peekSelfBundledTxHash,
+  readUserOperationEventSuccess,
+  withDeploySessionUserOpGas,
+} from './deployUserOpGas.js'
+import { ensurePhase2CoreCreatesPrecreated } from './phase2CorePrecreate.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -1974,6 +1980,22 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       let nextHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageKey]: null }
       try {
+        if (toStep === 'phase2_core_sent') {
+          const precreate = await ensurePhase2CoreCreatesPrecreated(fullCalls)
+          if (!precreate.skipped) {
+            payloadPatch = {
+              ...payloadPatch,
+              phase2CorePrecreateAt: new Date().toISOString(),
+              phase2CorePrecreateDeployed: precreate.deployed,
+              phase2CorePrecreateExisting: precreate.existing,
+            }
+          } else if (precreate.reason) {
+            payloadPatch = {
+              ...payloadPatch,
+              phase2CorePrecreateSkippedReason: precreate.reason,
+            }
+          }
+        }
         // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
         // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         nextHash = await sendUserOperation(bundler, {
@@ -1990,6 +2012,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           calls,
         })
         payloadPatch = {
+          ...payloadPatch,
           [stageKey]: null,
           cleanupDeferredAt: new Date().toISOString(),
           cleanupDeferredReason: cleanupFailureReason || 'inline_cleanup_failed',
@@ -2204,6 +2227,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     try {
       // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
       // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
+      if (sentStep === 'phase2_core_sent') {
+        await ensurePhase2CoreCreatesPrecreated(fullCalls)
+      }
       const nextHash = await sendUserOperation(bundler, {
         account: withDeploySessionUserOpGas(account),
         calls: fullCalls,
@@ -2280,7 +2306,77 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return undefined
     }
     const receipt = await bundlerClient.getUserOperationReceipt({ hash: stageHash }).catch(() => null)
-    return receipt?.receipt?.transactionHash as Hex | undefined
+    if (receipt) {
+      if (receipt.success === false) {
+        throw new Error(
+          `${step}_userop_failed: userOpHash=${stageHash} tx=${receipt.receipt?.transactionHash ?? 'unknown'}`,
+        )
+      }
+      return receipt.receipt?.transactionHash as Hex | undefined
+    }
+
+    // Self-bundled fat UserOps are not indexed by the CDP bundler. Resolve via
+    // the in-process map (same instance) or on-chain UserOperationEvent lookup.
+    const selfTx = peekSelfBundledTxHash(stageHash)
+    if (selfTx) {
+      const chainReceipt = await publicClient
+        .getTransactionReceipt({ hash: selfTx })
+        .catch(() => null)
+      if (!chainReceipt) return undefined
+      const opEvent = readUserOperationEventSuccess(chainReceipt.logs, stageHash)
+      if (!opEvent) {
+        throw new Error(
+          `${step}_self_bundle_missing_userop_event: userOpHash=${stageHash} tx=${selfTx}`,
+        )
+      }
+      if (!opEvent.success) {
+        throw new Error(
+          `${step}_userop_failed: userOpHash=${stageHash} tx=${selfTx} actualGasUsed=${opEvent.actualGasUsed}`,
+        )
+      }
+      return selfTx
+    }
+
+    // Last resort: scan recent EntryPoint logs for this userOpHash (covers
+    // cross-instance resume after a successful self-bundle on another worker).
+    try {
+      const latest = await publicClient.getBlockNumber()
+      const fromBlock = latest > 25n ? latest - 25n : 0n
+      const logs = await publicClient.getLogs({
+        address: entryPoint06Address,
+        event: {
+          type: 'event',
+          name: 'UserOperationEvent',
+          inputs: [
+            { name: 'userOpHash', type: 'bytes32', indexed: true },
+            { name: 'sender', type: 'address', indexed: true },
+            { name: 'paymaster', type: 'address', indexed: true },
+            { name: 'nonce', type: 'uint256', indexed: false },
+            { name: 'success', type: 'bool', indexed: false },
+            { name: 'actualGasCost', type: 'uint256', indexed: false },
+            { name: 'actualGasUsed', type: 'uint256', indexed: false },
+          ],
+        },
+        args: { userOpHash: stageHash },
+        fromBlock,
+        toBlock: latest,
+      })
+      if (logs.length > 0) {
+        const log = logs[logs.length - 1]
+        const success = Boolean((log.args as { success?: boolean } | undefined)?.success)
+        if (!success) {
+          throw new Error(
+            `${step}_userop_failed: userOpHash=${stageHash} tx=${log.transactionHash ?? 'unknown'}`,
+          )
+        }
+        return log.transactionHash as Hex | undefined
+      }
+    } catch (err) {
+      if (String((err as Error)?.message || err).includes('_userop_failed')) throw err
+      // ignore lookup failures; caller will retry on next tick
+    }
+
+    return undefined
   }
 
   if (needsReceipt) {

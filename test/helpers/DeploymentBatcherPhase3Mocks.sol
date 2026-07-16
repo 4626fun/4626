@@ -205,4 +205,8 @@ contract MockCreate2DeployerForPhase3 is IUniversalCreate2DeployerFromStore {
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external pure override returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(salt, initCodeHash)))));
     }
+
+    function store() external pure override returns (address) {
+        return address(0);
+    }
 }

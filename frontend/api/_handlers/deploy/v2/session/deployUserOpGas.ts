@@ -26,10 +26,12 @@ import {
   BaseError,
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   encodeFunctionData,
   http,
   toHex,
   type Hex,
+  type Log,
   type Transport,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
@@ -49,11 +51,14 @@ export const BASE_MAX_TX_GAS = 16_777_216n
  */
 const SELF_BUNDLE_AA95_SAFETY = 50_000n
 
+/** In-process map so advance can resolve self-bundled receipts without a bundler index. */
+const selfBundledTxByUserOpHash = new Map<string, Hex>()
+
 export const DEPLOY_SESSION_USEROP_GAS = {
-  // BASE_MAX * 63/64 ≈ 16_515_072; leave SAFETY, then reserve 800k verification.
-  // call 15.5M + verification 800k = 16.3M < 16_465_072.
-  callGasLimit: 15_500_000n,
-  verificationGasLimit: 800_000n,
+  // Maximize call gas under AA95 budget: BASE_MAX*63/64 - SAFETY ≈ 16_465_072.
+  // Keep verification high enough for CSW owner-index validateUserOp.
+  callGasLimit: 15_850_000n,
+  verificationGasLimit: 600_000n,
   preVerificationGas: 100_000n,
 } as const
 
@@ -138,7 +143,54 @@ const ENTRY_POINT_V06_ABI = [
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
   },
+  {
+    type: 'event',
+    name: 'UserOperationEvent',
+    inputs: [
+      { name: 'userOpHash', type: 'bytes32', indexed: true },
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'paymaster', type: 'address', indexed: true },
+      { name: 'nonce', type: 'uint256', indexed: false },
+      { name: 'success', type: 'bool', indexed: false },
+      { name: 'actualGasCost', type: 'uint256', indexed: false },
+      { name: 'actualGasUsed', type: 'uint256', indexed: false },
+    ],
+  },
 ] as const
+
+export function peekSelfBundledTxHash(userOpHash: Hex | string): Hex | undefined {
+  return selfBundledTxByUserOpHash.get(userOpHash.toLowerCase())
+}
+
+export function readUserOperationEventSuccess(
+  logs: readonly Log[],
+  userOpHash: Hex,
+): { success: boolean; actualGasUsed: bigint } | null {
+  for (const log of logs) {
+    try {
+      const decoded = decodeEventLog({
+        abi: ENTRY_POINT_V06_ABI,
+        data: log.data,
+        topics: log.topics,
+      })
+      if (decoded.eventName !== 'UserOperationEvent') continue
+      const args = decoded.args as {
+        userOpHash?: Hex
+        success?: boolean
+        actualGasUsed?: bigint
+      }
+      if (!args.userOpHash || args.userOpHash.toLowerCase() !== userOpHash.toLowerCase()) continue
+      if (typeof args.success !== 'boolean') continue
+      return {
+        success: args.success,
+        actualGasUsed: typeof args.actualGasUsed === 'bigint' ? args.actualGasUsed : 0n,
+      }
+    } catch {
+      // not an EntryPoint UserOperationEvent
+    }
+  }
+  return null
+}
 
 function readSelfBundlePrivateKey(): Hex | null {
   // Prefer an explicitly funded deploy bundler key, then the ops Safe owner key
@@ -326,8 +378,9 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       )
     }
 
+    let userOpHash: Hex
     try {
-      return getUserOperationHash({
+      userOpHash = getUserOperationHash({
         chainId: base.id,
         entryPointAddress: entryPoint06Address,
         entryPointVersion: '0.6',
@@ -346,8 +399,24 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
         },
       })
     } catch {
-      return txHash
+      // Fallback keeps prior behavior when hashing fails, but still refuse silent failure.
+      userOpHash = txHash
     }
+
+    const opEvent = readUserOperationEventSuccess(receipt.logs, userOpHash)
+    if (!opEvent) {
+      throwSelfBundleError(
+        `deploy_session_self_bundle_missing_userop_event: tx=${txHash} userOpHash=${userOpHash}`,
+      )
+    }
+    if (!opEvent.success) {
+      throwSelfBundleError(
+        `deploy_session_self_bundle_userop_failed: tx=${txHash} userOpHash=${userOpHash} actualGasUsed=${opEvent.actualGasUsed}`,
+      )
+    }
+
+    selfBundledTxByUserOpHash.set(userOpHash.toLowerCase(), txHash)
+    return userOpHash
   } catch (err) {
     if (err instanceof BaseError && String(err.message || '').includes('deploy_session_self_bundle_')) {
       throw err

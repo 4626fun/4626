@@ -8,6 +8,7 @@ import { createBundlerClient, sendUserOperation, toCoinbaseSmartAccount } from '
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import { createDeploySessionBundlerTransport, withDeploySessionUserOpGas } from './deployUserOpGas.js'
+import { ensurePhase2CoreCreatesPrecreated } from './phase2CorePrecreate.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -1044,6 +1045,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let lastUserOpHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageHashKey]: null }
       try {
+        if (toStep === 'phase2_core_sent') {
+          const precreate = await ensurePhase2CoreCreatesPrecreated(calls)
+          if (!precreate.skipped) {
+            payloadPatch = {
+              ...payloadPatch,
+              phase2CorePrecreateAt: new Date().toISOString(),
+              phase2CorePrecreateDeployed: precreate.deployed,
+              phase2CorePrecreateExisting: precreate.existing,
+            }
+          } else if (precreate.reason) {
+            payloadPatch = {
+              ...payloadPatch,
+              phase2CorePrecreateSkippedReason: precreate.reason,
+            }
+          }
+        }
         // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
         // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         lastUserOpHash = await sendUserOperation(bundlerClient, {
@@ -1059,6 +1076,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           calls: stageCalls,
         })
         payloadPatch = {
+          ...payloadPatch,
           [stageHashKey]: null,
           cleanupDeferredAt: new Date().toISOString(),
           cleanupDeferredReason: cleanupFailureReason,

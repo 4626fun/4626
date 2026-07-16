@@ -24,6 +24,11 @@ import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/Option
 interface IUniversalCreate2DeployerFromStore {
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr);
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address);
+    function store() external view returns (address);
+}
+
+interface IUniversalBytecodeStoreView {
+    function get(bytes32 codeId) external view returns (bytes memory);
 }
 
 /// @dev AUDIT-2026-07-08-NEW-H — phase modules consult the batcher shell for codeId allowlist.
@@ -1073,14 +1078,18 @@ contract DeploymentBatcherPhase2Module {
         bytes32 ccaSalt = _saltFor(baseSalt, "cca");
         bytes32 oracleSalt = _saltFor(baseSalt, "oracle");
 
+        // Base caps eth_sendRawTransaction at 2^24 gas and EntryPoint AA95 further
+        // shrinks call+verification under that cap. The three CREATE2 fan-outs alone
+        // exceed a single UserOp budget, so allow pre-created addresses (same salt /
+        // codeId / constructor args) and only spend UserOp gas on wiring.
         bytes memory gaugeArgs = abi.encode(params.shareOFT, treasury, protocolTreasury, tempOwner);
-        out.gaugeController = create2Deployer.deploy(gaugeSalt, codeIds.gauge, gaugeArgs);
+        out.gaugeController = _deployOrExisting(gaugeSalt, codeIds.gauge, gaugeArgs);
 
         bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
-        out.ccaLaunchArm = create2Deployer.deploy(ccaSalt, codeIds.cca, ccaArgs);
+        out.ccaLaunchArm = _deployOrExisting(ccaSalt, codeIds.cca, ccaArgs);
 
         bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
-        out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
+        out.oracle = _deployOrExisting(oracleSalt, codeIds.oracle, oracleArgs);
 
         IShareOFT4626(params.shareOFT).setGaugeController(out.gaugeController);
 
@@ -1109,6 +1118,22 @@ contract DeploymentBatcherPhase2Module {
         // Persist product-lane kind so Registry4626.getVaultKind is correct after deploy.
         // Agent-specific fields (tax adapter / pair) are left zero unless a later epoch adds params.
         _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
+    }
+
+    function _deployOrExisting(bytes32 salt, bytes32 codeId, bytes memory constructorArgs)
+        internal
+        returns (address addr)
+    {
+        address storeAddr = create2Deployer.store();
+        if (storeAddr != address(0)) {
+            bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
+            bytes32 initCodeHash = keccak256(bytes.concat(creationCode, constructorArgs));
+            addr = create2Deployer.computeAddress(salt, initCodeHash);
+            if (addr.code.length > 0) {
+                return addr;
+            }
+        }
+        addr = create2Deployer.deploy(salt, codeId, constructorArgs);
     }
 
     /// @dev Writes AgentIntegrationMeta (historical name for lane meta). Requires the batcher
