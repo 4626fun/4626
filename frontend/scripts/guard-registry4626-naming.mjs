@@ -88,6 +88,11 @@ const ALLOWLIST_RELATIVE = new Set([
   'script/sync-greenfield-env-from-handoff.sh',
   // Migration helper still mirrors retired env keys onto live addresses for one release.
   'script/sync-v1180-vercel-env.sh',
+  // These retain deployed BribesFactory ABI selectors and the matching bootstrap struct fields.
+  'contracts/shared/deploy/factories/RegistryBootstrap4626.sol',
+  'script/DeployRegistryBootstrap4626.s.sol',
+  'script/SmokeRegistryBootstrap4626.s.sol',
+  'test/RegistryBootstrap4626.t.sol',
 ])
 
 function walk(dir, out) {

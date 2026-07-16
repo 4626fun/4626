@@ -88,22 +88,25 @@ export const DEPLOY_SESSION_OMIT_PAYMASTER = true
 
 type AccountWithUserOpGas = {
   userOperation?: {
-    estimateGas?: (userOperation: unknown) => Promise<Record<string, bigint>> | Record<string, bigint>
+    estimateGas?: (userOperation: any) => Promise<any> | any
     [key: string]: unknown
   }
   [key: string]: unknown
 }
 
-export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(
+export function withDeploySessionUserOpGas<T>(
   account: T,
   gas: typeof DEPLOY_SESSION_USEROP_GAS | typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS = DEPLOY_SESSION_USEROP_GAS,
 ): T {
-  const previous = account.userOperation
+  // Preserve the concrete SmartAccount type for sendUserOperation callers while
+  // overriding only the optional estimate hook.
+  const accountWithGas = account as T & AccountWithUserOpGas
+  const previous = accountWithGas.userOperation
   return {
-    ...account,
+    ...accountWithGas,
     userOperation: {
       ...previous,
-      estimateGas: async (userOperation: unknown) => {
+      estimateGas: async (userOperation: any) => {
         if (typeof previous?.estimateGas === 'function') {
           const estimated = await previous.estimateGas(userOperation)
           return { ...estimated, ...gas }
@@ -111,7 +114,7 @@ export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(
         return { ...gas }
       },
     },
-  }
+  } as T
 }
 
 const ENTRY_POINT_V06_ABI = [

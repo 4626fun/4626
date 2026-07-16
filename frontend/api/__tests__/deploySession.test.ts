@@ -1486,6 +1486,7 @@ describe('deploy session optimistic concurrency', () => {
         if (functionName === 'ownerCount') return 1n
         if (functionName === 'nextOwnerIndex') return 1n
         if (functionName === 'ownerAtIndex') return '0xownerbytes'
+        if (functionName === 'gaugeController') return '0x00000000000000000000000000000000000000ac'
         if (functionName === 'owner') return '0x00000000000000000000000000000000000000aa'
         return '0xownerbytes'
       }),
@@ -1533,6 +1534,7 @@ describe('deploy session optimistic concurrency', () => {
         if (functionName === 'ownerCount') return 1n
         if (functionName === 'nextOwnerIndex') return 1n
         if (functionName === 'ownerAtIndex') return '0xownerbytes'
+        if (functionName === 'gaugeController') return '0x00000000000000000000000000000000000000ac'
         if (functionName === 'owner') return '0x00000000000000000000000000000000000000bb'
         return '0xownerbytes'
       }),

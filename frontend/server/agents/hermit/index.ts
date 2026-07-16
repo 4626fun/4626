@@ -313,7 +313,7 @@ function startHealthServer(): void {
 
       // Kick a background refresh through the short TTL + single-flight cache.
       // Probe responses stay memory-only and never block on DB/network work.
-      scheduleTokenExpiryRefresh()
+      void refreshTokenExpiryState()
 
       if (readCounterTradeState) {
         state.counterTrade = readCounterTradeState()

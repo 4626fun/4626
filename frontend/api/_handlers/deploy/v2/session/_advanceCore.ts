@@ -942,6 +942,8 @@ async function readPhase2ReplayState(params: {
   const vaultGaugeWired =
     typeof vaultGauge === 'string' &&
     isAddress(vaultGauge) &&
+    typeof finalizeInfo.gaugeController === 'string' &&
+    isAddress(finalizeInfo.gaugeController) &&
     getAddress(vaultGauge as Address).toLowerCase() ===
       getAddress(finalizeInfo.gaugeController).toLowerCase()
 

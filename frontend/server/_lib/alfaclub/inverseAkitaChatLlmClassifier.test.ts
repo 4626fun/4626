@@ -48,10 +48,15 @@ describe('inverseAkitaChatLlmClassifier', () => {
   it('builds a prompt that asks for author lean not the invert', () => {
     const { systemPrompt, userMessage } = buildInverseAkitaChatClassifierPrompt({
       text: 'btc looking juicy',
+      availableMarkets: [
+        { symbol: 'BTC', maxLeverage: 40 },
+        { symbol: 'xyz:TSLA', maxLeverage: 10 },
+      ],
     })
     expect(systemPrompt).toMatch(/AUTHOR/i)
     expect(systemPrompt).toMatch(/invert/i)
     expect(userMessage).toContain('btc looking juicy')
+    expect(userMessage).toContain('BTC, xyz:TSLA')
   })
 
   it('no-ops when disabled', async () => {

@@ -276,7 +276,7 @@ describe('assertDeploySessionPhaseBoundaries', () => {
     expect(() =>
       assertDeploySessionPhaseBoundaries({
         phase2PreFinalizeCalls: [
-          { data: ('0xafe8d7e9' + '00'.repeat(32)) as `0x${string}` },
+          { data: ('0x2c147792' + '00'.repeat(32)) as `0x${string}` },
           { data: ('0x4689260b' + '00'.repeat(64)) as `0x${string}` },
           { data: ('0x8522016e' + '00'.repeat(64)) as `0x${string}` },
         ],

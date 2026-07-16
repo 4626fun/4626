@@ -84,7 +84,7 @@ function listMarketHints(markets: readonly HyperliquidPerpMarket[] | undefined):
     return 'Common: BTC, ETH, SOL, DOGE, WIF, and Hyperliquid HIP-3 symbols like xyz:TSLA.'
   }
   const names = markets
-    .map((market) => String(market.name ?? '').trim())
+    .map((market) => String(market.symbol ?? '').trim())
     .filter(Boolean)
     .slice(0, 80)
   return names.length > 0 ? names.join(', ') : 'BTC, ETH, SOL'

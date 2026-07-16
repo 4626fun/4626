@@ -147,7 +147,7 @@ export async function verifyLotteryProductionReadiness(
 
   // Boost-off canary (requireBoostTimelockArmed=false) is only safe when both boost
   // sources are still zero. A configured source with an unarmed timelock leaves
-  // setBoostManager / setVe4626GaugeVoting immediately mutable under production traffic.
+  // setBoostManager / setve4626GaugeVoting immediately mutable under production traffic.
   if (!requireArmed) {
     try {
       const rawBoostManager = await params.publicClient.readContract({
