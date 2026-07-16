@@ -1423,6 +1423,24 @@ describe('inverse opinion decision ordering', () => {
     })
   })
 
+  it('does not re-trade when legacy reply claim is already owned after redeploy replay', async () => {
+    delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+    tryClaimCommandReplyMock.mockResolvedValueOnce(false)
+
+    await _executeInverseAkitaChatReactionBatchForTests({
+      intents: [intent],
+      flags: makeFlags({
+        roomId: '1659',
+        inverseAkitaChatReactionRoomIds: ['1659'],
+      }),
+      roomId: '1659',
+      jwt: 'jwt-current',
+    })
+
+    expect(tryClaimCommandReplyMock).toHaveBeenCalled()
+    expect(executeInverseAkitaChatReactionMock).not.toHaveBeenCalled()
+  })
+
 })
 
 describe('buildAlfaClubOutboundFrame reply/thread contract', () => {

@@ -61,7 +61,8 @@ const RECENT_PROFILE_SCAN = 300
 const AVATAR_FETCH_LIMIT = 12
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const DEFAULT_ARWEAVE_GATEWAY = 'https://arweave.net/'
-const STATS_CACHE_TTL_MS = 90_000
+/** In-process TTL — keeps warm serverless instances from re-hitting DB every poll. */
+const STATS_CACHE_TTL_MS = 60_000
 
 type StatsCacheEntry = {
   expiresAt: number
@@ -69,6 +70,11 @@ type StatsCacheEntry = {
 }
 
 let statsCache: StatsCacheEntry | null = null
+
+function wantsFreshStats(req: { query?: Record<string, unknown> }): boolean {
+  const raw = String(req.query?.fresh ?? req.query?.nocache ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
 
 function toIpfsPath(raw: string): string {
   const value = String(raw || '').trim()
@@ -271,9 +277,11 @@ export default async function handler(req: any, res: any) {
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
+  const fresh = wantsFreshStats(req)
   const now = Date.now()
-  if (statsCache && statsCache.expiresAt > now) {
-    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30')
+  if (!fresh && statsCache && statsCache.expiresAt > now) {
+    // Short CDN TTL so the dock count can move within a minute of new signups.
+    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45')
     return res.status(200).json({ success: true, data: statsCache.data } satisfies ApiEnvelope<WaitlistStatsResponse>)
   }
 
@@ -302,7 +310,11 @@ export default async function handler(req: any, res: any) {
       avatars,
     }
     statsCache = { expiresAt: now + STATS_CACHE_TTL_MS, data }
-    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30')
+    if (fresh) {
+      setNoStore(res)
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45')
+    }
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
   } catch (error) {

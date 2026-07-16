@@ -798,9 +798,15 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     props.walletSessionAddress,
   ])
 
-  const fetchWaitlistStats = useCallback(async () => {
+  const fetchWaitlistStats = useCallback(async (options?: { fresh?: boolean }) => {
     try {
-      const res = await apiFetch('/api/waitlist/stats', { headers: { Accept: 'application/json' } })
+      const fresh = options?.fresh === true
+      const path = fresh ? '/api/waitlist/stats?fresh=1' : '/api/waitlist/stats'
+      const res = await apiFetch(path, {
+        headers: { Accept: 'application/json' },
+        // Avoid sticky browser HTTP cache so the dock count can move after join.
+        cache: 'no-store',
+      })
       if (!res?.ok) return
       const json = (await res.json().catch(() => null)) as ApiEnvelope<{
         signedUpCount?: number
@@ -859,9 +865,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       void fetchWaitlistStats()
     }
     const timeoutId = window.setTimeout(runFetch, 0)
-    const intervalId = window.setInterval(runFetch, 60_000)
+    // Match the CDN max-age window so the visible dock can pick up new signups.
+    const intervalId = window.setInterval(runFetch, 30_000)
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') runFetch()
+      if (document.visibilityState === 'visible') void fetchWaitlistStats({ fresh: true })
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
@@ -905,7 +912,9 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     })
     setLocalSessionAddress(confirmedSessionAddress)
     setServerSessionAddress(confirmedSessionAddress)
-    void fetchWaitlistStats()
+    // Optimistic bump so the dock doesn't wait on CDN/in-process cache after join.
+    setListCount((current) => (current == null ? current : current + 1))
+    void fetchWaitlistStats({ fresh: true })
   }, [fetchWaitlistStats])
 
   const handleAlfaClubContinue = useCallback(async () => {

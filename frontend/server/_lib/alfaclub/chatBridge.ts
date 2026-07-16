@@ -2050,7 +2050,12 @@ async function sendCommandReplyToRoom(params: {
 }
 
 type BridgeState = {
-  seeded: boolean
+  /**
+   * Rooms that already completed first-tick history seed. Must be per-room:
+   * a global flag lets room 1043 seed first, then room 1659 replays full
+   * history (and re-fires inverse chat trades) on its first successful poll.
+   */
+  seededRoomIds: Set<string>
   seenMessageIds: Set<string>
   liveCommandQueue: AlfaClubCommandMessage[]
   liveFallbackActive: boolean
@@ -2063,7 +2068,7 @@ type BridgeState = {
 let activeHandle: ReturnType<typeof setInterval> | null = null
 let activeTickPromise: Promise<void> | null = null
 let bridgeState: BridgeState = {
-  seeded: false,
+  seededRoomIds: new Set<string>(),
   seenMessageIds: new Set<string>(),
   liveCommandQueue: [],
   liveFallbackActive: false,
@@ -3297,11 +3302,15 @@ async function executeInverseAkitaChatReactionBatch(params: {
           commandHead: 'inverse-chat',
         })
     if (!replyClaimed) {
+      // Claim is the durable dedupe across Railway redeploys. Never trade again
+      // when the ledger already owns this message — logging alone used to let
+      // the same "long eth" open a second short after seed replay.
       logger.info('[alfaclub-chat] inverse_chat_reply_skipped_already_claimed', {
         roomId: params.roomId,
         messageId: intent.id,
         sender: intent.sender,
       })
+      continue
     }
     try {
       const result = await executeInverseAkitaChatReaction({
@@ -3934,7 +3943,7 @@ async function runBridgeTick(
         flags,
       })
     }
-    bridgeState.seeded = true
+    bridgeState.seededRoomIds.add(roomId)
     const liveCommands = drainLiveCommands()
     const liveBatch = await executeCommandBatch({
       commands: liveCommands,
@@ -4082,9 +4091,10 @@ async function runBridgeTick(
   // First tick in long-running mode seeds the dedupe window and intentionally
   // avoids replaying historical commands sent before the bridge started.
   // In one-shot cron mode we continue so newly ingested commands are handled
-  // on the same invocation.
-  if (!bridgeState.seeded) {
-    bridgeState.seeded = true
+  // on the same invocation. Seed is per-room so room 1043 cannot unlock a
+  // full history replay for room 1659 on the next poll.
+  if (!bridgeState.seededRoomIds.has(roomId)) {
+    bridgeState.seededRoomIds.add(roomId)
     if (seedHistoryOnlyOnFirstTick) {
       const recentCutoffMs = Date.now() - FIRST_TICK_RECENT_COMMAND_WINDOW_MS
       const recentMessages = unseenMessages.filter((message) => {
@@ -4353,7 +4363,7 @@ export function startAlfaClubChatBridge(opts?: {
   }
 
   bridgeState = {
-    seeded: false,
+    seededRoomIds: new Set<string>(),
     seenMessageIds: new Set<string>(),
     liveCommandQueue: [],
     liveFallbackActive: false,
@@ -4690,7 +4700,7 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   activeTickPromise = null
   closeLiveSocket()
   bridgeState = {
-    seeded: false,
+    seededRoomIds: new Set<string>(),
     seenMessageIds: new Set<string>(),
     liveCommandQueue: [],
     liveFallbackActive: false,
