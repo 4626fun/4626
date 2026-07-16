@@ -37,10 +37,12 @@ import {
   type AlfaClubRoomDirectoryItem,
   formatRoomPoints,
   formatRoomType,
+  formatRoomUsd,
   readRecentRoomIds,
   rememberRecentRoom,
   roomCurveTierRingClassName,
 } from '@/lib/alfaclub/roomDirectory'
+import { alfaclubRoomPrimaryTitle } from '@/lib/alfaclub/roomLabel'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -462,7 +464,7 @@ export function AlfaClubTradingRooms() {
               AlfaClub rooms
             </span>
             <span className="block truncate text-sm font-medium text-zinc-200">
-              {selectedRoom?.displayLabel ?? (selectedRoomId ? `Room #${selectedRoomId}` : 'Choose a room')}
+              {selectedRoom ? alfaclubRoomPrimaryTitle(selectedRoom) : selectedRoomId ? `Room #${selectedRoomId}` : 'Choose a room'}
             </span>
             {selectedRoom ? (
               <span className="mt-0.5 block truncate font-mono text-[10px] capitalize text-zinc-400">
@@ -655,9 +657,9 @@ function RoomHeader({
   onSelectTab: (tab: AlfaClubRoomHubTab) => void
 }) {
   const selectedHandle = (room?.creatorHandle ?? '').trim().replace(/^@+/, '')
-  // room.displayLabel often already embeds "by <handle>" (e.g. "AKITA by wenakita") — use
-  // the raw roomName for the headline so the separate byline below doesn't repeat it.
-  const title = room?.roomName || room?.displayLabel || `Room #${roomId}`
+  const title = room
+    ? alfaclubRoomPrimaryTitle(room)
+    : `Room #${roomId}`
   const bannerSrc = room?.imageUrl?.trim() || null
   return (
     <header className="pt-2">
@@ -687,9 +689,26 @@ function RoomHeader({
               {selectedHandle ? <p className="mt-1 text-sm text-zinc-400">by @{selectedHandle}</p> : null}
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-2 text-right sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-2 text-right sm:grid-cols-3 xl:grid-cols-6">
+            <HeaderStat
+              label="Key price"
+              value={
+                safetySummary?.pricing
+                  ? formatRoomUsd(safetySummary.pricing.currentUsdc)
+                  : formatRoomUsd(room?.keyPriceUsdc)
+              }
+            />
+            <HeaderStat label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
+            <HeaderStat label="Fees generated" value={formatRoomUsd(room?.feesGeneratedUsdc)} />
+            <HeaderStat
+              label="Trading fund"
+              value={
+                safetySummary?.pricing
+                  ? formatRoomUsd(safetySummary.pricing.treasuryUsdc)
+                  : formatRoomUsd(room?.tradingFundUsdc)
+              }
+            />
             <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
-            <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
             <HeaderStat label="Safety" value={safetySummary?.label ?? 'Open tab'} />
           </dl>
         </div>
@@ -794,7 +813,7 @@ function DiscoveryLanding({
                   <SelectedRoomAvatar room={room} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-zinc-100">
-                      {room.displayLabel || room.roomName}
+                      {alfaclubRoomPrimaryTitle(room)}
                     </p>
                     <p className="mt-1 text-xs text-zinc-500">{formatRoomType(room.roomType)}</p>
                   </div>
@@ -891,15 +910,31 @@ function OverviewPanel({
         {room?.description ? (
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">{room.description}</p>
         ) : null}
-        <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-2">
+        <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <FactCard
+            label="Key price"
+            value={
+              pricing ? formatUsd(pricing.currentUsdc) : formatRoomUsd(room?.keyPriceUsdc)
+            }
+          />
+          <FactCard label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
+          <FactCard label="Fees generated" value={formatRoomUsd(room?.feesGeneratedUsdc)} />
+          <FactCard
+            label="Trading fund"
+            value={
+              pricing
+                ? formatUsd(pricing.treasuryUsdc)
+                : formatRoomUsd(room?.tradingFundUsdc)
+            }
+          />
           <FactCard label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
+          <FactCard label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
           <FactCard label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
           <FactCard label="Bonding curve" value={room?.tier ?? '—'} />
           <FactCard label="Last updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
         </dl>
         {pricing ? (
-          <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <FactCard label="Current price" value={formatUsd(pricing.currentUsdc)} />
+          <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <FactCard label="Buy next key" value={formatUsd(pricing.buyUsdc)} />
             <FactCard label="Sell 1 key" value={formatUsd(pricing.sellUsdc)} />
             <FactCard label="Reported fund" value={formatUsd(pricing.reportedFundUsdc)} />

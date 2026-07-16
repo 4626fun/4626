@@ -11,9 +11,11 @@ import {
   type AlfaClubRoomSort,
   formatRoomPoints,
   formatRoomType,
+  formatRoomUsd,
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
+import { alfaclubRoomPrimaryTitle } from '@/lib/alfaclub/roomLabel'
 import { cn } from '@/lib/shared/utils'
 
 type RoomTypeFilter = 'all' | AlfaClubRoomDirectoryItem['roomType']
@@ -212,11 +214,15 @@ export function AlfaClubExploreRooms() {
 
         <section className="overflow-hidden rounded-2xl bg-black/30 ring-1 ring-white/[0.08]" aria-label="AlfaClub room results">
           <div className="overflow-x-auto scrollbar-hide">
-            <div className="min-w-[900px]">
-              <div className="grid grid-cols-[minmax(300px,1.6fr)_130px_105px_120px_90px_90px_140px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
+            <div className="min-w-[1280px]">
+              <div className="grid grid-cols-[minmax(280px,1.5fr)_110px_90px_100px_100px_100px_100px_100px_80px_80px_120px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
                 <span>Room</span>
                 <span className="text-center">Type</span>
                 <span className="text-center">Tier</span>
+                <span className="text-right">Key price</span>
+                <span className="text-right">Volume</span>
+                <span className="text-right">Fees</span>
+                <span className="text-right">Trading fund</span>
                 <span className="text-right">Points</span>
                 <span className="text-right">Keys</span>
                 <span className="text-right">Holders</span>
@@ -321,13 +327,13 @@ function RoomSelect<T extends string>({
 }
 
 function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
-  const title = room.displayLabel || room.roomName || `Room #${room.roomId}`
+  const title = alfaclubRoomPrimaryTitle(room)
   const handle = room.creatorHandle?.trim().replace(/^@+/, '')
   const tierRing = roomCurveTierRingClassName(room)
   return (
     <Link
       to={`/rooms?roomId=${encodeURIComponent(room.roomId)}`}
-      className="group grid grid-cols-[minmax(300px,1.6fr)_130px_105px_120px_90px_90px_140px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
+      className="group grid grid-cols-[minmax(280px,1.5fr)_110px_90px_100px_100px_100px_100px_100px_80px_80px_120px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
     >
       <div className="flex min-w-0 items-center gap-3 pr-4">
         {room.imageUrl ? (
@@ -362,6 +368,18 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
       <span className="text-center text-zinc-300">{formatRoomType(room.roomType)}</span>
       <span className="text-center capitalize text-zinc-400">{room.tier ?? '—'}</span>
       <span className="text-right font-medium tabular-nums text-zinc-100">
+        {formatRoomUsd(room.keyPriceUsdc)}
+      </span>
+      <span className="text-right tabular-nums text-zinc-200">
+        {formatRoomUsd(room.volumeUsdc)}
+      </span>
+      <span className="text-right tabular-nums text-zinc-200">
+        {formatRoomUsd(room.feesGeneratedUsdc)}
+      </span>
+      <span className="text-right tabular-nums text-zinc-200">
+        {formatRoomUsd(room.tradingFundUsdc)}
+      </span>
+      <span className="text-right tabular-nums text-zinc-400">
         {formatRoomPoints(room.roomPoints)}
       </span>
       <span className="text-right tabular-nums text-zinc-300">

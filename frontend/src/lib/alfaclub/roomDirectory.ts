@@ -9,6 +9,14 @@ export type AlfaClubRoomDirectoryItem = {
   tier: AlfaRoomTier | null
   keySupply: number | null
   roomPoints: number | null
+  /** Current key mid/buy price in USD. */
+  keyPriceUsdc: number | null
+  /** Lifetime key-trade volume in USD. */
+  volumeUsdc: number | null
+  /** Creator fees / rewards accrued in USD. */
+  feesGeneratedUsdc: number | null
+  /** Reported trading-fund size in USD (spot + Hyperliquid + Polymarket). */
+  tradingFundUsdc: number | null
   imageUrl: string | null
   description: string | null
   featured: boolean
@@ -30,6 +38,27 @@ export function formatRoomPoints(value: number | null): string {
     maximumFractionDigits: value >= 1_000 ? 1 : 0,
   }).format(value)
   return `${formatted} pts`
+}
+
+/** Format AlfaClub USDC amounts for directory/dashboard metrics. */
+export function formatRoomUsd(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: abs >= 1000 ? 0 : abs >= 1 ? 2 : 4,
+  })
+}
+
+/**
+ * AlfaClub snapshot prices/volumes are typically USDC with 6 decimals.
+ * Values already in plain USD (e.g. fund_size) pass through unchanged.
+ */
+export function normalizeAlfaClubUsdc(raw: number | null | undefined): number | null {
+  if (raw == null || !Number.isFinite(raw)) return null
+  if (raw >= 1_000_000) return raw / 1_000_000
+  return raw
 }
 
 /**

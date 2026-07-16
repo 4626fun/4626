@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatAlfaClubRoomLabel } from './roomLabel'
+import { alfaclubRoomPrimaryTitle, formatAlfaClubRoomLabel } from './roomLabel'
 
 describe('formatAlfaClubRoomLabel', () => {
   it('combines room title and creator handle', () => {
@@ -33,3 +33,26 @@ describe('formatAlfaClubRoomLabel', () => {
     ).toBe('Room #42')
   })
 })
+
+describe('alfaclubRoomPrimaryTitle', () => {
+  it('omits the trailing by-handle when the handle is shown separately', () => {
+    expect(
+      alfaclubRoomPrimaryTitle({
+        roomId: '1',
+        roomName: 'AlfaClub Official',
+        creatorHandle: 'AlfaClubdotapp',
+        displayLabel: 'AlfaClub Official by AlfaClubdotapp',
+      }),
+    ).toBe('AlfaClub Official')
+  })
+})
+
+  it('uses Room #id for generic titles so the handle is not duplicated', () => {
+    expect(
+      alfaclubRoomPrimaryTitle({
+        roomId: '1',
+        roomName: 'Room 1',
+        creatorHandle: 'AlfaClubdotapp',
+      }),
+    ).toBe('Room #1')
+  })

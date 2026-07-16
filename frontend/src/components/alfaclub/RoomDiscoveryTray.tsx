@@ -29,6 +29,7 @@ import {
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
+import { alfaclubRoomPrimaryTitle } from '@/lib/alfaclub/roomLabel'
 import { cn } from '@/lib/shared/utils'
 
 type DiscoveryEntry =
@@ -619,11 +620,13 @@ function RoomRow({
   onFocus: () => void
   onSelect: (roomId: string) => void
 }) {
+  const title = alfaclubRoomPrimaryTitle(room)
   return (
     <button
       type="button"
       id={`alfaclub-room-option-${room.roomId}`}
       role="option"
+      aria-label={`${title}, room ${room.roomId}`}
       aria-selected={selected}
       aria-current={selected ? 'true' : undefined}
       tabIndex={-1}
@@ -648,7 +651,7 @@ function RoomRow({
       <RoomAvatar room={room} />
       <span className="min-w-0 flex-1 overflow-hidden">
         <span className="flex items-center justify-between gap-2">
-          <span className="truncate text-[13px] font-semibold">{room.displayLabel || room.roomName}</span>
+          <span className="truncate text-[13px] font-semibold">{title}</span>
           <span className="shrink-0 rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[9px] text-zinc-500">
             #{room.roomId}
           </span>

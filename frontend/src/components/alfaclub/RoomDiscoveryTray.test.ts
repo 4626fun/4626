@@ -28,6 +28,10 @@ function room(
     tier,
     keySupply: Number(roomId),
     roomPoints: Number(roomId) * 100,
+    keyPriceUsdc: null,
+    volumeUsdc: null,
+    feesGeneratedUsdc: null,
+    tradingFundUsdc: null,
     imageUrl: null,
     description: null,
     featured,
@@ -165,7 +169,7 @@ describe('RoomDiscoveryTray grouping', () => {
       'social',
     )
 
-    const roomThree = screen.getByRole('option', { name: /Room 3/ })
+    const roomThree = screen.getByRole('option', { name: /Room #3, room 3/i })
     expect(roomThree.getAttribute('data-room-type')).toBe('social')
     expect(roomThree.textContent).not.toContain('SOC')
     expect(roomThree.textContent).toContain('K 3')
@@ -208,8 +212,8 @@ describe('RoomDiscoveryTray grouping', () => {
       }),
     )
 
-    const tradingRoom = await screen.findByRole('option', { name: /Room 1/ })
-    const socialRoom = screen.getByRole('option', { name: /Room 2/ })
+    const tradingRoom = await screen.findByRole('option', { name: /Room #1, room 1/i })
+    const socialRoom = screen.getByRole('option', { name: /Room #2, room 2/i })
 
     expect(tradingRoom.className).toContain('bg-cyan')
     expect(socialRoom.className).toContain('bg-fuchsia')

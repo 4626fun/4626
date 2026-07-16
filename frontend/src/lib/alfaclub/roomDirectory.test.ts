@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatRoomPoints,
+  formatRoomUsd,
+  normalizeAlfaClubUsdc,
   readRecentRoomIds,
   rememberRecentRoom,
   sortAlfaClubRooms,
@@ -23,6 +25,10 @@ function room(
     tier: 'club',
     keySupply,
     roomPoints,
+    keyPriceUsdc: null,
+    volumeUsdc: null,
+    feesGeneratedUsdc: null,
+    tradingFundUsdc: null,
     imageUrl: null,
     description: null,
     featured: false,
@@ -36,6 +42,13 @@ describe('AlfaClub room directory helpers', () => {
     expect(formatRoomPoints(12_400)).toBe('12.4K pts')
     expect(formatRoomPoints(42)).toBe('42 pts')
     expect(formatRoomPoints(null)).toBe('—')
+  })
+
+  it('normalizes micro-USDC snapshot amounts and formats USD metrics', () => {
+    expect(normalizeAlfaClubUsdc(102_400_000)).toBe(102.4)
+    expect(normalizeAlfaClubUsdc(628.232661)).toBe(628.232661)
+    expect(formatRoomUsd(102.4)).toBe('$102.40')
+    expect(formatRoomUsd(null)).toBe('—')
   })
 
   it('sorts by points, keys, or freshness', () => {

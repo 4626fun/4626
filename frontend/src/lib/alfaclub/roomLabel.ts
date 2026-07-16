@@ -43,3 +43,31 @@ export function formatAlfaClubRoomOptionLabel(
   if (keys != null && keys > 0) return `${base} · ${keys.toLocaleString()} keys`
   return base
 }
+
+
+/** Title for UIs that already show the creator handle separately. */
+export function alfaclubRoomPrimaryTitle(input: AlfaClubRoomLabelInput & {
+  displayLabel?: string | null
+}): string {
+  const roomId = input.roomId.trim()
+  const handle = normalizeHandle(input.creatorHandle)
+  const rawName = normalizeRoomName(input.roomName)
+  if (rawName && !isGenericRoomName(rawName, roomId)) {
+    return stripTrailingByHandle(rawName, handle)
+  }
+  const display = normalizeRoomName(input.displayLabel)
+  if (display) {
+    const stripped = stripTrailingByHandle(display, handle)
+    if (stripped && !isGenericRoomName(stripped, roomId)) return stripped
+  }
+  // Prefer a neutral room id over the creator handle — callers already render @handle below.
+  return `Room #${roomId}`
+}
+
+function stripTrailingByHandle(label: string, handle: string): string {
+  if (!handle) return label
+  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const suffix = new RegExp(`\\s+by\\s+@?${escaped}$`, 'i')
+  const stripped = label.replace(suffix, '').trim()
+  return stripped || label
+}
