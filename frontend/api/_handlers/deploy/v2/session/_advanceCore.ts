@@ -20,6 +20,7 @@ import { createBundlerClient, createPaymasterClient, entryPoint06Address, sendUs
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   createDeploySessionBundlerTransport,
+  DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
   peekSelfBundledTxHash,
   readUserOperationEventSuccess,
   withDeploySessionUserOpGas,
@@ -2004,6 +2005,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       let nextHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageKey]: null }
       try {
+        let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
         if (toStep === 'phase2_core_sent') {
           const precreate = await ensurePhase2CoreCreatesPrecreated(fullCalls)
           if (!precreate.skipped) {
@@ -2012,6 +2014,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
               phase2CorePrecreateAt: new Date().toISOString(),
               phase2CorePrecreateDeployed: precreate.deployed,
               phase2CorePrecreateExisting: precreate.existing,
+            }
+            if (precreate.deployed.length + precreate.existing.length >= 3) {
+              phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
             }
           } else if (precreate.reason) {
             payloadPatch = {
@@ -2022,8 +2027,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         }
         // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
         // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
+        // When phase2 CREATE2s are already on-chain, use wiring-only gas (fits CDP).
         nextHash = await sendUserOperation(bundler, {
-          account: withDeploySessionUserOpGas(account),
+          account: withDeploySessionUserOpGas(account, phase2AccountGas),
           calls: fullCalls,
         })
       } catch (err) {
@@ -2251,11 +2257,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     try {
       // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
       // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
+      let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
       if (sentStep === 'phase2_core_sent') {
-        await ensurePhase2CoreCreatesPrecreated(fullCalls)
+        const precreate = await ensurePhase2CoreCreatesPrecreated(fullCalls)
+        if (!precreate.skipped && precreate.deployed.length + precreate.existing.length >= 3) {
+          phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
+        }
       }
       const nextHash = await sendUserOperation(bundler, {
-        account: withDeploySessionUserOpGas(account),
+        account: withDeploySessionUserOpGas(account, phase2AccountGas),
         calls: fullCalls,
       })
       await updateDeploySession({

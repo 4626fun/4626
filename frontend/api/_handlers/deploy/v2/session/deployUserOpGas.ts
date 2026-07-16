@@ -47,18 +47,27 @@ export const BASE_MAX_TX_GAS = 16_777_216n
  * EntryPoint 0.6 AA95: before running an op it requires
  * `gasleft() * 63 / 64 >= callGasLimit + verificationGasLimit`.
  * Always submit handleOps with the full Base tx gas cap, and keep
- * call+verification under that 63/64 budget (with a small safety margin).
+ * call+verification under that 63/64 budget (with a safety margin that
+ * absorbs EntryPoint preamble / calldata overhead before the AA95 check).
  */
-const SELF_BUNDLE_AA95_SAFETY = 50_000n
+const SELF_BUNDLE_AA95_SAFETY = 500_000n
 
 /** In-process map so advance can resolve self-bundled receipts without a bundler index. */
 const selfBundledTxByUserOpHash = new Map<string, Hex>()
 
 export const DEPLOY_SESSION_USEROP_GAS = {
-  // Maximize call gas under AA95 budget: BASE_MAX*63/64 - SAFETY ≈ 16_465_072.
-  // Keep verification high enough for CSW owner-index validateUserOp.
-  callGasLimit: 15_850_000n,
-  verificationGasLimit: 600_000n,
+  // Observed AA95 failure with call 15.85M + ver 600k under Base 2^24 (2026-07-16):
+  // handleOps preamble shrinks gasleft before the check. Keep a wide margin.
+  // Phase2 CREATE2 fan-out is pre-created separately; wiring fits well under this.
+  callGasLimit: 14_000_000n,
+  verificationGasLimit: 500_000n,
+  preVerificationGas: 100_000n,
+} as const
+
+/** Tighter limits once phase2 CREATE2 targets already exist (wiring-only UserOp). */
+export const DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS = {
+  callGasLimit: 3_000_000n,
+  verificationGasLimit: 500_000n,
   preVerificationGas: 100_000n,
 } as const
 
@@ -85,7 +94,10 @@ type AccountWithUserOpGas = {
   [key: string]: unknown
 }
 
-export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(account: T): T {
+export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(
+  account: T,
+  gas: typeof DEPLOY_SESSION_USEROP_GAS | typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS = DEPLOY_SESSION_USEROP_GAS,
+): T {
   const previous = account.userOperation
   return {
     ...account,
@@ -94,9 +106,9 @@ export function withDeploySessionUserOpGas<T extends AccountWithUserOpGas>(accou
       estimateGas: async (userOperation: unknown) => {
         if (typeof previous?.estimateGas === 'function') {
           const estimated = await previous.estimateGas(userOperation)
-          return { ...estimated, ...DEPLOY_SESSION_USEROP_GAS }
+          return { ...estimated, ...gas }
         }
-        return { ...DEPLOY_SESSION_USEROP_GAS }
+        return { ...gas }
       },
     },
   }

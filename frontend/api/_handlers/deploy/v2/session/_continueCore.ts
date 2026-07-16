@@ -7,7 +7,7 @@ import { base } from 'viem/chains'
 import { createBundlerClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
-import { createDeploySessionBundlerTransport, withDeploySessionUserOpGas } from './deployUserOpGas.js'
+import { createDeploySessionBundlerTransport, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS, withDeploySessionUserOpGas } from './deployUserOpGas.js'
 import { ensurePhase2CoreCreatesPrecreated } from './phase2CorePrecreate.js'
 import {
   handleOptions,
@@ -1066,6 +1066,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let lastUserOpHash: Hex
       let payloadPatch: Record<string, unknown> = { [stageHashKey]: null }
       try {
+        let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
         if (toStep === 'phase2_core_sent') {
           const precreate = await ensurePhase2CoreCreatesPrecreated(calls)
           if (!precreate.skipped) {
@@ -1074,6 +1075,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               phase2CorePrecreateAt: new Date().toISOString(),
               phase2CorePrecreateDeployed: precreate.deployed,
               phase2CorePrecreateExisting: precreate.existing,
+            }
+            if (precreate.deployed.length + precreate.existing.length >= 3) {
+              phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
             }
           } else if (precreate.reason) {
             payloadPatch = {
@@ -1085,7 +1089,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
         // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         lastUserOpHash = await sendUserOperation(bundlerClient, {
-          account: withDeploySessionUserOpGas(account),
+          account: withDeploySessionUserOpGas(account, phase2AccountGas),
           calls,
         })
       } catch (err) {
