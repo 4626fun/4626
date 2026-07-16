@@ -32,8 +32,9 @@ describe('inverseAkitaChatSelfSenders', () => {
     ])
   })
 
-  it('includes Hermit owner, protocol CSW, JWT wallet, and explicit self senders', () => {
+  it('blocks only Hermit bot wallets (JWT + explicit self senders), not the operator', () => {
     vi.stubEnv('HERMIT_OWNER_ADDRESS', '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9')
+    vi.stubEnv('PROTOCOL_CSW_ADDRESS', '0x793ca28123cba3ca3c20b9c6c67f37510c89c145')
     vi.stubEnv(
       'ALFACLUB_INVERSE_AKITA_CHAT_SELF_SENDERS',
       '0x1111111111111111111111111111111111111111',
@@ -44,12 +45,16 @@ describe('inverseAkitaChatSelfSenders', () => {
     )
 
     const addresses = readInverseAkitaChatSelfSenderAddresses()
-    expect(addresses.has('0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9')).toBe(true)
     expect(addresses.has('0x8719fa7be10533fd69885b124a8c84f9c51071af')).toBe(true)
     expect(addresses.has('0x1111111111111111111111111111111111111111')).toBe(true)
+    expect(addresses.has('0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9')).toBe(false)
+    expect(addresses.has('0x793ca28123cba3ca3c20b9c6c67f37510c89c145')).toBe(false)
     expect(
       isInverseAkitaChatSelfSender('0x8719fa7be10533fd69885b124a8c84f9c51071af'),
     ).toBe(true)
+    expect(
+      isInverseAkitaChatSelfSender('0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'),
+    ).toBe(false)
     expect(
       isInverseAkitaChatSelfSender('0x2222222222222222222222222222222222222222'),
     ).toBe(false)

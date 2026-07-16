@@ -1,8 +1,3 @@
-import {
-  CANONICAL_CSW_ADDRESS,
-  PROTOCOL_CSW_ADDRESS,
-} from '../../../src/wallet/canonicalWalletPolicy.js'
-
 declare const process: { env: Record<string, string | undefined> }
 
 const HEX_ADDRESS_RE = /^0x[a-f0-9]{40}$/i
@@ -66,15 +61,15 @@ export function readAlfaClubChatJwtWalletAddresses(
 }
 
 /**
- * Addresses that must never trigger InverseAKITA chat reactions:
- * protocol/operator CSWs, Hermit owner, chat-JWT posting wallet, and optional env extras.
+ * Addresses that must never trigger InverseAKITA chat reactions.
+ *
+ * Only Hermit4626's own posting identity — the chat-JWT wallet and optional
+ * `ALFACLUB_INVERSE_AKITA_CHAT_SELF_SENDERS`. Operator / room-owner wallets
+ * (`HERMIT_OWNER_ADDRESS`, CANONICAL/PROTOCOL CSW) are eligible like any other
+ * staker so their chat takes can be faded.
  */
 export function readInverseAkitaChatSelfSenderAddresses(): Set<string> {
   const addresses = new Set<string>()
-  pushAddress(addresses, CANONICAL_CSW_ADDRESS)
-  pushAddress(addresses, PROTOCOL_CSW_ADDRESS)
-  pushAddress(addresses, process.env.PROTOCOL_CSW_ADDRESS)
-  pushAddress(addresses, process.env.HERMIT_OWNER_ADDRESS)
   pushCsv(addresses, process.env.ALFACLUB_INVERSE_AKITA_CHAT_SELF_SENDERS)
   for (const address of readAlfaClubChatJwtWalletAddresses()) {
     addresses.add(address)

@@ -3090,7 +3090,6 @@ function ensureLiveCommandSocket(params: {
         const inverseIntents = await collectInverseAkitaChatTradeIntents({
           roomId: targetRoomId,
           messages: roomMessages as InverseAkitaChatHistoryMessage[],
-          selfAddress: CANONICAL_CSW_ADDRESS,
           availableMarkets:
             (await loadInverseAkitaChatReactionMarkets()) ?? undefined,
         })
@@ -4115,7 +4114,6 @@ async function runBridgeTick(
         ? await collectInverseAkitaChatTradeIntents({
             roomId,
             messages: recentMessages as InverseAkitaChatHistoryMessage[],
-            selfAddress: CANONICAL_CSW_ADDRESS,
             availableMarkets:
               (await loadInverseAkitaChatReactionMarkets()) ?? undefined,
           })
@@ -4185,7 +4183,6 @@ async function runBridgeTick(
   const inverseChatIntents = await collectInverseAkitaChatTradeIntents({
     roomId,
     messages: unseenMessages as InverseAkitaChatHistoryMessage[],
-    selfAddress: CANONICAL_CSW_ADDRESS,
     availableMarkets: inverseChatMarkets ?? undefined,
   })
   if (inverseChatIntents.length > 0) {
