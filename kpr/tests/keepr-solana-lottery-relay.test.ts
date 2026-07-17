@@ -7,7 +7,8 @@ import {
 import { normalizeSolanaOrchestratorAction } from '../solana-keeper-orchestrator.js'
 import {
   assessSolanaLotteryLzTransportReadiness,
-  buildSolanaLotteryLzV2PayloadFields,
+  buildSolanaLotteryLzV3PayloadFields,
+  hashSolanaLotterySourceEventId,
   SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE,
 } from '../utils/solanaLotteryLzTransport.js'
 import { buildSolanaLotterySourceEventId } from '../utils/solanaLotterySourceEventId.js'
@@ -20,6 +21,7 @@ describe('keepr solana lottery relay (LZ-era fail-closed)', () => {
     delete process.env.SOLANA_LOTTERY_INGEST_ENABLED
     delete process.env.SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP
     delete process.env.SOLANA_BRIDGE_ADAPTER_ADDRESS
+    delete process.env.LOTTERY_MANAGER
   })
 
   it('does not register relay/submit on orchestrator allowlist', () => {
@@ -30,9 +32,26 @@ describe('keepr solana lottery relay (LZ-era fail-closed)', () => {
   })
 
   it('relay flag disabled by default / transport fail-closed', () => {
-    const readiness = assessSolanaLotteryLzTransportReadiness()
+    const readiness = assessSolanaLotteryLzTransportReadiness({})
     expect(readiness.relayEntriesEnabled).toBe(false)
     expect(readiness.ready).toBe(false)
+    expect(readiness.reasons).toContain('missing_lottery_manager')
+  })
+
+  it('accepts only the canonical v1.19.1 LotteryManager target', () => {
+    const baseEnv = {
+      SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+    }
+    expect(assessSolanaLotteryLzTransportReadiness({
+      ...baseEnv,
+      LOTTERY_MANAGER: '0xB45E68a5867935a5734E4185977F81c528006650',
+    }).ready).toBe(true)
+    expect(assessSolanaLotteryLzTransportReadiness({
+      ...baseEnv,
+      LOTTERY_MANAGER: '0xB68F359e01626Ec5d15C624037311C70DacAba43',
+    }).reasons).toContain('noncanonical_lottery_manager')
   })
 
   it('ingest stays disabled unless explicitly enabled', async () => {
@@ -69,33 +88,37 @@ describe('keepr solana lottery relay (LZ-era fail-closed)', () => {
   })
 
   it('forces base-odds coverage 0 in payload builder', () => {
-    const fields = buildSolanaLotteryLzV2PayloadFields({
+    const fields = buildSolanaLotteryLzV3PayloadFields({
       buyer: '0x1111111111111111111111111111111111111111',
       tokenIn: '0x2222222222222222222222222222222222222222',
       amount: 5n,
       sourceChainId: 0,
       buyerCurrentShareBalance: 0n,
+      sourceEventId: 'gen:prog:sig:0:0',
     })
     expect(fields.buyerCurrentShareBalance).toBe(0n)
+    expect(fields.sourceEventId).toBe(hashSolanaLotterySourceEventId('gen:prog:sig:0:0'))
     expect(() =>
-      buildSolanaLotteryLzV2PayloadFields({
+      buildSolanaLotteryLzV3PayloadFields({
         buyer: '0x1111111111111111111111111111111111111111',
         tokenIn: '0x2222222222222222222222222222222222222222',
         amount: 5n,
         sourceChainId: 0,
         buyerCurrentShareBalance: 9n,
+        sourceEventId: 'gen:prog:sig:0:0',
       }),
     ).toThrow('solana_lottery_coverage_must_be_zero')
   })
 
   it('rejects zero buyer/token addresses', () => {
     expect(() =>
-      buildSolanaLotteryLzV2PayloadFields({
+      buildSolanaLotteryLzV3PayloadFields({
         buyer: '0x0000000000000000000000000000000000000000',
         tokenIn: '0x2222222222222222222222222222222222222222',
         amount: 5n,
         sourceChainId: 0,
         buyerCurrentShareBalance: 0n,
+        sourceEventId: 'gen:prog:sig:0:0',
       }),
     ).toThrow('invalid_buyer')
   })

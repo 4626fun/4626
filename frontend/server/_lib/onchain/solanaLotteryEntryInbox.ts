@@ -52,6 +52,7 @@ export type SolanaLotteryInboxRow = {
   baseTxHash: string | null
   submittedAt: string | null
   confirmedAt: string | null
+  submitAttemptId: string | null
   attemptCount: number
   lastError: string | null
   createdAt: string
@@ -116,6 +117,7 @@ function mapRow(row: any): SolanaLotteryInboxRow {
     baseTxHash: row.base_tx_hash ? String(row.base_tx_hash) : null,
     submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
     confirmedAt: row.confirmed_at ? new Date(row.confirmed_at).toISOString() : null,
+    submitAttemptId: row.submit_attempt_id ? String(row.submit_attempt_id) : null,
     attemptCount: Number(row.attempt_count ?? 0),
     lastError: row.last_error ? String(row.last_error) : null,
     createdAt: new Date(row.created_at ?? Date.now()).toISOString(),
@@ -230,6 +232,10 @@ export async function claimSolanaLotteryInboxLeases(params: {
     UPDATE solana_lottery_entry_inbox AS inbox
     SET
       status = 'leased',
+      beneficiary_csw = NULL,
+      profile_id = NULL,
+      share_oft = NULL,
+      amount_scaled = NULL,
       lease_owner = ${leaseOwner},
       leased_at = NOW(),
       lease_expires_at = NOW() + (${leaseMs} || ' milliseconds')::interval,
@@ -250,8 +256,11 @@ export async function markInboxIdentity(params: {
   profileId: string
   shareOft: string
   amountScaled: string
+  leaseOwner: string
 }): Promise<SolanaLotteryInboxRow> {
   await ensureSchema(params.db)
+  const leaseOwner = params.leaseOwner.trim()
+  if (!leaseOwner) throw new Error('invalid_lease_owner')
   const result = await params.db.sql`
     UPDATE solana_lottery_entry_inbox
     SET
@@ -262,6 +271,10 @@ export async function markInboxIdentity(params: {
       coverage_share_balance = 0,
       updated_at = NOW()
     WHERE id = ${params.id}
+      AND status = 'leased'
+      AND lease_owner = ${leaseOwner}
+      AND lease_expires_at IS NOT NULL
+      AND lease_expires_at > NOW()
     RETURNING *
   `
   const row = result.rows?.[0]
@@ -380,20 +393,29 @@ export async function beginInboxSubmit(params: {
   db: Db
   id: number
   leaseOwner: string
+  submitAttemptId: string
 }): Promise<SolanaLotteryInboxRow> {
   await ensureSchema(params.db)
   const leaseOwner = params.leaseOwner.trim()
   if (!leaseOwner) throw new Error('invalid_lease_owner')
+  const submitAttemptId = params.submitAttemptId.trim()
+  if (!submitAttemptId) throw new Error('invalid_submit_attempt_id')
   const result = await params.db.sql`
     UPDATE solana_lottery_entry_inbox
     SET
       status = 'submitting',
+      submit_attempt_id = ${submitAttemptId},
       updated_at = NOW()
     WHERE id = ${params.id}
       AND status = 'leased'
       AND lease_owner = ${leaseOwner}
       AND lease_expires_at IS NOT NULL
       AND lease_expires_at > NOW()
+      AND beneficiary_csw IS NOT NULL
+      AND share_oft IS NOT NULL
+      AND amount_scaled IS NOT NULL
+      AND amount_scaled > 0
+      AND coverage_share_balance = 0
     RETURNING *
   `
   const row = result.rows?.[0]
@@ -409,12 +431,15 @@ export async function markInboxSubmitted(params: {
   db: Db
   id: number
   leaseOwner: string
+  submitAttemptId: string
   lzGuid?: string | null
   baseTxHash?: string | null
 }): Promise<SolanaLotteryInboxRow> {
   await ensureSchema(params.db)
   const leaseOwner = params.leaseOwner.trim()
   if (!leaseOwner) throw new Error('invalid_lease_owner')
+  const submitAttemptId = params.submitAttemptId.trim()
+  if (!submitAttemptId) throw new Error('invalid_submit_attempt_id')
   const lzGuid = params.lzGuid ? String(params.lzGuid).trim() : ''
   const baseTxHash = params.baseTxHash ? String(params.baseTxHash).trim() : ''
   if (!lzGuid && !baseTxHash) throw new Error('inbox_submitted_requires_receipt')
@@ -430,10 +455,16 @@ export async function markInboxSubmitted(params: {
       lease_expires_at = NULL,
       updated_at = NOW()
     WHERE id = ${params.id}
-      AND status = 'submitting'
-      AND lease_owner = ${leaseOwner}
-      AND lease_expires_at IS NOT NULL
-      AND lease_expires_at > NOW()
+      AND submit_attempt_id = ${submitAttemptId}
+      AND (
+        (status = 'submitting' AND lease_owner = ${leaseOwner})
+        OR (
+          status = 'quarantined'
+          AND quarantine_reason = 'submit_crash_unconfirmed'
+          AND lz_guid IS NULL
+          AND base_tx_hash IS NULL
+        )
+      )
     RETURNING *
   `
   const row = result.rows?.[0]
@@ -467,7 +498,7 @@ export async function markInboxConfirmed(params: {
   return mapRow(row)
 }
 
-/** Release a lease back to pending after a fail-closed transport error (retryable). */
+/** Release a pre-submit lease after a definitely effect-free error. */
 export async function releaseInboxLease(params: {
   db: Db
   id: number
@@ -481,13 +512,17 @@ export async function releaseInboxLease(params: {
     UPDATE solana_lottery_entry_inbox
     SET
       status = 'pending',
+      beneficiary_csw = NULL,
+      profile_id = NULL,
+      share_oft = NULL,
+      amount_scaled = NULL,
       lease_owner = NULL,
       lease_expires_at = NULL,
       last_error = ${params.lastError},
       updated_at = NOW()
     WHERE id = ${params.id}
       AND lease_owner = ${leaseOwner}
-      AND status IN ('leased', 'submitting')
+      AND status = 'leased'
     RETURNING *
   `
   const row = result.rows?.[0]
@@ -546,16 +581,23 @@ export async function replayQuarantinedInboxEvent(params: {
     SET
       status = 'pending',
       quarantine_reason = NULL,
+      submit_attempt_id = NULL,
+      beneficiary_csw = NULL,
+      profile_id = NULL,
+      share_oft = NULL,
+      amount_scaled = NULL,
       lease_owner = NULL,
       lease_expires_at = NULL,
       last_error = NULL,
       updated_at = NOW()
     WHERE source_event_id = ${params.sourceEventId}
       AND status = 'quarantined'
+      AND lz_guid IS NULL
+      AND base_tx_hash IS NULL
     RETURNING *
   `
   const row = result.rows?.[0]
-  if (!row) throw new Error('inbox_replay_not_quarantined')
+  if (!row) throw new Error('inbox_replay_not_quarantined_or_has_receipt')
   return mapRow(row)
 }
 
@@ -576,10 +618,16 @@ export async function getInboxSubmitRecoveryState(
   if (row.status === 'confirmed') {
     return { canSubmit: false, reason: 'already_confirmed', row }
   }
-  if (row.status === 'submitted' && (row.lzGuid || row.baseTxHash)) {
-    return { canSubmit: false, reason: 'already_submitted_has_receipt', row }
+  if (row.status === 'submitted') {
+    return {
+      canSubmit: false,
+      reason: row.lzGuid || row.baseTxHash
+        ? 'already_submitted_has_receipt'
+        : 'submitted_missing_receipt',
+      row,
+    }
   }
-  if (row.status === 'submitting') {
+  if (row.status === 'submitting' || row.status === 'leased') {
     return { canSubmit: false, reason: 'submit_in_flight_or_crash', row }
   }
   if (row.status === 'quarantined' || row.status === 'skipped_identity' || row.status === 'skipped_pricing') {
@@ -587,6 +635,9 @@ export async function getInboxSubmitRecoveryState(
   }
   if (row.instructionKind !== 'buy_path') {
     return { canSubmit: false, reason: 'not_buy_path', row }
+  }
+  if (row.status !== 'pending') {
+    return { canSubmit: false, reason: `not_submit_ready_${row.status}`, row }
   }
   return { canSubmit: true, reason: 'ok', row }
 }

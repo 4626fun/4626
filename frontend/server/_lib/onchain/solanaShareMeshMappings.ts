@@ -139,6 +139,26 @@ export async function listSolanaShareMeshMappingsForCreator(params: {
   return (result.rows ?? []).map(mapRow)
 }
 
+/** Resolve the unique applied B2 mint route used by lottery submission. */
+export async function resolveAppliedSolanaShareMeshMappingByMint(params: {
+  db: Db
+  shareMeshMint: string
+}): Promise<SolanaShareMeshMapping | null> {
+  await ensureSolanaShareMeshMappingsSchema(params.db)
+  const shareMeshMint = normalizeSolanaMint(params.shareMeshMint)
+  const result = await params.db.sql`
+    SELECT *
+    FROM solana_share_mesh_mappings
+    WHERE share_mesh_mint = ${shareMeshMint}
+      AND status = 'applied'
+    ORDER BY updated_at DESC
+    LIMIT 2;
+  `
+  const rows = (result.rows ?? []).map(mapRow)
+  if (rows.length > 1) throw new Error('ambiguous_applied_share_mesh_mint')
+  return rows[0] ?? null
+}
+
 export async function markSolanaShareMeshMappingApplied(params: {
   db: Db
   shareOft: string

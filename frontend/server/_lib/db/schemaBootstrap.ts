@@ -1096,7 +1096,18 @@ export async function ensureSolanaCreatorRelayConfigSchema(db: Db): Promise<void
 /** Durable Solana lottery entry inbox + ingest cursor (LZ-era exactly-once). */
 export async function ensureSolanaLotteryEntryInboxSchema(db: Db): Promise<void> {
   await withEnsureOnce('solanaLotteryEntryInbox', async () => {
-    await ensureMigrationApplied(db, '20260717090000_solana_lottery_entry_inbox.sql').catch(() => {})
+    await ensureMigrationApplied(
+      db,
+      '20260717090000_solana_lottery_entry_inbox.sql',
+      undefined,
+      { strict: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260717100000_solana_lottery_entry_inbox_attempt_fencing.sql',
+      undefined,
+      { strict: true },
+    )
   })
 }
 

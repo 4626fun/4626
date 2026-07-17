@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { verifyShareOftRegistryBinding } from '../utils/registry.js'
+
 const execFileAsync = promisify(execFile)
 
 export type SolanaSyncMappingInput = {
@@ -119,6 +121,18 @@ async function writeEnvFileWithSudo(path: string, content: string): Promise<void
 
 export async function executeSolanaSyncMapping(payload: Record<string, unknown>) {
   const parsed = parseInput(payload)
+
+  // Fail closed before any env write — matches Keeper `/solana/sync-mapping` 409 gate.
+  const registryBinding = await verifyShareOftRegistryBinding({
+    creatorToken: parsed.creatorToken,
+    shareOft: parsed.shareOft,
+  })
+  if (!registryBinding.verified) {
+    throw new Error(
+      `registry_share_oft_mismatch:${registryBinding.reason ?? 'unknown'}`,
+    )
+  }
+
   const currentMapping = parseMappingEnv(String(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}'))
   const currentMints = parseMintList(String(process.env.SOLANA_CREATOR_MINTS ?? ''))
 

@@ -16,6 +16,7 @@ import {
   markSolanaShareMeshMappingFailed,
   upsertSolanaShareMeshMapping,
 } from '../../../server/_lib/onchain/solanaShareMeshMappings.js'
+import { validateRegistry4626ShareOftBinding } from '../../../server/_lib/onchain/registry4626Verification.js'
 
 type SyncBody = {
   creatorToken?: string
@@ -75,6 +76,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<SyncResult>)
     }
     await ensureSolanaShareMeshMappingsSchema(db as any)
+
+    const registryBinding = await validateRegistry4626ShareOftBinding({
+      creatorToken: body.creatorToken,
+      shareOft: body.shareOft,
+    })
+    if (!registryBinding.ok) {
+      return res.status(409).json({
+        success: false,
+        error: `shareOft does not match Registry4626: ${registryBinding.reason}`,
+      } satisfies ApiEnvelope<never>)
+    }
 
     const mapping = await upsertSolanaShareMeshMapping({
       db: db as any,

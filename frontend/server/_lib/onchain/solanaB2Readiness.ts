@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from '@solana/web3.js'
 
 import { deriveCreatorShareHookPdas } from './creatorShareHookPdas.js'
+import { validateRegistry4626ShareOftBinding } from './registry4626Verification.js'
 import { readSolanaHookStatusByCreatorToken } from './solanaHookStatus.js'
 import { readSolanaMeteoraPoolStatusByShareMeshMint } from './solanaMeteoraPoolStatus.js'
 import {
@@ -158,6 +159,32 @@ export async function verifySolanaB2Readiness(params: {
     })
   }
 
+  if (mapping?.status === 'applied') {
+    try {
+      const registryBinding = await validateRegistry4626ShareOftBinding({
+        creatorToken,
+        shareOft: mapping.shareOft,
+      })
+      checks.push({
+        id: 'registry_share_oft_matches',
+        passed: registryBinding.ok,
+        detail: registryBinding.ok ? 'registry_share_oft_matches' : registryBinding.reason,
+      })
+    } catch (error) {
+      checks.push({
+        id: 'registry_share_oft_matches',
+        passed: false,
+        detail: error instanceof Error ? error.message : 'registry_4626_unreachable',
+      })
+    }
+  } else {
+    checks.push({
+      id: 'registry_share_oft_matches',
+      passed: false,
+      detail: 'applied_mapping_required',
+    })
+  }
+
   if (!shareMeshMint) {
     checks.push({
       id: 'share_mesh_mint',
@@ -200,6 +227,25 @@ export async function verifySolanaB2Readiness(params: {
       passed: true,
       detail: 'hook_mint_matches_share_mesh_mint',
     })
+  }
+
+  if (shareOft) {
+    if (!hook?.shareOft) {
+      checks.push({
+        id: 'hook_share_oft_matches_mapping',
+        passed: false,
+        detail: 'hook_share_oft_missing',
+      })
+    } else {
+      const matches = hook.shareOft.toLowerCase() === shareOft.toLowerCase()
+      checks.push({
+        id: 'hook_share_oft_matches_mapping',
+        passed: matches,
+        detail: matches
+          ? 'hook_share_oft_matches_mapping'
+          : `hook_share_oft=${hook.shareOft},mapping_share_oft=${shareOft}`,
+      })
+    }
   }
 
   const onChainChecks = await checkOnChainAccounts({

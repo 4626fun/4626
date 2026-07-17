@@ -52,7 +52,6 @@ describe('solanaLotteryIngest', () => {
       signature: 'sig',
       slot: 9,
       blockTime: null,
-      instructionIndex: 0,
       logMessages: hookBuyLogs(10n),
     })
     expect(parsed).toHaveLength(1)
@@ -68,7 +67,6 @@ describe('solanaLotteryIngest', () => {
       signature: 'sig',
       slot: 9,
       blockTime: null,
-      instructionIndex: 0,
       logMessages: forgeJsonInOtherProgram(),
     })
     expect(parsed).toHaveLength(0)
@@ -92,7 +90,6 @@ describe('solanaLotteryIngest', () => {
       signature: 'sig',
       slot: 9,
       blockTime: null,
-      instructionIndex: 2,
       logMessages: [
         `Program ${PROGRAM} invoke [1]`,
         `Program data: ${entry}`,
@@ -102,6 +99,49 @@ describe('solanaLotteryIngest', () => {
     })
     expect(parsed).toHaveLength(1)
     expect(parsed[0].instructionKind).toBe('relay_entries_reemit')
+  })
+
+  it('uses stable hook invocation and per-window event indices for CPI buys', () => {
+    const first = encodeLotteryEntryRecordedProgramData({
+      creatorMint: MINT,
+      buyer: BUYER,
+      amount: 1n,
+      slot: 1,
+      bufferCount: 1,
+    })
+    const second = encodeLotteryEntryRecordedProgramData({
+      creatorMint: MINT,
+      buyer: BUYER,
+      amount: 2n,
+      slot: 1,
+      bufferCount: 2,
+    })
+    const parsed = parseLotteryEntryRecordedFromLogs({
+      programId: PROGRAM,
+      signature: 'sig',
+      slot: 9,
+      blockTime: null,
+      logMessages: [
+        `Program ${OTHER} invoke [1]`,
+        `Program ${PROGRAM} invoke [2]`,
+        `Program data: ${first}`,
+        `Program ${PROGRAM} success`,
+        `Program ${OTHER} success`,
+        `Program ${OTHER} invoke [1]`,
+        `Program ${PROGRAM} invoke [2]`,
+        `Program data: ${second}`,
+        `Program ${PROGRAM} success`,
+        `Program ${OTHER} success`,
+      ],
+    })
+    expect(parsed.map(({ instructionIndex, eventIndex, amountRaw }) => ({
+      instructionIndex,
+      eventIndex,
+      amountRaw,
+    }))).toEqual([
+      { instructionIndex: 0, eventIndex: 0, amountRaw: '1' },
+      { instructionIndex: 1, eventIndex: 0, amountRaw: '2' },
+    ])
   })
 
   it('drains backlog across multiple signature pages', async () => {
@@ -130,6 +170,36 @@ describe('solanaLotteryIngest', () => {
       limit: 2,
     })
     expect(drained).toEqual(['sig1', 'sig2', 'sig3', 'sig4', 'sig5'])
+  })
+
+  it('fails closed instead of returning a truncated backlog at an explicit page cap', async () => {
+    const rpc = {
+      getGenesisHash: async () => 'gen',
+      getSignaturesForAddress: async () => ['sig2', 'sig1'],
+      getParsedTransaction: async () => null,
+    }
+    await expect(drainSignaturesSinceWatermark({
+      rpc,
+      programId: PROGRAM,
+      watermark: 'old',
+      limit: 2,
+      maxPages: 1,
+    })).rejects.toThrow('solana_lottery_backlog_page_cap_reached')
+  })
+
+  it('fails closed when pagination before cursor stalls', async () => {
+    const rpc = {
+      getGenesisHash: async () => 'gen',
+      getSignaturesForAddress: async () => ['sig2', 'sig1'],
+      getParsedTransaction: async () => null,
+    }
+    await expect(drainSignaturesSinceWatermark({
+      rpc,
+      programId: PROGRAM,
+      watermark: 'old',
+      limit: 2,
+      maxPages: 3,
+    })).rejects.toThrow('solana_lottery_backlog_pagination_stalled')
   })
 
   it('ingests authenticated events and advances cursor; ignores forge JSON', async () => {

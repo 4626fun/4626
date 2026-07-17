@@ -60,23 +60,6 @@ export type SolanaParsedTx = {
   }
 }
 
-function pubkeyToString(value: unknown): string {
-  if (!value) return ''
-  if (typeof value === 'string') return value
-  if (
-    typeof value === 'object' &&
-    value &&
-    'toBase58' in value &&
-    typeof (value as { toBase58?: () => string }).toBase58 === 'function'
-  ) {
-    return String((value as { toBase58: () => string }).toBase58())
-  }
-  if (typeof value === 'object' && value && 'pubkey' in value) {
-    return pubkeyToString((value as { pubkey: unknown }).pubkey)
-  }
-  return String(value)
-}
-
 /**
  * Parse authenticated Anchor events from hook invoke windows only.
  * JSON / marker-based logs are intentionally unsupported.
@@ -86,7 +69,6 @@ export function parseLotteryEntryRecordedFromLogs(params: {
   signature: string
   slot: number
   blockTime: number | null
-  instructionIndex: number
   logMessages: string[]
 }): ParsedLotteryEntryLog[] {
   const windows = decodeHookLotteryEventsFromLogs({
@@ -94,14 +76,14 @@ export function parseLotteryEntryRecordedFromLogs(params: {
     logMessages: params.logMessages,
   })
   const out: ParsedLotteryEntryLog[] = []
-  let eventIndex = 0
   for (const window of windows) {
+    let eventIndex = 0
     for (const entry of window.entries) {
       out.push({
         signature: params.signature,
         slot: params.slot,
         blockTime: params.blockTime,
-        instructionIndex: params.instructionIndex,
+        instructionIndex: window.instructionIndex,
         eventIndex,
         instructionKind: window.instructionKind,
         creatorMint: entry.creatorMint,
@@ -125,10 +107,14 @@ export async function drainSignaturesSinceWatermark(params: {
   limit: number
   maxPages?: number
 }): Promise<string[]> {
-  const maxPages = Math.max(1, params.maxPages ?? 50)
+  const maxPages =
+    params.maxPages == null ? Number.POSITIVE_INFINITY : Math.max(1, params.maxPages)
   const newestFirst: string[] = []
   let before: string | undefined
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0; ; page++) {
+    if (page >= maxPages) {
+      throw new Error('solana_lottery_backlog_page_cap_reached')
+    }
     const batch = await params.rpc.getSignaturesForAddress(params.programId, {
       commitment: 'finalized',
       limit: params.limit,
@@ -138,7 +124,11 @@ export async function drainSignaturesSinceWatermark(params: {
     if (batch.length === 0) break
     newestFirst.push(...batch)
     if (batch.length < params.limit) break
-    before = batch[batch.length - 1]
+    const nextBefore = batch[batch.length - 1]
+    if (!nextBefore || nextBefore === before) {
+      throw new Error('solana_lottery_backlog_pagination_stalled')
+    }
+    before = nextBefore
   }
   // Oldest → newest for processing / cursor advancement.
   return newestFirst.reverse()
@@ -193,22 +183,11 @@ export async function ingestFinalizedLotteryLogs(params: {
     }
 
     const logs = Array.isArray(tx.meta?.logMessages) ? tx.meta!.logMessages! : []
-    let instructionIndex = 0
-    const ixs = tx.transaction.message.instructions ?? []
-    for (let i = 0; i < ixs.length; i++) {
-      const pid = pubkeyToString(ixs[i]?.programId)
-      if (pid === programId) {
-        instructionIndex = i
-        break
-      }
-    }
-
     const parsed = parseLotteryEntryRecordedFromLogs({
       programId,
       signature,
       slot,
       blockTime: tx.blockTime,
-      instructionIndex,
       logMessages: logs,
     })
 
