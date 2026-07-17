@@ -112,6 +112,52 @@ describe('verifyDeployPhase2Invariants', () => {
     expect(result.expectations?.payoutRecipientMode).toBe('gauge')
   })
 
+  it('skips CreatorCoin payoutRecipient check when the asset reverts (plain ERC20 canary)', async () => {
+    const gaugeController = '0x0000000000000000000000000000000000000104'
+    const zero = '0x0000000000000000000000000000000000000000'
+    const readContract = async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case 'feeRecipient':
+          return gaugeController
+        case 'gaugeController':
+          return gaugeController
+        case 'payoutRecipient':
+          throw new Error('execution reverted')
+        case 'creatorShareBps':
+          return 0n
+        case 'creatorTreasury':
+          return zero
+        case 'boostManager':
+        case 'vaultGaugeVoting':
+          return zero
+        default:
+          throw new Error(`unexpected functionName=${functionName}`)
+      }
+    }
+
+    const result = await verifyDeployPhase2Invariants({
+      publicClient: {
+        readContract,
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+      },
+      phase2FinalizeCalls: [
+        {
+          to: '0x0000000000000000000000000000000000000010',
+          value: 0n,
+          data: makeFinalizePhase2Data(),
+        },
+      ],
+      payload: {},
+      enforceProductionReadiness: true,
+    })
+
+    expect(result.checked).toBe(true)
+    expect(result.violations.map((entry) => entry.code)).not.toContain('creator_coin_payout_recipient_mismatch')
+    expect(result.violations.map((entry) => entry.code)).not.toContain('creator_coin_payout_recipient_unresolved')
+    expect(result.violations).toEqual([])
+  })
+
   it('flags unresolved payout-router mode when no explicit CreatorCoin payout recipient is available', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
     const readContract = async ({ functionName }: { functionName: string }) => {
