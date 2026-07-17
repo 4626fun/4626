@@ -4,6 +4,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 // @ts-ignore[6307] - zoraWalletHoldings pulls in app-layer code outside the node typecheck surface (acceptable for this bridge module)
 import {
   clampTopTokenCount,
+  parseExtraTokenAddressesQuery,
   resolveZoraWalletHoldings,
   type ZoraWalletHoldingsResult,
 } from '../../../server/_lib/wallet/zoraWalletHoldings.js'
@@ -88,9 +89,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const extraTokensRaw =
+      getStringQuery(req, 'extraTokens') ?? getStringQuery(req, 'extraTokenAddresses')
     const data = await resolveZoraWalletHoldings({
       wallet,
       topTokenCount: parseTopTokenCount(req),
+      extraTokenAddresses: parseExtraTokenAddressesQuery(extraTokensRaw),
     })
 
     if (!data) {

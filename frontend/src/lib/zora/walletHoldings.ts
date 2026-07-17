@@ -147,17 +147,44 @@ export function zoraHoldingsDtoToBundle(data: ZoraWalletHoldingsResult): ZoraWal
   }
 }
 
+/** Must stay in sync with server MAX_TOP_TOKEN_COUNT in zoraWalletHoldings.ts */
+export const ZORA_HOLDINGS_MAX_TOP_TOKENS = 200
+
+export type FetchWalletZoraHoldingsOptions = {
+  topTokenCount?: number
+  /** Force-lookup token addresses (e.g. profile creator coin) even if absent from topTokens. */
+  extraTokenAddresses?: readonly string[] | null
+}
+
+function appendExtraTokenAddresses(qs: URLSearchParams, addresses: readonly string[] | null | undefined) {
+  if (!addresses || addresses.length === 0) return
+  const normalized: string[] = []
+  const seen = new Set<string>()
+  for (const value of addresses) {
+    const trimmed = String(value ?? '').trim()
+    if (!trimmed || !isAddress(trimmed)) continue
+    const checksummed = getAddress(trimmed)
+    const lc = checksummed.toLowerCase()
+    if (seen.has(lc)) continue
+    seen.add(lc)
+    normalized.push(checksummed)
+  }
+  if (normalized.length > 0) qs.set('extraTokens', normalized.join(','))
+}
+
 export async function fetchWalletZoraHoldings(params: {
   wallet: string
   topTokenCount?: number
+  extraTokenAddresses?: readonly string[] | null
 }): Promise<ZoraWalletHoldingsResult | null> {
   const trimmed = String(params.wallet ?? '').trim()
   if (!trimmed || !isAddress(trimmed)) return null
 
   const qs = new URLSearchParams({ wallet: getAddress(trimmed) })
   if (typeof params.topTokenCount === 'number' && params.topTokenCount > 0) {
-    qs.set('topTokens', String(Math.min(params.topTokenCount, 100)))
+    qs.set('topTokens', String(Math.min(params.topTokenCount, ZORA_HOLDINGS_MAX_TOP_TOKENS)))
   }
+  appendExtraTokenAddresses(qs, params.extraTokenAddresses)
 
   const res = await fetch(`/api/wallet/zora-holdings?${qs.toString()}`, {
     headers: { Accept: 'application/json' },
@@ -168,9 +195,13 @@ export async function fetchWalletZoraHoldings(params: {
 
 export async function fetchWalletZoraHoldingsBundle(
   wallet: string,
-  options?: { topTokenCount?: number },
+  options?: FetchWalletZoraHoldingsOptions,
 ): Promise<ZoraWalletHoldingsBundle | null> {
-  const data = await fetchWalletZoraHoldings({ wallet, topTokenCount: options?.topTokenCount ?? 100 })
+  const data = await fetchWalletZoraHoldings({
+    wallet,
+    topTokenCount: options?.topTokenCount ?? ZORA_HOLDINGS_MAX_TOP_TOKENS,
+    extraTokenAddresses: options?.extraTokenAddresses,
+  })
   if (!data) return null
   return zoraHoldingsDtoToBundle(data)
 }
@@ -220,7 +251,7 @@ export function mergeZoraHoldingsBundles(
 
 export async function fetchTrayZoraHoldingsForWallets(
   wallets: string[],
-  options?: { topTokenCount?: number },
+  options?: FetchWalletZoraHoldingsOptions,
 ): Promise<{ creator: TrayTokenHolding[]; content: TrayTokenHolding[]; trend: TrayTokenHolding[] }> {
   const normalized = wallets
     .map((w) => normalizeZoraHoldingsWalletAddress(w))

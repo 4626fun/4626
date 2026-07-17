@@ -53,7 +53,10 @@ import {
 import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
 import { useCreatorEconomySummary } from '@/hooks/useCreatorEconomySummary'
 import type { CreatorEconomySigningStatus } from '@/lib/creatorEconomy/types'
-import { fetchTrayZoraHoldingsForWallets } from '@/lib/zora/walletHoldings'
+import {
+  fetchTrayZoraHoldingsForWallets,
+  ZORA_HOLDINGS_MAX_TOP_TOKENS,
+} from '@/lib/zora/walletHoldings'
 
 type ConnectButtonStateInput = {
   sessionHydrated: boolean
@@ -447,15 +450,25 @@ export function ConnectButton({
   )
   const zoraTokenWalletSources = useMemo<TrayWalletSource[]>(() => trayWalletSources, [trayWalletSources])
   void zoraTokenWalletSources
+  const pinnedCreatorCoinAddress = canonicalIdentity.creatorCoinAddress
   const trayZoraHoldingsQuery = useQuery({
-    queryKey: ['account-tray', 'zora-holdings', trayWalletKey],
+    queryKey: [
+      'account-tray',
+      'zora-holdings',
+      trayWalletKey,
+      pinnedCreatorCoinAddress?.toLowerCase() ?? '',
+      ZORA_HOLDINGS_MAX_TOP_TOKENS,
+    ],
     enabled: auth.hasSession && showMenu && trayWalletSources.length > 0,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () =>
       fetchTrayZoraHoldingsForWallets(
         trayWalletSources.map((wallet) => wallet.address),
-        { topTokenCount: 100 },
+        {
+          topTokenCount: ZORA_HOLDINGS_MAX_TOP_TOKENS,
+          extraTokenAddresses: pinnedCreatorCoinAddress ? [pinnedCreatorCoinAddress] : null,
+        },
       ),
   })
   const trayZoraCreatorTokens = useMemo(
@@ -501,6 +514,8 @@ export function ConnectButton({
   }, [trayPortfolioQuery.data?.sources])
   const trayHoldingsLoading = trayPortfolioQuery.isLoading
   const trayZoraTokensLoading = trayZoraHoldingsQuery.isLoading
+  const trayZoraTokensSettled =
+    trayZoraHoldingsQuery.isFetched && !trayZoraHoldingsQuery.isLoading && !trayZoraHoldingsQuery.isFetching
   const sessionAddress = auth.authAddress ?? null
   const trayAccountPointsQuery = useQuery({
     queryKey: ['account-tray', 'accounts-me-points'],
@@ -730,6 +745,7 @@ export function ConnectButton({
                   zoraContentTokens={trayZoraContentTokens}
                   zoraTrendTokens={trayZoraTrendTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
+                  zoraTokensSettled={trayZoraTokensSettled}
                 />
               ) : null}
               {auth.hasSession && traySection === 'points' ? (
@@ -885,6 +901,7 @@ export function ConnectButton({
                   zoraContentTokens={trayZoraContentTokens}
                   zoraTrendTokens={trayZoraTrendTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
+                  zoraTokensSettled={trayZoraTokensSettled}
                 />
               ) : (
                 <RelayTrayPointsModule
@@ -1066,6 +1083,8 @@ function RelayTrayPortfolioModule(props: {
   zoraContentTokens: TrayTokenHolding[]
   zoraTrendTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
+  /** True after the Zora holdings query has finished (success or empty). */
+  zoraTokensSettled?: boolean
 }) {
   const [networksExpanded, setNetworksExpanded] = useState(false)
   const topRows = props.rows.slice(0, 6)
@@ -1077,6 +1096,8 @@ function RelayTrayPortfolioModule(props: {
     props.zoraCreatorTokens.length > 0 ||
     props.zoraContentTokens.length > 0 ||
     props.zoraTrendTokens.length > 0
+  const showZoraEmptyState =
+    Boolean(props.zoraTokensSettled) && !props.zoraTokensLoading && !hasZoraTokens
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
@@ -1160,13 +1181,14 @@ function RelayTrayPortfolioModule(props: {
             </div>
           ) : null}
 
-          {props.zoraCreatorTokens.length > 0 ||
-          props.zoraContentTokens.length > 0 ||
-          props.zoraTrendTokens.length > 0 ||
-          props.zoraTokensLoading ? (
+          {hasZoraTokens || props.zoraTokensLoading || showZoraEmptyState ? (
             <div className="mt-4 space-y-4 border-t border-white/8 pt-3">
               {props.zoraTokensLoading ? (
                 <div className="text-[11px] text-zinc-500">Loading Zora coin holdings…</div>
+              ) : showZoraEmptyState ? (
+                <div className="text-[11px] text-zinc-500">
+                  No Zora creator or content coins found in this wallet’s top holdings.
+                </div>
               ) : (
                 <>
                   {props.zoraCreatorTokens.length > 0 ? (
