@@ -15,6 +15,7 @@ export const MSG_TYPE_LOTTERY_ENTRY = 3
 export const SOLANA_LOTTERY_SOURCE_EVENT_DOMAIN = '4626.solana.lottery.source-event.v1:'
 /** Solana mainnet LayerZero endpoint id. */
 export const SOLANA_LZ_EID = 30168
+export const CANONICAL_LOTTERY_MANAGER = '0xb45e68a5867935a5734e4185977f81c528006650'
 
 export type SolanaLotteryLzPayloadInput = {
   buyer: `0x${string}`
@@ -127,6 +128,9 @@ export function assessSolanaLotteryLzTransportReadiness(
   if (!transportReadyEnv) reasons.push('transport_ready_env_unset')
   if (!peerBytes32) reasons.push('missing_solana_lottery_oapp_peer')
   if (!lotteryManager) reasons.push('missing_lottery_manager')
+  else if (lotteryManager !== CANONICAL_LOTTERY_MANAGER) {
+    reasons.push('noncanonical_lottery_manager')
+  }
   // Twin adapter must never be treated as active transport.
   const twin = String(env.SOLANA_BRIDGE_ADAPTER_ADDRESS ?? '').trim().toLowerCase()
   if (twin === '0x9a61814082a26192dd9cb201b44058506685be60') {

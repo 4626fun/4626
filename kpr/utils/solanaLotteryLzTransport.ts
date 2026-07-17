@@ -4,6 +4,7 @@
  */
 
 import { keccak256, stringToHex } from 'viem'
+import { CANONICAL_LOTTERY_MANAGER } from './solanaCanonicalAddresses.js'
 
 export const SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE = 'solana_lottery_lz_transport_unavailable'
 export const SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN = 'solana_lottery_eoa_submit_forbidden'
@@ -17,6 +18,7 @@ export type SolanaLotteryLzTransportReadiness = {
   relayEntriesEnabled: boolean
   transportReadyEnv: boolean
   peerBytes32: string | null
+  lotteryManager: string | null
 }
 
 export function truthyEnv(raw: string | undefined): boolean {
@@ -33,10 +35,22 @@ export function assessSolanaLotteryLzTransportReadiness(
   const transportReadyEnv = truthyEnv(env.SOLANA_LOTTERY_LZ_TRANSPORT_READY)
   const peerRaw = String(env.SOLANA_LOTTERY_OAPP_PEER_BYTES32 ?? '').trim().toLowerCase()
   const peerBytes32 = /^0x[a-f0-9]{64}$/.test(peerRaw) ? peerRaw : null
+  const managerRaw = String(
+    env.LOTTERY_MANAGER ??
+    env.LOTTERY_MANAGER_ADDRESS ??
+    env.VITE_LOTTERY_MANAGER ??
+    env.VITE_LOTTERY_MANAGER_ADDRESS ??
+    '',
+  ).trim().toLowerCase()
+  const lotteryManager = /^0x[a-f0-9]{40}$/.test(managerRaw) ? managerRaw : null
 
   if (!relayEntriesEnabled) reasons.push('relay_flag_disabled')
   if (!transportReadyEnv) reasons.push('transport_ready_env_unset')
   if (!peerBytes32) reasons.push('missing_solana_lottery_oapp_peer')
+  if (!lotteryManager) reasons.push('missing_lottery_manager')
+  else if (lotteryManager !== CANONICAL_LOTTERY_MANAGER.toLowerCase()) {
+    reasons.push('noncanonical_lottery_manager')
+  }
 
   const twin = String(env.SOLANA_BRIDGE_ADAPTER_ADDRESS ?? '').trim().toLowerCase()
   if (twin === '0x9a61814082a26192dd9cb201b44058506685be60') {
@@ -49,6 +63,7 @@ export function assessSolanaLotteryLzTransportReadiness(
     relayEntriesEnabled,
     transportReadyEnv,
     peerBytes32,
+    lotteryManager,
   }
 }
 

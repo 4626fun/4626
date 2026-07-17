@@ -85,6 +85,51 @@ function getRegistryAddress(): Address {
   return registry
 }
 
+/** Strictly bind a creator token to its canonical ShareOFT in Registry4626. */
+export async function validateRegistry4626ShareOftBinding(input: {
+  creatorToken: string
+  shareOft: string
+}): Promise<Registry4626ValidationResult> {
+  const creatorToken = normalizeAddress(input.creatorToken)
+  const expectedShareOft = normalizeAddress(input.shareOft)
+  if (!creatorToken || !expectedShareOft) return { ok: false, reason: 'invalid_input' }
+
+  const registry = getRegistryAddress()
+  let lastError: unknown = null
+  for (const rpcUrl of getBaseRpcUrls()) {
+    const client = createPublicClient({
+      chain: base,
+      transport: http(rpcUrl, { timeout: 15_000 }),
+    })
+    try {
+      const [active, registryShareOft] = await Promise.all([
+        client.readContract({
+          address: registry,
+          abi: REGISTRY_4626_ABI,
+          functionName: 'isTokenActive',
+          args: [creatorToken],
+        }) as Promise<boolean>,
+        client.readContract({
+          address: registry,
+          abi: REGISTRY_4626_ABI,
+          functionName: 'getShareOFTForToken',
+          args: [creatorToken],
+        }) as Promise<Address>,
+      ])
+      if (!active) return { ok: false, reason: 'creator_coin_inactive' }
+      if (getAddress(registryShareOft) !== expectedShareOft) {
+        return { ok: false, reason: 'share_token_mismatch' }
+      }
+      return { ok: true, mode: 'registry' }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError
+  throw new Error('registry_4626_unreachable')
+}
+
 export async function validateRegistry4626Binding(
   input: Registry4626BindingInput,
 ): Promise<Registry4626ValidationResult> {

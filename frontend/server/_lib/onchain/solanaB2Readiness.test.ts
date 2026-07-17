@@ -8,6 +8,7 @@ import {
 const listMappingsMock = vi.fn()
 const readPoolMock = vi.fn()
 const readHookMock = vi.fn()
+const validateRegistryShareOftMock = vi.fn()
 
 vi.mock('./solanaShareMeshMappings.js', () => ({
   listSolanaShareMeshMappingsForCreator: (...args: unknown[]) => listMappingsMock(...args),
@@ -21,10 +22,16 @@ vi.mock('./solanaHookStatus.js', () => ({
   readSolanaHookStatusByCreatorToken: (...args: unknown[]) => readHookMock(...args),
 }))
 
+vi.mock('./registry4626Verification.js', () => ({
+  validateRegistry4626ShareOftBinding: (...args: unknown[]) =>
+    validateRegistryShareOftMock(...args),
+}))
+
 describe('verifySolanaB2Readiness', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.SOLANA_RPC_URL
+    validateRegistryShareOftMock.mockResolvedValue({ ok: true, mode: 'registry' })
   })
 
   it('returns not ready when mapping is not applied', async () => {
@@ -77,6 +84,32 @@ describe('verifySolanaB2Readiness', () => {
       id: 'onchain_accounts',
       passed: false,
       detail: 'failed_no_solana_rpc_url',
+    })
+  })
+
+  it('fails closed when the applied mapping disagrees with Registry4626', async () => {
+    const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
+    listMappingsMock.mockResolvedValue([{
+      status: 'applied',
+      shareOft: '0x459ea17556082ebd586870f3aba81b822f104626',
+      shareMeshMint,
+    }])
+    readPoolMock.mockResolvedValue(null)
+    readHookMock.mockResolvedValue(null)
+    validateRegistryShareOftMock.mockResolvedValue({
+      ok: false,
+      reason: 'share_token_mismatch',
+    })
+
+    const result = await verifySolanaB2Readiness({
+      db: { sql: vi.fn() } as any,
+      creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+    })
+
+    expect(result.checks.find((check) => check.id === 'registry_share_oft_matches')).toEqual({
+      id: 'registry_share_oft_matches',
+      passed: false,
+      detail: 'share_token_mismatch',
     })
   })
 })

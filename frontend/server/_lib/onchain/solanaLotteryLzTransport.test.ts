@@ -65,6 +65,17 @@ describe('solanaLotteryLzTransport', () => {
     expect(readiness.lotteryManager).toBe('0xb45e68a5867935a5734e4185977f81c528006650')
   })
 
+  it('rejects a retired LotteryManager even when other gates are set', () => {
+    const readiness = assessSolanaLotteryLzTransportReadiness({
+      SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      LOTTERY_MANAGER: '0xb68f359e01626ec5d15c624037311c70dacaba43',
+    })
+    expect(readiness.ready).toBe(false)
+    expect(readiness.reasons).toContain('noncanonical_lottery_manager')
+  })
+
   it('builds V3 payload with coverage zero and a source-event replay key', () => {
     const sourceEventId = hashSolanaLotterySourceEventId('g:p:s:0:0')
     const payload = buildSolanaLotteryLzV3Payload({
