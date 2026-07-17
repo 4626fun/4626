@@ -100,6 +100,8 @@ require_rg "\`deploymentBatcherShareMeshHelper\` | \`$share_mesh_helper\`" "$INV
 require_rg "\`deploymentBatcherUtilsHelper\` | \`$utils_helper\`" "$INVENTORY_DOC" 'inventory deploymentBatcherUtilsHelper address'
 
 require_rg "SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('${batcher#0x}')" "$DEFAULTS" 'frontend split Phase-1 batcher constant'
+require_rg "SPLIT_PHASE1_PHASE1_MODULE = addr('${phase1_module#0x}')" "$DEFAULTS" 'frontend live Phase1Module constant'
+require_rg "SPLIT_PHASE1_PHASE2_MODULE = addr('${phase2_module#0x}')" "$DEFAULTS" 'frontend live Phase2Module constant'
 
 if rg -n 'solanaBridgeAdapter' "$DEFAULTS" >/dev/null; then
   echo "release target guard failed: frontend contracts.defaults still exports solanaBridgeAdapter (LZ ShareOFT only)" >&2

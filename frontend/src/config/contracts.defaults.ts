@@ -44,7 +44,13 @@ export const SPLIT_PHASE1_PHASE1_MODULE = addr('0d12951A5e35ce064D7Add3A57bE0CC8
 export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
-export const SPLIT_PHASE1_PHASE2_MODULE = addr('0DDac7f1A3EA3796b31709Ed2270Cf0876A98460')
+/** Retired v1.19.1 greenfield Phase2Module (pre AA95 / vaultKind hot-swap). */
+export const SPLIT_PHASE1_PHASE2_MODULE_V1191_HANDOFF = addr('0DDac7f1A3EA3796b31709Ed2270Cf0876A98460')
+/**
+ * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
+ * Source-ahead bytecode epoch: `deployments/base/v1.19.2-bytecode-manifest.json`.
+ */
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba')
 export const SPLIT_PHASE1_PHASE3_HELPER = addr('C54Fb8d8232a8a654E512b3bDf761c8Eb2783B74')
 export const SPLIT_PHASE1_SHARE_MESH_HELPER = addr('73b6efB7196CdFa6c095Dc196559c88818Cd3211')
 /** @deprecated Use SPLIT_PHASE1_SHARE_MESH_HELPER */
