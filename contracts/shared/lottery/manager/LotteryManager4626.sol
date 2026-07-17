@@ -1288,10 +1288,14 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             );
         }
 
+        // Solana exactly-once: consume the V3 digest after the entry opportunity is
+        // processed — including sponsorship/VRF skips (entryId == 0). Prevents LZ
+        // redelivery from requesting VRF later. Early rejects above do not mark.
+        if (sourceEventId != bytes32(0)) {
+            _processedRemoteLotterySourceEvents[sourceEventId] = true;
+        }
+
         if (entryId > 0) {
-            if (sourceEventId != bytes32(0)) {
-                _processedRemoteLotterySourceEvents[sourceEventId] = true;
-            }
             // Update reference only when an entry is actually created.
             if (oraclePriceUSD1e18 > 0) {
                 lastAcceptedPriceUSD1e18[token] = oraclePriceUSD1e18;

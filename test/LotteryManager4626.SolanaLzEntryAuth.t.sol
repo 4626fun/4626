@@ -75,9 +75,14 @@ contract SolanaLzMockRegistry {
 contract SolanaLzMockVrfIntegrator {
     uint64 public nextSequence = 1;
     uint256 public requestCount;
+    uint256 public nativeFee;
 
-    function quoteFee() external pure returns (MessagingFee memory fee) {
-        return MessagingFee({nativeFee: 0, lzTokenFee: 0});
+    function setNativeFee(uint256 fee_) external {
+        nativeFee = fee_;
+    }
+
+    function quoteFee() external view returns (MessagingFee memory fee) {
+        return MessagingFee({nativeFee: nativeFee, lzTokenFee: 0});
     }
 
     function requestRandomWordsPayable(uint32)
@@ -219,5 +224,20 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         vm.prank(hubForwarder);
         lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
         assertEq(integrator.requestCount(), 1);
+    }
+
+    function test_solanaSourceEventConsumedEvenWhenVrfSkipped() public {
+        bytes32 sourceEventId = keccak256("event-skip");
+        bytes memory payload = _v3Payload(sourceEventId);
+
+        // Non-zero LZ fee with empty sponsorship budget → entryId == 0 (skip).
+        integrator.setNativeFee(1 ether);
+        lotteryManager.exposedLzReceive(_origin(solanaPeer), payload);
+        assertEq(integrator.requestCount(), 0, "sponsorship skip must not create VRF request");
+
+        // Even after fees become free, the same digest must not create an entry.
+        integrator.setNativeFee(0);
+        lotteryManager.exposedLzReceive(_origin(solanaPeer), payload);
+        assertEq(integrator.requestCount(), 0, "digest must remain consumed after VRF skip");
     }
 }

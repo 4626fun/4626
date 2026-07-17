@@ -73,8 +73,9 @@ cast call $LM "deferredVrfQueueLength()(uint256)" --rpc-url $BASE_RPC_URL
 - [ ] `VITE_DEPLOYMENT_VERSION=v1.19.0`
 - [ ] every deploy-consumed v1.19 codeId is stored and Safe-approved
 - [ ] active `DeploymentBatcher.phase2Module()` has immutable
-  `lotteryManager() == 0xB68F359e…`
-- [ ] `SolanaBridgeAdapter.lotteryManager() == 0xB68F359e…`
+  `lotteryManager() == 0xB45E68a5867935a5734E4185977F81c528006650`
+- [ ] Twin / `SolanaBridgeAdapter` lottery wiring remains **retired** (do not re-enable)
+- [ ] Solana lottery OApp peer unset until explicit ops authorization; relay flag stays `0`
 - [ ] immutable batcher-shell LM getter is treated as historical, not as the
   active Phase2 authority
 

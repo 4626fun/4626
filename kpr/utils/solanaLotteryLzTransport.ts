@@ -5,6 +5,10 @@
 
 import { keccak256, stringToHex } from 'viem'
 import { CANONICAL_LOTTERY_MANAGER } from './solanaCanonicalAddresses.js'
+import {
+  resolveSolanaLotteryOappSender,
+  type SolanaLotteryOappSender,
+} from './solanaLotteryOappSender.js'
 
 export const SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE = 'solana_lottery_lz_transport_unavailable'
 export const SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN = 'solana_lottery_eoa_submit_forbidden'
@@ -110,12 +114,21 @@ export function hashSolanaLotterySourceEventId(sourceEventId: string): `0x${stri
   return keccak256(stringToHex(`${SOLANA_LOTTERY_SOURCE_EVENT_DOMAIN}${normalized}`))
 }
 
-export async function submitSolanaLotteryEntryViaLz(_request: {
-  sourceEventId: string
-  buyer: string
-  tokenIn: string
-  amount: bigint
-}): Promise<never> {
+export type SolanaLotteryLzSubmitResult = {
+  ok: true
+  lzGuid: string
+  baseTxHash: string | null
+}
+
+export async function submitSolanaLotteryEntryViaLz(
+  request: {
+    sourceEventId: string
+    buyer: string
+    tokenIn: string
+    amount: bigint
+  },
+  options?: { sender?: SolanaLotteryOappSender | null },
+): Promise<SolanaLotteryLzSubmitResult> {
   if (truthyEnv(process.env.SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP)) {
     throw new Error(SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN)
   }
@@ -123,10 +136,26 @@ export async function submitSolanaLotteryEntryViaLz(_request: {
   if (!readiness.ready) {
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${readiness.reasons.join(',')}`)
   }
-  hashSolanaLotterySourceEventId(_request.sourceEventId)
-  throw new Error(
-    `${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:solana_lottery_oapp_send_not_implemented`,
-  )
+  if (!readiness.peerBytes32 || !readiness.lotteryManager) {
+    throw new Error(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)
+  }
+  const sourceEventDigest = hashSolanaLotterySourceEventId(request.sourceEventId)
+  try {
+    const sent = await resolveSolanaLotteryOappSender(options?.sender).send({
+      sourceEventId: request.sourceEventId,
+      sourceEventDigest,
+      buyer: request.buyer,
+      tokenIn: request.tokenIn,
+      amount: request.amount,
+      peerBytes32: readiness.peerBytes32 as `0x${string}`,
+      lotteryManager: readiness.lotteryManager,
+    })
+    return { ok: true, lzGuid: sent.lzGuid, baseTxHash: sent.baseTxHash }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.startsWith(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)) throw error
+    throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${message}`)
+  }
 }
 
 export async function submitSolanaLotteryWinnerViaLz(_params: {

@@ -130,6 +130,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/solana/sync-mapping': () => import('./keeper/_solanaSyncMapping.js'),
   'keeper/solana/provision-creator': () => import('./keeper/_solanaProvisionCreator.js'),
   'keeper/solana/verify-b2-readiness': () => import('./keeper/_solanaVerifyB2Readiness.js'),
+  'keeper/solana/lottery-submit': () => import('./keeper/_solanaLotterySubmit.js'),
   'keeper/ajna/rebalance': () => import('./keeper/_ajnaRebalance.js'),
   'keeper/control-plane/status': () => import('./keeper/_controlPlaneStatus.js'),
   'keeper/control-plane/provision': () => import('./keeper/control-plane/_provision.js'),

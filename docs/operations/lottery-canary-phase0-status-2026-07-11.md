@@ -9,7 +9,8 @@
 
 | Item | Value |
 |------|-------|
-| New `LotteryManager4626` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
+| Canonical `LotteryManager4626` (current) | `0xB45E68a5867935a5734E4185977F81c528006650` |
+| Superseded canary LM (historical) | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | PricingLib | `0x1d74A8e2F88eb12C167a912C6611407c4c4a7C6D` (pre-existing CREATE2) |
 | Registry `getLotteryManager(8453)` | → new LM |
 | AMOE router `manager()` | → new LM |

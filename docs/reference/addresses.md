@@ -142,7 +142,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 
 > **Solana lottery OApp peer (LZ entry sender):** unset. Solana→Base lottery
 > transport is fail-closed until a reviewed peer is authorized on LM
-> `authorizedRemoteOFTs(30168, peer)`. Do not use the retired Twin adapter.
+> `authorizedRemoteOFTs(30168, peer)`. Do not use the retired Twin adapter. Sender mode (`SOLANA_LOTTERY_OAPP_SENDER_MODE`) stays unset until the peer is authorized and an http/mock sender is explicitly configured.
 
 ### Solana ShareOFT identity
 

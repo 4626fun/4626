@@ -21,6 +21,8 @@ describe('solanaLotteryLzTransport', () => {
     'VITE_LOTTERY_MANAGER',
     'SOLANA_BRIDGE_ADAPTER_ADDRESS',
     'SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP',
+    'SOLANA_LOTTERY_OAPP_SENDER_MODE',
+    'SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND',
   ] as const
 
   afterEach(() => {
@@ -141,6 +143,24 @@ describe('solanaLotteryLzTransport', () => {
         amount: 1n,
       }),
     ).rejects.toThrow(SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN)
+  })
+
+  it('submits via configured mock OApp sender when readiness passes', async () => {
+    process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = '1'
+    process.env.SOLANA_LOTTERY_LZ_TRANSPORT_READY = '1'
+    process.env.SOLANA_LOTTERY_OAPP_PEER_BYTES32 = `0x${'11'.repeat(32)}`
+    process.env.LOTTERY_MANAGER = '0xB45E68a5867935a5734E4185977F81c528006650'
+    process.env.SOLANA_LOTTERY_OAPP_SENDER_MODE = 'mock'
+    process.env.SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND = '1'
+
+    const result = await submitSolanaLotteryEntryViaLz({
+      sourceEventId: 'g:p:s:0:0',
+      buyer: '0x1111111111111111111111111111111111111111',
+      tokenIn: '0x2222222222222222222222222222222222222222',
+      amount: 1n,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.lzGuid.startsWith('mock-')).toBe(true)
   })
 
   it('winner relay fails closed on win_id path', async () => {

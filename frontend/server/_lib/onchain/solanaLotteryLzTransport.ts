@@ -9,6 +9,11 @@
 
 import { encodeAbiParameters, keccak256, stringToHex, type Hex } from 'viem'
 
+import {
+  sendSolanaLotteryOappMessage,
+  type SolanaLotteryOappSender,
+} from './solanaLotteryOappSender.js'
+
 export const SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE = 'solana_lottery_lz_transport_unavailable'
 export const SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN = 'solana_lottery_eoa_submit_forbidden'
 export const MSG_TYPE_LOTTERY_ENTRY = 3
@@ -163,11 +168,12 @@ export type SolanaLotteryLzSubmitResult = {
 }
 
 /**
- * Submit path — always fail-closed until Solana lottery OApp peer is live.
+ * Submit path — fail-closed until readiness + configured OApp sender are live.
  * Never calls processSwapLottery / Twin adapter.
  */
 export async function submitSolanaLotteryEntryViaLz(
   request: SolanaLotteryLzSubmitRequest,
+  options?: { sender?: SolanaLotteryOappSender | null },
 ): Promise<SolanaLotteryLzSubmitResult> {
   // Explicit guard: EOA / processSwapLottery is architecturally forbidden.
   if (envFlag('SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP')) {
@@ -179,30 +185,47 @@ export async function submitSolanaLotteryEntryViaLz(
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${readiness.reasons.join(',')}`)
   }
 
-  // Peer exists in env for readiness, but no live Solana OApp send is wired
-  // in this PR (deploy forbidden). Fail closed rather than papering over.
-  const peer = readBytes32Env('SOLANA_LOTTERY_OAPP_PEER_BYTES32')
-  const lm =
-    readAddressEnv('LOTTERY_MANAGER') ??
-    readAddressEnv('LOTTERY_MANAGER_ADDRESS') ??
-    readAddressEnv('VITE_LOTTERY_MANAGER') ??
-    readAddressEnv('VITE_LOTTERY_MANAGER_ADDRESS')
+  const peer = readiness.peerBytes32
+  const lm = readiness.lotteryManager
   if (!peer || !lm) {
     throw new Error(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)
   }
 
-  buildSolanaLotteryLzV3Payload({
+  const sourceEventDigest = hashSolanaLotterySourceEventId(request.sourceEventId)
+  const payload = buildSolanaLotteryLzV3Payload({
     buyer: request.buyer,
     tokenIn: request.tokenIn,
     amount: request.amount,
     sourceChainId: request.sourceChainId ?? 0,
     buyerCurrentShareBalance: 0n,
-    sourceEventId: hashSolanaLotterySourceEventId(request.sourceEventId),
+    sourceEventId: sourceEventDigest,
   })
 
-  throw new Error(
-    `${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:solana_lottery_oapp_send_not_implemented`,
-  )
+  try {
+    const sent = await sendSolanaLotteryOappMessage(
+      {
+        payload,
+        sourceEventId: request.sourceEventId,
+        sourceEventDigest,
+        buyer: request.buyer,
+        tokenIn: request.tokenIn,
+        amount: request.amount,
+        peerBytes32: peer,
+        lotteryManager: lm,
+      },
+      options?.sender,
+    )
+    return {
+      ok: true,
+      lzGuid: sent.lzGuid,
+      baseTxHash: sent.baseTxHash,
+      payload,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.startsWith(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)) throw error
+    throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${message}`)
+  }
 }
 
 /** Winner relay stub — fail closed (Twin winner path retired). */
