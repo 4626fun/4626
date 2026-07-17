@@ -195,7 +195,7 @@ Ops hygiene:
 
   [ ] Railway Hermit /readyz: bridgeStarted=true
   [ ] Railway Hermit /readyz: tokenRefresherStarted=false, reason=vercel_cron_owner
-  [ ] Railway Hermit /readyz: counterTradeEffective + counterTradeEffectiveReason are present
+  [ ] Railway Hermit /readyz: 200 only when an enabled runner has counterTradeEffective=true
   [ ] Vercel /api/v1/alfaclub/chat-token-refresh: recent 200, no privy_refresh_failed
   [ ] Supabase inverse_opinion_* claim/outbox tables exist before capture is enabled
   [ ] ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED=1 on the single Railway executor

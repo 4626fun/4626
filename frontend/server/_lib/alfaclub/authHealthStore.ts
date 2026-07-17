@@ -94,7 +94,8 @@ const HEALTH_WRITE_WARN_THROTTLE_MS = 10 * 60_000
  * production writer not in this set should be added explicitly via PR
  * review, not silently accepted.
  *
- * - `privy-token-refresher`: the Vercel cron path (canonical writer).
+ * - `vercel-cron-privy-refresher`: the Vercel cron path (canonical writer).
+ * - `privy-token-refresher`: retained for historical rows.
  * - `admin.api`: documented operator restore via /api/v1/alfaclub/chat-token
  *   (used when an admin posts a fresh triplet by hand).
  * - `computer-token-restore`: documented operator restore via the local
@@ -105,6 +106,7 @@ const HEALTH_WRITE_WARN_THROTTLE_MS = 10 * 60_000
  * `_chat-token.ts:185`). That is treated as an expected writer pattern.
  */
 const KNOWN_WRITERS: ReadonlySet<string> = new Set([
+  'vercel-cron-privy-refresher',
   'privy-token-refresher',
   'admin.api',
   'computer-token-restore',
@@ -141,10 +143,9 @@ export function evaluateWriterAnomaly(updatedBy: string | null | undefined): Wri
     // wallet. Treated as an expected pattern.
     return { isAnomalous: false, reason: null, writer: lower }
   }
-  if (lower === 'cursor-hermit-rotate') {
-    // Fingerprint of the legacy long-lived in-process refresher that PR
-    // #458 disabled by default. Surfacing it explicitly so the operator
-    // recognizes the regression on sight.
+  if (lower === 'cursor-hermit-rotate' || lower === 'hermit-privy-refresher') {
+    // Fingerprints of legacy Railway/in-process refresh writers. Surface them
+    // explicitly so operators recognize a single-writer regression on sight.
     return {
       isAnomalous: true,
       reason: 'legacy_in_process_refresher',

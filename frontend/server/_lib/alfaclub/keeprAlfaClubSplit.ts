@@ -1,7 +1,7 @@
 /**
  * Keepr (4626-keepr-agent / keepr.4626.fun) is the XMTP primary on Railway.
  * AlfaClub room chat, JWT refresh, and Hermit creative lanes run on separate
- * surfaces (Vercel cron backup + optional Hermit Railway service).
+ * surfaces (Hermit Railway bridge + Vercel cron/creative endpoints).
  */
 
 export function parseAlfaClubBoolEnv(value: string | undefined): boolean {
@@ -31,8 +31,7 @@ export function isKeeprRailwayAlfaClubSplit(): boolean {
 }
 
 /**
- * True when the dedicated Hermit Railway service owns the live AlfaClub bridge
- * (long-lived polling + optional in-process Privy refresh).
+ * True when the dedicated Hermit Railway service owns the live AlfaClub bridge.
  */
 export function isAlfaClubRailwayHermitPrimaryConfigured(): boolean {
   return parseBool(process.env.ALFACLUB_RAILWAY_HERMIT_PRIMARY)
@@ -51,9 +50,8 @@ export function shouldSuppressVercelBridgeCron(): boolean {
 }
 
 /**
- * Vercel's token-refresh cron can be retired when Hermit runs the in-process
- * refresher (`ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1`). Keep an hourly Vercel
- * backup unless explicitly disabled.
+ * Emergency kill switch for the canonical Vercel token-refresh cron.
+ * Production should leave this false unless an operator is stopping refresh.
  */
 export function shouldSuppressVercelTokenRefreshCron(): boolean {
   return parseBool(process.env.ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED)
