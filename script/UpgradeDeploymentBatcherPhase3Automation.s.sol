@@ -54,7 +54,7 @@ interface IGnosisSafe {
  * - PROTOCOL_AUTOMATION_SAFE (defaults to `0x08f0875E40781578F902998b2b831cc48d838eBE`)
  */
 contract UpgradeDeploymentBatcherPhase3Automation is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xA9024e1B89C5Be34502A275576Cc137473d65839;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
     address constant DEFAULT_PROTOCOL_AUTOMATION_SAFE = 0x08f0875E40781578F902998b2b831cc48d838eBE;
 
     function run() external {

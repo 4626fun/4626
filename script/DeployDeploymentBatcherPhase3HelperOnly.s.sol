@@ -14,7 +14,7 @@ import {DeploymentBatcher, DeploymentBatcherPhase3Helper} from "@4626/shared/dep
  * - DEPLOYMENT_BATCHER (defaults to live shell)
  */
 contract DeployDeploymentBatcherPhase3HelperOnly is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

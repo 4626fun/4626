@@ -21,7 +21,7 @@ import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/dep
  *   execute the swap via frontend/scripts/ops/execute-set-phase2-module-safe.ts.
  */
 contract UpgradeDeploymentBatcherPhase2Module is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

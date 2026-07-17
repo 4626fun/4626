@@ -20,8 +20,8 @@ import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
  *     forge test --match-path "test/fork/DeploymentBatcherPhase2ModuleHotSwap.fork.t.sol" -vv
  */
 contract DeploymentBatcherPhase2ModuleHotSwapForkTest is Test {
-    address constant LIVE_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
-    address constant CANONICAL_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
+    address constant LIVE_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
+    address constant CANONICAL_LOTTERY_MANAGER = 0xB45E68a5867935a5734E4185977F81c528006650;
     address constant AKITA = 0x5b674196812451B7cEC024FE9d22D2c0b172fa75;
     address constant CANONICAL_CSW = 0xAb6d5C10b03300326CD7fAb7267Ae192842967b5;
 

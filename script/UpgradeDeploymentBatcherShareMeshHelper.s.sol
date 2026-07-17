@@ -52,7 +52,7 @@ interface IGnosisSafe {
  * - DEPLOYMENT_BATCHER (defaults to live shell in test/current-release-target-guard.sh)
  */
 contract UpgradeDeploymentBatcherShareMeshHelper is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

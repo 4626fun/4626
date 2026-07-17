@@ -5,13 +5,13 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Updated on: 2026-07-15
+Updated on: 2026-07-17
 Scope: current live `v1.19.1` greenfield shared infrastructure.
 
 ## Sources
 
 1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.19.1-bytecode-manifest.json`
+2. Bytecode / codeId manifest: sealed `deployments/base/v1.19.1-bytecode-manifest.json`; source-ahead Phase2 `deployments/base/v1.19.2-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.19.1-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -33,8 +33,8 @@ Scope: current live `v1.19.1` greenfield shared infrastructure.
 | `ovaultStrategiesModule` | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165` |
 | `ovaultAdminModule` | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
 | `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| `deploymentBatcherPhase1Module` | `0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc` |
-| `deploymentBatcherPhase2Module` | `0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460` |
+| `deploymentBatcherPhase1Module` | `0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b` |
+| `deploymentBatcherPhase2Module` | `0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba` |
 | `deploymentBatcherPhase3Helper` | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | `deploymentBatcherShareMeshHelper` | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
 | `deploymentBatcherUtilsHelper` | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
@@ -86,8 +86,8 @@ before `finalizePhase2`; there is no adapter or global-peer fallback.
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase1Module=0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc`
-- `DeploymentBatcherPhase2Module=0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460`
+- `DeploymentBatcherPhase1Module=0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b`
+- `DeploymentBatcherPhase2Module=0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba`
 - `DeploymentBatcherPhase3Helper=0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`
 - `DeploymentBatcherShareMeshHelper=0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`
 - `DeploymentBatcherUtilsHelper=0x8833225A423f4B1BB071702CB68d71fA4af434f2`

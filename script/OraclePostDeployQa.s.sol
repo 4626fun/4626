@@ -55,7 +55,7 @@ interface ICCALaunchOracleRef {
 /// Example:
 ///   forge script script/OraclePostDeployQa.s.sol:OraclePostDeployQa --rpc-url $BASE_RPC_URL
 contract OraclePostDeployQa is Script {
-    address internal constant DEFAULT_REGISTRY = 0x777e28d7617ADb6E2fE7b7C49864A173e36881EF;
+    address internal constant DEFAULT_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
     uint32 internal constant DEFAULT_TWAP = 1800;
 
     function run() external view {
