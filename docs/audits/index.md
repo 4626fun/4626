@@ -19,7 +19,7 @@ status: current
 <section class="audit-hero">
   <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Security disclosure</span>
   <h1 class="audit-hero__title">Security &amp; audits</h1>
-  <p class="audit-hero__subtitle">Published security review materials and machine-checked math proofs for integrators, auditors, and token holders: the June 2026 technical review, Aristotle / Lean claim pages, and supplementary session records.</p>
+  <p class="audit-hero__subtitle">June 2026 technical review, Aristotle / Lean proofs, and session records for integrators, auditors, and token holders.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/fable/findings-summary">Executive summary<span class="home-btn__arrow" aria-hidden="true">→</span></a>
     <a class="home-btn home-btn--ghost" href="/audits/fable">Scope &amp; methodology</a>
@@ -136,7 +136,7 @@ flowchart LR
 
 ## Aristotle
 
-Machine-checked Lean&nbsp;4 proofs of lottery and fee math, authored with [Aristotle](https://aristotle.harmonic.fun/). Complementary to the June 2026 review — not a replacement.
+Machine-checked Lean&nbsp;4 proofs of lottery and fee math via [Aristotle](https://aristotle.harmonic.fun/). Complements the June 2026 review; does not replace it.
 
 <div class="home-cards">
   <a class="home-card audit-card audit-card--featured" href="/audits/aristotle">
@@ -158,7 +158,7 @@ Machine-checked Lean&nbsp;4 proofs of lottery and fee math, authored with [Arist
 
 <div class="audit-limitations">
   <div class="audit-limitations__title">Limitations &amp; disclaimer</div>
-  <p>This publication documents a <strong>read-only technical security review</strong> of the 4626 monorepo conducted in June 2026. It is <strong>not</strong> a formal smart-contract audit certificate from an independent security firm and does not constitute legal or investment advice. Findings reflect repository state at review time; verify remediation status against current code and public disclosures before launch or integration decisions. Appendices contain supplementary session records — authoritative written conclusions are in the executive summary and full report. Aristotle pages prove stated formulas only.</p>
+  <p>This publication documents a <strong>read-only technical security review</strong> of the 4626 monorepo (June 2026). It is <strong>not</strong> a formal smart-contract audit certificate from an independent security firm and is not legal or investment advice. Findings reflect repository state at review time; verify remediation against current code and public disclosures before launch or integration. Authoritative conclusions are in the executive summary and full report; appendices are supplementary session records. Aristotle pages prove stated formulas only.</p>
 </div>
 
 <div class="home-links">

@@ -5,6 +5,8 @@ sidebar_position: 1
 
 # Reference
 
+Launch a vault → Auction the shares → Run strategies → Earn together.
+
 | Doc | Use when |
 |-----|----------|
 | [Addresses](/reference/addresses) | Live batcher, factories, modules (v1.19.1) |

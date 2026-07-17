@@ -5,7 +5,7 @@ sidebar_position: 0
 
 # Launch a vault
 
-Step-by-step path to launch a **new vault on Base** (release **v1.19.1**). Legacy vaults may use older infrastructure.
+Step-by-step path for a **new vault on Base** (release **v1.19.1**). Legacy vaults may differ.
 
 <div class="docs-at-a-glance">
 
@@ -21,20 +21,12 @@ Step-by-step path to launch a **new vault on Base** (release **v1.19.1**). Legac
 
 | Step | Page | Outcome |
 |------|------|---------|
-| Overview | [Launch checklist](/guides/launch-checklist) | Prerequisites + full timeline |
-| 1 | [Pay launch fee](/guides/strategy-bundle) | Deploy unlocked ($499 USDC bundle) |
+| Overview | [Launch checklist](/guides/launch-checklist) | Prerequisites + timeline |
+| 1 | [Pay launch fee](/guides/strategy-bundle) | Deploy unlocked ($499 USDC) |
 | 2 | [Deploy contracts](/guides/launch-token) | Vault stack onchain, unfunded |
-| 3 | [Activate vault](/guides/activate-vault) | Deposit finalized; auction scheduled or live |
-| 4 | [After activation](/guides/after-activation) | Auction → finalize → trading live |
+| 3 | [Activate vault](/guides/activate-vault) | Deposit + strategies + auction scheduled |
+| 4 | [After activation](/guides/after-activation) | Auction → settle → trading live |
 
-**Application:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+**App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
-## After step 3
-
-No secondary DEX trading until the auction completes and finalize succeeds. See [After activation](/guides/after-activation).
-
-Solana share bridge: [Solana share bridge](/overview/solana-share-mesh)
-
-## Understand the product
-
-[What is 4626?](/getting-started) · [Fees, auction, and lottery](/overview/how-it-works)
+Activation is **not** trading live — secondary DEX trading waits for auction settlement. [Solana share bridge](/overview/solana-share-mesh) · [What is 4626?](/getting-started)

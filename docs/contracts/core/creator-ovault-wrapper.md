@@ -24,18 +24,10 @@ Wrap/unwrap fees default to **0** (`setFees`, capped). Bridging does not dilute 
 ## Key Functions
 
 ```solidity
-// Creator coin ↔ ■ (primary UX)
 function deposit(uint256 amount) external returns (uint256 shareOFTOut);
 function withdraw(uint256 amount) external returns (uint256 creatorCoinOut);
-
-// ▢ ↔ ■ (advanced)
 function wrap(uint256 amount) external returns (uint256 amountOut);   // ÷1000
 function unwrap(uint256 amount) external returns (uint256 amountOut); // ×1000
-
-IERC20 public immutable creatorCoin;
-IERC4626 public immutable vault;
-IShareOFT public shareOFT; // set once via setShareOFT
-uint256 public constant NORMALIZATION_FACTOR = 1000;
 ```
 
 ## Flows

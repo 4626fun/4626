@@ -5,114 +5,64 @@ sidebar_position: 5
 
 # Step 4: After activation
 
-What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activation finalizes your deposit and share split; it does **not** immediately open secondary DEX trading.
+What happens after [Activate](/guides/activate-vault). Activation finalizes your deposit and share split — it does **not** open secondary DEX trading.
 
 <div class="docs-at-a-glance">
 
-Activation finalizes your deposit and share split. Public DEX trading starts after the fair-launch auction completes and finalize succeeds on Base.
-
-Monitor progress in the [deploy app](https://app.4626.fun/deploy/vault).
+Public DEX trading starts after the share auction completes and settlement succeeds on Base. Monitor in the [deploy app](https://app.4626.fun/deploy/vault).
 
 </div>
-
-[Launch checklist](/guides/launch-checklist) · [What is 4626?](/getting-started)
 
 ## Right after activation
 
 | Item | State |
 |------|--------|
 | Vault | Funded (50M–100M creator coin) |
-| Fair-launch auction | **Scheduled or live** (Thursday 00:00 UTC epoch) |
-| `■` ShareOFT on DEX | **Not yet** |
+| Share auction | **Scheduled or live** (Thursday 00:00 UTC epoch) |
+| `■` on DEX | **Not yet** |
 | Lottery | **Not yet** (needs qualifying live **buys**) |
 | Milestone | **Activated** |
 
-### Share allocation at finalize
-
-When activation **finalizes**, the batcher wraps the deposit into `■` and enforces a fixed split:
+### Share allocation
 
 | Leg | % | Notes |
 |-----|---|--------|
-| CCA auction | 30% | Fair-launch price discovery |
-| Creator vesting | 30% | Linear unlock over 365 days |
-| Solana bridge | 30% | LayerZero OFT bridge (part of finalize) |
-| LP reserve | 10% | Held on CCA strategy for v4 migration |
-
-The 30% Solana bridge leg runs at **Phase 2 finalize** as part of deployment — no separate Solana step. [Solana share bridge](/overview/solana-share-mesh)
+| Auction | 30% | Open price discovery |
+| Creator vesting | 30% | 365-day linear unlock |
+| Solana bridge | 30% | LayerZero at finalize |
+| LP reserve | 10% | Post-auction v4 migration |
 
 ## Timeline
 
-Deploy-session steps (sponsored UserOps, same activation flow):
+| Step | What happens | Your action |
+|------|----------------|-------------|
+| Phase 2 finalize | Wrap + **30/30/30/10** | Sign in app |
+| Phase 3 strategies | Charm 45% · Ajna 45% · 10% idle | Sign in app |
+| Phase 4 launch | Auction scheduled | Sign in app |
+| Auction live | Clearing price discovery | Monitor |
+| Settlement | `sweepCurrency()` → `migrate()` | Keeper / app if prompted → **Trading live** |
 
-| Step | What happens | Your action | Milestone |
-|------|----------------|-------------|-----------|
-| **Phase 2 finalize** | Wrap deposit; **30/30/30/10** split | Sign in app | Activated |
-| **Phase 3 strategies** | Charm **45%** · Ajna **45%** · **10% idle** TVL | Sign in app (automatic bundle) | Activated |
-| **Phase 4 launch** | `launchDeferredAuction` — auction scheduled | Sign in app | Activated |
+## Trading live on Base {#when-is-trading-live-on-base}
 
-After Phase 4, the **auction runs** on its own schedule:
+Base is **trading live** when all succeed:
 
-| Phase | What happens | Your action | Milestone |
-|-------|----------------|-------------|-----------|
-| **Auction scheduled** | CCA created; bids open at next Thursday 00:00 UTC | Monitor app | Activated |
-| **Auction live** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
-| **Auction graduates** | Minimum raise met; settlement eligible | Usually none | → Settlement |
-| **Settlement** | `sweepCurrency()` → `migrate()` (Uniswap v4 LP) | Keeper / app if prompted | → **Trading live** |
-| **Solana bridge + Meteora** | Bridged `■` at finalize; pool may follow | None — included in bundle |
+1. Auction **graduates** (minimum raise met)
+2. `sweepCurrency()`
+3. `migrate()` (Uniswap v4 LP from auction + LP reserve)
+4. Hook / `tradeFeeCollector` aligned with gauge routing
 
-## Trading live on Base
+Failed auction: `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears state for relaunch. [CCA arm](/contracts/strategies/cca-launch).
 
-<a id="when-is-trading-live-on-base"></a>
-
-Public DEX trading and lottery are **not** guaranteed the moment activation finalizes. Base is **trading live** when all of the following have succeeded:
-
-| Step | Onchain action | Notes |
-|------|----------------|-------|
-| 1 | CCA auction **graduates** | Minimum raise met; clearing price set |
-| 2 | `sweepCurrency()` | Auction proceeds swept per CCA lifecycle |
-| 3 | `migrate()` | Uniswap v4 LP position created from auction + LP reserve |
-| 4 | Hook config aligned | Tax hook / `tradeFeeCollector` must match intended gauge routing — separate from `migrate()` |
-
-If the auction **fails**, `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears strategy state so a relaunch can proceed. Details: [CCA launch strategy](/contracts/strategies/cca-launch).
-
-Once live:
-
-- `■` shares tradable on Base DEXs
-- Fees on qualifying **buys** → [CreatorGaugeController](/contracts/governance/gauge-controller)
-- Lottery entries on qualifying **buys** → [LotteryManager4626](/contracts/utilities/lottery-manager)
-- Zora creator revenue can accrue vault PPS via `creatorCoinPayoutRecipient` / `CreatorPayoutRouter`
-
-[How fees and lottery work](/overview/how-it-works)
-
-## Solana share bridge
-
-The Solana bridge is **included in every new vault launch** and runs at Phase 2 finalize (~30% of `■` supply). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete after finalize.
-
-[Solana share bridge](/overview/solana-share-mesh)
+Once live: `■` trades on Base DEXs; fees → [gauge](/contracts/governance/gauge-controller); lottery on qualifying **buys** → [LotteryManager](/contracts/utilities/lottery-manager); Zora earnings can accrue PPS via `creatorCoinPayoutRecipient`.
 
 ## FAQ
 
-### Why isn’t trading live yet?
+**Why isn’t trading live?** Buyers get shares through the auction first; open DEX trading follows settlement.
 
-Buyers receive shares through the **auction** first. Open DEX trading follows auction completion + finalize.
+**When does lottery start?** After trading live, on qualifying ShareOFT DEX **buys** — not on activation or bridge receipts.
 
-### When does the lottery start?
+**Do I finalize manually?** New vaults are app-orchestrated; follow in-app prompts.
 
-After **trading live**, on qualifying ShareOFT DEX **buys** on Base — not on activation, wraps, or bridge receipts.
+**Auction stuck?** Use in-app support. Onchain: [CCA arm](/contracts/strategies/cca-launch).
 
-### Do I run finalize manually?
-
-New vault flows are app-orchestrated. Follow in-app prompts if finalize is pending.
-
-### Auction stuck or failed?
-
-Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/strategies/cca-launch).
-
-## Related
-
-| Topic | Page |
-|-------|------|
-| Full checklist | [Launch checklist](/guides/launch-checklist) |
-| Economics | [How fees and lottery work](/overview/how-it-works) |
-| Share token | [CreatorShareOFT](/contracts/core/creator-share-oft) |
-| Addresses | [Addresses](/reference/addresses) |
+[Launch checklist](/guides/launch-checklist) · [Fees & lottery](/overview/how-it-works) · [Solana bridge](/overview/solana-share-mesh)

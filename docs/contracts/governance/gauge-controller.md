@@ -25,13 +25,11 @@ No `setFeeSplit` — read via `getFeeSplit()`. Conservation: [Lean §4](/audits/
 Primary ShareOFT path — **split in ■ first**:
 
 ```
-receiveFees() → pending (■)
-   ↓ distribute()
-Split:
-  - 69% → jackpotReserve (■)
-  - 21.39% → voter/protocol (■)
-  - creator% → creatorTreasury (■; default 0%)
-  - 9.61% residual → unwrap → ▢ burned (PPS ↑)
+receiveFees() → pending (■) → distribute()
+  69% → jackpotReserve (■)
+  21.39% → voter/protocol (■)
+  creator% → creatorTreasury (■; default 0%)
+  9.61% residual → unwrap → ▢ burned (PPS ↑)
 ```
 
 ## Key functions
@@ -40,17 +38,13 @@ Split:
 function receiveFees(uint256 amount) external;
 function receiveWETHFees(uint256 amount) external;
 function deposit(uint256 amount) external;
-
 function distribute() external;
 function forceDistribute() external onlyOwner;
-
-function payJackpot(address winner, uint256 amount) external; // ShareOFT ■; lottery manager only
+function payJackpot(address winner, uint256 amount) external; // lottery manager only
 function getJackpotReserve() external view returns (uint256);
-
 function setCreatorTreasury(address treasury) external onlyOwner;
-function getFeeSplit()
-    external pure
-    returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol);
+function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol);
+function processWETHFees() external;
 ```
 
 If `creatorShareBps > 0`, treasury must be non-zero (`CreatorTreasuryRequired`).
@@ -58,15 +52,3 @@ If `creatorShareBps > 0`, treasury must be non-zero (`CreatorTreasuryRequired`).
 ### WETH / hook path
 
 Alternate ingress: WETH → creator coin → vault deposit. Lottery/voter slices are wrapped back to ■; burn stays ▢. Large swaps are owner/keeper-gated by default (`setWethFeeKeeper`, `setWethProcessingConfig`).
-
-```solidity
-function processWETHFees() external;
-```
-
-## Events
-
-```solidity
-event FeesReceived(address indexed from, uint256 amount);
-event FeesDistributed(uint256 burned, uint256 toLottery, uint256 toCreator, uint256 toProtocol, uint256 newPPS);
-event JackpotPaid(address indexed winner, uint256 amount);
-```

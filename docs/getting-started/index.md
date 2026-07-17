@@ -9,7 +9,7 @@ sidebar_position: 1
 
 <div class="docs-at-a-glance">
 
-Creator coin on Base? Start with the [Launch checklist](/guides/launch-checklist). For fees and lottery after trading is live, see [Fees, auction, and lottery](/overview/how-it-works).
+Creator coin on Base? Start with the [Launch checklist](/guides/launch-checklist). After trading is live: [Fees, auction, and lottery](/overview/how-it-works).
 
 </div>
 
@@ -28,9 +28,9 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 2. **Deploy** vault, share, gauge, oracle, and auction contracts.
 3. **Activate** — deposit 50M–100M creator coin; attach strategies; schedule the share auction.
 4. Auction **graduates** → finalize → `■` shares trade on Base; fees and lottery apply to qualifying buys.
-5. **Solana share bridge** runs at finalize (~30% of `■`; included in the launch bundle).
+5. **Solana share bridge** at finalize (~30% of `■`; included in the launch bundle).
 
-Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
+[Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
 
 ## Three tokens
 
@@ -40,62 +40,37 @@ Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation
 | **Vault share (`▢`)** | ERC-4626 claim on the vault | `▢JESSE` |
 | **Tradable share (`■`)** | DEX + cross-chain ShareOFT | `■JESSE` |
 
-[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) locks **1000 ▢ per 1 ■**; `deposit()` presents ~1 creator coin → ~1 ■. Creator coin address **≠** share token address. See [Token units](/reference/glossary#token-units).
+Wrapper locks **1000 ▢ per 1 ■**; `deposit()` presents ~1 creator coin → ~1 ■. Addresses differ. [Token units](/reference/glossary#token-units).
 
 ## Before you launch
 
 | Requirement | Why |
 |-------------|-----|
 | Creator coin on **Base** | Vault deposit asset |
-| **50M–100M** creator coin for activation | Shown in app for your release version |
-| **4626 account** with signing ready | Deploy and activate transactions |
-| **Launch bundle active** ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
-
-## Launch steps
-
-| Step | Action | Guide |
-|------|--------|-------|
-| 1 | Pay launch bundle ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
-| 2 | Deploy contracts | [Deploy contracts](/guides/launch-token) |
-| 3 | Activate vault (deposit + share split + auction) | [Activate vault](/guides/activate-vault) |
-| 4 | Auction → finalize → trading live | [After activation](/guides/after-activation) |
-| 5 | Solana share bridge (at finalize) | [Solana share bridge](/overview/solana-share-mesh) |
+| **50M–100M** creator coin | Activation deposit (shown in app) |
+| **4626 account** ready to sign | Deploy and activate |
+| **Launch bundle** ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
 
 ## Milestones
 
-| Milestone | You are here when… | Trading on Base? |
-|-----------|-------------------|------------------|
+| Milestone | Meaning | Trading on Base? |
+|-----------|---------|------------------|
 | **Deployed** | Contracts exist; vault empty | No |
-| **Activated** | Deposit done; **auction scheduled or live** | No |
-| **Trading live** | Auction done + finalize complete | Yes |
+| **Activated** | Deposit done; auction scheduled or live | No |
+| **Trading live** | Auction done + settle complete | Yes |
 
 ## FAQ
 
-### What does the $499 fee cover?
+**What does $499 cover?** Deploy unlock plus Charm, Ajna, Solana bridge, and Meteora entitlement — not the creator-coin deposit. [Pay launch fee](/guides/strategy-bundle).
 
-The **launch bundle** unlocks deploy plus Charm LP, Ajna lending, Solana share bridge + Meteora entitlement. It does **not** include the creator coin deposit. Details: [Pay launch fee](/guides/strategy-bundle).
+**What do buyers get?** Tradable shares (`■`), not the Zora creator coin.
 
-### What do buyers get?
+**Do I deploy to Solana separately?** No. ~30% of `■` bridges at Phase 2 finalize. [Solana share bridge](/overview/solana-share-mesh).
 
-**Tradable shares (`■`)**, not the Zora creator coin.
+**What wallet?** A 4626 account with execution-ready signing.
 
-### Do I deploy to Solana separately?
+## App
 
-No. The Solana share bridge is **built into deployment** and runs at Phase 2 finalize (~30% of `■` supply). Meteora pool setup may complete shortly after. See [Solana share bridge](/overview/solana-share-mesh).
+**[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)** — pay the bundle, then deploy and activate.
 
-### What wallet do I need?
-
-A 4626 account with execution-ready signing (including Coinbase Smart Wallet / Base App where applicable).
-
-## Application
-
-**[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)** — confirm launch bundle is active, then deploy and activate.
-
-## More reading
-
-| Topic | Page |
-|-------|------|
-| Step-by-step launch | [Launch checklist](/guides/launch-checklist) |
-| Fees & lottery | [How fees and lottery work](/overview/how-it-works) |
-| Terminology | [Glossary](/reference/glossary) |
-| Contract addresses | [Addresses](/reference/addresses) |
+[Fees & lottery](/overview/how-it-works) · [Glossary](/reference/glossary) · [Addresses](/reference/addresses)

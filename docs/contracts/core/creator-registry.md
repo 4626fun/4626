@@ -5,24 +5,15 @@ sidebar_position: 1
 
 # Registry4626
 
-**Product role:** Onchain **index** from a lane token address (creator coin or agent token) to that vault’s contract stack (vault, wrapper, ShareOFT, gauge). Integrators and the application resolve which contracts belong to a given token via the registry.
+**Product role:** Onchain **index** from a lane token address (creator coin or agent token) to that vault's contract stack (vault, wrapper, ShareOFT, gauge).
 
-Central registry for platform contract lookups and shared chain config.
-
-## Purpose
-
-The Registry4626:
-- Maps lane tokens → (Vault, Wrapper, OFT, GaugeController, Lottery)
-- Stores chain configurations (LayerZero endpoints, DEX infrastructure)
-- Provides lookup functions for all platform contracts
-- Manages per-creator and shared infrastructure references
+Central registry for platform contract lookups and shared chain config. Maps lane tokens → (Vault, Wrapper, OFT, GaugeController, Lottery), stores LayerZero endpoints and DEX infrastructure, and exposes lookup for all platform contracts.
 
 ## Key Functions
 
 ### Registration
 
 ```solidity
-// Register a new lane token (creator coin or agent token)
 function registerToken(
     address token,
     string calldata name,
@@ -36,29 +27,17 @@ function registerToken(
 ### Lookup
 
 ```solidity
-// Get vault for a creator coin
 function getVaultForToken(address creatorCoin) external view returns (address);
-
-// Get ShareOFT for a creator coin
 function getShareOFTForToken(address creatorCoin) external view returns (address);
-
-// Check if a token is registered
 function isTokenRegistered(address token) external view returns (bool);
-
-// Get all registered tokens
 function getAllTokens() external view returns (address[] memory);
 ```
 
 ### Chain Configuration
 
 ```solidity
-// Get LayerZero endpoint for a chain
 function getLayerZeroEndpoint(uint16 chainId) external view returns (address);
-
-// Get endpoint ID for a chain
 function getEidForChainId(uint256 chainId) external view returns (uint32);
-
-// Check if current chain is hub
 function isHubChain() external view returns (bool);
 ```
 

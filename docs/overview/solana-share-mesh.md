@@ -7,57 +7,48 @@ slug: /overview/solana-share-mesh
 
 # Solana share bridge
 
-How **tradable shares (`■TICKER`)** reach Solana as part of a new vault deployment — and what stays on Base only.
+How tradable shares (`■TICKER`) reach Solana on a new vault launch — and what stays on Base.
 
 <div class="docs-at-a-glance">
 
-Every **new vault launch** bridges ~30% of `■` supply to Solana at Phase 2 finalize via LayerZero. Creator coin stays on Base. Terminology: [Glossary](/reference/glossary#quick-definitions).
+Every new vault bridges ~30% of `■` to Solana at Phase 2 finalize (LayerZero). Creator coin stays on Base. [Glossary](/reference/glossary#quick-definitions).
 
 </div>
 
-[Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
+## Included in the launch bundle
 
-## Part of deployment, not an add-on
-
-The **$499 launch bundle** includes Solana mesh + Meteora entitlement. There is no separate “enable Solana” purchase and no extra app step.
+No separate Solana purchase or app step.
 
 | What | When | Creator action |
 |------|------|----------------|
-| **Solana bridge leg** (~30% of `■`) | **Phase 2 finalize** (same activation session) | None — automatic |
-| **Meteora pool** on bridged `■` | Operator-provisioned after finalize | None — included in bundle |
+| **Bridge (~30% of `■`)** | Phase 2 finalize | None — automatic |
+| **Meteora pool** | After finalize (operator) | None — in bundle |
 
-Base DEX trading and lottery do **not** wait for Meteora — they follow auction graduation on Base. The Solana bridge still runs at finalize as part of the standard deploy path.
+Base trading and lottery do **not** wait for Meteora.
 
-## What exists on each chain
+## What exists where
 
 | Asset | Base | Solana |
 |-------|------|--------|
-| Creator coin (`$TICKER`) | Yes — vault deposit asset | **No** — creator coin stays on Base |
-| Tradable share (`■TICKER`) | Yes — after trading is live | Yes — bridged share at finalize (~30% of split) |
+| Creator coin (`$TICKER`) | Yes | **No** |
+| Tradable share (`■TICKER`) | Yes (after trading live) | Yes (~30% at finalize) |
 
-Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. Symbol stays `■TICKER` on both chains (e.g. `■AKITA`).
+Solana gets bridged **ShareOFT**, not a separate creator-coin SPL. Symbol stays `■TICKER` on both chains.
 
 ## Timeline
 
-| Order | Event | Creator action |
-|-------|--------|----------------|
-| 1 | [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base | Required |
-| 2 | **Phase 2 finalize** — **30/30/30/10** split includes Solana bridge | Sign in app |
-| 3 | Fair-launch auction runs | Monitor in app |
-| 4 | Settlement → **trading live** on Base | Usually automatic / in-app |
-| 5 | Meteora pool on bridged `■` may complete | None — operator-assisted |
+1. [Deploy](/guides/launch-token) + [activate](/guides/activate-vault) on Base.
+2. Phase 2 finalize — **30/30/30/10** split includes the Solana bridge.
+3. Share auction runs → settle → **trading live** on Base.
+4. Meteora may complete after finalize (operator-assisted).
 
-There is no separate “deploy to Solana” step in the application.
+## Lottery
 
-## Lottery: Base vs Solana
+| Chain | Status |
+|-------|--------|
+| **Base** | Live when trading is live — qualifying DEX **buys** |
+| **Solana** | Planned — Base stays authoritative until relay is live |
 
-| Chain | Status (new vaults) |
-|-------|---------------------|
-| **Base** | **Live when trading is live** — qualifying ShareOFT DEX **buys** may enter [LotteryManager4626](/contracts/utilities/lottery-manager) |
-| **Solana** | **Planned** — policy targets pool **buys** of the bridged share; Base lottery stays authoritative until relay is live |
+Wraps, deposits, and bridge receipts do **not** create lottery entries.
 
-Wraps, deposits, and bridge receipts do **not** create lottery entries. Qualifying **buys** do.
-
-## Contract reference
-
-[CreatorShareOFT](/contracts/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · [Addresses](/reference/addresses)
+[CreatorShareOFT](/contracts/core/creator-share-oft) · [Addresses](/reference/addresses) · [After activation](/guides/after-activation)

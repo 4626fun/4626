@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Step 1: Pay launch fee
 
-Pay the **launch bundle** ($499 USDC on Base) before deploy appears in the application.
+Pay the **launch bundle** ($499 USDC on Base) before deploy unlocks in the app.
 
 <div class="docs-at-a-glance">
 
@@ -14,34 +14,26 @@ Pay the **launch bundle** ($499 USDC on Base) before deploy appears in the appli
 | **You do** | Pay once at strategy features |
 | **4626 does** | Marks `vault_full_deploy` active |
 | **Done when** | Deploy page unlocks |
-| **Not included** | 50M–100M creator coin activation deposit |
+| **Not included** | 50M–100M creator-coin deposit |
 
 </div>
 
-[Launch checklist](/guides/launch-checklist) · [What is 4626?](/getting-started)
+## What’s included
 
-## What the bundle includes
+| Included | Role |
+|----------|------|
+| **Charm active LP** | CREATOR/USDC liquidity |
+| **Ajna lending** | CREATOR lending |
+| **Solana bridge** | ~30% of `■` at Phase 2 finalize |
+| **Meteora entitlement** | Solana pool (may lag finalize) |
 
-| Included | What it does |
-|----------|----------------|
-| **Charm active LP** | CREATOR/USDC liquidity management |
-| **Ajna lending** | CREATOR lending strategy |
-| **Solana bridge** | ~30% of `■` bridges at Phase 2 finalize (activation session) |
-| **Meteora entitlement** | Operator-provisioned Solana pool (may lag finalize) |
-
-After launch, vault CREATOR targets ~**45% Charm · 45% Ajna · 10% idle**. Individual strategy keys are not sold separately for new vaults.
-
-Internal catalog id: `vault_full_deploy`. See [Glossary](/reference/glossary).
+After launch, vault CREATOR targets ~**45% Charm · 45% Ajna · 10% idle**. Strategy keys are not sold separately for new vaults.
 
 ## How to pay
 
 1. Open **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)**
-2. Pay via **USDC**, **x402**, or **Stripe** (as shown in app)
-3. Confirm **launch bundle** status is **active**
-4. Continue to [Step 2: Deploy contracts](/guides/launch-token)
+2. Pay with **USDC**, **x402**, or **Stripe** (as shown)
+3. Confirm launch bundle is **active**
+4. Continue to [Step 2: Deploy](/guides/launch-token)
 
-Deploy stays blocked until step 3.
-
-## Next
-
-[Step 2: Deploy contracts](/guides/launch-token)
+[Launch checklist](/guides/launch-checklist) · [Glossary](/reference/glossary)

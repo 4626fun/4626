@@ -5,36 +5,15 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed contract addresses for 4626 on Base mainnet. Shared
-infrastructure is the **v1.19.1** full greenfield epoch; new per-creator launches use the **v1.19.1** bytecode/CREATE2 namespace.
+Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.1** greenfield epoch (cutover 2026-07-15).
 
-> **v1.19.1 greenfield cutover (2026-07-15):** fresh shared/global + phased
-> deploy infra is live on Base. Hardened `VaultAuxiliaryDeployBatcher`
-> `0xaA9229c1…408e` is CREATE2-authorized on the new store/deployer/batcher.
-> v1.19.1 bytecode store is fully seeded (including `AgentRevenuePolicyController`).
-> Fresh `LotteryAmoeRouter` `0x630c3769…` wired to manager `0xB45E68a5…`.
-> Creator + Agent canaries remain the outstanding gate. Runbook:
-> [`v1.19.1-greenfield.md`](../_internal/deployment-releases-legacy/v1.19.1-greenfield.md).
+v1.19.1 is live: hardened `VaultAuxiliaryDeployBatcher` `0xaA9229c1…408e` (CREATE2-authorized), seeded bytecode store (incl. `AgentRevenuePolicyController`), and `LotteryAmoeRouter` `0x630c3769…` on manager `0xB45E68a5…`. Creator + Agent canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
 
-> **Historical / superseded — v1.19.0 partial refresh:** release packet:
-> [`v1.19.0-partial-refresh.md`](../_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md).
-> This reuses the v1.18 shared addresses and changes only bytecode/codeIds,
-> Phase2 module wiring, lottery configuration, and the launch namespace. It is
-> superseded by the v1.19.1 greenfield epoch above.
+For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
-> **Historical / superseded — 2026-07-08 cutover:** treasury Safe wiring, AMOE
-> router `0x18D180…` on manager (updated **2026-07-11** to remediation LM
-> `0xB68F359e…`), bytecode store seeding, env sync, and the legacy v1.16.1
-> manager kill-switch were completed for that epoch. These router and manager
-> addresses are not current; v1.19.1 superseded this cutover on 2026-07-15.
+**Terms:** **New vault launch** = fresh deploy on the current release (*greenfield*). **Solana bridge at finalize** = ~30% of `■` bridged during activation (*Pipe A*). See [Glossary](/reference/glossary#quick-definitions).
 
-> **Abandoned:** v1.17.0 partial broadcast (orphan infra only). Handoff: `tmp/base-v1.17.0-handoff.env`.
-
-For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy and available in the application and onchain events.
-
-> **Terms:** **New vault launch** = fresh deploy on the current release (internal: *greenfield*). **Solana bridge at finalize** = ~30% of `■` bridged during activation (internal: *Pipe A*). See [Glossary](/reference/glossary#quick-definitions).
-
-> **Canonical source.** When documentation or tooling disagrees with this file, **this file wins**. Addresses link to [BaseScan](https://basescan.org) on Base mainnet.
+**Canonical source.** When documentation or tooling disagrees with this file, **this file wins**. Addresses link to [BaseScan](https://basescan.org) on Base mainnet.
 
 ## Base
 

@@ -5,18 +5,18 @@ sidebar_position: 2
 
 # Glossary
 
-Plain-language names used in public docs, with internal or onchain identifiers where they differ. For launch steps, see [Launch checklist](/guides/launch-checklist).
+Public names used across docs and the app, with internal or onchain identifiers where they differ. Launch steps: [Launch checklist](/guides/launch-checklist).
 
 ## Quick definitions
 
-**New vault launch** *(internal: **greenfield**)*  
-A **brand-new** vault deployed on the **current** release (v1.19.1 today) — not a patch or migration of an older vault (e.g. AKITA). Engineers say “greenfield” to mean “fresh deploy on the latest contracts and batcher,” as opposed to **legacy vaults** still tied to retired infrastructure.
+**New vault launch** *(greenfield)*  
+A brand-new vault on the **current** release (v1.19.1) — not a patch or migration of an older vault (e.g. AKITA).
 
-**Solana share bridge at finalize** *(internal: **Pipe A**, `solana_ovault_mesh`)*  
-During **activation**, when you finalize Phase 2, about **30%** of tradable `■` shares are **automatically** bridged to Solana (LayerZero). You do not buy or enable this separately — it is part of the standard new-vault path included in the launch bundle. “Pipe A” is an internal label for this **finalize-time bridge** (replacing an older, retired Solana routing model). Base trading and the fair-launch auction do not wait for Solana; the bridge runs in the same activation session.
+**Solana share bridge at finalize** *(Pipe A, `solana_ovault_mesh`)*  
+At Phase 2 finalize, about **30%** of tradable `■` shares bridge to Solana via LayerZero automatically. Included in the launch bundle; Base trading and the fair-launch auction do not wait on it.
 
 **Legacy vault**  
-Deployed on an **older batcher or release**. May behave differently from a new vault launch; do not assume AKITA-era addresses or flows apply to new launches.
+Deployed on an **older batcher or release**. Do not assume AKITA-era addresses or flows apply to new launches.
 
 ## Public names vs internal names
 
@@ -35,7 +35,7 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 
 ## Tokens
 
-**Creator coin** — The Zora ERC-20 deposited into the vault; the vault **deposit asset**. Distinct contract address from share tokens.
+**Creator coin** — Zora ERC-20 deposited into the vault (deposit asset). Distinct address from share tokens.
 
 **Vault share (`▢TICKER`)** — ERC-4626 share from [CreatorOVault](/contracts/core/creator-ovault); pro-rata claim on vault TVL.
 
@@ -43,15 +43,13 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 
 **Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); locks **1000 ▢ per 1 ■** (`NORMALIZATION_FACTOR = 1000`). User `deposit()` presents **~1 creator coin → ~1 ■**.
 
-**ve■4626** — Decaying power created by locking the protocol **■4626** ShareOFT. It is not created by holding a creator’s `■TICKER`. See the [ve■4626 reader guide](/overview/ve4626).
+**ve■4626** — Decaying power from locking protocol **■4626** ShareOFT — not from holding a creator’s `■TICKER`. See [ve■4626](/overview/ve4626).
 
-**ve33** — Utility assigned from ve■4626 for gauge voting, fees, and bribes.
+**ve33** — Utility from ve■4626 for gauge voting, fees, and bribes.
 
-**veLottery** — Opt-in utility assigned from ve■4626 for the personal lottery multiplier. It works alongside creator-share coverage; it does not replace coverage.
+**veLottery** — Opt-in utility from ve■4626 for the personal lottery multiplier. Works with creator-share coverage; does not replace it.
 
 ## Token units {#token-units}
-
-Raw unit math vs user-facing UX:
 
 | Step | Ratio | Notes |
 |------|-------|-------|
@@ -121,4 +119,4 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 
 **Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
 
-**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from v1.19.1 new-vault path.
+**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from the v1.19.1 new-vault path.

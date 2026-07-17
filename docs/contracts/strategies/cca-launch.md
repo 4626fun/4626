@@ -5,33 +5,26 @@ sidebar_position: 2
 
 # Share CCA Launch Arm
 
-**Product role:** **Vault arm** (not a leg / not `addStrategy`) that runs the **fair-launch auction** selling ■ ShareOFT for native ETH at a clearing price before secondary mesh liquidity.
+**Product role:** **Vault arm** (not a leg / not `addStrategy`) that runs the **auction** selling tradable ■ ShareOFT for native ETH at a clearing price before secondary mesh liquidity.
 
-Uniswap Continuous Clearing Auction (CCA) integration for fair-launch price discovery on Uniswap V4.
+Uniswap Continuous Clearing Auction (CCA) integration for price discovery on Uniswap V4. Onchain name: `CCALaunchArm` (legacy: `CCALaunchStrategy` / `ccaLaunchStrategy`).
 
-## Purpose
-
-The Share CCA launch arm (`CCALaunchArm`; legacy onchain names `CCALaunchStrategy` / `ccaLaunchStrategy`):
-- Runs CCA price discovery with explicit lifecycle tracking.
-- Supports deterministic failed-auction finalization and relaunch safety.
-- On graduation: `migrate()` initializes the ShareOFT/native-ETH V4 pool and wires the oracle — **no LP mint** at migrate (mesh arm handles liquidity later).
-- Derives launch floor price onchain from oracle data (manipulation-resistant).
-- Exposes non-blocking backing telemetry (vault economics stay live).
+Runs CCA price discovery with explicit lifecycle tracking, supports deterministic failed-auction finalization and relaunch safety, and on graduation `migrate()` initializes the ShareOFT/native-ETH V4 pool and wires the oracle — **no LP mint** at migrate (mesh arm handles liquidity later). Launch floor price is derived onchain from oracle data. Non-blocking backing telemetry keeps vault economics live during the auction.
 
 ## Auction Flow
 
-On **finalize** (after the creator deposits creator coin and the batcher wraps into `■` ShareOFT), the batcher enforces a fixed **four-way split** of wrapped share supply. Constants live on `DeploymentBatcher` / `DeploymentBatcherPhase2Module` (`AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT`).
+On **finalize** (after the creator deposits creator coin and the batcher wraps into `■` ShareOFT), the batcher enforces a fixed **four-way split** of wrapped share supply. Constants: `DeploymentBatcher` / `DeploymentBatcherPhase2Module` (`AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT`).
 
 ```text
 Creator deposits creator coin → wrapper mints ■ ShareOFT
    ↓
 Batcher enforces 30/30/30/10 split (of wrapped ■ supply)
-  - 30% fair-launch CCA auction (pending launch)
+  - 30% CCA auction (pending launch)
   - 30% creator linear vesting (365 days)
   - 30% LayerZero bridge to Solana (part of finalize; same ■ ticker)
   - 10% LP reserve held on launch arm for post-auction mesh seeding
    ↓
-Fair-launch auction runs (30% auction leg + 10% LP reserve metadata)
+Auction runs (30% auction leg + 10% LP reserve metadata)
    ↓
 If graduated: sweepCurrency() → migrate() (pool init + oracle) → mesh arm (deploy LP manager → seedLpManager → seedRebalance)
    ↓
@@ -64,68 +57,34 @@ The launch arm schedules auctions on the **next Thursday 00:00 UTC** weekly epoc
 | **Graduated** | `sweepCurrency()` → `migrate()` eligible after delays |
 | **Failed** | `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears state for relaunch |
 
-**Charm 99/1 bootstrap (not CCA):** when the Charm strategy first seeds an empty LP, it targets ~**99% creator coin / 1% USDC** — this runs in **Phase 3**, separate from the fair-launch auction.
+**Charm 99/1 bootstrap (not CCA):** when the Charm strategy first seeds an empty LP, it targets ~**99% creator coin / 1% USDC** — this runs in **Phase 3**, separate from the auction.
 
 ## Key Functions
 
 ```solidity
-// Launch auction with explicit LP reserve metadata.
-// `floorPrice` is legacy/ignored; floor is derived onchain.
 function launchAuctionWithReserve(
-  uint256 amount,
-  uint256 lpReserveAmount,
-  uint256 floorPrice,
-  uint128 requiredRaise,
-  bytes calldata auctionSteps
-) external returns (address);
+  uint256 amount, uint256 lpReserveAmount, uint256 floorPrice,
+  uint128 requiredRaise, bytes calldata auctionSteps
+) external returns (address);  // floorPrice legacy/ignored; floor derived onchain
 
-// Legacy status (kept for compatibility).
-function getAuctionStatus()
-  external
-  view
+function getAuctionStatus() external view
   returns (address auction, bool isActive, bool isGraduated, uint256 clearingPrice, uint256 currencyRaised);
 
-// Rich lifecycle status for API/UI/keepers.
 function getLifecycleStatus() external view returns (LifecycleStatus memory);
-
-// Preview launch floor/tick from oracle data.
-function previewLaunchPricing()
-  external
-  view
+function previewLaunchPricing() external view
   returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice);
-
-// Trigger v4 LP migration after graduation/sweep readiness.
 function migrate() external;
-
-// Finalize failed auctions and unblock future launches.
 function finalizeFailedAuction() external;
 ```
 
-## Migration Parameters
-
-- `positionManager`: v4 position minter used for LP creation.
-- `positionRecipient`: recipient of the minted LP position.
-- `operator`: residual sweep operator after `sweepBlock`.
-- `migrationDelayBlocks`: delay from auction end to migration eligibility.
-- `sweepDelayBlocks`: delay from claim readiness to residual sweeps.
-
 ## Launch Completion Caveat
 
-- `migrate()` performs pool initialization and LP position migration, but does not itself finalize hook `setTaxConfig`.
-- Canonical launch completion should require:
-  - sweep success,
-  - migrate success,
-  - hook config active and aligned to the intended `tradeFeeCollector`.
+`migrate()` performs pool initialization and LP position migration, but does not itself finalize hook `setTaxConfig`. Canonical launch completion requires sweep success, migrate success, and hook config active and aligned to the intended `tradeFeeCollector`.
 
 ## Launch pricing
 
-- Launch floor is derived onchain from the lane oracle via `IOracle4626` (`getAssetPrice` and `getEthPrice`), then converted to Q96.
-- Strategy applies a configurable launch discount (`launchDiscountBps`) and aligns floor to configurable spacing (`launchTickSpacingBps`).
-- Stale/invalid oracle data reverts launch (`LaunchOracleStale`, `LaunchOracleInvalidPrice`), so launch cannot proceed on unsafe pricing.
-- Frontend `computeMarketFloorQuote` is diagnostic/reference only and no longer trusted as an authoritative launch input.
+Launch floor is derived onchain from the lane oracle via `IOracle4626` (`getAssetPrice`, `getEthPrice`), then converted to Q96. Configurable launch discount (`launchDiscountBps`) and tick spacing (`launchTickSpacingBps`). Stale/invalid oracle data reverts launch (`LaunchOracleStale`, `LaunchOracleInvalidPrice`). Frontend `computeMarketFloorQuote` is diagnostic only.
 
 ## Share Economics During Auction
 
-- Vault economics are intentionally **not frozen** during auctions.
-- Strategy snapshots launch-time backing telemetry (`totalAssets`, `totalSupply`) when configured with `backingVault`.
-- API/UI expose drift fields for transparency (`assetsDelta`, `supplyDelta`), but these are warning-only and do not block settlement or migration.
+Vault economics are **not frozen** during auctions. Strategy snapshots launch-time backing telemetry when configured with `backingVault`. API/UI expose drift fields (`assetsDelta`, `supplyDelta`) — warning-only, do not block settlement or migration.
