@@ -35,6 +35,8 @@ contract MockCreate2DeployerForShareMesh is IUniversalCreate2DeployerFromStore {
         return address(uint160(uint256(keccak256(abi.encodePacked(salt, initCodeHash)))));
     }
 
+    function authorizedDeployers(address) external view returns (bool) { return false; }
+
     function store() external pure override returns (address) {
         return address(0);
     }

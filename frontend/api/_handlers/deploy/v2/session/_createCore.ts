@@ -431,9 +431,6 @@ const DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'gaugeInitCodeHash', type: 'bytes32' },
-          { name: 'ccaInitCodeHash', type: 'bytes32' },
-          { name: 'oracleInitCodeHash', type: 'bytes32' },
         ],
       },
       {
@@ -485,9 +482,6 @@ const DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'gaugeInitCodeHash', type: 'bytes32' },
-          { name: 'ccaInitCodeHash', type: 'bytes32' },
-          { name: 'oracleInitCodeHash', type: 'bytes32' },
         ],
       },
       {

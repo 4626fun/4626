@@ -34,7 +34,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | CreatorOVaultAdminModule | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
 | DeploymentBatcher | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | DeploymentBatcherPhase1Module | `0x33ABACC30a4179444d9d565245561B3988650bF5` |
-| DeploymentBatcherPhase2Module | `0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba` |
+| DeploymentBatcherPhase2Module | `0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad` |
 | DeploymentBatcherPhase3Helper | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | DeploymentBatcherShareMeshHelper | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
 | DeploymentBatcherUtilsHelper | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
@@ -43,8 +43,10 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 Notes:
 - **v1.19.2** is the current shared/global + per-creator bytecode/CREATE2
   namespace. Infra addresses match the v1.19.1 greenfield deploy.
-- Live `DeploymentBatcherPhase2Module` is `0x3089678d…` (AA95 / vaultKind).
-  Manifest + store seed: `deployments/base/v1.19.2-bytecode-manifest.json`. Prior module `0x0DDac7f1…` superseded.
+- Live `DeploymentBatcherPhase2Module` is `0xC3Af8F49…` (pending-hash F4 + F7/F8, 2026-07-17).
+  Safe swap: [`0x8ec89e09…`](https://basescan.org/tx/0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8).
+  Shell `deployPhase2Core` selectors unchanged (`0xf9344d88` / `0x6004df9c`).
+  Prior module `0x3089678d…` superseded; earlier `0x0DDac7f1…` retired.
 - Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
   new store/deployer/batcher stack.
 - Prior v1.18.0 stack (registry `0xDb8570…`, batcher `0x02D7…`, aux `0xde93…`)

@@ -4,6 +4,9 @@
  * contracts from an authorized create2 deployer key, then let deployPhase2Core
  * (or deployPhase2CoreWithRolePolicy) reuse them via
  * DeploymentBatcherPhase2Module._deployOrExisting and spend UserOp gas on wiring only.
+ *
+ * Init-code hashes are published on the Phase2 module via setPendingInitCodeHashes
+ * (shell deployPhase2Core ABI stays unchanged — no hash fields on Phase2CoreParams).
  */
 import {
   concat,
@@ -24,10 +27,10 @@ import { base } from 'viem/chains'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 
-/** Shell `deployPhase2Core` selector (Phase2CoreParams with optional init-code hashes). */
-export const SELECTOR_DEPLOY_PHASE2_CORE = '0x07455a76'
+/** Shell `deployPhase2Core` selector. */
+export const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
 /** Shell `deployPhase2CoreWithRolePolicy` selector (role-policy rewrite path). */
-export const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x5dfdf2d2'
+export const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x6004df9c'
 
 const PHASE2_PARAMS_COMPONENTS = [
   { name: 'creatorToken', type: 'address' },
@@ -40,9 +43,6 @@ const PHASE2_PARAMS_COMPONENTS = [
   { name: 'shareSymbol', type: 'string' },
   { name: 'version', type: 'string' },
   { name: 'floorPriceQ96', type: 'uint256' },
-  { name: 'gaugeInitCodeHash', type: 'bytes32' },
-  { name: 'ccaInitCodeHash', type: 'bytes32' },
-  { name: 'oracleInitCodeHash', type: 'bytes32' },
 ] as const
 
 const PHASE2_CODE_IDS_COMPONENTS = [
@@ -88,6 +88,20 @@ const BATCHER_VIEW_ABI = [
   { type: 'function', name: 'protocolTreasury', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'chainlinkEthUsd', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'phase2Module', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const SET_PENDING_INIT_CODE_HASHES_ABI = [
+  {
+    type: 'function',
+    name: 'setPendingInitCodeHashes',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'salts', type: 'bytes32[3]' },
+      { name: 'hashes', type: 'bytes32[3]' },
+    ],
+    outputs: [],
+  },
 ] as const
 
 const UTILS_ABI = [
@@ -190,9 +204,6 @@ type Phase2CoreParams = {
   shareSymbol: string
   version: string
   floorPriceQ96: bigint
-  gaugeInitCodeHash?: Hex
-  ccaInitCodeHash?: Hex
-  oracleInitCodeHash?: Hex
 }
 
 type Phase2CodeIds = {
@@ -272,6 +283,12 @@ export type Phase2CoreInitCodeHashes = {
   oracle: Hex
 }
 
+export type Phase2CoreSalts = {
+  gauge: Hex
+  cca: Hex
+  oracle: Hex
+}
+
 export type Phase2CorePrecreateResult = {
   skipped: boolean
   reason?: string
@@ -279,47 +296,66 @@ export type Phase2CorePrecreateResult = {
   existing: Array<{ label: string; address: Address }>
   /** Present when precreate computed CREATE2 init-code hashes for all three targets. */
   initCodeHashes?: Phase2CoreInitCodeHashes
+  salts?: Phase2CoreSalts
+  /** True when setPendingInitCodeHashes was published on the Phase2 module. */
+  publishedPendingHashes?: boolean
 }
 
 /**
- * Rewrite deployPhase2Core(*) calldata to include AA95-friendly init-code hashes.
+ * Publish gauge/cca/oracle CREATE2 init-code hashes on the live Phase2 module
+ * so deployPhase2Core can reuse precreated contracts without hashing in the UserOp.
  */
-export function injectPhase2CoreInitCodeHashes(
-  calls: Call[],
-  hashes: Phase2CoreInitCodeHashes,
-): { calls: Call[]; injected: boolean } {
-  let injected = false
-  const next = calls.map((call) => {
-    if (!call?.data || !isPhase2CoreCalldata(call.data)) return call
-    const decoded = decodePhase2CoreCreateArgs(call.data as Hex)
-    if (!decoded) return call
-    const params = {
-      ...decoded.params,
-      gaugeInitCodeHash: hashes.gauge,
-      ccaInitCodeHash: hashes.cca,
-      oracleInitCodeHash: hashes.oracle,
-    }
-    injected = true
-    if (decoded.variant === 'deployPhase2CoreWithRolePolicy') {
-      return {
-        ...call,
-        data: encodeFunctionData({
-          abi: DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
-          functionName: 'deployPhase2CoreWithRolePolicy',
-          args: [params as any, decoded.codeIds as any, decoded.rolePolicyId ?? 0n],
-        }) as Hex,
-      }
-    }
-    return {
-      ...call,
-      data: encodeFunctionData({
-        abi: DEPLOY_PHASE2_CORE_ABI,
-        functionName: 'deployPhase2Core',
-        args: [params as any, decoded.codeIds as any],
-      }) as Hex,
-    }
+export async function publishPhase2PendingInitCodeHashes(params: {
+  batcher: Address
+  salts: Phase2CoreSalts
+  hashes: Phase2CoreInitCodeHashes
+}): Promise<{ txHash: Hex } | { skipped: true; reason: string }> {
+  const pk = readPrecreatePrivateKey()
+  if (!pk) {
+    return { skipped: true, reason: 'precreate_key_missing' }
+  }
+
+  const account = privateKeyToAccount(pk)
+  const rpcUrl = resolveDeploySessionRpcUrl()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl, { timeout: 120_000 }),
   })
-  return { calls: next, injected }
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(rpcUrl, { timeout: 120_000 }),
+  })
+
+  const phase2Module = await publicClient.readContract({
+    address: params.batcher,
+    abi: BATCHER_VIEW_ABI,
+    functionName: 'phase2Module',
+  })
+  if (!phase2Module || phase2Module === '0x0000000000000000000000000000000000000000') {
+    return { skipped: true, reason: 'phase2_module_missing' }
+  }
+
+  try {
+    const data = encodeFunctionData({
+      abi: SET_PENDING_INIT_CODE_HASHES_ABI,
+      functionName: 'setPendingInitCodeHashes',
+      args: [
+        [params.salts.gauge, params.salts.cca, params.salts.oracle],
+        [params.hashes.gauge, params.hashes.cca, params.hashes.oracle],
+      ],
+    })
+    const txHash = await walletClient.sendTransaction({
+      to: getAddress(phase2Module),
+      data,
+      gas: 500_000n,
+    })
+    await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
+    return { txHash }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err ?? 'publish_failed')
+    return { skipped: true, reason: `setPendingInitCodeHashes_failed:${msg.slice(0, 160)}` }
+  }
 }
 
 /**
@@ -410,7 +446,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
 
   const planned = [
     {
-      label: 'gauge',
+      label: 'gauge' as const,
       saltLabel: 'gauge',
       codeId: codeIds.gauge as Hex,
       args: encodeAbiParameters(
@@ -419,7 +455,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
       ),
     },
     {
-      label: 'cca',
+      label: 'cca' as const,
       saltLabel: 'cca',
       codeId: codeIds.cca as Hex,
       args: encodeAbiParameters(
@@ -428,7 +464,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
       ),
     },
     {
-      label: 'oracle',
+      label: 'oracle' as const,
       saltLabel: 'oracle',
       codeId: codeIds.oracle as Hex,
       args: encodeAbiParameters(
@@ -441,6 +477,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
   const deployed: Phase2CorePrecreateResult['deployed'] = []
   const existing: Phase2CorePrecreateResult['existing'] = []
   const hashByLabel: Partial<Record<'gauge' | 'cca' | 'oracle', Hex>> = {}
+  const saltByLabel: Partial<Record<'gauge' | 'cca' | 'oracle', Hex>> = {}
 
   for (const item of planned) {
     const salt = await publicClient.readContract({
@@ -449,6 +486,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
       functionName: 'saltFor',
       args: [baseSalt, item.saltLabel],
     })
+    saltByLabel[item.label] = salt as Hex
     const creationCode = (await publicClient.readContract({
       address: store,
       abi: STORE_ABI,
@@ -492,6 +530,29 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
     hashByLabel.gauge && hashByLabel.cca && hashByLabel.oracle
       ? { gauge: hashByLabel.gauge, cca: hashByLabel.cca, oracle: hashByLabel.oracle }
       : undefined
+  const salts =
+    saltByLabel.gauge && saltByLabel.cca && saltByLabel.oracle
+      ? { gauge: saltByLabel.gauge, cca: saltByLabel.cca, oracle: saltByLabel.oracle }
+      : undefined
 
-  return { skipped: false, deployed, existing, initCodeHashes }
+  let publishedPendingHashes = false
+  if (initCodeHashes && salts) {
+    const published = await publishPhase2PendingInitCodeHashes({
+      batcher: core.to,
+      salts,
+      hashes: initCodeHashes,
+    })
+    if (!('skipped' in published)) {
+      publishedPendingHashes = true
+    }
+  }
+
+  return {
+    skipped: false,
+    deployed,
+    existing,
+    initCodeHashes,
+    salts,
+    publishedPendingHashes,
+  }
 }

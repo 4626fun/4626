@@ -10,7 +10,6 @@ import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import { createDeploySessionBundlerTransport, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS, withDeploySessionUserOpGas } from './deployUserOpGas.js'
 import {
   ensurePhase2CoreCreatesPrecreated,
-  injectPhase2CoreInitCodeHashes,
 } from './phase2CorePrecreate.js'
 import {
   handleOptions,
@@ -1086,13 +1085,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
             }
             if (precreate.initCodeHashes) {
-              const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
-              if (injected.injected) {
-                userOpCalls = injected.calls
-                payloadPatch = {
-                  ...payloadPatch,
-                  phase2CoreInitCodeHashes: precreate.initCodeHashes,
-                }
+              payloadPatch = {
+                ...payloadPatch,
+                phase2CoreInitCodeHashes: precreate.initCodeHashes,
+                ...(precreate.publishedPendingHashes
+                  ? { phase2CorePendingHashesPublished: true }
+                  : {}),
               }
             }
           } else if (precreate.reason) {

@@ -653,7 +653,7 @@ describe('deploy session ownership guardrails', () => {
       method: 'POST',
       body: {
         ...makeRequestBody(),
-        phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x07455a76' }],
+        phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0xf9344d88' }],
         phase2FinalizeCalls: [
           {
             to: '0x0000000000000000000000000000000000000010',
@@ -679,7 +679,7 @@ describe('deploy session ownership guardrails', () => {
     expect(Array.isArray(phase2FinalizeCalls)).toBe(true)
     expect(phase2CoreCalls.length).toBe(2)
     expect(phase2CoreCalls[0]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000010')
-    expect(String(phase2CoreCalls[0]?.data || '').toLowerCase()).toBe('0x07455a76')
+    expect(String(phase2CoreCalls[0]?.data || '').toLowerCase()).toBe('0xf9344d88')
     expect(phase2CoreCalls[0]?.value).toBe('0')
     expect(phase2CoreCalls[1]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000003')
     expect(String(phase2CoreCalls[1]?.data || '').toLowerCase().startsWith('0x095ea7b3')).toBe(true)

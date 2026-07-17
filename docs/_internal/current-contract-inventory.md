@@ -34,7 +34,7 @@ Scope: current live `v1.19.2` shared infrastructure (v1.19.1 greenfield addresse
 | `ovaultAdminModule` | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
 | `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | `deploymentBatcherPhase1Module` | `0x33ABACC30a4179444d9d565245561B3988650bF5` |
-| `deploymentBatcherPhase2Module` | `0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba` |
+| `deploymentBatcherPhase2Module` | `0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad` |
 | `deploymentBatcherPhase3Helper` | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | `deploymentBatcherShareMeshHelper` | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
 | `deploymentBatcherUtilsHelper` | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
@@ -87,7 +87,7 @@ before `finalizePhase2`; there is no adapter or global-peer fallback.
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
 - `DeploymentBatcherPhase1Module=0x33ABACC30a4179444d9d565245561B3988650bF5`
-- `DeploymentBatcherPhase2Module=0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba`
+- `DeploymentBatcherPhase2Module=0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad`
 - `DeploymentBatcherPhase3Helper=0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`
 - `DeploymentBatcherShareMeshHelper=0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`
 - `DeploymentBatcherUtilsHelper=0x8833225A423f4B1BB071702CB68d71fA4af434f2`

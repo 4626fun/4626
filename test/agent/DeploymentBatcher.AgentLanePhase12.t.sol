@@ -2,7 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {
+    DeploymentBatcher,
+    DeploymentBatcherPhase2Module
+} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 
@@ -494,10 +497,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: bytes32(0),
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
 
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
@@ -532,10 +532,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: bytes32(0),
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
 
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(phase2, _codeIds(false));
@@ -587,6 +584,13 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         MockAgentLaneGauge pre = new MockAgentLaneGauge(address(0), address(0), address(0), address(batcher));
         vm.etch(predicted, address(pre).code);
 
+        // Publish hash on the module contract (shell ABI stays unchanged).
+        bytes32[3] memory salts;
+        bytes32[3] memory hashes;
+        salts[0] = gaugeSalt;
+        hashes[0] = gaugeInitHash;
+        DeploymentBatcherPhase2Module(address(batcher.phase2Module())).setPendingInitCodeHashes(salts, hashes);
+
         DeploymentBatcher.Phase2CoreParams memory params = DeploymentBatcher.Phase2CoreParams({
             creatorToken: agentToken,
             owner: address(this),
@@ -597,10 +601,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: gaugeInitHash,
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
 
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
@@ -619,10 +620,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: bytes32(0),
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
 
