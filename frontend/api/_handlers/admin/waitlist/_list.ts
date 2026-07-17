@@ -11,10 +11,10 @@ import {
   isAdminAddress,
 } from '@4626/server-core'
 
-
-
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
+
+type WaitlistListScope = 'email' | 'incomplete' | 'all'
 
 type WaitlistListItem = {
   id: number
@@ -38,8 +38,19 @@ type WaitlistListItem = {
   preprovCoinSymbol: string | null
 }
 
+type ListCounts = {
+  /** Verified-email waitlist (matches public `/api/waitlist/stats`). */
+  email: number
+  /** Unmerged profiles with no email (wallet/Privy shells). */
+  incomplete: number
+  /** email + incomplete. */
+  all: number
+}
+
 type ListResponse = {
   admin: string
+  scope: WaitlistListScope
+  counts: ListCounts
   items: WaitlistListItem[]
 }
 
@@ -49,6 +60,30 @@ function toIso(value: any): string {
     return new Date(value).toISOString()
   } catch {
     return ''
+  }
+}
+
+function parseScope(raw: unknown): WaitlistListScope {
+  const value = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+  if (value === 'incomplete' || value === 'no-email' || value === 'shells') return 'incomplete'
+  if (value === 'all') return 'all'
+  return 'email'
+}
+
+function scopeSqlPredicate(scope: WaitlistListScope): string {
+  switch (scope) {
+    case 'incomplete':
+      return 'email IS NULL'
+    case 'all':
+      return 'TRUE'
+    case 'email':
+      return 'email IS NOT NULL'
+    default: {
+      const _exhaustive: never = scope
+      return _exhaustive
+    }
   }
 }
 
@@ -71,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const qRaw = typeof (req.query as any)?.q === 'string' ? String((req.query as any).q) : ''
   const q = qRaw.trim()
+  const scope = parseScope((req.query as any)?.scope)
 
   const mapItem = (row: any): WaitlistListItem => {
     const profileWallets = Array.isArray(row.profile_wallets) ? row.profile_wallets : []
@@ -82,39 +118,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     )?.address
 
     return {
-    id: typeof row.id === 'number' ? row.id : Number(row.id),
-    email: typeof row.email === 'string' ? row.email : String(row.email || ''),
-    persona: typeof row.persona === 'string' ? row.persona : null,
-    primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
-    cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
-    solanaWallet:
-      typeof row.solana_wallet === 'string'
-        ? row.solana_wallet
-        : typeof solanaFromWallets === 'string'
-          ? solanaFromWallets
-          : null,
-    embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
-    embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
-    embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
-    referralCode: typeof row.referral_code === 'string' ? row.referral_code : null,
-    contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
-    appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
-    appAccessDecidedAt: toIso(row.app_access_decided_at) || null,
-    createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at),
-    preprovisioned: Boolean(row.preprovisioned_at),
-    preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
-    preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
-  }
+      id: typeof row.id === 'number' ? row.id : Number(row.id),
+      email: typeof row.email === 'string' ? row.email : String(row.email || ''),
+      persona: typeof row.persona === 'string' ? row.persona : null,
+      primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
+      cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
+      solanaWallet:
+        typeof row.solana_wallet === 'string'
+          ? row.solana_wallet
+          : typeof solanaFromWallets === 'string'
+            ? solanaFromWallets
+            : null,
+      embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
+      embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
+      embeddedWalletClientType:
+        typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
+      referralCode: typeof row.referral_code === 'string' ? row.referral_code : null,
+      contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
+      appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
+      appAccessDecidedAt: toIso(row.app_access_decided_at) || null,
+      createdAt: toIso(row.created_at),
+      updatedAt: toIso(row.updated_at),
+      preprovisioned: Boolean(row.preprovisioned_at),
+      preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
+      preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
+    }
   }
 
   let items: WaitlistListItem[] = []
+  let counts: ListCounts = { email: 0, incomplete: 0, all: 0 }
 
   const db = isDbConfigured() ? await getDb() : null
   if (db?.query) {
     await ensureWaitlistSchema(db as any)
-    const where = q
-      ? `WHERE email ILIKE $1
+
+    const countsResult = await db.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE email IS NOT NULL)::int AS email_count,
+         COUNT(*) FILTER (WHERE email IS NULL)::int AS incomplete_count,
+         COUNT(*)::int AS all_count
+       FROM profiles
+       WHERE merged_into_profile_id IS NULL;`,
+    )
+    const countRow = countsResult.rows?.[0] ?? {}
+    counts = {
+      email: Number(countRow.email_count ?? 0) || 0,
+      incomplete: Number(countRow.incomplete_count ?? 0) || 0,
+      all: Number(countRow.all_count ?? 0) || 0,
+    }
+
+    const scopePredicate = scopeSqlPredicate(scope)
+    const searchPredicate = q
+      ? `(email ILIKE $1
          OR primary_wallet ILIKE $1
          OR referral_code ILIKE $1
          OR embedded_wallet ILIKE $1
@@ -125,8 +180,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            WHERE pw.profile_id = profiles.id
              AND pw.address ILIKE $1
              AND LOWER(COALESCE(pw.chain, '')) = 'solana'
-         )`
-      : ''
+         ))`
+      : null
+    const where = [
+      'merged_into_profile_id IS NULL',
+      `(${scopePredicate})`,
+      searchPredicate,
+    ]
+      .filter(Boolean)
+      .join(' AND ')
     const params = q ? [`%${q}%`] : []
 
     const result = await db.query(
@@ -158,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          preprov_zora_handle,
          preprov_coin_symbol
        FROM profiles
-       ${where}
+       WHERE ${where}
        ORDER BY created_at DESC
        LIMIT 200;`,
       params,
@@ -166,6 +228,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     items = (result.rows ?? []).map(mapItem)
   } else if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
+
+    const [emailRes, incompleteRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .not('email', 'is', null)
+        .is('merged_into_profile_id', null),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .is('email', null)
+        .is('merged_into_profile_id', null),
+    ])
+    if (emailRes.error || incompleteRes.error) {
+      return res.status(500).json({
+        success: false,
+        error: `Supabase count failed: ${(emailRes.error ?? incompleteRes.error)?.message}`,
+      } satisfies ApiEnvelope<never>)
+    }
+    counts = {
+      email: emailRes.count ?? 0,
+      incomplete: incompleteRes.count ?? 0,
+      all: (emailRes.count ?? 0) + (incompleteRes.count ?? 0),
+    }
+
     let query = supabase
       .from('profiles')
       .select(
@@ -190,8 +277,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'profile_wallets(address,is_canonical_solana_wallet,chain)',
         ].join(','),
       )
+      .is('merged_into_profile_id', null)
       .order('created_at', { ascending: false })
       .limit(200)
+
+    if (scope === 'email') query = query.not('email', 'is', null)
+    if (scope === 'incomplete') query = query.is('email', null)
+
     if (q) {
       const term = q.replace(/,/g, ' ')
       query = query.or(
@@ -221,6 +313,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     success: true,
-    data: { admin, items } satisfies ListResponse,
+    data: { admin, scope, counts, items } satisfies ListResponse,
   } satisfies ApiEnvelope<ListResponse>)
 }

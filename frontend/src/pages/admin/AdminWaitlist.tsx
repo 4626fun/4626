@@ -42,8 +42,18 @@ type WaitlistListItem = {
   preprovCoinSymbol: string | null
 }
 
+type WaitlistListScope = 'email' | 'incomplete' | 'all'
+
+type AdminWaitlistListCounts = {
+  email: number
+  incomplete: number
+  all: number
+}
+
 type AdminWaitlistListResponse = {
   admin: string
+  scope: WaitlistListScope
+  counts: AdminWaitlistListCounts
   items: WaitlistListItem[]
 }
 
@@ -157,8 +167,12 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
   )
 }
 
-async function fetchWaitlistList(params: { q?: string | null }): Promise<AdminWaitlistListResponse> {
+async function fetchWaitlistList(params: {
+  q?: string | null
+  scope: WaitlistListScope
+}): Promise<AdminWaitlistListResponse> {
   const qs = new URLSearchParams()
+  qs.set('scope', params.scope)
   if (params.q) qs.set('q', params.q)
   const res = await apiFetch(`/api/admin/waitlist/list?${qs.toString()}`, { method: 'GET', headers: { Accept: 'application/json' } })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminWaitlistListResponse> | null
@@ -207,8 +221,10 @@ function ListItem({
         <div className="min-w-0 flex items-center gap-1.5 sm:gap-2">
           {displayName ? (
             <span className="text-[13px] sm:text-sm text-zinc-200 truncate font-medium">{displayName}</span>
-          ) : (
+          ) : item.email.trim() ? (
             <span className="text-[13px] sm:text-sm text-zinc-400 truncate">{item.email}</span>
+          ) : (
+            <span className="text-[13px] sm:text-sm text-zinc-600 truncate italic">No email</span>
           )}
           {item.preprovisioned && (
             <Zap className="w-3 h-3 text-indigo-400 shrink-0" aria-label="Pre-provisioned" />
@@ -488,6 +504,7 @@ export function AdminWaitlist() {
   const { isSignedIn } = useSiweAuth()
 
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState<WaitlistListScope>('email')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   // On mobile: null = show list, non-null + mobileShowDetail = show detail
   const [mobileShowDetail, setMobileShowDetail] = useState(false)
@@ -496,9 +513,13 @@ export function AdminWaitlist() {
   const [decisionError, setDecisionError] = useState<string | null>(null)
 
   const listQuery = useQuery({
-    queryKey: ['adminWaitlistList', query.trim().toLowerCase()],
+    queryKey: ['adminWaitlistList', scope, query.trim().toLowerCase()],
     enabled: isConnected && isSignedIn,
-    queryFn: () => fetchWaitlistList({ q: query.trim().length > 0 ? query.trim().toLowerCase() : null }),
+    queryFn: () =>
+      fetchWaitlistList({
+        scope,
+        q: query.trim().length > 0 ? query.trim().toLowerCase() : null,
+      }),
     staleTime: 5_000,
     retry: 0,
   })
@@ -532,13 +553,24 @@ export function AdminWaitlist() {
     return e.message
   }, [detailQuery.error, listQuery.error])
 
+  const counts = listQuery.data?.counts
   const stats = useMemo(() => {
-    const total = items.length
     const approved = items.filter((i) => i.appAccessStatus === 'approved').length
     const pending = items.filter((i) => !i.appAccessStatus || i.appAccessStatus === 'pending').length
     const preprovisioned = items.filter((i) => i.preprovisioned).length
-    return { total, approved, pending, preprovisioned }
-  }, [items])
+    return {
+      email: counts?.email ?? (scope === 'email' ? items.length : 0),
+      incomplete: counts?.incomplete ?? 0,
+      approved,
+      pending,
+      preprovisioned,
+    }
+  }, [counts, items, scope])
+
+  useEffect(() => {
+    setSelectedId(null)
+    setMobileShowDetail(false)
+  }, [scope])
 
   function handleSelectItem(id: number) {
     setSelectedId(id)
@@ -582,7 +614,9 @@ export function AdminWaitlist() {
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-0.5 sm:space-y-1 min-w-0">
           <h1 className="headline text-xl sm:text-2xl lg:text-3xl">Waitlist</h1>
-          <div className="text-[11px] sm:text-xs text-zinc-600 hidden sm:block">Review signups, pre-provisioned identities, and manage access.</div>
+          <div className="text-[11px] sm:text-xs text-zinc-600 hidden sm:block">
+            Email waitlist matches public stats. Incomplete rows are wallet/Privy shells with no verified email.
+          </div>
         </div>
         <button
           type="button"
@@ -597,10 +631,11 @@ export function AdminWaitlist() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+      {/* Stats — email total matches public waitlist dock */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
         {[
-          { label: 'Total', value: stats.total, color: 'text-zinc-300' },
+          { label: 'Email waitlist', value: stats.email, color: 'text-zinc-300' },
+          { label: 'No email', value: stats.incomplete, color: 'text-zinc-500' },
           { label: 'Pending', value: stats.pending, color: 'text-amber-400' },
           { label: 'Approved', value: stats.approved, color: 'text-emerald-400' },
           { label: 'Ready', value: stats.preprovisioned, color: 'text-indigo-400' },
@@ -612,8 +647,33 @@ export function AdminWaitlist() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Scope + search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5 shrink-0">
+          {(
+            [
+              { id: 'email' as const, label: 'Email' },
+              { id: 'incomplete' as const, label: 'No email' },
+              { id: 'all' as const, label: 'All' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setScope(tab.id)}
+              className={`rounded-md px-2.5 py-1.5 text-[11px] sm:text-xs transition-colors ${
+                scope === tab.id
+                  ? 'bg-white/10 text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {tab.label}
+              {tab.id === 'email' && counts ? ` (${counts.email})` : ''}
+              {tab.id === 'incomplete' && counts ? ` (${counts.incomplete})` : ''}
+              {tab.id === 'all' && counts ? ` (${counts.all})` : ''}
+            </button>
+          ))}
+        </div>
         <div className="relative flex-1 min-w-0">
           <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-600 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -623,7 +683,7 @@ export function AdminWaitlist() {
             className="w-full rounded-lg border border-white/10 bg-black/30 pl-8 sm:pl-9 pr-3 py-2 text-[13px] sm:text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
           />
         </div>
-        <div className="text-[10px] sm:text-[11px] text-zinc-600 shrink-0">{items.length}</div>
+        <div className="text-[10px] sm:text-[11px] text-zinc-600 shrink-0">{items.length} shown</div>
       </div>
 
       {errorMessage ? (
