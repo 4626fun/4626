@@ -38,7 +38,7 @@ function parseNumberQuery(value: unknown): number | null {
  * anonymous callers always get `chatEvents: []`.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(res, req)
+  setCors(req, res)
   setNoStore(res)
 
   if (handleOptions(req, res)) return
