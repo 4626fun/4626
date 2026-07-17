@@ -1582,7 +1582,12 @@ describe('inverse opinion decision ordering', () => {
 
     expect(claimInverseOpinionTradeIntentMock).not.toHaveBeenCalled()
     expect(deliverInverseOpinionTerminalReplyMock).not.toHaveBeenCalled()
-    expect(tryClaimCommandReplyMock).toHaveBeenCalled()
+    expect(tryClaimCommandReplyMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      messageId: intent.id,
+      commandHead: 'inverse-chat',
+      failureMode: 'closed',
+    })
     expect(executeInverseAkitaChatReactionMock).toHaveBeenCalledWith({
       roomId: '1659',
       intent,

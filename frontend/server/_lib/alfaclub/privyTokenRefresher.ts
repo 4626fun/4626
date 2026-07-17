@@ -25,9 +25,7 @@
  * ## Bootstrap
  *
  * First-time setup: operator pastes a freshly-logged-in triplet into the
- * three env vars on the host platform (Vercel for the canonical cron path;
- * Railway is still available as a long-lived host for non-AlfaClub
- * runtimes if AlfaClub is later moved back in-process):
+ * three env vars on Vercel, which owns the canonical cron path:
  *   - `ALFACLUB_CHAT_JWT`                   (identity token; alfaclub API)
  *   - `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN`    (access token; Privy refresh)
  *   - `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN`   (refresh token; 30-day lifetime)
@@ -632,13 +630,9 @@ export interface AlfaClubRefresherHandle {
  * Reads the long-lived-host opt-in flag for the in-process Privy token
  * refresher.
  *
- * For most Railway services (Keepr primary, etc.): leave this OFF. Vercel cron
- * remains the canonical writer.
- *
- * For the dedicated Hermit creative service (hermit.4626.fun): set to `1`.
- * This service is the primary long-lived consumer of the AlfaClub bridge
- * (especially for 1659 theatrical marketing). It is now the recommended owner
- * of the token rotation loop.
+ * Leave this OFF on Railway services. Vercel cron is the canonical writer.
+ * The helper remains available for isolated tests and deliberate non-Hermit
+ * recovery runtimes, but the Railway Hermit process never starts it.
  */
 function isInProcessRefresherEnabled(): boolean {
   const raw = String(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim().toLowerCase()
