@@ -717,7 +717,7 @@ export function Positions() {
   )
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    // Session flips includeChat on the API — refetch after sign-in so messages load.
+    // Chat access depends on session + room key / coin-equivalent eligibility.
     queryKey: [
       'alfaclub-room-timeline',
       '1659',
@@ -1666,7 +1666,8 @@ export function Positions() {
                     <div className="mt-3 rounded-lg bg-white/[0.03] p-4 text-sm text-zinc-300">
                       <p className="text-zinc-200">Room chat is private.</p>
                       <p className="mt-1 text-xs text-zinc-500">
-                        Sign in to view messages. Charts and trades stay public.
+                        Sign in, then view messages with a room key (held or staked) or the
+                        required creator-coin equivalent. Charts and trades stay public.
                       </p>
                       <Button
                         type="button"
@@ -1679,7 +1680,16 @@ export function Positions() {
                       </Button>
                     </div>
                   ) : null}
-                  {hasSession ? (
+                  {hasSession && !isLoading && data && !data.chatAccess?.allowed ? (
+                    <div className="mt-3 rounded-lg bg-white/[0.03] p-4 text-sm text-zinc-300">
+                      <p className="text-zinc-200">Room key required.</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Messages unlock with a FriendKey for this room (staked or unstaked), or
+                        enough creator-coin equivalent via the room LP access path.
+                      </p>
+                    </div>
+                  ) : null}
+                  {hasSession && data?.chatAccess?.allowed ? (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {(['all', 'host', 'room', 'bot'] as const).map((filter) => (
                       <button
@@ -1697,7 +1707,7 @@ export function Positions() {
                     ))}
                   </div>
                   ) : null}
-                  {hasSession ? (
+                  {hasSession && data?.chatAccess?.allowed ? (
                   <div
                     ref={messageTimelineListRef}
                     className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"

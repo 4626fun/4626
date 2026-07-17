@@ -105,6 +105,11 @@ async function fetchRoomChatPage(params: {
   })
   const payload = (await response.json().catch(() => null)) as RoomChatListResponse | null
   if (!response.ok || !payload?.success || !Array.isArray(payload.data?.messages)) {
+    if (payload?.error === 'room_access_required') {
+      throw new Error(
+        'Room key required — hold or stake a FriendKey for this room, or meet the creator-coin equivalent.',
+      )
+    }
     throw new Error(payload?.error ?? `room_chat_failed_${response.status}`)
   }
   return {

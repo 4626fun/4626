@@ -12,6 +12,7 @@ import {
   setNoStore,
 } from '@4626/server-core'
 import { normalizeChatAddress } from '../../../../server/_lib/chat/presence.js'
+import { resolveRoomChatViewAccess } from '../../../../server/_lib/alfaclub/roomChatViewAccess.js'
 import { buildRoomTimelineData } from '../../../../server/_lib/alfaclub/roomTimeline.js'
 
 function parseStringQuery(value: unknown): string | null {
@@ -34,8 +35,8 @@ function parseNumberQuery(value: unknown): number | null {
  * Room timeline for /positions.
  *
  * Candles + trade overlays stay world-readable.
- * Chat message text (`chatEvents`) is only returned for authenticated sessions —
- * anonymous callers always get `chatEvents: []`.
+ * Chat message text (`chatEvents`) requires a room FriendKey (held or staked)
+ * or creator-coin / LP-equivalent access — not mere sign-in.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -70,9 +71,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'roomId is required' })
   }
 
-  const includeChat = Boolean(
-    normalizeChatAddress(g.auth?.address) ?? normalizeChatAddress(getSessionAddress(req)),
-  )
+  const sessionAddress =
+    normalizeChatAddress(g.auth?.address) ?? normalizeChatAddress(getSessionAddress(req))
+  const chatAccess = await resolveRoomChatViewAccess({
+    roomId,
+    sessionAddress,
+  })
+  const includeChat = chatAccess.allowed
 
   try {
     const data = await buildRoomTimelineData({
@@ -91,7 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     )
     return res.status(200).json({
       success: true,
-      data,
+      data: {
+        ...data,
+        chatAccess,
+      },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'room_timeline_failed'

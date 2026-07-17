@@ -36,3 +36,5 @@ Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only*
 - When Hermit/counter-trade fires a live InverseAKITA entry, have **Hermit4626 post the advisory/analysis in-room** (not only the hidden `INV_AKITA_ENTRY_ADVISORY` shadow canary) so AlfaClub users see the signal when the trade triggers.
 
 - On AlfaClub `/rooms` overview, keep the **Who controls this room** ownership sunburst (`KeyOwnershipSunburst`) **above** the Room overview panel — not below it.
+
+- **`/positions` and room chat text** should stay private to room access: show messages only with a FriendKey for that room (**staked or unstaked**) or the required creator-coin / LP equivalent — never world-readable and not “signed in only.” Sudoswap ERC-1155/ERC-20 LP equivalence can extend the coin path later.

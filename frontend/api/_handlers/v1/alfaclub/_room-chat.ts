@@ -27,6 +27,7 @@ import {
   linkAlfaClubCrossChannelIngress,
 } from '../../../../server/_lib/alfaclub/crossChannelIngress.js'
 import { readAlfaClubRoomAccessMembership } from '../../../../server/_lib/alfaclub/roomAccessPolicy.js'
+import { resolveRoomChatViewAccess } from '../../../../server/_lib/alfaclub/roomChatViewAccess.js'
 import { readAlfaClubRoomChannelBinding } from '../../../../server/_lib/alfaclub/roomChannelBindings.js'
 import { resolveAuthorizedWalletProfile } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
@@ -91,6 +92,18 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   const roomId = parseStringQuery(req.query.roomId)
   if (!roomId) return res.status(400).json({ success: false, error: 'roomId is required' })
 
+  const chatAccess = await resolveRoomChatViewAccess({
+    roomId,
+    sessionAddress: requesterAddress,
+  })
+  if (!chatAccess.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: 'room_access_required',
+      chatAccess,
+    })
+  }
+
   const limit = parseNumberQuery(req.query.limit)
   const beforeMessageId = parseStringQuery(req.query.beforeMessageId)
   const beforeDateMs = parseNumberQuery(req.query.beforeDateMs)
@@ -112,6 +125,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         roomId,
         messages,
         channels: channelFlagsFromBinding(binding),
+        chatAccess,
         generatedAt: new Date().toISOString(),
       },
     })

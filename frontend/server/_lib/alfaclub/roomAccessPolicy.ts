@@ -209,6 +209,15 @@ async function checkRoomEligibility(params: {
   }
 }
 
+/** Live creator-coin eligibility vs the room LP quote (enter/exit thresholds). */
+export async function evaluateAlfaClubRoomCoinEligibility(params: {
+  walletAddress: `0x${string}`
+  policy: AlfaClubRoomAccessPolicy
+  rpcUrls?: string[]
+}): Promise<EligibilityResult> {
+  return checkRoomEligibility(params)
+}
+
 export async function readAlfaClubRoomAccessPolicy(roomId: string): Promise<AlfaClubRoomAccessPolicy | null> {
   const db = await getDb()
   if (!db) return null

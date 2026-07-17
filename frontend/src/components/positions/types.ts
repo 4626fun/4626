@@ -69,6 +69,22 @@ export type MarketSummary = {
   currentPosition: MarketPosition | null
 }
 
+export type TimelineChatAccessReason =
+  | 'anonymous'
+  | 'no_wallet'
+  | 'room_key'
+  | 'staked_key'
+  | 'membership'
+  | 'coin_equivalent'
+  | 'insufficient'
+  | 'check_failed'
+
+export type TimelineChatAccess = {
+  allowed: boolean
+  reason: TimelineChatAccessReason
+  walletAddress: string | null
+}
+
 export type TimelineResponse = {
   roomId: string
   symbol: string
@@ -82,6 +98,7 @@ export type TimelineResponse = {
   currentPositions: MarketPosition[]
   marketSummaries: MarketSummary[]
   roomWideMessageCount: number
+  chatAccess?: TimelineChatAccess
 }
 
 export type PositionContextAtTime = {
