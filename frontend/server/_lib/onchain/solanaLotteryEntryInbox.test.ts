@@ -256,11 +256,22 @@ describe('solanaLotteryEntryInbox', () => {
     })
   })
 
-  it('replay quarantine only via explicit recovery path', async () => {
-    const { db } = createDb([
+  it('replay quarantine only via explicit recovery path and requires null receipts', async () => {
+    const { db, calls } = createDb([
       { rows: [{ ...baseRow, status: 'pending', quarantine_reason: null }] },
     ])
     const row = await replayQuarantinedInboxEvent({ db, sourceEventId: 'g:p:sig:0:0' })
     expect(row.status).toBe('pending')
+    const sql = String(calls[0].strings.join('?'))
+    expect(sql).toContain("status = 'quarantined'")
+    expect(sql).toContain('lz_guid IS NULL')
+    expect(sql).toContain('base_tx_hash IS NULL')
+  })
+
+  it('refuses to replay quarantined rows that already have a receipt', async () => {
+    const { db } = createDb([{ rows: [] }])
+    await expect(
+      replayQuarantinedInboxEvent({ db, sourceEventId: 'g:p:sig:0:0' }),
+    ).rejects.toThrow('inbox_replay_not_quarantined_or_has_receipt')
   })
 })

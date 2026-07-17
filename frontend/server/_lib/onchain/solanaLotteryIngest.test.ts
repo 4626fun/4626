@@ -187,6 +187,21 @@ describe('solanaLotteryIngest', () => {
     })).rejects.toThrow('solana_lottery_backlog_page_cap_reached')
   })
 
+  it('fails closed when pagination before cursor stalls', async () => {
+    const rpc = {
+      getGenesisHash: async () => 'gen',
+      getSignaturesForAddress: async () => ['sig2', 'sig1'],
+      getParsedTransaction: async () => null,
+    }
+    await expect(drainSignaturesSinceWatermark({
+      rpc,
+      programId: PROGRAM,
+      watermark: 'old',
+      limit: 2,
+      maxPages: 3,
+    })).rejects.toThrow('solana_lottery_backlog_pagination_stalled')
+  })
+
   it('ingests authenticated events and advances cursor; ignores forge JSON', async () => {
     const upserts: unknown[] = []
     let advanced: { sig: string; slot: number } | null = null

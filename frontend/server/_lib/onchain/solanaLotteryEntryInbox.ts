@@ -592,10 +592,12 @@ export async function replayQuarantinedInboxEvent(params: {
       updated_at = NOW()
     WHERE source_event_id = ${params.sourceEventId}
       AND status = 'quarantined'
+      AND lz_guid IS NULL
+      AND base_tx_hash IS NULL
     RETURNING *
   `
   const row = result.rows?.[0]
-  if (!row) throw new Error('inbox_replay_not_quarantined')
+  if (!row) throw new Error('inbox_replay_not_quarantined_or_has_receipt')
   return mapRow(row)
 }
 

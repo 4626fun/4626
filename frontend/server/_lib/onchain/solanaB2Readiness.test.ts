@@ -70,6 +70,7 @@ describe('verifySolanaB2Readiness', () => {
     readHookMock.mockResolvedValue({
       status: 'created',
       hookMint: shareMeshMint,
+      shareOft: '0x459ea17556082ebd586870f3aba81b822f104626',
       creatorConfig: 'CreatorConfig111111111111111111111111111111',
       pendingEntries: 'PendingEntries111111111111111111111111111',
     })
@@ -111,6 +112,59 @@ describe('verifySolanaB2Readiness', () => {
       passed: false,
       detail: 'share_token_mismatch',
     })
+  })
+
+  it('fails closed when hook ShareOFT is absent for an applied mapping', async () => {
+    const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
+    listMappingsMock.mockResolvedValue([{
+      status: 'applied',
+      shareOft: '0x459ea17556082ebd586870f3aba81b822f104626',
+      shareMeshMint,
+    }])
+    readPoolMock.mockResolvedValue(null)
+    readHookMock.mockResolvedValue({
+      status: 'created',
+      hookMint: shareMeshMint,
+      creatorConfig: 'CreatorConfig111111111111111111111111111111',
+      pendingEntries: 'PendingEntries111111111111111111111111111',
+    })
+
+    const result = await verifySolanaB2Readiness({
+      db: { sql: vi.fn() } as any,
+      creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+    })
+
+    expect(result.ready).toBe(false)
+    expect(result.checks.find((check) => check.id === 'hook_share_oft_matches_mapping')).toEqual({
+      id: 'hook_share_oft_matches_mapping',
+      passed: false,
+      detail: 'hook_share_oft_missing',
+    })
+  })
+
+  it('fails closed when hook ShareOFT disagrees with the applied mapping', async () => {
+    const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
+    listMappingsMock.mockResolvedValue([{
+      status: 'applied',
+      shareOft: '0x459ea17556082ebd586870f3aba81b822f104626',
+      shareMeshMint,
+    }])
+    readPoolMock.mockResolvedValue(null)
+    readHookMock.mockResolvedValue({
+      status: 'created',
+      hookMint: shareMeshMint,
+      shareOft: '0x1111111111111111111111111111111111111111',
+      creatorConfig: 'CreatorConfig111111111111111111111111111111',
+      pendingEntries: 'PendingEntries111111111111111111111111111',
+    })
+
+    const result = await verifySolanaB2Readiness({
+      db: { sql: vi.fn() } as any,
+      creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
+    })
+
+    expect(result.ready).toBe(false)
+    expect(result.checks.find((check) => check.id === 'hook_share_oft_matches_mapping')?.passed).toBe(false)
   })
 })
 

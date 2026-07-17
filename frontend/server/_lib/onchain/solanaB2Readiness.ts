@@ -229,14 +229,23 @@ export async function verifySolanaB2Readiness(params: {
     })
   }
 
-  if (hook?.shareOft && shareOft) {
-    checks.push({
-      id: 'hook_share_oft_matches_mapping',
-      passed: hook.shareOft.toLowerCase() === shareOft.toLowerCase(),
-      detail: hook.shareOft.toLowerCase() === shareOft.toLowerCase()
-        ? 'hook_share_oft_matches_mapping'
-        : `hook_share_oft=${hook.shareOft},mapping_share_oft=${shareOft}`,
-    })
+  if (shareOft) {
+    if (!hook?.shareOft) {
+      checks.push({
+        id: 'hook_share_oft_matches_mapping',
+        passed: false,
+        detail: 'hook_share_oft_missing',
+      })
+    } else {
+      const matches = hook.shareOft.toLowerCase() === shareOft.toLowerCase()
+      checks.push({
+        id: 'hook_share_oft_matches_mapping',
+        passed: matches,
+        detail: matches
+          ? 'hook_share_oft_matches_mapping'
+          : `hook_share_oft=${hook.shareOft},mapping_share_oft=${shareOft}`,
+      })
+    }
   }
 
   const onChainChecks = await checkOnChainAccounts({

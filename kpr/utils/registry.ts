@@ -184,6 +184,44 @@ export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<Re
   return { verified: true };
 }
 
+/**
+ * Strictly bind a creator token to its canonical ShareOFT in Registry4626.
+ * Used by Solana sync_mapping so env writes cannot bypass the Keeper API gate.
+ * No grandfathered fallback — lottery routing requires an active registry binding.
+ */
+export async function verifyShareOftRegistryBinding(input: {
+  creatorToken: string;
+  shareOft: string;
+}): Promise<RegistryVerificationResult> {
+  const creatorToken = normalizeAddress(input.creatorToken);
+  const expectedShareOft = normalizeAddress(input.shareOft);
+  if (!creatorToken || !expectedShareOft) {
+    return { verified: false, reason: 'invalid_addresses' };
+  }
+
+  const registryAddress = getRegistry4626Address();
+  const [active, registryShare] = await Promise.all([
+    readContract<boolean>({
+      address: registryAddress,
+      abi: REGISTRY_4626_ABI,
+      functionName: 'isTokenActive',
+      args: [creatorToken],
+    }),
+    readContract<Address>({
+      address: registryAddress,
+      abi: REGISTRY_4626_ABI,
+      functionName: 'getShareOFTForToken',
+      args: [creatorToken],
+    }),
+  ]);
+
+  if (!active) return { verified: false, reason: 'creator_coin_inactive' };
+  if (getAddress(registryShare) !== expectedShareOft) {
+    return { verified: false, reason: 'share_token_mismatch' };
+  }
+  return { verified: true };
+}
+
 interface VaultsResponse {
   success: boolean;
   data?: {
