@@ -44,8 +44,7 @@ Notes:
 - **v1.19.2** is the current shared/global + per-creator bytecode/CREATE2
   namespace. Infra addresses match the v1.19.1 greenfield deploy.
 - Live `DeploymentBatcherPhase2Module` is `0x3089678d…` (AA95 / vaultKind).
-  Manifest: `deployments/base/v1.19.2-bytecode-manifest.json`. Prior module `0x0DDac7f1…` superseded.
-  Store reseed required for Phase2 + OVault wrapper codeIds before CREATE2-from-store deploy.
+  Manifest + store seed: `deployments/base/v1.19.2-bytecode-manifest.json`. Prior module `0x0DDac7f1…` superseded.
 - Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
   new store/deployer/batcher stack.
 - Prior v1.18.0 stack (registry `0xDb8570…`, batcher `0x02D7…`, aux `0xde93…`)

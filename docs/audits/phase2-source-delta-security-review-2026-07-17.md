@@ -83,7 +83,7 @@ Slither findings on the batcher file. Full-repo CI Slither remains the broader g
 
 ## Residual
 
-1. Reseed store for Phase2Module + Creator/Agent OVaultWrapper codeIds (v1.19.2 manifest).
+1. Store reseed for Phase2Module + Creator/Agent OVaultWrapper codeIds completed (2026-07-17).
 2. Phase1 agent-core hot-swap before agent canary.
 3. Rebalance suite excluded (~65 known fails).
 4. Slither supplemental when memory allows.
