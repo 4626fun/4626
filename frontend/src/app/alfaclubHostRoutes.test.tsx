@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { AlfaClubHubRedirect, RedirectPreserve } from '@/app/alfaclubHostRoutes'
 import {
+  ALFACLUB_EXPLORE_POOLS_PATH,
   ALFACLUB_EXPLORE_ROOMS_PATH,
   ALFACLUB_POOLS_PATH,
   ALFACLUB_ROOMS_PATH,
@@ -48,8 +49,8 @@ describe('AlfaClub host path redirects', () => {
       ALFACLUB_EXPLORE_ROOMS_PATH,
     )
     expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_EXPLORE_POOLS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_EXPLORE_POOLS_PATH)
 
     expect(
       buildAlfaClubAbsoluteUrl({
@@ -73,18 +74,16 @@ describe('AlfaClub host path redirects', () => {
     expect(screen.getByTestId('location').textContent).toBe('/rooms?roomId=1659&tab=safety#analysis')
   })
 
-  it('redirects pools into room liquidity while preserving pool selection', () => {
+  it('redirects pools into the explore planner while preserving pool selection', () => {
     render(
       <MemoryRouter initialEntries={['/pools?roomId=9&pool=0xabc']}>
         <Routes>
           <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubHubRedirect />} />
-          <Route path={ALFACLUB_ROOMS_PATH} element={<LocationProbe />} />
+          <Route path={ALFACLUB_EXPLORE_POOLS_PATH} element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     )
 
-    expect(screen.getByTestId('location').textContent).toBe(
-      '/rooms?roomId=9&pool=0xabc&tab=liquidity',
-    )
+    expect(screen.getByTestId('location').textContent).toBe('/explore/pools?roomId=9&pool=0xabc')
   })
 })

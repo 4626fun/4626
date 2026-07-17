@@ -8,6 +8,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { waitlistEntryHref, useOptionalAccessContext } from '@/app/accessShared'
 import { SmartWalletRoute } from '@/app/routeGuards'
+import { LpCreatorPlanner } from '@/components/alfaclub/LpCreatorPlanner'
 import { CONTRACTS } from '@/config/contracts'
 import {
   filterAlfaClubLiquidityPools,
@@ -16,7 +17,7 @@ import {
   useAlfaClubLiquidityPools,
   type AlfaClubLiquidityPoolSummary,
 } from '@/hooks/useAlfaClubLiquidityPools'
-import { ALFACLUB_POOLS_PATH } from '@/lib/alfaclub/hostPaths'
+import { ALFACLUB_EXPLORE_POOLS_PATH } from '@/lib/alfaclub/hostPaths'
 import { cn } from '@/lib/shared/utils'
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 
@@ -277,9 +278,9 @@ export function AlfaClubLiquidityPools() {
   return (
     <div className="relative pb-24 md:pb-0">
       <PageMeta
-        title="AlfaClub Liquidity Pools"
-        description="Browse Creator Coin and AlfaClub FriendKey pools, trade keys, or manage liquidity on Base."
-        canonicalPath={ALFACLUB_POOLS_PATH}
+        title="AlfaClub LP planner"
+        description="Plan Creator Coin and FriendKey pool seeds, then browse or manage AlfaClub liquidity on Base."
+        canonicalPath={ALFACLUB_EXPLORE_POOLS_PATH}
       />
 
       <section className="cinematic-section no-divider-top !pb-0">
@@ -310,6 +311,8 @@ export function AlfaClubLiquidityPools() {
               </button>
             ) : null}
           </div>
+
+          <LpCreatorPlanner />
 
           <div className="mt-8 rounded-3xl bg-black/35 p-4 ring-1 ring-white/[0.06] sm:p-5">
             {!factoryReady ? (

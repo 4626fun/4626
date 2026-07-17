@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
 import {
+  ALFACLUB_EXPLORE_POOLS_PATH,
   ALFACLUB_EXPLORE_ROOMS_PATH,
   ALFACLUB_INVERSE_AKITA_PATH,
   ALFACLUB_POOLS_PATH,
@@ -19,6 +20,7 @@ import { AccountContextProvider } from '@/wallet/accountContext'
 import {
   AlfaClubExploreRooms,
   AlfaClubInverseAkita,
+  AlfaClubLiquidityPools,
   AlfaClubTradingRooms,
   Arena,
   ArenaBacktestPage,
@@ -100,6 +102,7 @@ export function AlfaClubHostApp() {
           <Route element={<AlfaClubLayout />}>
             <Route index element={<RedirectPreserve to={ALFACLUB_EXPLORE_ROOMS_PATH} />} />
             <Route path={ALFACLUB_EXPLORE_ROOMS_PATH} element={<AlfaClubExploreRooms />} />
+            <Route path={ALFACLUB_EXPLORE_POOLS_PATH} element={<AlfaClubLiquidityPools />} />
             <Route path={ALFACLUB_ROOMS_PATH} element={<AlfaClubTradingRooms />} />
             <Route path={ALFACLUB_INVERSE_AKITA_PATH} element={<AlfaClubInverseAkita />} />
             <Route path="/arena" element={<Arena />}>
@@ -124,18 +127,9 @@ export function AlfaClubHostApp() {
               path="/alfaclub/trading-rooms"
               element={<RedirectPreserve to={ALFACLUB_EXPLORE_ROOMS_PATH} />}
             />
-            <Route
-              path="/alfaclub/key-safety"
-              element={<AlfaClubHubRedirect />}
-            />
-            <Route
-              path="/alfaclub/liquidity"
-              element={<AlfaClubHubRedirect />}
-            />
-            <Route
-              path="/alfaclub/liquidity-pools"
-              element={<AlfaClubHubRedirect />}
-            />
+            <Route path="/alfaclub/key-safety" element={<AlfaClubHubRedirect />} />
+            <Route path="/alfaclub/liquidity" element={<AlfaClubHubRedirect />} />
+            <Route path="/alfaclub/liquidity-pools" element={<AlfaClubHubRedirect />} />
 
             <Route path="*" element={<RedirectPreserve to={ALFACLUB_EXPLORE_ROOMS_PATH} />} />
           </Route>

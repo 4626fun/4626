@@ -41,7 +41,7 @@ const NAV_ITEMS_ALFACLUB: NavItem[] = [
   {
     label: 'Rooms',
     to: '/explore/rooms',
-    activePrefixes: ['/explore/rooms', '/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
+    activePrefixes: ['/explore/rooms', '/explore/pools', '/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
   },
   {
     label: 'InverseAKITA',

@@ -38,6 +38,10 @@ vi.mock('@/pages/AlfaClubLiquidity', () => ({
   AlfaClubLiquidity: () => <div data-testid="lp-console">console</div>,
 }))
 
+vi.mock('@/components/alfaclub/LpCreatorPlanner', () => ({
+  LpCreatorPlanner: () => <div data-testid="lp-planner">planner</div>,
+}))
+
 vi.mock('@/app/routeGuards', () => ({
   SmartWalletRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))

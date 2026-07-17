@@ -3,6 +3,7 @@ import { ALFACLUB_ORIGIN } from '@/lib/env/host'
 /** Canonical hub and retained alias paths on alfaclub.4626.fun. */
 export const ALFACLUB_ROOMS_PATH = '/rooms'
 export const ALFACLUB_EXPLORE_ROOMS_PATH = '/explore/rooms'
+export const ALFACLUB_EXPLORE_POOLS_PATH = '/explore/pools'
 export const ALFACLUB_INVERSE_AKITA_PATH = '/inverseakita'
 export const ALFACLUB_ARENA_PATH = '/arena'
 export const ALFACLUB_SAFETY_PATH = '/safety'
@@ -18,6 +19,7 @@ const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
   '/alfaclub/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
   '/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
   [ALFACLUB_EXPLORE_ROOMS_PATH]: { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
+  [ALFACLUB_EXPLORE_POOLS_PATH]: { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
   [ALFACLUB_INVERSE_AKITA_PATH]: { pathname: ALFACLUB_INVERSE_AKITA_PATH },
   [ALFACLUB_ARENA_PATH]: { pathname: ALFACLUB_ARENA_PATH },
   '/arena/introduction': { pathname: '/arena/introduction' },
@@ -30,11 +32,11 @@ const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
   '/safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
   '/alfaclub/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
   '/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
-  '/pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
-  '/alfaclub/liquidity': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
-  '/alfaclub/liquidity-pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
-  '/liquidity': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
-  '/liquidity-pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
+  '/pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
+  '/alfaclub/liquidity': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
+  '/alfaclub/liquidity-pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
+  '/liquidity': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
+  '/liquidity-pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
 }
 
 function normalizePathname(pathname: string): string {

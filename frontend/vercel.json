@@ -159,12 +159,12 @@
     {
       "src": "/alfaclub/liquidity-pools(.*)",
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
+      "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/liquidity(.*)",
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
+      "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/?",
@@ -253,13 +253,13 @@
       "src": "/alfaclub/liquidity-pools",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
+      "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/liquidity",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
+      "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/key-safety",
@@ -283,7 +283,7 @@
       "src": "/pools",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/rooms?tab=liquidity"
+      "dest": "/explore/pools"
     },
     {
       "src": "/key-safety",
@@ -295,13 +295,13 @@
       "src": "/liquidity-pools",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/rooms?tab=liquidity"
+      "dest": "/explore/pools"
     },
     {
       "src": "/liquidity",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/rooms?tab=liquidity"
+      "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/trading-rooms",
@@ -319,13 +319,13 @@
       "src": "/alfaclub/liquidity-pools",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/rooms?tab=liquidity"
+      "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/liquidity",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/rooms?tab=liquidity"
+      "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/?",

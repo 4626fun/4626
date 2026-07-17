@@ -56,7 +56,7 @@ const navItemsAlfaClub: MobileNavItem[] = [
     path: '/explore/rooms',
     icon: Search,
     label: 'Rooms',
-    activePrefixes: ['/explore/rooms', '/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
+    activePrefixes: ['/explore/rooms', '/explore/pools', '/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
   },
   { path: '/inverseakita', icon: Bot, label: 'InverseAKITA', activePrefixes: ['/inverseakita'] },
   { path: '/arena/positions', icon: Activity, label: 'Arena', activePrefixes: ['/arena'] },
