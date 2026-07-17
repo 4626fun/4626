@@ -1,11 +1,10 @@
 /**
  * POST /api/v1/alfaclub/chat-token-refresh
  *
- * Cron-secret-gated backup entry point that runs exactly one Privy session-refresh
- * pass for the AlfaClub chat bridge in Vercel's serverless runtime. Hermit Railway
- * is the primary writer when `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1`; this cron
- * fires hourly as a safety net unless
- * `ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED=1`.
+ * Cron-secret-gated canonical entry point that runs exactly one Privy
+ * session-refresh pass for the AlfaClub chat bridge in Vercel's serverless
+ * runtime. Railway only consumes the DB-backed JWT. The emergency
+ * `ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED=1` switch stops this writer.
  *
  * The handler delegates to `runAlfaClubPrivyRefreshOnce` (one-shot) and
  * never returns raw token material; only refresh status, fingerprintable

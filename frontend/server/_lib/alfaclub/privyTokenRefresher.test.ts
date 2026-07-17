@@ -1295,6 +1295,7 @@ describe('requestImmediatePrivyRefresh', () => {
     'ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN',
     'ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN',
     'ALFACLUB_CHAT_JWT',
+    'RAILWAY_SERVICE_ID',
   ] as const
   let priorEnv: Record<string, string | undefined>
 
@@ -1302,6 +1303,7 @@ describe('requestImmediatePrivyRefresh', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-02T15:00:00.000Z'))
     priorEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]))
+    delete process.env.RAILWAY_SERVICE_ID
     process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN = 'at-old'
     process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN = 'rt-old'
     process.env.ALFACLUB_CHAT_JWT = 'id-old'
@@ -1320,6 +1322,16 @@ describe('requestImmediatePrivyRefresh', () => {
     }
     _resetImmediatePrivyRefreshForTests()
     vi.useRealTimers()
+  })
+
+  it('does not write from Railway when Vercel owns refresh', async () => {
+    process.env.RAILWAY_SERVICE_ID = 'hermit-service'
+    globalThis.fetch = vi.fn() as unknown as typeof fetch
+
+    await expect(requestImmediatePrivyRefresh('bridge_auth_fail')).resolves.toEqual({
+      kind: 'disabled',
+    })
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('is idempotent while a refresh is in flight', async () => {

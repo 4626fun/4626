@@ -27,6 +27,7 @@ import {
   resolveCounterTradeTickerEffectiveness,
   startCounterTradeTicker,
 } from '../../_lib/alfaclub/counterTradeTicker.js'
+import { isCounterTradeRunnerEnabledByEnv } from '../../_lib/alfaclub/counterTradeEnv.js'
 import {
   type InverseOpinionTradeReconcilerTickerState,
   startInverseOpinionTradeReconcilerTicker,
@@ -47,6 +48,7 @@ import {
   applyTokenExpiryHealthMetadata,
   createTokenExpiryHealthRefresher,
 } from './tokenExpiryHealth.js'
+import { resolveHermitProbeStatus } from './hermitHealthStatus.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -336,8 +338,12 @@ function startHealthServer(): void {
               state.counterTradeTickerStarted ? 'awaiting_first_tick' : 'not_started'
             ),
           }
-      const ready = state.bridgeStarted
-      const status = url === '/readyz' && !ready ? 503 : 200
+      const status = resolveHermitProbeStatus({
+        probe: url,
+        bridgeStarted: state.bridgeStarted,
+        counterTradeRunnerEnabled: isCounterTradeRunnerEnabledByEnv(),
+        counterTradeEffective: counterTradeEffectiveness.effective,
+      })
       res.writeHead(status, {
         'cache-control': 'no-store',
         'content-type': 'application/json',

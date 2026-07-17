@@ -11,10 +11,11 @@ import {
 
 describe('evaluateWriterAnomaly', () => {
   it('accepts the canonical refresher writer', () => {
-    const result = evaluateWriterAnomaly('privy-token-refresher')
+    const result = evaluateWriterAnomaly('vercel-cron-privy-refresher')
     expect(result.isAnomalous).toBe(false)
     expect(result.reason).toBeNull()
-    expect(result.writer).toBe('privy-token-refresher')
+    expect(result.writer).toBe('vercel-cron-privy-refresher')
+    expect(evaluateWriterAnomaly('privy-token-refresher').isAnomalous).toBe(false)
   })
 
   it('accepts admin.api and computer-token-restore', () => {
@@ -37,11 +38,14 @@ describe('evaluateWriterAnomaly', () => {
     expect(result.writer).toBe(addr.toLowerCase())
   })
 
-  it('flags cursor-hermit-rotate (legacy in-process refresher) explicitly', () => {
-    const result = evaluateWriterAnomaly('cursor-hermit-rotate')
-    expect(result.isAnomalous).toBe(true)
-    expect(result.reason).toBe('legacy_in_process_refresher')
-  })
+  it.each(['cursor-hermit-rotate', 'hermit-privy-refresher'])(
+    'flags %s as a legacy in-process refresher',
+    (writer) => {
+      const result = evaluateWriterAnomaly(writer)
+      expect(result.isAnomalous).toBe(true)
+      expect(result.reason).toBe('legacy_in_process_refresher')
+    },
+  )
 
   it('flags an unknown freeform writer as unknown_writer', () => {
     const result = evaluateWriterAnomaly('railway-side-script')

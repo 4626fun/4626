@@ -78,6 +78,7 @@ import {
   recordRefreshFailure,
   recordRefreshSuccess,
 } from './authHealthStore.js'
+import { isRailwayRuntimeEnv } from './keeprAlfaClubSplit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -598,7 +599,14 @@ export async function runAlfaClubPrivyRefreshOnce(
 
 export function requestImmediatePrivyRefresh(
   reason: 'bridge_auth_fail' | 'manual' = 'manual',
-): Promise<AlfaClubRefresherOutcome | { kind: 'throttled' }> {
+): Promise<AlfaClubRefresherOutcome | { kind: 'disabled' | 'throttled' }> {
+  if (isRailwayRuntimeEnv()) {
+    logger.info('[alfaclub-refresher] immediate refresh skipped on Railway', {
+      reason,
+      owner: 'vercel-cron',
+    })
+    return Promise.resolve({ kind: 'disabled' })
+  }
   const now = Date.now()
   if (immediateRefreshInFlight) return immediateRefreshInFlight
   if (now - lastImmediateRefreshKickAt < MIN_IMMEDIATE_REFRESH_KICK_INTERVAL_MS) {

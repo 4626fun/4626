@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * End-to-end Hermit creative probe (HTTP).
+ * End-to-end Hermit creative probe for the Vercel draft path (HTTP).
  *
  *   pnpm -C frontend exec tsx scripts/ops/probe-pinata-hermit.ts
  */
