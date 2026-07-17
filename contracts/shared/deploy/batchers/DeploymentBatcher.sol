@@ -25,6 +25,7 @@ interface IUniversalCreate2DeployerFromStore {
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr);
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address);
     function store() external view returns (address);
+    function authorizedDeployers(address deployer) external view returns (bool);
 }
 
 interface IUniversalBytecodeStoreView {
@@ -983,6 +984,14 @@ contract DeploymentBatcherPhase2Module {
     address public immutable lotteryManager;
     address public immutable vaultActivationBatcher;
     address public immutable batcher;
+    /// @dev Module contract address (not batcher). Used to read/write pending init-code
+    ///      hashes from delegatecall context without changing shell `Phase2CoreParams` ABI.
+    address private immutable moduleSelf;
+
+    /// @dev salt => CREATE2 init-code hash published by precreate (AA95 reuse without store.get).
+    mapping(bytes32 => bytes32) public pendingInitCodeHash;
+
+    error NotAuthorizedInitCodeHashWriter();
 
     constructor(
         address _create2Deployer,
@@ -1005,6 +1014,23 @@ contract DeploymentBatcherPhase2Module {
         vaultActivationBatcher = _vaultActivationBatcher;
         if (_batcher == address(0)) revert NotBatcherContext();
         batcher = _batcher;
+        moduleSelf = address(this);
+    }
+
+    /**
+     * @notice Publish CREATE2 init-code hashes for gauge/cca/oracle salts before phase2 UserOp.
+     * @dev Callable on the module contract itself (not via batcher delegatecall). Keeps the live
+     *      shell's `deployPhase2Core` ABI unchanged while enabling AA95-friendly reuse.
+     */
+    function setPendingInitCodeHashes(bytes32[3] calldata salts, bytes32[3] calldata hashes) external {
+        if (msg.sender != protocolTreasury && !create2Deployer.authorizedDeployers(msg.sender)) {
+            revert NotAuthorizedInitCodeHashWriter();
+        }
+        for (uint256 i = 0; i < 3; i++) {
+            if (salts[i] != bytes32(0)) {
+                pendingInitCodeHash[salts[i]] = hashes[i];
+            }
+        }
     }
 
     /// @dev Dead footgun: always hard-coded Creator. Shell routes through
@@ -1088,13 +1114,13 @@ contract DeploymentBatcherPhase2Module {
         // exceed a single UserOp budget, so allow pre-created addresses (same salt /
         // codeId / constructor args) and only spend UserOp gas on wiring.
         bytes memory gaugeArgs = abi.encode(params.shareOFT, treasury, protocolTreasury, tempOwner);
-        out.gaugeController = _deployOrExisting(gaugeSalt, codeIds.gauge, gaugeArgs, params.gaugeInitCodeHash);
+        out.gaugeController = _deployOrExisting(gaugeSalt, codeIds.gauge, gaugeArgs);
 
         bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
-        out.ccaLaunchArm = _deployOrExisting(ccaSalt, codeIds.cca, ccaArgs, params.ccaInitCodeHash);
+        out.ccaLaunchArm = _deployOrExisting(ccaSalt, codeIds.cca, ccaArgs);
 
         bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
-        out.oracle = _deployOrExisting(oracleSalt, codeIds.oracle, oracleArgs, params.oracleInitCodeHash);
+        out.oracle = _deployOrExisting(oracleSalt, codeIds.oracle, oracleArgs);
 
         IShareOFT4626(params.shareOFT).setGaugeController(out.gaugeController);
 
@@ -1125,20 +1151,20 @@ contract DeploymentBatcherPhase2Module {
         _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
     }
 
-    /// @dev When `initCodeHash` is non-zero, reuse checks skip `store.get()` (AA95).
-    ///      Callers that pre-create (deploy-session) should pass the same hash they
-    ///      used for CREATE2 prediction. Zero keeps the legacy derive-via-get path.
+    /// @dev When a pending init-code hash is published for `salt`, reuse checks skip
+    ///      `store.get()` (AA95). Precreate writes hashes via `setPendingInitCodeHashes`
+    ///      on the module contract. Zero keeps the legacy derive-via-get path.
     error InitCodeHashMismatch();
 
-    function _deployOrExisting(
-        bytes32 salt,
-        bytes32 codeId,
-        bytes memory constructorArgs,
-        bytes32 initCodeHash
-    ) internal returns (address addr) {
+    function _deployOrExisting(bytes32 salt, bytes32 codeId, bytes memory constructorArgs)
+        internal
+        returns (address addr)
+    {
         address storeAddr = create2Deployer.store();
         if (storeAddr != address(0)) {
-            bytes32 resolvedHash = initCodeHash;
+            // Read from module storage (not batcher storage) while running under delegatecall.
+            bytes32 publishedHash = DeploymentBatcherPhase2Module(moduleSelf).pendingInitCodeHash(salt);
+            bytes32 resolvedHash = publishedHash;
             if (resolvedHash == bytes32(0)) {
                 // Legacy path: materialize creation bytecode to derive the hash.
                 if (IUniversalBytecodeStoreView(storeAddr).pointers(codeId) == address(0)) {
@@ -1152,10 +1178,10 @@ contract DeploymentBatcherPhase2Module {
             if (addr.code.length > 0) {
                 return addr;
             }
-            // Optional integrity: if a hash was supplied, redeploy must match it.
-            if (initCodeHash != bytes32(0)) {
+            // Optional integrity: if a hash was published, redeploy must match it.
+            if (publishedHash != bytes32(0)) {
                 bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
-                if (keccak256(bytes.concat(creationCode, constructorArgs)) != initCodeHash) {
+                if (keccak256(bytes.concat(creationCode, constructorArgs)) != publishedHash) {
                     revert InitCodeHashMismatch();
                 }
             }
@@ -1519,11 +1545,9 @@ contract DeploymentBatcher is ReentrancyGuard {
         string shareSymbol;
         string version;
         uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
-        /// @dev Optional CREATE2 init-code hashes for gauge/cca/oracle reuse without store.get.
-        ///      Zero => derive via store.get (legacy). Non-zero => AA95-friendly reuse path.
-        bytes32 gaugeInitCodeHash;
-        bytes32 ccaInitCodeHash;
-        bytes32 oracleInitCodeHash;
+        // NOTE: AA95 init-code hashes are NOT on this struct — changing it would break the live
+        // shell's deployPhase2Core selector. Precreate publishes hashes on the Phase2 module via
+        // `setPendingInitCodeHashes` instead (see DeploymentBatcherPhase2Module).
     }
 
     struct Phase2FinalizeParams {

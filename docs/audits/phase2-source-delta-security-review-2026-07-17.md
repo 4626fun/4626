@@ -33,8 +33,10 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 
 ### F4 — `_deployOrExisting` store.get on reuse (Medium / fixed)
 
-- Optional `Phase2CoreParams.*InitCodeHash` skips `store.get()` on reuse when precreate
-  supplies the CREATE2 init-code hash (AA95). Zero keeps the legacy derive-via-get path.
+- AA95 reuse via module `setPendingInitCodeHashes` (shell `Phase2CoreParams` ABI unchanged).
+  Live module `0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad` (Safe `0x8ec89e09…`).
+- Earlier attempt to put hashes on `Phase2CoreParams` broke shell/module orchestrator
+  selectors and was rolled back before this cutover.
 
 ### F5 — Precreate misses `deployPhase2CoreWithRolePolicy` (Medium / fixed)
 

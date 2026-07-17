@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # CreatorOVaultWrapper
 
-Converts **▢ vault shares** ↔ **■ ShareOFT** for DEX trading and LayerZero bridging. Raw wrap is **1000 ▢ : 1 ■**; `deposit()` presents **~1 creator coin → ~1 ■**.
+**Product role:** Converts **▢ vault shares** ↔ **■ ShareOFT** for DEX trading and LayerZero bridging. Raw wrap is **1000 ▢ : 1 ■**; `deposit()` presents **~1 creator coin → ~1 ■**.
 
 [Token units](/reference/glossary#token-units)
 
@@ -40,3 +40,5 @@ function unwrap(uint256 amount) external returns (uint256 amountOut); // ×1000
 ## Gauge integration
 
 On ShareOFT fee distribute, the gauge **splits in ■ first**. Only the **9.61% burn slice** calls `unwrap()`; those ▢ are burned for PPS.
+
+Prev: [CreatorShareOFT](/contracts/core/creator-share-oft) · Next: [CreatorGaugeController](/contracts/governance/gauge-controller)

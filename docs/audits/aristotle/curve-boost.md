@@ -20,7 +20,7 @@ status: current
   <a class="audit-path__step" href="/audits/aristotle">Aristotle</a>
   <a class="audit-path__step" href="/audits/aristotle">Introduction</a>
   <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
-  <a class="audit-path__step" href="/audits/aristotle/lean-proof-targets">Next targets</a>
+  <a class="audit-path__step" href="/audits/aristotle/lean-proof-targets">All targets (proven)</a>
 </nav>
 
 <section class="audit-hero">

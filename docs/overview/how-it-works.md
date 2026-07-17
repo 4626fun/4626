@@ -9,7 +9,7 @@ How a Zora creator coin becomes a vault: auction tradable shares, run strategies
 
 <div class="docs-at-a-glance">
 
-[Launch checklist](/guides/launch-checklist) · Creator coin, vault share (`▢`), and tradable share (`■`) are three separate addresses.
+[Launch a vault](/guides) · Creator coin, vault share (`▢`), and tradable share (`■`) are three separate addresses.
 
 </div>
 
@@ -49,16 +49,7 @@ Personal boost: [ve■4626](/overview/ve4626). Formal math: [2.5× boost](/audit
 
 ## Share allocation at finalize
 
-Activation wraps the deposit into `■`, then splits **30/30/30/10**:
-
-| Leg | % | What happens |
-|-----|---|--------------|
-| Auction | 30% | Open price discovery |
-| Creator vesting | 30% | 365-day linear vest |
-| Solana bridge | 30% | LayerZero bridge at finalize |
-| LP reserve | 10% | Held for post-auction v4 migration |
-
-Strategies (same session): Charm **45%** · Ajna **45%** · **10% idle**.
+Activation wraps the deposit into `■`, then splits **30/30/30/10** (auction · vesting · Solana · LP reserve). Strategy deploy in the same session targets Charm **45%** · Ajna **45%** · **10% idle**. Full table: [Share allocation](/reference/glossary#share-allocation-at-finalize) · [Activate vault](/guides/activate-vault).
 
 **Trading live** needs auction graduation + `sweepCurrency()` + `migrate()` + hook alignment — not activation alone. [After activation](/guides/after-activation#when-is-trading-live-on-base).
 
@@ -68,6 +59,6 @@ Base is primary for deploy, auction, and lottery. ~30% of `■` still bridges at
 
 ## Core contracts
 
-Shared infra: [Addresses](/reference/addresses) (v1.19.1). Per creator: [Registry](/contracts/core/creator-registry) · [Vault](/contracts/core/creator-ovault) · [Wrapper](/contracts/core/creator-ovault-wrapper) · [ShareOFT](/contracts/core/creator-share-oft) · [Gauge](/contracts/governance/gauge-controller) · [CCA arm](/contracts/strategies/cca-launch) · [Lottery](/contracts/utilities/lottery-manager) · [Oracle](/contracts/utilities/creator-oracle).
+Shared infra: [Addresses](/reference/addresses) (v1.19.1 stack · v1.19.2 epoch). Per creator: [Registry](/contracts/core/creator-registry) · [Vault](/contracts/core/creator-ovault) · [Wrapper](/contracts/core/creator-ovault-wrapper) · [ShareOFT](/contracts/core/creator-share-oft) · [Gauge](/contracts/governance/gauge-controller) · [CCA arm](/contracts/strategies/cca-launch) · [Lottery](/contracts/utilities/lottery-manager) · [Oracle](/contracts/utilities/creator-oracle).
 
-[Launch checklist](/guides/launch-checklist) · [Glossary](/reference/glossary)
+Prev: [What is 4626?](/getting-started) · Next: [Launch a vault](/guides)

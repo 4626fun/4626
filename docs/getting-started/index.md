@@ -9,7 +9,7 @@ sidebar_position: 1
 
 <div class="docs-at-a-glance">
 
-Creator coin on Base? Start with the [Launch checklist](/guides/launch-checklist). After trading is live: [Fees, auction, and lottery](/overview/how-it-works).
+Creator coin on Base? Start with [Launch a vault](/guides). After trading is live: [Fees, auction, and lottery](/overview/how-it-works).
 
 </div>
 
@@ -27,10 +27,10 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 1. Pay the **launch bundle** ($499 USDC) — unlocks deploy.
 2. **Deploy** vault, share, gauge, oracle, and auction contracts.
 3. **Activate** — deposit 50M–100M creator coin; attach strategies; schedule the share auction.
-4. Auction **graduates** → finalize → `■` shares trade on Base; fees and lottery apply to qualifying buys.
+4. Auction **graduates** → settle → `■` shares trade on Base; fees and lottery apply to qualifying buys.
 5. **Solana share bridge** at finalize (~30% of `■`; included in the launch bundle).
 
-[Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
+Milestones (Deployed → Activated → Trading live) and the full checklist live under [Launch a vault](/guides) and [Launch checklist](/guides/launch-checklist).
 
 ## Three tokens
 
@@ -51,14 +51,6 @@ Wrapper locks **1000 ▢ per 1 ■**; `deposit()` presents ~1 creator coin → ~
 | **4626 account** ready to sign | Deploy and activate |
 | **Launch bundle** ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
 
-## Milestones
-
-| Milestone | Meaning | Trading on Base? |
-|-----------|---------|------------------|
-| **Deployed** | Contracts exist; vault empty | No |
-| **Activated** | Deposit done; auction scheduled or live | No |
-| **Trading live** | Auction done + settle complete | Yes |
-
 ## FAQ
 
 **What does $499 cover?** Deploy unlock plus Charm, Ajna, Solana bridge, and Meteora entitlement — not the creator-coin deposit. [Pay launch fee](/guides/strategy-bundle).
@@ -73,4 +65,4 @@ Wrapper locks **1000 ▢ per 1 ■**; `deposit()` presents ~1 creator coin → ~
 
 **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)** — pay the bundle, then deploy and activate.
 
-[Fees & lottery](/overview/how-it-works) · [Glossary](/reference/glossary) · [Addresses](/reference/addresses)
+Next: [Fees, auction, and lottery](/overview/how-it-works) · [Launch a vault](/guides)

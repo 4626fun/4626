@@ -189,10 +189,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             shareOFT: makeAddr("shareOFT"),
             shareSymbol: "S4626",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: bytes32(0),
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
         DeploymentBatcher.CodeIds memory codeIds = DeploymentBatcher.CodeIds({
             vault: bytes32(uint256(1)),
@@ -240,10 +237,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             shareOFT: makeAddr("shareOFT"),
             shareSymbol: "S4626",
             version: "v1",
-            floorPriceQ96: 0,
-            gaugeInitCodeHash: bytes32(0),
-            ccaInitCodeHash: bytes32(0),
-            oracleInitCodeHash: bytes32(0)
+            floorPriceQ96: 0
         });
         DeploymentBatcher.CodeIds memory codeIds = DeploymentBatcher.CodeIds({
             vault: bytes32(uint256(1)),

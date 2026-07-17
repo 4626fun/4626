@@ -88,3 +88,5 @@ Launch floor is derived onchain from the lane oracle via `IOracle4626` (`getAsse
 ## Share Economics During Auction
 
 Vault economics are **not frozen** during auctions. Strategy snapshots launch-time backing telemetry when configured with `backingVault`. API/UI expose drift fields (`assetsDelta`, `supplyDelta`) — warning-only, do not block settlement or migration.
+
+Prev: [CreatorGaugeController](/contracts/governance/gauge-controller) · Next: [LotteryManager4626](/contracts/utilities/lottery-manager)

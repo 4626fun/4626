@@ -29,9 +29,6 @@ const PHASE2_CORE_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'gaugeInitCodeHash', type: 'bytes32' },
-          { name: 'ccaInitCodeHash', type: 'bytes32' },
-          { name: 'oracleInitCodeHash', type: 'bytes32' },
         ],
       },
       {
@@ -80,9 +77,6 @@ function makePhase2CoreWithRolePolicyCall(rolePolicyId: bigint): Call {
           shareSymbol: '4626',
           version: 'v1',
           floorPriceQ96: 0n,
-          gaugeInitCodeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          ccaInitCodeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          oracleInitCodeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
         },
         {
           vault: `0x${'11'.repeat(32)}`,

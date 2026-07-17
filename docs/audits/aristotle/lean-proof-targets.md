@@ -1,6 +1,6 @@
 ---
-title: Lean proof targets (next 5)
-sidebar_label: Next targets
+title: Lean proof targets (all proven)
+sidebar_label: All targets (proven)
 sidebar_position: 12
 last_updated: '2026-07-11'
 audience:
@@ -20,12 +20,12 @@ status: current
   <a class="audit-path__step" href="/audits/aristotle">Aristotle</a>
   <a class="audit-path__step" href="/audits/aristotle">Introduction</a>
   <a class="audit-path__step" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
-  <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/lean-proof-targets">Next targets</a>
+  <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/lean-proof-targets">All targets (proven)</a>
 </nav>
 
 <section class="audit-hero">
   <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Verification complete</span>
-  <h1 class="audit-hero__title">Next five Lean targets</h1>
+  <h1 class="audit-hero__title">All five Lean targets (proven)</h1>
   <p class="audit-hero__subtitle">Each target has a plain claim, a worked example, the onchain formula, and a copy-paste Aristotle prompt. All five are <strong>Proven</strong> (no <code>sorry</code>/<code>admit</code>). New here? Read the <a href="/audits/aristotle">Introduction</a>, then the proven <a href="/audits/aristotle/curve-boost">2.5× boost</a>.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/aristotle/curve-boost">Proven 2.5× boost<span class="home-btn__arrow" aria-hidden="true">→</span></a>

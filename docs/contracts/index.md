@@ -5,7 +5,9 @@ sidebar_position: 1
 
 # Smart contracts
 
-Onchain reference for 4626 vault infrastructure. Launch journey: [Launch a vault](/guides/).
+Onchain reference for 4626 vault infrastructure. **Use when** integrating, verifying the stack, or reading ABIs after a launch.
+
+Launch journey: [Launch a vault](/guides/).
 
 Shared infrastructure (batcher, factories, registry) plus a **per-creator stack** per launch.
 
@@ -24,7 +26,7 @@ Shared infrastructure (batcher, factories, registry) plus a **per-creator stack*
 
 ## Shared infrastructure
 
-**[Contract addresses](/reference/addresses)** (v1.19.1) — batcher, factories, modules.
+**[Contract addresses](/reference/addresses)** (v1.19.1 stack · v1.19.2 epoch) — batcher, factories, modules.
 
 [Impairment disclosures](/reference/impairment-v1-disclosures) · [Glossary](/reference/glossary)
 
@@ -40,3 +42,5 @@ Shared infrastructure (batcher, factories, registry) plus a **per-creator stack*
 Launch is **complete on Base** after auction graduation, `sweepCurrency()` / `migrate()`, and hook alignment — see [After activation](/guides/after-activation#when-is-trading-live-on-base).
 
 Source: [github.com/wenakita/4626/contracts](https://github.com/wenakita/4626/tree/main/contracts)
+
+Prev: [Launch a vault](/guides) · Next: [Registry4626](/contracts/core/creator-registry)

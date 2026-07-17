@@ -27,7 +27,6 @@ import {
 } from './deployUserOpGas.js'
 import {
   ensurePhase2CoreCreatesPrecreated,
-  injectPhase2CoreInitCodeHashes,
 } from './phase2CorePrecreate.js'
 import {
   handleOptions,
@@ -2025,13 +2024,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
               phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
             }
             if (precreate.initCodeHashes) {
-              const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
-              if (injected.injected) {
-                userOpCalls = injected.calls
-                payloadPatch = {
-                  ...payloadPatch,
-                  phase2CoreInitCodeHashes: precreate.initCodeHashes,
-                }
+              payloadPatch = {
+                ...payloadPatch,
+                phase2CoreInitCodeHashes: precreate.initCodeHashes,
+                ...(precreate.publishedPendingHashes
+                  ? { phase2CorePendingHashesPublished: true }
+                  : {}),
               }
             }
           } else if (precreate.reason) {
@@ -2283,13 +2281,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
             phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
           }
           if (precreate.initCodeHashes) {
-            const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
-            if (injected.injected) {
-              userOpCalls = injected.calls
-              payloadPatch = {
-                ...payloadPatch,
-                phase2CoreInitCodeHashes: precreate.initCodeHashes,
-              }
+            payloadPatch = {
+              ...payloadPatch,
+              phase2CoreInitCodeHashes: precreate.initCodeHashes,
+              ...(precreate.publishedPendingHashes
+                ? { phase2CorePendingHashesPublished: true }
+                : {}),
             }
           }
         }

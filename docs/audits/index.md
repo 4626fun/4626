@@ -150,9 +150,9 @@ Machine-checked Lean&nbsp;4 proofs of lottery and fee math via [Aristotle](https
     <span class="home-card__desc">Personal lottery boost stays in 1.0×–2.5×; coverage blend only applies the covered uplift.</span>
   </a>
   <a class="home-card audit-card" href="/audits/aristotle/lean-proof-targets">
-    <span class="home-card__tag">Backlog</span>
-    <span class="home-card__title">Next targets</span>
-    <span class="home-card__desc">Five queued Lean targets: win chance, VRF fairness, fee-split conservation, jackpot fraction.</span>
+    <span class="home-card__tag">Proven</span>
+    <span class="home-card__title">All targets (proven)</span>
+    <span class="home-card__desc">Five Lean targets: win chance, VRF fairness, fee-split conservation, jackpot fraction.</span>
   </a>
 </div>
 

@@ -51,4 +51,4 @@ Solana gets bridged **ShareOFT**, not a separate creator-coin SPL. Symbol stays 
 
 Wraps, deposits, and bridge receipts do **not** create lottery entries.
 
-[CreatorShareOFT](/contracts/core/creator-share-oft) · [Addresses](/reference/addresses) · [After activation](/guides/after-activation)
+Prev: [Step 4: After activation](/guides/after-activation) · Next: [Launch a vault](/guides)

@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # CreatorGaugeController
 
-Per-creator `tradeFeeCollector`: receives ShareOFT trade fees, splits them by **immutable** BPS, and custodies `jackpotReserve`. Jackpot **payout** authority is [LotteryManager4626](/contracts/utilities/lottery-manager).
+**Product role:** Per-creator `tradeFeeCollector`: receives ShareOFT trade fees, splits them by **immutable** BPS, and custodies `jackpotReserve`. Jackpot **payout** authority is [LotteryManager4626](/contracts/utilities/lottery-manager).
 
 [Token units](/reference/glossary#token-units)
 
@@ -52,3 +52,5 @@ If `creatorShareBps > 0`, treasury must be non-zero (`CreatorTreasuryRequired`).
 ### WETH / hook path
 
 Alternate ingress: WETH → creator coin → vault deposit. Lottery/voter slices are wrapped back to ■; burn stays ▢. Large swaps are owner/keeper-gated by default (`setWethFeeKeeper`, `setWethProcessingConfig`).
+
+Prev: [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · Next: [Share CCA Launch Arm](/contracts/strategies/cca-launch)
