@@ -114,18 +114,33 @@ describe('resolveCounterTradeTickerEffectiveness', () => {
     })).toEqual({ effective: false, reason: 'last_tick_failed' })
   })
 
-  it('reports a started room-1659 no-op as ineffective', () => {
+  it('reports a blocking loop reason as ineffective', () => {
     expect(resolveCounterTradeTickerEffectiveness({
       started: true,
       reason: null,
       intervalMs: 120_000,
       ticks: 1,
       lastTickAt: '2026-07-17T13:00:00.000Z',
-      lastResult: okResult({ reason: 'staker_pilot_mode' }),
+      lastResult: okResult({ reason: 'disabled' }),
       lastError: null,
     })).toEqual({
       effective: false,
-      reason: 'staker_pilot_mode',
+      reason: 'disabled',
+    })
+  })
+
+  it('reports a successful room-1659 split_by_action tick as effective', () => {
+    expect(resolveCounterTradeTickerEffectiveness({
+      started: true,
+      reason: null,
+      intervalMs: 120_000,
+      ticks: 1,
+      lastTickAt: '2026-07-17T13:00:00.000Z',
+      lastResult: okResult({ roomId: '1659', skipped: 1, executed: 1 }),
+      lastError: null,
+    })).toEqual({
+      effective: true,
+      reason: null,
     })
   })
 

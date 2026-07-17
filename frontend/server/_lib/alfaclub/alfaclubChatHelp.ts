@@ -63,7 +63,7 @@ function formatHermitConciseCtaSection(params: {
   lines.push('• Refresh risk + PnL snapshot: **`/position`**')
 
   if (params.roomId === '1659') {
-    lines.push('• Check room execution lane: **`/arena status`** (or `/arena register` to create/bind an arena agent). /arena gated to allowlisted or HERMIT_OWNER_ADDRESS in AlfaClub rooms.')
+    lines.push('• Check room execution lane: **`/h arena status`** (or `/h arena register` to create/bind an arena agent). Arena controls gated to allowlisted or HERMIT_OWNER_ADDRESS in AlfaClub rooms.')
     lines.push('• Enable Telegram DMs: link in **4626 Telegram Mini App** → **`/hermit alert`** → **`/hermit alert test`**')
     lines.push('', '_Alerts monitor room HL + Virtual Arena wallets; DMs go to your linked Telegram._')
   } else {
@@ -244,7 +244,7 @@ export function formatAlfaClubCommandHelp(): string {
     '  `/alfa chart [kind] [limit]` — room analytics chart (IPFS image)',
     '  `/alfa status` or `/bridge status` — pipeline + bridge auth health',
     '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
-    '  `/arena status|register|identity ...|join|activate|...` — Arena controls (1659 + flags; supports per-sender "mine" bindings; gated to allowlist/owner in AlfaClub)',
+    '  `/h arena status|register|identity ...|join|activate|...` — Arena controls (1659 + flags; supports per-sender "mine" bindings; gated to allowlist/owner in AlfaClub)',
     '',
     '**Hermit** (ops room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
     '',

@@ -78,9 +78,13 @@ FROM base AS runner
 WORKDIR /app
 
 ARG DGCLAW_SKILL_REPO=https://github.com/Virtual-Protocol/dgclaw-skill.git
-ARG DGCLAW_SKILL_REF=main
+# Pin to tested commit SHAs (not floating main). Upgrade path: bump these SHAs
+# after a known-good local Arena trade smoke, then rebuild Dockerfile.hermit.
+ARG DGCLAW_SKILL_REF=2a8b79728c17c428421f30f5ed545ab5ff4f335c
 ARG ACP_CLI_REPO=https://github.com/Virtual-Protocol/acp-cli.git
-ARG ACP_CLI_REF=main
+ARG ACP_CLI_REF=24e5affdd71980fd32fff177a7dac3a850c2555c
+ARG ACP_CLI_NPM_VERSION=1.0.25
+ARG VIEM_VERSION=2.45.1
 
 # Copy installed node_modules and package.json
 COPY --from=deps /app/node_modules ./node_modules
@@ -107,17 +111,24 @@ COPY frontend/shared ./shared
 # `acp` binary (trade.ts prefers ACP_BIN / PATH). The git checkout is kept for
 # ACP_CLI_DIR compatibility only — do not npm install inside it (tsx/esbuild
 # postinstall fails reliably in this image).
-RUN git clone --depth=1 --branch "${DGCLAW_SKILL_REF}" "${DGCLAW_SKILL_REPO}" /app/dgclaw-skill \
+RUN git init /app/dgclaw-skill \
   && cd /app/dgclaw-skill \
+  && git remote add origin "${DGCLAW_SKILL_REPO}" \
+  && git fetch --depth=1 origin "${DGCLAW_SKILL_REF}" \
+  && git checkout --detach FETCH_HEAD \
   && npm install --omit=dev \
   # viem powers the optional HL_AGENT_PRIVATE_KEY signing lane in the patched
   # trade.ts (user-silo liquidation defense signs with an approved HL API
   # wallet key instead of acp-cli). Upstream dgclaw does not depend on it.
-  && npm install --no-save --omit=dev viem@^2
+  && npm install --no-save --omit=dev "viem@${VIEM_VERSION}"
 
-RUN git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli
+RUN git init /app/acp-cli \
+  && cd /app/acp-cli \
+  && git remote add origin "${ACP_CLI_REPO}" \
+  && git fetch --depth=1 origin "${ACP_CLI_REF}" \
+  && git checkout --detach FETCH_HEAD
 
-RUN npm install -g @virtuals-protocol/acp-cli
+RUN npm install -g "@virtuals-protocol/acp-cli@${ACP_CLI_NPM_VERSION}"
 
 # Overlay repo-patched dgclaw scripts on top of the upstream clone.
 # trade.ts adds: partial close (`close --size <usd>`, reduce-only) for the

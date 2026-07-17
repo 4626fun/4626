@@ -78,7 +78,7 @@ describe('buildHyperliquidPositionReport', () => {
     expect(report).toContain('📡 **Market pulse** (room 1659 context)')
     expect(report).toContain('Hype score: **31/100**')
     expect(report).toContain('Room 1659 HL leg')
-    expect(report).toContain('Arena lane check: `/arena status`')
+    expect(report).toContain('Arena lane check: `/h arena status`')
   })
 
   it('includes wallet lanes, monitored wallets, and mark→liq alert copy for room 1659', () => {

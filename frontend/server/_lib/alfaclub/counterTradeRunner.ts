@@ -96,20 +96,8 @@ function resolveStrategySubaccount(params: {
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   const baseRuntime = readCounterTradeRuntimeConfig()
-  if (baseRuntime.roomId === INVERSE_AKITA_ROOM_ID) {
-    return {
-      ok: true,
-      reason: 'staker_pilot_mode',
-      roomId: baseRuntime.roomId,
-      scannedIdentities: 0,
-      scannedEvents: 0,
-      newEvents: 0,
-      executed: 0,
-      skipped: 0,
-      blocked: 0,
-      failed: 0,
-    }
-  }
+  // Room 1659 uses split_by_action: chat reaction owns OPEN (entry fills);
+  // this ticker owns add/reduce/close/defense/harvest-dip. Do not early-return.
   if (!baseRuntime.enabled || !isCounterTradeEnabledByEnv()) {
     return {
       ok: false,
@@ -407,6 +395,23 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // it runs before cooldown/hourly/daily gates and the LLM gate; dedupe
         // and the env/DB kill switches above still apply.
         const fillAction = classifyCounterTradeFillAction(fill)
+
+        // Chat reaction owns OPEN fades for InverseAKITA room 1659. Skip ticker
+        // entry so Chip/chat OPEN and fill-mirror OPEN never double-execute.
+        if (runtime.roomId === INVERSE_AKITA_ROOM_ID && fillAction === 'entry') {
+          skipped += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'skipped',
+            reason: 'chat_reaction_owns_open',
+            counterSide: null,
+            counterNotionalUsd: null,
+            counterLeverage: null,
+          })
+          continue
+        }
 
         if (isExitFillAction(fillAction)) {
           const exitResult = await handleCounterTradeExitFlow({

@@ -479,7 +479,7 @@ function formatActionCta(conviction: ConvictionProfile, roomId?: string | null):
     '• Disable alerts: `/hermit alert off`',
   ]
   if (roomId === '1659') {
-    lines.splice(2, 0, '• Arena lane check: `/arena status` (or `/arena register` to create/bind+onboard an agent for arena). Requires HERMIT_OWNER or allowlist in AlfaClub rooms.')
+    lines.splice(2, 0, '• Arena lane check: `/h arena status` (or `/h arena register` to create/bind+onboard an agent for arena). Requires HERMIT_OWNER or allowlist in AlfaClub rooms.')
     lines.splice(3, 0, '• Timeline chart: `https://app.4626.fun/positions`')
   }
   return lines
@@ -739,7 +739,7 @@ export function formatRoom1659WalletLanesSection(params: {
       `• Virtual Arena execution: **${formatWalletShort(params.arenaAddress)}** — \`/h pos\` for live legs`,
     )
   } else {
-    lines.push('• Virtual Arena execution: _not bound_ — `/arena status` or `/arena register`')
+    lines.push('• Virtual Arena execution: _not bound_ — `/h arena status` or `/h arena register`')
   }
   lines.push(
     `• Alerts + Telegram: your linked 4626 account (operator **${formatWalletShort(params.operatorWallet)}**)`,
@@ -788,7 +788,7 @@ export function formatCompactArenaHlSummary(params: {
   const lines = [
     `**Virtual Arena HL** (${walletLabel})`,
     `- **${legs.length}** open leg${legs.length === 1 ? '' : 's'} · nearest liq-dist **${formatPct(nearestLiqDist)}**`,
-    '- Drill in: `/h pos` · `/arena status`',
+    '- Drill in: `/h pos` · `/h arena status`',
   ]
   return lines
 }

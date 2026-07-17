@@ -124,7 +124,7 @@ export function buildAlfaClubApiHeaders(params: {
 
 /**
  * Read and normalize all AlfaClub HTTP auth inputs from env.
- * Supports separate read/write bot tokens plus legacy aliases.
+ * Supports separate read bot token (ALFACLUB_READ_BOT_TOKEN) and write token (ALFACLUB_API_KEY only).
  */
 export function readAlfaClubApiAuthFlags(): AlfaClubApiAuthFlags {
   return {
@@ -135,11 +135,7 @@ export function readAlfaClubApiAuthFlags(): AlfaClubApiAuthFlags {
     readBotToken: normalizeAlfaClubBotToken(
       process.env.ALFACLUB_READ_BOT_TOKEN ?? process.env.ALFACLUB_CHAT_READ_BOT_TOKEN,
     ),
-    botToken: normalizeAlfaClubBotToken(
-      process.env.ALFACLUB_API_KEY ??
-        process.env.alfaclub_api_key ??
-        process.env.ALFACLUB_BOT_TOKEN,
-    ),
+    botToken: normalizeAlfaClubBotToken(process.env.ALFACLUB_API_KEY),
   }
 }
 

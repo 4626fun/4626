@@ -723,11 +723,7 @@ function shouldAttemptStrategyStatusAutoprovision(roomId: string, senderAddress:
 }
 
 function readPositionAlertBotToken(): string | null {
-  const candidates = [
-    process.env.ALFACLUB_API_KEY,
-    process.env.alfaclub_api_key,
-    process.env.ALFACLUB_BOT_TOKEN,
-  ]
+  const candidates = [process.env.ALFACLUB_API_KEY]
   for (const candidate of candidates) {
     const value = asTrimmed(candidate)
     if (value) return value

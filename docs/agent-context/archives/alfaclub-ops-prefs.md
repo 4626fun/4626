@@ -38,3 +38,5 @@ Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only*
 - On AlfaClub `/rooms` overview, keep the **Who controls this room** ownership sunburst (`KeyOwnershipSunburst`) **above** the Room overview panel — not below it.
 
 - **`/positions` and room chat text** should stay private to room access: show messages only with a FriendKey for that room (**staked or unstaked**) or the required creator-coin / LP equivalent — never world-readable and not “signed in only.” Sudoswap ERC-1155/ERC-20 LP equivalence can extend the coin path later.
+
+- **Public Arena CTAs are `/h arena …` only (H-06/H-07).** Help + bare `arena …` intake advertise `/h arena`; website `vercel.json` `/arena` redirects stay unchanged. `ALFACLUB_API_KEY` is the only bot credential — shadow `ALFACLUB_BOT_TOKEN` / `alfaclub_api_key` aliases are retired in code.

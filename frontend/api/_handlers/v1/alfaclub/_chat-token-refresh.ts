@@ -89,14 +89,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       reason: 'vercel_token_refresh_disabled',
       data: {
-        hint: 'Hermit Railway owns Privy rotation; unset ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED to re-enable this backup cron',
+        hint: 'Vercel cron owns Privy/JWT rotation; unset ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED to re-enable this canonical refresh path',
       },
     })
   }
 
   try {
     // Always force a refresh on the cron path. Vercel invokes this every
-    // ~10 minutes as a backup while Hermit owns the primary ~55 minute loop.
+    // ~10 minutes as the canonical Privy/JWT writer (Railway refresher stays off).
     // burning rate budget — and skipping based on the identity-token's
     // remaining lifetime would mean a missed cron tick (cold start, transient
     // 5xx, etc.) could push the next refresh past the 1-hour cliff.

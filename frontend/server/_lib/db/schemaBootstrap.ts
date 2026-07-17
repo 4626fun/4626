@@ -515,6 +515,7 @@ export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubDailyBrief', async () => {
     await ensureMigrationApplied(db, '20260610000000_alfaclub_daily_brief_dispatch.sql').catch(() => {})
     await ensureMigrationApplied(db, '20260706000000_alfaclub_command_reply_ledger.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260717110000_alfaclub_daily_brief_dispatch_rls.sql').catch(() => {})
   })
 }
 

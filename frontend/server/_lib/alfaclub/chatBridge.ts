@@ -705,7 +705,7 @@ function normalizeBareArenaCommand(rawText: string): string | null {
   const match = trimmed.match(/^arena(?:\s+(.+))?$/i)
   if (!match) return null
   const suffix = String(match[1] ?? '').trim()
-  return suffix.length > 0 ? `/arena ${suffix}` : '/arena'
+  return suffix.length > 0 ? `/h arena ${suffix}` : '/h arena'
 }
 
 function isTelegramRelayedSlashCommand(rawText: string, extractedCommandText: string): boolean {

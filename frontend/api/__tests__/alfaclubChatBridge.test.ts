@@ -116,8 +116,9 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
-      ALFACLUB_API_KEY: undefined,
-      alfaclub_api_key: 'alfa_bot_lowercase',
+      ALFACLUB_API_KEY: 'alfa_bot_primary',
+      alfaclub_api_key: undefined,
+      ALFACLUB_BOT_TOKEN: undefined,
       ALFACLUB_CHAT_GROUP_ID: 'alfa-room-main',
       ALFACLUB_CHAT_POLL_INTERVAL_MS: '7000',
       ALFACLUB_CHAT_HISTORY_LIMIT: '35',
@@ -137,7 +138,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.roomId).toBe('1043')
     expect(flags.jwt).toBe('token-xyz')
     expect(flags.ingestJwt).toBeNull()
-    expect(flags.botToken).toBe('alfa_bot_lowercase')
+    expect(flags.botToken).toBe('alfa_bot_primary')
     expect(flags.groupId).toBe('alfa-room-main')
     expect(flags.pollIntervalMs).toBe(7000)
     expect(flags.historyLimit).toBe(35)
@@ -195,16 +196,30 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.ingestJwt).toBe('ingest-token')
   })
 
-  it('prefers uppercase AlfaClub bot token env when both aliases exist', () => {
+  it('reads only ALFACLUB_API_KEY (shadow bot-token aliases are retired)', () => {
     restoreEnv = applyEnv({
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_API_KEY: 'alfa_bot_uppercase',
       alfaclub_api_key: 'alfa_bot_lowercase',
+      ALFACLUB_BOT_TOKEN: 'alfa_bot_shadow',
     })
 
     const flags = readAlfaClubChatBridgeFlags()
     expect(flags.botToken).toBe('alfa_bot_uppercase')
+  })
+
+  it('does not fall back to retired alfaclub_api_key / ALFACLUB_BOT_TOKEN aliases', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_API_KEY: undefined,
+      alfaclub_api_key: 'alfa_bot_lowercase',
+      ALFACLUB_BOT_TOKEN: 'alfa_bot_shadow',
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.botToken).toBeNull()
   })
 
   it('falls back to bot token for history reads when read token is unset', () => {

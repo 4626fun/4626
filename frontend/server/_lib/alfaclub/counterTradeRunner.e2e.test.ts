@@ -272,24 +272,43 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
   })
 
-  it('skips counter-trade loop in room 1659 (staker pilot mode)', async () => {
+  it('skips room 1659 entry fills (chat owns OPEN) but still processes exits', async () => {
     mocks.readCounterTradeRuntimeConfig.mockReturnValue({
       ...BASE_RUNTIME,
       roomId: '1659',
       chatPostRoomId: '1659',
+      exitEnabled: true,
+    })
+    mocks.readOrCreateCounterTradeRoomStrategy.mockResolvedValue({
+      enabled: true,
+      killSwitch: false,
+      globalBias: 'neutral',
+    })
+    mocks.getUserFillsByTimeDetailed.mockResolvedValue([
+      { ...FILL, time: 1_720_000_000_000, dir: 'Open Long', sz: '1', px: '100', startPosition: '0' },
+      { ...FILL, time: 1_720_000_060_000, dir: 'Close Long', sz: '1', px: '101', startPosition: '1' },
+    ])
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
+      assetPositions: [
+        { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
+      ],
     })
 
     const result = await runCounterTradeLoop()
 
-    expect(result).toMatchObject({
-      ok: true,
-      reason: 'staker_pilot_mode',
-      roomId: '1659',
-      scannedIdentities: 0,
-      executed: 0,
-    })
-    expect(mocks.listActiveCounterTradeOptIns).not.toHaveBeenCalled()
-    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+    expect(result.ok).toBe(true)
+    expect(result.reason).toBeUndefined()
+    expect(result.roomId).toBe('1659')
+    expect(mocks.listActiveCounterTradeOptIns).toHaveBeenCalled()
+    const skipReasons = mocks.recordCounterTradeAction.mock.calls
+      .map((call) => call[0])
+      .filter((row) => row?.status === 'skipped')
+      .map((row) => row?.reason)
+    expect(skipReasons).toContain('chat_reaction_owns_open')
+    // Close fill should still attempt a mirrored exit trade.
+    expect(mocks.runArenaTrade).toHaveBeenCalled()
   })
 
   it('uses only one active strategy actor for room 1043 when multiple opt-ins exist', async () => {
