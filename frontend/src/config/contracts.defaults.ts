@@ -42,8 +42,8 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V1191_STORE_POINTER = addr('0d12951A5e35
  * `agentVaultCoreModule` = live AgentOVaultCoreModule instance `0x8c084A63…`.
  */
 export const SPLIT_PHASE1_PHASE1_MODULE = addr('33ABACC30a4179444d9d565245561B3988650bF5')
-/** Retired v1.13.0 Phase1Module (grandfathered greenfield only). */
-export const SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
+/** Pre-v1.14.0 Phase1Module (v1.13.0 greenfield; grandfathered vaults only). */
+export const PRE_V1140_SPLIT_PHASE1_PHASE1_MODULE = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
 /** Retired v1.19.1 greenfield Phase2Module (pre AA95 / vaultKind hot-swap). */
