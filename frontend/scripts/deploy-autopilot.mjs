@@ -93,10 +93,15 @@ function ownerBytes(owner) {
   return encodeAbiParameters([{ type: 'address' }], [owner]).toLowerCase()
 }
 
-function buildHeaders({ bearer, cookie }) {
+function buildHeaders({ bearer, cookie, origin }) {
   const headers = { 'Content-Type': 'application/json' }
   if (bearer) headers.Authorization = `Bearer ${bearer}`
   if (cookie) headers.Cookie = cookie
+  // Cookie/session CSRF guard requires a trusted Origin on mutating deploy routes.
+  if (origin) {
+    headers.Origin = origin
+    headers.Referer = `${origin.replace(/\/+$/, '')}/deploy/vault`
+  }
   return headers
 }
 
@@ -104,7 +109,15 @@ async function apiPost({ origin, path, headers, body }) {
   const url = `${origin.replace(/\/+$/, '')}/api/${path}`
   const res = await fetch(url, {
     method: 'POST',
-    headers,
+    headers: {
+      ...headers,
+      ...(origin
+        ? {
+            Origin: origin,
+            Referer: `${origin.replace(/\/+$/, '')}/deploy/vault`,
+          }
+        : null),
+    },
     body: JSON.stringify(body ?? {}),
   })
   const json = await res.json().catch(() => null)
@@ -344,7 +357,7 @@ async function main() {
       pushAuditEvent('preflight_skipped')
     }
 
-    const headers = buildHeaders({ bearer, cookie })
+    const headers = buildHeaders({ bearer, cookie, origin })
     const started = await apiPost({
       origin,
       path: 'deploy/v2/session/start',
