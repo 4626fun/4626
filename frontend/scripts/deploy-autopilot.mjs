@@ -8,15 +8,14 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0xe3F9490CfD6bd3D68010405d18Bf772C167E7178'
-const DEFAULT_STORE = '0x6925d601cf618AFB9F55099C0FF3d30769a5e141'
-const DEFAULT_DEPLOYER = '0x02feAFb12fDF2c0Ef65dA3038584Dd4EA3b1E2A9'
+const DEFAULT_BATCHER = '0xa18169caf37fa0347285B16aAFC2B09eCB43F145'
+const DEFAULT_STORE = '0xF9622613682a12E46b914c7498716F42E44c4d36'
+const DEFAULT_DEPLOYER = '0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2'
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 
-const SELECTOR_PHASE1_CORE = '1331378b'
-const SELECTOR_PHASE1_CORE_WITH_SALT = '4154f24e'
-const SELECTOR_PHASE1_FINALIZE = 'a98ec9d8'
-const SELECTOR_PHASE1_FINALIZE_WITH_SALT = '3bc09a8b'
+// v1.19.1 DeploymentBatcher exposes salt-aware Phase1 split entrypoints only.
+const SELECTOR_PHASE1_CORE_WITH_SALT = '8287b529'
+const SELECTOR_PHASE1_FINALIZE_WITH_SALT = 'af399b2b'
 
 const OWNER_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -190,12 +189,7 @@ async function runPreflight({ client, batcher, expectedStore, expectedDeployer }
     // Older deployers may not expose owner/authorizedDeployers; skip auth check.
   }
 
-  const requiredSelectors = [
-    SELECTOR_PHASE1_CORE,
-    SELECTOR_PHASE1_CORE_WITH_SALT,
-    SELECTOR_PHASE1_FINALIZE,
-    SELECTOR_PHASE1_FINALIZE_WITH_SALT,
-  ]
+  const requiredSelectors = [SELECTOR_PHASE1_CORE_WITH_SALT, SELECTOR_PHASE1_FINALIZE_WITH_SALT]
   for (const s of requiredSelectors) {
     if (!codeLc.includes(s)) throw new Error(`batcher missing split selector 0x${s}`)
   }

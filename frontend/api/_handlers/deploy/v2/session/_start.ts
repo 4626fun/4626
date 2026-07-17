@@ -94,6 +94,25 @@ function forwardAuthHeaders(req: VercelRequest): Record<string, string> {
   if (typeof siwaReceipt === 'string' && siwaReceipt.trim()) headers['X-SIWA-Receipt'] = siwaReceipt.trim()
   const cookie = req.headers?.cookie
   if (typeof cookie === 'string' && cookie.trim()) headers.Cookie = cookie
+  // FINDING-03: create/resume CSRF requires a trusted Origin. Start already
+  // passed that guard; forward Origin/Referer so the internal create proxy
+  // does not get a bare 403 Forbidden.
+  const origin = typeof req.headers?.origin === 'string' ? req.headers.origin.trim() : ''
+  const referer = typeof req.headers?.referer === 'string' ? req.headers.referer.trim() : ''
+  if (origin) {
+    headers.Origin = origin
+  } else {
+    try {
+      headers.Origin = getCanonicalOrigin(req).replace(/\/+$/, '')
+    } catch {
+      // leave unset; create CSRF will reject with Forbidden
+    }
+  }
+  if (referer) {
+    headers.Referer = referer
+  } else if (headers.Origin) {
+    headers.Referer = `${headers.Origin}/deploy/vault`
+  }
   return headers
 }
 

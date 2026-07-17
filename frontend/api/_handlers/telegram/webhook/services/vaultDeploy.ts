@@ -927,6 +927,8 @@ export async function startAkitaVaultDeployFromTelegram(params: {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        Origin: origin,
+        Referer: `${origin}/deploy/vault`,
       },
       body: JSON.stringify(body),
     })
