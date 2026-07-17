@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  isAlfaClubChipSystemMessage,
   isAlfaClubChipUsername,
   isAlfaClubTradeCompletedSender,
   parseInverseAkitaChatTradeEvent,
@@ -115,6 +116,9 @@ describe('parseInverseAkitaChatTradeEvent', () => {
     expect(isAlfaClubTradeCompletedSender('Chip')).toBe(true)
     expect(isAlfaClubChipUsername('chip')).toBe(true)
     expect(isAlfaClubTradeCompletedSender('0xabc')).toBe(false)
+    expect(isAlfaClubChipSystemMessage({ sender: 'trade-completed' })).toBe(true)
+    expect(isAlfaClubChipSystemMessage({ sender: '0xabc', username: 'Chip' })).toBe(true)
+    expect(isAlfaClubChipSystemMessage({ sender: '0xabc', username: 'manito' })).toBe(false)
   })
 })
 

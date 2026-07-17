@@ -167,6 +167,16 @@ export function isAlfaClubChipUsername(username: string | null | undefined): boo
   return normalized === 'chip' || normalized === 'chipbot'
 }
 
+/** True when the chat row is an AlfaClub Chip / trade-completed system card. */
+export function isAlfaClubChipSystemMessage(params: {
+  sender?: string | null
+  username?: string | null
+}): boolean {
+  return (
+    isAlfaClubTradeCompletedSender(params.sender) || isAlfaClubChipUsername(params.username)
+  )
+}
+
 /**
  * Attribute a Chip trade to a wallet for stake gating:
  * 1) payload userAddress

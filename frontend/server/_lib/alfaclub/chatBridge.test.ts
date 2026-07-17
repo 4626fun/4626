@@ -175,6 +175,8 @@ import {
   buildAlfaClubOutboundFrame,
   canBridgeExecuteCommandsInRoom,
   canBridgeReplyInRoom,
+  isAlfaClubHistoryIngestSender,
+  isHistoryMessageChipIngestCandidate,
   isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
   readAlfaClubChatBridgeFlagsForCronTick,
@@ -1041,6 +1043,131 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     ])
   })
 
+  it('history ingest persists Chip trade-completed cards for any polled room', async () => {
+    const nowMs = Date.now()
+    const chipText = JSON.stringify({ coin: 'HYPE', dir: 'Open Long', sz: '0.65' })
+    mockHistoryMessages([
+      {
+        id: 'm-human',
+        date: nowMs - 5_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'watching hype',
+      },
+      {
+        id: 'm-chip-open',
+        date: nowMs - 4_000,
+        sender: 'trade-completed',
+        username: 'Chip',
+        text: chipText,
+        isBot: true,
+      },
+      {
+        id: 'm-other-bot',
+        date: nowMs - 3_000,
+        sender: 'some-other-system',
+        username: 'OtherBot',
+        text: 'ignore me',
+        isBot: true,
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([
+      {
+        roomId: '1484',
+        messageId: 'm-human',
+        senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'watching hype',
+        dateMs: nowMs - 5_000,
+      },
+      {
+        roomId: '1484',
+        messageId: 'm-chip-open',
+        senderAddress: 'trade-completed',
+        username: 'Chip',
+        text: chipText,
+        dateMs: nowMs - 4_000,
+      },
+    ])
+
+    await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({
+        roomId: '1043',
+        hermitCommandRoomIds: ['1043', '1659'],
+        inverseAkitaChatReactionRoomIds: ['1484', '1659'],
+      }),
+      {
+        seedHistoryOnlyOnFirstTick: false,
+        pollRoomId: '1484',
+        skipLiveWebSocket: true,
+      },
+    )
+
+    const firstCall = upsertAlfaClubIngestMessagesMock.mock.calls[0] as any
+    const rows = (firstCall?.[0] ?? []) as Array<{ messageId?: string; senderAddress?: string }>
+    expect(rows.map((row) => row.messageId).sort()).toEqual(['m-chip-open', 'm-human'])
+    expect(rows.find((row) => row.messageId === 'm-chip-open')?.senderAddress).toBe(
+      'trade-completed',
+    )
+    expect(rows.some((row) => row.messageId === 'm-other-bot')).toBe(false)
+  })
+
+  it('cron command-only mode still upserts Chip cards alongside slash commands', async () => {
+    const nowMs = Date.now()
+    const chipText = JSON.stringify({ coin: 'ETH', dir: 'Open Short', sz: '0.1' })
+    mockHistoryMessages([
+      {
+        id: 'm-chat',
+        date: nowMs - 5_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'gm everyone',
+      },
+      {
+        id: 'm-chip',
+        date: nowMs - 4_500,
+        sender: 'trade-completed',
+        username: 'Chip',
+        text: chipText,
+        isBot: true,
+      },
+      {
+        id: 'm-gmeow',
+        date: nowMs - 4_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([
+      {
+        roomId: '1043',
+        messageId: 'm-chip',
+        senderAddress: 'trade-completed',
+        username: 'Chip',
+        text: chipText,
+        dateMs: nowMs - 4_500,
+      },
+      {
+        roomId: '1043',
+        messageId: 'm-gmeow',
+        senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+        dateMs: nowMs - 4_000,
+      },
+    ])
+
+    await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+      ingestCommandCandidatesOnly: true,
+      skipLiveWebSocket: true,
+    })
+
+    const firstCall = upsertAlfaClubIngestMessagesMock.mock.calls[0] as any
+    const rows = (firstCall?.[0] ?? []) as Array<{ messageId?: string }>
+    expect(rows.map((row) => row.messageId).sort()).toEqual(['m-chip', 'm-gmeow'])
+    // Chip system cards must not fan out to XMTP/Telegram.
+    expect(relayRoomMessagesToXmtpMock).toHaveBeenCalledWith([
+      { roomId: '1043', messageId: 'm-gmeow', text: '/gmeow' },
+    ])
+  })
+
   it('polls Hermit room 1659 when pollRoomId is set on the tick', async () => {
     let historyRoomId = ''
     globalThis.fetch = vi.fn(async (input) => {
@@ -1220,6 +1347,35 @@ describe('AlfaClub chat bridge cron helpers', () => {
       }),
     ).toBe(false)
   })
+
+  it('accepts Chip / trade-completed as history ingest senders', () => {
+    expect(isAlfaClubHistoryIngestSender({ sender: 'trade-completed' })).toBe(true)
+    expect(isAlfaClubHistoryIngestSender({ sender: 'chip', username: 'Chip' })).toBe(true)
+    expect(
+      isAlfaClubHistoryIngestSender({
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+      }),
+    ).toBe(true)
+    expect(isAlfaClubHistoryIngestSender({ sender: 'some-bot' })).toBe(false)
+    expect(
+      isHistoryMessageChipIngestCandidate({
+        id: 'chip-1',
+        date: Date.now(),
+        sender: 'trade-completed',
+        username: 'Chip',
+        text: JSON.stringify({ coin: 'HYPE', dir: 'Open Long', sz: '0.65' }),
+        isBot: true,
+      }),
+    ).toBe(true)
+    expect(
+      isHistoryMessageChipIngestCandidate({
+        id: 'human-1',
+        date: Date.now(),
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'gm',
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('inverse opinion decision ordering', () => {
@@ -1252,7 +1408,15 @@ describe('inverse opinion decision ordering', () => {
       counterSide: 'short',
       pair: 'BTC',
     })
-    tryClaimCommandReplyMock.mockClear()
+    // Reset (not clear): prior tests may leave unused mockResolvedValueOnce entries.
+    tryClaimCommandReplyMock.mockReset()
+    tryClaimCommandReplyMock.mockImplementation(
+      async ({ messageId }: { roomId: string; messageId: string }) => {
+        if (repliedCommandLedgerMock.has(messageId)) return false
+        repliedCommandLedgerMock.add(messageId)
+        return true
+      },
+    )
   })
 
   afterEach(() => {
@@ -1508,7 +1672,15 @@ describe('data-driven room channel origin-aware outbound fan-out', () => {
   const realFetch = globalThis.fetch
 
   function makeInboundMessage(
-    overrides: Partial<{ roomId: string; id: string; date: number; sender: string; text: string }> = {},
+    overrides: Partial<{
+      roomId: string
+      id: string
+      date: number
+      sender: string
+      text: string
+      username: string
+      isBot: boolean
+    }> = {},
   ) {
     return {
       roomId: '1659',
@@ -1613,6 +1785,51 @@ describe('data-driven room channel origin-aware outbound fan-out', () => {
     await _ingestLiveMessagesForTests([], makeFlags({ roomId: '1659' }))
 
     expect(upsertAlfaClubIngestMessagesMock).not.toHaveBeenCalled()
+    expect(relayRoomMessagesToXmtpMock).not.toHaveBeenCalled()
+  })
+
+  it('ingests live Chip cards with username/isBot and skips XMTP/Telegram fan-out', async () => {
+    const chipText = JSON.stringify({ coin: 'HYPE', dir: 'Open Long', sz: '0.65' })
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([
+      {
+        roomId: '1484',
+        messageId: 'chip-live-1',
+        senderAddress: 'trade-completed',
+        username: 'Chip',
+        text: chipText,
+        dateMs: 1000,
+        rawPayloadText: null,
+      },
+    ])
+
+    await _ingestLiveMessagesForTests(
+      [
+        makeInboundMessage({
+          roomId: '1484',
+          id: 'chip-live-1',
+          sender: 'trade-completed',
+          username: 'Chip',
+          isBot: true,
+          text: chipText,
+        }),
+      ],
+      makeFlags({
+        roomId: '1484',
+        telegramRelayEnabled: true,
+        telegramRelayBotToken: 'tg-token',
+        telegramRelayChatId: '-100123',
+      }),
+    )
+
+    const upsertRows = upsertAlfaClubIngestMessagesMock.mock.calls[0]?.[0] as Array<{
+      senderAddress?: string
+      username?: string | null
+      isBot?: boolean | null
+    }>
+    expect(upsertRows).toHaveLength(1)
+    expect(upsertRows[0]?.senderAddress).toBe('trade-completed')
+    expect(upsertRows[0]?.username).toBe('Chip')
+    expect(upsertRows[0]?.isBot).toBe(true)
     expect(relayRoomMessagesToXmtpMock).not.toHaveBeenCalled()
   })
 })

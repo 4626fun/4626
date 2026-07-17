@@ -70,6 +70,7 @@ import {
   readInverseAkitaChatReactionRoomIds,
   setInverseAkitaRuntimeReactionRoomIds,
 } from './inverseAkitaChatReactionPolicy.js'
+import { isAlfaClubChipSystemMessage } from './inverseAkitaChatTradeEvent.js'
 import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptureConfig.js'
 import { claimInverseOpinionTradeIntent } from './inverseOpinionTradeRecorder.js'
 import { deliverInverseOpinionTerminalReply } from './inverseOpinionTerminalReplyDelivery.js'
@@ -731,6 +732,30 @@ export function isHistoryMessageCommandCandidate(message: AlfaClubRoomHistoryMes
   const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, normalized.sender)
   const bareArena = normalizeBareArenaCommand(commandText)
   return trustedBareGmeow || Boolean(bareArena) || isAlfaClubSlashCommandText(commandText)
+}
+
+/**
+ * Wallet senders plus Chip / `trade-completed` system cards.
+ * Chip sender is usually the non-hex token `trade-completed` (UI label "Chip").
+ */
+export function isAlfaClubHistoryIngestSender(params: {
+  sender: string
+  username?: string | null
+}): boolean {
+  const sender = String(params.sender ?? '').trim().toLowerCase()
+  if (!sender) return false
+  if (isHexAddress(sender)) return true
+  return isAlfaClubChipSystemMessage({ sender, username: params.username })
+}
+
+/** Chip trade cards should land in chat_ingest even in cron command-only mode. */
+export function isHistoryMessageChipIngestCandidate(message: AlfaClubRoomHistoryMessage): boolean {
+  const id = String(message.id ?? '').trim()
+  if (!id) return false
+  const sender = String(message.sender ?? '').trim().toLowerCase()
+  const username = typeof message.username === 'string' ? message.username : null
+  if (!isAlfaClubHistoryIngestSender({ sender, username })) return false
+  return isAlfaClubChipSystemMessage({ sender, username })
 }
 
 /**
@@ -2868,15 +2893,25 @@ async function fanOutInsertedRoomMessages(
     senderAddress: string
     text: string
     dateMs: number | null
+    username?: string | null
     rawPayloadText?: string | null
   }>,
   flags: AlfaClubChatBridgeFlags,
 ): Promise<void> {
-  if (inserted.length === 0) return
+  // Chip / trade-completed cards are system JSON — persist them, but do not
+  // echo trade payloads into Telegram/XMTP room bridges.
+  const relayable = inserted.filter(
+    (message) =>
+      !isAlfaClubChipSystemMessage({
+        sender: message.senderAddress,
+        username: message.username,
+      }),
+  )
+  if (relayable.length === 0) return
   const originsByRoom = new Map<string, Map<string, ChatBridgeMessageOrigin>>()
   const bindingsByRoom = new Map<string, Awaited<ReturnType<typeof lookupEnabledAlfaClubRoomChannelBindingByRoom>>>()
-  for (const roomId of new Set(inserted.map((message) => message.roomId))) {
-    const messageIds = inserted.filter((message) => message.roomId === roomId).map((message) => message.messageId)
+  for (const roomId of new Set(relayable.map((message) => message.roomId))) {
+    const messageIds = relayable.filter((message) => message.roomId === roomId).map((message) => message.messageId)
     const [origins, binding] = await Promise.all([
       getChatBridgeMessageOrigins({ roomId, messageIds }),
       lookupEnabledAlfaClubRoomChannelBindingByRoom(roomId),
@@ -2886,7 +2921,7 @@ async function fanOutInsertedRoomMessages(
   }
 
   const xmtpRelay = await relayRoomMessagesToXmtp(
-    inserted.map((message) => ({
+    relayable.map((message) => ({
       roomId: message.roomId,
       messageId: message.messageId,
       text: message.text,
@@ -2900,7 +2935,7 @@ async function fanOutInsertedRoomMessages(
   }
 
   if (!flags.telegramRelayBotToken) return
-  for (const message of inserted) {
+  for (const message of relayable) {
     const binding = bindingsByRoom.get(message.roomId)?.binding
     if (!binding?.telegram.enabled || !binding.telegram.chatId) continue
     if (originsByRoom.get(message.roomId)?.get(message.messageId) === 'telegram') continue
@@ -2951,6 +2986,8 @@ async function ingestLiveMessages(
       senderAddress: message.sender,
       text: message.text,
       dateMs: message.date,
+      username: message.username ?? null,
+      isBot: typeof message.isBot === 'boolean' ? message.isBot : null,
       attachmentsJson: message.attachments,
       replyAttachmentsJson: message.replyAttachments,
       messagePayloadJson: message.rawPayloadText ? (() => {
@@ -3980,12 +4017,18 @@ async function runBridgeTick(
   let newlyIngestedHistoryIds: Set<string> | null = null
   try {
     const ingestSourceMessages = options.ingestCommandCandidatesOnly
-      ? fetchedMessages.filter(isHistoryMessageCommandCandidate)
+      ? fetchedMessages.filter(
+          (message) =>
+            isHistoryMessageCommandCandidate(message) ||
+            isHistoryMessageChipIngestCandidate(message),
+        )
       : fetchedMessages
     const historyIngestRows: AlfaClubIngestMessage[] = ingestSourceMessages.flatMap((message) => {
       const id = String(message.id ?? '').trim()
       const sender = String(message.sender ?? '').trim().toLowerCase()
-      if (!id || !isHexAddress(sender)) return []
+      const username = typeof message.username === 'string' ? message.username : null
+      // Persist wallet chat + Chip / trade-completed system cards (non-hex sender).
+      if (!id || !isAlfaClubHistoryIngestSender({ sender, username })) return []
       const date = Number(message.date)
       const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
       const editDeadlineRaw = Number(message.edit_deadline)
