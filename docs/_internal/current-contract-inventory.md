@@ -6,12 +6,12 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Updated on: 2026-07-17
-Scope: current live `v1.19.1` greenfield shared infrastructure.
+Scope: current live `v1.19.2` shared infrastructure (v1.19.1 greenfield addresses).
 
 ## Sources
 
 1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
-2. Bytecode / codeId manifest: sealed `deployments/base/v1.19.1-bytecode-manifest.json`; source-ahead Phase2 `deployments/base/v1.19.1-phase2-source-bytecode-manifest.json`
+2. Bytecode / codeId manifest: `deployments/base/v1.19.2-bytecode-manifest.json` (historical seal: `v1.19.1-bytecode-manifest.json`)
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.19.1-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment

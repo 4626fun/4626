@@ -31,7 +31,7 @@ export const PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('17163e67dED6B45bd
 export const PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('A9024e1B89C5Be34502A275576Cc137473d65839')
 /** v1.18.0 greenfield epoch (superseded by v1.19.1 greenfield). */
 export const PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('02D7abC547F8B1e7E2D7a919D8D1005918361750')
-/** v1.19.1 greenfield epoch: fresh shared/global + phased deploy infra. */
+/** v1.19.2 epoch (v1.19.1 greenfield addresses + Phase2/wrapper bytecode cutover). */
 export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a18169caf37fa0347285B16aAFC2B09eCB43F145')
 /** Retired v1.19.1 greenfield Phase1Module (agentVaultCoreModule == creator core). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V1191_HANDOFF = addr('7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc')
@@ -50,7 +50,7 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD
 export const SPLIT_PHASE1_PHASE2_MODULE_V1191_HANDOFF = addr('0DDac7f1A3EA3796b31709Ed2270Cf0876A98460')
 /**
  * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
- * Source-ahead bytecode epoch: `deployments/base/v1.19.1-phase2-source-bytecode-manifest.json`.
+ * Bytecode epoch: `deployments/base/v1.19.2-bytecode-manifest.json`.
  */
 export const SPLIT_PHASE1_PHASE2_MODULE = addr('3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba')
 export const SPLIT_PHASE1_PHASE3_HELPER = addr('C54Fb8d8232a8a654E512b3bDf761c8Eb2783B74')

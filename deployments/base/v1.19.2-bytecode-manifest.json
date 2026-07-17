@@ -1,6 +1,6 @@
 {
-  "release": "v1.19.1-phase2-source",
-  "generatedAt": "2026-07-17T12:23:57Z",
+  "release": "v1.19.2",
+  "generatedAt": "2026-07-17T14:44:34Z",
   "chain": "base",
   "chainId": 8453,
   "contracts": {
@@ -75,14 +75,14 @@
       "creationBytecodeBytes": 26305
     },
     "CreatorOVaultWrapper": {
-      "creationBytecodeHash": "0xeebaec27686902ab28740a18332c50549aa7b095974a8c834a11dc22d939f8f8",
-      "codeId": "0xeebaec27686902ab28740a18332c50549aa7b095974a8c834a11dc22d939f8f8",
-      "creationBytecodeBytes": 11145
+      "creationBytecodeHash": "0xfaa03d8a3275eef294fc9a222e8f8f2af0c20a0e1977891ec078bd3479638d30",
+      "codeId": "0xfaa03d8a3275eef294fc9a222e8f8f2af0c20a0e1977891ec078bd3479638d30",
+      "creationBytecodeBytes": 11161
     },
     "AgentOVaultWrapper": {
-      "creationBytecodeHash": "0x885fffecabe98a1620fc8e40b7171f623b757a61ade25e12337b61fc90237d4c",
-      "codeId": "0x885fffecabe98a1620fc8e40b7171f623b757a61ade25e12337b61fc90237d4c",
-      "creationBytecodeBytes": 11166
+      "creationBytecodeHash": "0xc0d353999de748b5b75296fd5f6af519e48dafdf1fb94f0192ae435a16045480",
+      "codeId": "0xc0d353999de748b5b75296fd5f6af519e48dafdf1fb94f0192ae435a16045480",
+      "creationBytecodeBytes": 11182
     },
     "CreatorShareOFT": {
       "creationBytecodeHash": "0xe7d27ab64192ea41cc97d2439485563bd472b9f17bb6e1e4fe824f3596b0e9d2",

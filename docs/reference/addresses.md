@@ -5,9 +5,9 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.1** greenfield epoch (cutover 2026-07-15).
+Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.2** epoch (v1.19.1 greenfield stack; bytecode cutover 2026-07-17).
 
-v1.19.1 is live: hardened `VaultAuxiliaryDeployBatcher` `0xaA9229c1…408e` (CREATE2-authorized), seeded bytecode store (incl. `AgentRevenuePolicyController`), and `LotteryAmoeRouter` `0x630c3769…` on manager `0xB45E68a5…`. Creator + Agent canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
+v1.19.2 is live on the v1.19.1 greenfield stack: hardened `VaultAuxiliaryDeployBatcher` `0xaA9229c1…408e` (CREATE2-authorized), seeded bytecode store (incl. `AgentRevenuePolicyController`), and `LotteryAmoeRouter` `0x630c3769…` on manager `0xB45E68a5…`. Creator + Agent canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
@@ -41,11 +41,11 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | VaultAuxiliaryDeployBatcher | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` (hardened v1.19.1; authorized) |
 
 Notes:
-- **v1.19.1** is the shared/global infrastructure epoch and the per-creator
-  bytecode/CREATE2 namespace for new launches.
-- Live `DeploymentBatcherPhase2Module` was hot-swapped to `0x3089678d…` (AA95 /
-  vaultKind wiring). Source artifacts track `deployments/base/v1.19.1-phase2-source-bytecode-manifest.json`;
-  the sealed store seed set remains `v1.19.1`. Prior module `0x0DDac7f1…` is superseded.
+- **v1.19.2** is the current shared/global + per-creator bytecode/CREATE2
+  namespace. Infra addresses match the v1.19.1 greenfield deploy.
+- Live `DeploymentBatcherPhase2Module` is `0x3089678d…` (AA95 / vaultKind).
+  Manifest: `deployments/base/v1.19.2-bytecode-manifest.json`. Prior module `0x0DDac7f1…` superseded.
+  Store reseed required for Phase2 + OVault wrapper codeIds before CREATE2-from-store deploy.
 - Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
   new store/deployer/batcher stack.
 - Prior v1.18.0 stack (registry `0xDb8570…`, batcher `0x02D7…`, aux `0xde93…`)
