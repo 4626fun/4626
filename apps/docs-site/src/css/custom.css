@@ -895,7 +895,8 @@ code {
 
 .table-wrap table {
   margin: 0;
-  min-width: 640px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .table-wrap table th {
@@ -1360,7 +1361,8 @@ details > :not(summary) {
   }
 
   .table-wrap table {
-    min-width: 520px;
+    width: max-content;
+    min-width: 100%;
   }
 
   .markdown :is(pre, .theme-code-block, .docusaurus-mermaid-container, .table-wrap) {
@@ -1947,6 +1949,44 @@ details > :not(summary) {
   padding: 0.35rem 0.75rem 0.35rem 0;
   border: none;
   vertical-align: top;
+}
+
+/* Glance key/value tables: no scroll chrome (fades / sticky / forced min-width) */
+.theme-doc-markdown .docs-at-a-glance .table-wrap {
+  overflow-x: visible;
+  margin: 0.5rem 0 0;
+  background: none;
+}
+
+.theme-doc-markdown .docs-at-a-glance .table-wrap table {
+  width: 100%;
+  min-width: 0;
+}
+
+.theme-doc-markdown .docs-at-a-glance .table-wrap table th:first-child,
+.theme-doc-markdown .docs-at-a-glance .table-wrap table td:first-child {
+  position: static;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Empty markdown header row (| | |) + Infima zebra stripes look broken in glance cards */
+.theme-doc-markdown .docs-at-a-glance table thead {
+  display: none;
+}
+
+.theme-doc-markdown .docs-at-a-glance table,
+.theme-doc-markdown .docs-at-a-glance table thead,
+.theme-doc-markdown .docs-at-a-glance table tr,
+.theme-doc-markdown .docs-at-a-glance table tr:nth-child(2n),
+.theme-doc-markdown .docs-at-a-glance table th,
+.theme-doc-markdown .docs-at-a-glance table td {
+  background: transparent !important;
+}
+
+.theme-doc-markdown .docs-at-a-glance table th,
+.theme-doc-markdown .docs-at-a-glance table td {
+  border: none !important;
 }
 
 /* ============================================
