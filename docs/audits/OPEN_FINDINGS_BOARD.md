@@ -89,20 +89,22 @@ Update statuses in place as work lands. Prefer linking a PR or commit when closi
 
 **Gate:** Solana **B2 `relay_entries` stays off**. M2-12/13 and pool verification are not sufficient. The source-event identity, durable inbox, keeper-Twin transport, and token/pool compatibility gates in [the 2026-07-11 integration audit](./solana-lottery-relay-integration-audit-2026-07-11.md) must also close; the retired Twin adapter must remain out of active config.
 
-### Solana lottery relay integration (2026-07-11)
+### Solana lottery relay integration (2026-07-11 → LZ-era close 2026-07-17)
 
 | ID | Status | Gate |
 |----|--------|------|
-| SOL-P0-01 | Mitigated / transport open | KPR fails closed; build reviewed Solana→Base keeper-Twin attached-call transport |
-| SOL-P0-02 | Open | Finalized `(genesis, program, signature, event index)` identity + durable atomic inbox |
-| SOL-P0-03 | Closed / superseded | Adapter wiring gate superseded by retirement; retired Twin adapter must remain out of active config |
-| SOL-P0-04 | Open | Resolve standard SPL vs Token-2022 TransferHook pool incompatibility |
-| SOL-P1-01 | Open | Durable atomic inbox/cursor and crash-after-submit recovery |
-| SOL-P1-02 | Open | Event-log ingestion must replace lossy 256-entry ring buffer as canonical source |
+| SOL-P0-01 | Fixed in source / enablement blocked | Twin retired; fail-closed LZ `MSG_TYPE_LOTTERY_ENTRY` transport modules; OApp peer + flag remain unset |
+| SOL-P0-02 | Fixed in source | Finalized `(genesis, program, signature, ix, event index)` + `solana_lottery_entry_inbox` |
+| SOL-P0-03 | Closed / superseded | Retired Twin adapter must remain out of active config |
+| SOL-P0-04 | Fixed in source / venue canary deferred | B1 SPL = trading only; B2 Token-2022+Meteora `token_badge` = eligibility; one-buy→one-event tests |
+| SOL-P1-01 | Fixed in source | Durable inbox + `FOR UPDATE SKIP LOCKED` lease + crash-after-submit recovery |
+| SOL-P1-02 | Fixed in source | Event-log ingest canonical; 256 ring buffer reconciliation-only |
 | SOL-P1-03 | Fixed in source | Injective winner maps + strict `u64` payout |
 | SOL-P1-04 | Fixed in source / undeployed | Registry bytes32 reverse-map conflict protection |
 | SOL-P1-05 | Fixed | B2 missing-RPC and wrong-owner checks fail closed |
-| SOL-P1-06 | Fixed | KPR v1.18 defaults + release guard |
+| SOL-P1-06 | Fixed | KPR defaults + release guard |
+
+**Verdicts (unchanged):** `Solana personal veLottery boost safe to enable: NO` · `Solana base-odds relay safe to enable: NO` (live OApp peer + ops canary still required). Relay flag must stay `0`. Detail: `docs/_internal/audits-workpapers/solana-lottery-relay-lz-era-close-2026-07-17.md`.
 
 ---
 

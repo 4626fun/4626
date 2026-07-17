@@ -1093,6 +1093,13 @@ export async function ensureSolanaCreatorRelayConfigSchema(db: Db): Promise<void
   })
 }
 
+/** Durable Solana lottery entry inbox + ingest cursor (LZ-era exactly-once). */
+export async function ensureSolanaLotteryEntryInboxSchema(db: Db): Promise<void> {
+  await withEnsureOnce('solanaLotteryEntryInbox', async () => {
+    await ensureMigrationApplied(db, '20260717090000_solana_lottery_entry_inbox.sql').catch(() => {})
+  })
+}
+
 /** Base MCP human-approval requests (durable approval flow store). */
 export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
   await withEnsureOnce('baseMcpApproval', async () => {

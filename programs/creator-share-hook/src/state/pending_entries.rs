@@ -31,8 +31,11 @@ impl LotteryEntry {
 /// 12KB buffer on the SBF stack. The runtime memory-maps the account data
 /// directly, keeping stack usage minimal.
 ///
-/// The keeper relays this buffer periodically and forwards entries to Base.
 /// Overflow policy: drop-oldest (head advances, oldest overwritten).
+///
+/// **Not canonical for exactly-once:** finalized buy-path event logs are the
+/// durable eligibility source. This buffer is a hint/cache for reconciliation
+/// only (SOL-P1-02).
 #[account(zero_copy)]
 #[derive(Debug)]
 #[repr(C)]

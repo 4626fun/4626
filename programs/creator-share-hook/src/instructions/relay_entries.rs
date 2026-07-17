@@ -6,13 +6,19 @@ use crate::errors::CreatorShareHookError;
 use crate::events::*;
 use crate::state::*;
 
-/// Keeper-only: emit and clear all pending lottery entries for relay.
+/// Keeper-only: re-emit and clear the PendingEntries ring buffer.
 ///
-/// The keeper calls this to relay the PendingEntries ring buffer, then
-/// relays the entries to Base via `SolanaBridgeAdapter.processLotteryEntryFromSolana()`.
+/// **LZ-era tombstone:** Twin `SolanaBridgeAdapter` / keeper attached-call
+/// transport is retired. This instruction is a reconciliation helper only —
+/// the 256-entry ring buffer is **not** the canonical eligibility source.
+/// Durable ingestion must read finalized `LotteryEntryRecorded` logs from the
+/// buy-path TransferHook instruction (not this re-emit), keyed by
+/// `(genesis, program_id, signature, instruction_index, event_index)`.
 ///
-/// Entries are emitted as an Anchor event for the keeper to read from
-/// the transaction logs. The buffer is reset after relay.
+/// Consumers must classify by enclosing instruction: buy-path
+/// `transfer_hook`/`execute` vs this `relay_entries` re-emit share the same
+/// event name. Solana→Base submission is LayerZero `MSG_TYPE_LOTTERY_ENTRY`
+/// only; never EOA → `processSwapLottery`.
 #[derive(Accounts)]
 pub struct RelayEntries<'info> {
     /// The keeper authority (must match `creator_config.keeper_authority`).

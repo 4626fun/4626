@@ -532,17 +532,17 @@ describe('keeper job coordination handlers', () => {
       CRON_SECRET: 'cron-secret-for-solana-reconcile',
       KEEPER_SOLANA_RECONCILE_ENABLED: '1',
       KEEPER_SOLANA_RECONCILE_WORKFLOW: 'solana-orchestrator',
-      KEEPER_SOLANA_RECONCILE_ACTIONS: 'relay_entries,settle_fees',
+      KEEPER_SOLANA_RECONCILE_ACTIONS: 'settle_fees,price_monitor',
       KEEPER_SOLANA_RECONCILE_CHECKPOINT_PREFIX: 'test-window',
     })
     try {
       dbSqlMock
         .mockResolvedValueOnce({
-          rows: [jobRow({ id: 601, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:relay_entries' })],
+          rows: [jobRow({ id: 601, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:settle_fees' })],
           rowCount: 1,
         })
         .mockResolvedValueOnce({
-          rows: [jobRow({ id: 602, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:settle_fees' })],
+          rows: [jobRow({ id: 602, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:price_monitor' })],
           rowCount: 1,
         })
       const req = createMockReq({
@@ -556,8 +556,8 @@ describe('keeper job coordination handlers', () => {
       expect(res.statusCode).toBe(200)
       expect(res.body?.data?.enabled).toBe(true)
       expect(res.body?.data?.jobs?.map((job: any) => job.dedupeKey)).toEqual([
-        'solana-reconcile:solana-orchestrator:test-window:relay_entries',
         'solana-reconcile:solana-orchestrator:test-window:settle_fees',
+        'solana-reconcile:solana-orchestrator:test-window:price_monitor',
       ])
     } finally {
       restoreEnv()

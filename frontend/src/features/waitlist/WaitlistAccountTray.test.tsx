@@ -148,7 +148,7 @@ describe('WaitlistAccountTray', () => {
     expect(screen.queryByLabelText('Open account menu')).toBeNull()
   })
 
-  it('shows a closed corner trigger and opens identity tab with wallets, identities, and post-join shell', () => {
+  it('shows a closed corner trigger and opens the same three-tab tray as the app', () => {
     renderTray()
 
     const trigger = screen.getByLabelText('Open account menu')
@@ -163,12 +163,22 @@ describe('WaitlistAccountTray', () => {
     expect(screen.getByTestId('identities-panel')).toBeTruthy()
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
     expect(screen.getByRole('button', { name: /^identity$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^portfolio$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^points$/i })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
     expect(screen.getAllByRole('button', { name: /sign out/i }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('link', { name: /^help$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^accounts$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^settings$/i })).toBeTruthy()
+  })
+
+  it('shows the portfolio placeholder with enter-app CTA on the portfolio tab', () => {
+    renderTray()
+    fireEvent.click(screen.getByLabelText('Open account menu'))
+    fireEvent.click(screen.getByRole('button', { name: /^portfolio$/i }))
+
+    expect(screen.getByText(/token balances and activity are available in the app/i)).toBeTruthy()
+    expect(screen.getByRole('link', { name: /enter app/i })).toBeTruthy()
   })
 
   it('auto-opens the tray once when a required setup step (wallet provisioning / owner-install signing) is pending', async () => {

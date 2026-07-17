@@ -129,7 +129,7 @@ Prerequisite: Path 1 complete.
 
 1. Meteora admin **`token_badge`** → `setup-creator-full` PDAs → allowlist Meteora program (**before** pool).
 2. Pool on **same** hook mint; seed LP.
-3. Keep orchestrator relay disabled. The current Meteora/TransferHook compatibility claim, finalized source-event identity, durable inbox, and keeper transport must all be proven before an end-to-end canary.
+3. Keep orchestrator relay disabled. Source gates for finalized identity, durable inbox, and fail-closed LZ transport closed 2026-07-17; live Meteora/TransferHook buy canary + Solana lottery OApp peer authorization remain required before enablement.
 
 ### Meteora UI + display
 

@@ -32,6 +32,24 @@ Do not use the historical bridge-wrapped creator SPL (for example AKITA
 `9JWh…`) as the share-lottery token. The removed Twin adapter/provisioner grain
 is out of scope for share-mesh policy.
 
+
+## Canonical Solana lottery eligibility (SOL-P0-04, LZ-era)
+
+| Lane | Mint | Venue | Solana lottery eligibility |
+|------|------|-------|------------------------------|
+| **B1 (default)** | LZ **standard SPL** share mesh (`■TICKER`) | Optional Meteora DLMM | **None** — lottery stays on Base Uniswap ShareOFT buys |
+| **B2 (hook)** | **Token-2022 + TransferHook** share mint | Meteora DLMM **after** admin `token_badge` | Buy-path `LotteryEntryRecorded` only (one authentic event per qualifying transfer) |
+
+**Resolution of the prior mint/pool contradiction:** Meteora does not accept TransferHook mints until an admin `token_badge` is issued. That is a sequenced B2 prerequisite, not a dual-mint design. B1 and B2 must never share the same mint identity.
+
+**Ring buffer:** 256-entry `PendingEntries` is reconciliation-only (lossy). Canonical source = finalized buy-path tx logs keyed by `(cluster_genesis_hash, program_id, signature, instruction_index, event_index)`.
+
+**Transport:** Twin adapter retired. Solana→Base submission is LayerZero `MSG_TYPE_LOTTERY_ENTRY` into current LM auth (`authorizedRemoteOFTs` / hub ShareOFT forwarder). Fail closed when the Solana lottery OApp peer is unavailable. Relay flag stays off.
+
+**Identity:** Base beneficiary = parent CSW of the unique linked account whose canonical Solana wallet matches the buyer pubkey. Coverage forced to `0` (base-odds-only). Missing/ambiguous mapping → quarantine.
+
+**Verdicts:** personal veLottery boost = NO; base-odds relay enablement = NO until inbox + LZ peer + ops canary.
+
 ## B1 vs B2 (Phase B fork)
 
 | | **B1 — default** | **B2 — on-chain hook** |

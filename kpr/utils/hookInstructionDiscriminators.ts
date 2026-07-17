@@ -21,3 +21,13 @@ function anchorDiscriminator(globalName: string): Buffer {
 export function settleFeesInstructionDiscriminator(schema = resolveHookInstructionSchema()): Buffer {
   return anchorDiscriminator(schema === 'legacy' ? 'global:flush_fees' : 'global:settle_fees')
 }
+
+/** Buy-path TransferHook execute (eligibility). Distinct from relay_entries re-emit. */
+export function transferHookInstructionDiscriminator(): Buffer {
+  return anchorDiscriminator('global:transfer_hook')
+}
+
+/** Keeper ring-buffer re-emit — not a canonical eligibility source (SOL-P1-02). */
+export function relayEntriesInstructionDiscriminator(): Buffer {
+  return anchorDiscriminator('global:relay_entries')
+}

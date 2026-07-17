@@ -109,35 +109,56 @@ pub fn handler(mut ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     process_transfer_hook(&mut ctx.accounts, amount)
 }
 
+/// Resolve a lottery-eligible buyer for one TransferHook invocation.
+///
+/// Returns `Ok(Some(buyer))` when this call must emit exactly one
+/// `LotteryEntryRecorded`. Returns `Ok(None)` for non-buys / lottery-off
+/// (silent no-op). Errors on forged token accounts (audit C-01 / H2-06).
+///
+/// One qualifying buy transfer ⇒ one authentic eligibility event (SOL-P0-04).
+/// Two qualifying instructions in one transaction each call this once ⇒ two
+/// events with distinct instruction indices for durable source identity.
+pub(crate) fn resolve_lottery_buy_buyer(
+    config: &CreatorConfig,
+    authority: &Pubkey,
+    mint: &Pubkey,
+    source_token_account: &AccountInfo,
+    destination_token_account: &AccountInfo,
+) -> Result<Option<Pubkey>> {
+    if !config.lottery_enabled {
+        return Ok(None);
+    }
+    if !config.is_known_amm(authority) {
+        return Ok(None);
+    }
+
+    let source_owner = require_transferring_token_account(source_token_account, mint)?;
+    if !is_allowlisted_buy(config, authority, &source_owner) {
+        return Ok(None);
+    }
+
+    let buyer = require_transferring_token_account(destination_token_account, mint)?;
+    if buyer == Pubkey::default() {
+        return Ok(None);
+    }
+    Ok(Some(buyer))
+}
+
 pub fn process_transfer_hook(accounts: &mut TransferHook, amount: u64) -> Result<()> {
     let config = &accounts.creator_config;
-
-    if !config.lottery_enabled {
-        return Ok(());
-    }
     let authority = accounts.authority.key();
-    if !config.is_known_amm(&authority) {
-        return Ok(());
-    }
-
-    // Both token accounts must be genuine Token-2022 accounts of this mint
-    // with the runtime `transferring` flag set — i.e. we are inside a real
-    // Token-2022 transfer of the hooked share mint, not a forged direct
-    // invocation (audit C-01 / H2-06).
     let mint_key = accounts.mint.key();
-    let source_owner =
-        require_transferring_token_account(&accounts.source_token_account, &mint_key)?;
-    // Treat as AMM buy only when runtime transfer authority is allowlisted AND
-    // matches the source token-account owner field.
-    if !is_allowlisted_buy(config, &authority, &source_owner) {
-        return Ok(());
-    }
 
-    let buyer =
-        require_transferring_token_account(&accounts.destination_token_account, &mint_key)?;
-    if buyer == Pubkey::default() {
+    let Some(buyer) = resolve_lottery_buy_buyer(
+        config,
+        &authority,
+        &mint_key,
+        &accounts.source_token_account,
+        &accounts.destination_token_account,
+    )?
+    else {
         return Ok(());
-    }
+    };
 
     let clock = Clock::get()?;
     let entry = LotteryEntry {
@@ -156,6 +177,7 @@ pub fn process_transfer_hook(accounts: &mut TransferHook, amount: u64) -> Result
         });
     }
 
+    // Exactly one LotteryEntryRecorded per qualifying TransferHook call.
     emit!(LotteryEntryRecorded {
         creator_mint: config.creator_mint,
         buyer,
@@ -321,5 +343,139 @@ mod tests {
         );
         let err = require_transferring_token_account(&account_info, &mint).unwrap_err();
         assert_eq!(err, CreatorShareHookError::InvalidTokenAccount.into());
+    }
+
+    // ── SOL-P0-04: one qualifying buy ⇒ one authentic eligibility event ──
+
+    fn account_info_from_data<'a>(
+        key: &'a Pubkey,
+        lamports: &'a mut u64,
+        data: &'a mut [u8],
+        owner: &'a Pubkey,
+    ) -> AccountInfo<'a> {
+        AccountInfo::new(key, false, false, lamports, data, owner, false)
+    }
+
+    #[test]
+    fn qualifying_buy_resolves_exactly_one_buyer() {
+        let amm = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let buyer = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+
+        let src_key = Pubkey::new_unique();
+        let dst_key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut src_lamports = 1_000_000u64;
+        let mut dst_lamports = 1_000_000u64;
+        let mut src_data = make_token_account_data(&mint, &amm, Some(true));
+        let mut dst_data = make_token_account_data(&mint, &buyer, Some(true));
+        let src = account_info_from_data(&src_key, &mut src_lamports, &mut src_data, &program_owner);
+        let dst = account_info_from_data(&dst_key, &mut dst_lamports, &mut dst_data, &program_owner);
+
+        let resolved =
+            resolve_lottery_buy_buyer(&config, &amm, &mint, &src, &dst).unwrap();
+        assert_eq!(resolved, Some(buyer));
+    }
+
+    #[test]
+    fn non_amm_authority_records_zero_events() {
+        let amm = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let buyer = Pubkey::new_unique();
+        let other = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+
+        let src_key = Pubkey::new_unique();
+        let dst_key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut src_lamports = 1_000_000u64;
+        let mut dst_lamports = 1_000_000u64;
+        let mut src_data = make_token_account_data(&mint, &other, Some(true));
+        let mut dst_data = make_token_account_data(&mint, &buyer, Some(true));
+        let src = account_info_from_data(&src_key, &mut src_lamports, &mut src_data, &program_owner);
+        let dst = account_info_from_data(&dst_key, &mut dst_lamports, &mut dst_data, &program_owner);
+
+        let resolved =
+            resolve_lottery_buy_buyer(&config, &other, &mint, &src, &dst).unwrap();
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn lottery_disabled_records_zero_events() {
+        let amm = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let buyer = Pubkey::new_unique();
+        let mut config = config_with_known_amm(amm);
+        config.lottery_enabled = false;
+
+        let src_key = Pubkey::new_unique();
+        let dst_key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut src_lamports = 1_000_000u64;
+        let mut dst_lamports = 1_000_000u64;
+        let mut src_data = make_token_account_data(&mint, &amm, Some(true));
+        let mut dst_data = make_token_account_data(&mint, &buyer, Some(true));
+        let src = account_info_from_data(&src_key, &mut src_lamports, &mut src_data, &program_owner);
+        let dst = account_info_from_data(&dst_key, &mut dst_lamports, &mut dst_data, &program_owner);
+
+        let resolved =
+            resolve_lottery_buy_buyer(&config, &amm, &mint, &src, &dst).unwrap();
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn forged_not_transferring_rejects_buy_path() {
+        let amm = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let buyer = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+
+        let src_key = Pubkey::new_unique();
+        let dst_key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut src_lamports = 1_000_000u64;
+        let mut dst_lamports = 1_000_000u64;
+        let mut src_data = make_token_account_data(&mint, &amm, Some(false));
+        let mut dst_data = make_token_account_data(&mint, &buyer, Some(true));
+        let src = account_info_from_data(&src_key, &mut src_lamports, &mut src_data, &program_owner);
+        let dst = account_info_from_data(&dst_key, &mut dst_lamports, &mut dst_data, &program_owner);
+
+        let err = resolve_lottery_buy_buyer(&config, &amm, &mint, &src, &dst).unwrap_err();
+        assert_eq!(err, CreatorShareHookError::TransferNotInProgress.into());
+    }
+
+    #[test]
+    fn two_qualifying_ixs_yield_two_independent_buyers() {
+        // Two TransferHook CPIs in one tx each resolve once — durable identity
+        // distinguishes them via instruction_index, not buyer/amount/slot alone.
+        let amm = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let buyer_a = Pubkey::new_unique();
+        let buyer_b = Pubkey::new_unique();
+        let config = config_with_known_amm(amm);
+        let program_owner = token_2022::ID;
+
+        let src_key = Pubkey::new_unique();
+        let dst_a_key = Pubkey::new_unique();
+        let dst_b_key = Pubkey::new_unique();
+        let mut src_lamports = 1_000_000u64;
+        let mut dst_a_lamports = 1_000_000u64;
+        let mut dst_b_lamports = 1_000_000u64;
+        let mut src_data = make_token_account_data(&mint, &amm, Some(true));
+        let mut dst_a_data = make_token_account_data(&mint, &buyer_a, Some(true));
+        let mut dst_b_data = make_token_account_data(&mint, &buyer_b, Some(true));
+
+        let src = account_info_from_data(&src_key, &mut src_lamports, &mut src_data, &program_owner);
+        let dst_a =
+            account_info_from_data(&dst_a_key, &mut dst_a_lamports, &mut dst_a_data, &program_owner);
+        let dst_b =
+            account_info_from_data(&dst_b_key, &mut dst_b_lamports, &mut dst_b_data, &program_owner);
+
+        let first = resolve_lottery_buy_buyer(&config, &amm, &mint, &src, &dst_a).unwrap();
+        let second = resolve_lottery_buy_buyer(&config, &amm, &mint, &src, &dst_b).unwrap();
+        assert_eq!(first, Some(buyer_a));
+        assert_eq!(second, Some(buyer_b));
+        assert_ne!(first, second);
     }
 }

@@ -15,13 +15,12 @@ type SolanaReconcileResponse = {
   reason?: string
 }
 
+/** Maintenance-only. Twin lottery relay actions are permanently retired. */
 const VALID_ACTIONS = new Set([
-  'relay_entries',
   'settle_fees',
-  'winner_relay',
   'price_monitor',
   'graduation',
-  'rebalance',
+  'sync_mapping',
 ])
 
 function env(name: string): string {

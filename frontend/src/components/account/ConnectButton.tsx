@@ -36,7 +36,11 @@ import {
   CanonicalIdentityCard,
   CanonicalIdentityDropdown,
 } from '@/components/account/CanonicalIdentityCard'
-import { CreatorEconomyTrayModule } from '@/components/account/CreatorEconomyTrayModule'
+import {
+  RelayAccountTrayFooter,
+  RelayAccountTrayIdentityPanel,
+  useRelayAccountTrayStyles,
+} from '@/components/account/relayAccountTrayShared'
 import {
   buildTrayAssetHoldings,
   collectTrayZoraTokenKeys,
@@ -378,28 +382,7 @@ export function ConnectButton({
   const optionsPanelClassName = 'absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1'
   const isPhoneViewport = useIsPhoneViewport()
   const trayPin = isPhoneViewport ? 'bottom' : 'right'
-  const trayStyles = useMemo(() => {
-    if (isPhoneViewport) {
-      return {
-        header: {
-          minHeight: '0px',
-        },
-        content: {
-          paddingTop: '0.5rem',
-          paddingBottom: '0.75rem',
-        },
-      }
-    }
-    return {
-      header: {
-        minHeight: '0px',
-      },
-      content: {
-        paddingTop: '0.5rem',
-        paddingBottom: '0.75rem',
-      },
-    }
-  }, [isPhoneViewport])
+  const trayStyles = useRelayAccountTrayStyles(isPhoneViewport)
 
   const disconnectMainWallet = useCallback(async () => {
     const externalAddress = canonicalIdentity.externalEoaAddress
@@ -710,36 +693,27 @@ export function ConnectButton({
                 </>
               ) : null}
               {auth.hasSession && traySection === 'identity' ? (
-                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
-                  <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
-                    {creatorEconomy.view.symbolDisplay} economy
-                  </div>
-                  <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
-                    {creatorEconomy.view.statusLabel}
-                  </div>
-                  <CreatorEconomyTrayModule
-                    variant="app"
-                    loading={creatorEconomy.loading}
-                    view={creatorEconomy.view}
-                  />
-                  <div className="mt-4 h-px bg-white/[0.06]" />
-                  <CanonicalIdentityDropdown
-                    identity={canonicalIdentity}
-                    onRequestConnectWallet={() => {
+                <RelayAccountTrayIdentityPanel
+                  economyView={creatorEconomy.view}
+                  economyLoading={creatorEconomy.loading}
+                  economyVariant="app"
+                  identityDropdown={{
+                    identity: canonicalIdentity,
+                    onRequestConnectWallet: () => {
                       setShowMenu(false)
                       setShowOptions(true)
-                    }}
-                    onRequestSignOut={() => {
+                    },
+                    onRequestSignOut: () => {
                       void auth.signOut()
                       setShowMenu(false)
-                    }}
-                    signingOut={auth.busy}
-                    onRequestDisconnectMainWallet={() => {
+                    },
+                    signingOut: auth.busy,
+                    onRequestDisconnectMainWallet: () => {
                       void disconnectMainWallet()
-                    }}
-                    disconnectingMainWallet={disconnectingMainWallet}
-                  />
-                </div>
+                    },
+                    disconnectingMainWallet,
+                  }}
+                />
               ) : null}
               {auth.hasSession && traySection === 'portfolio' ? (
                 <RelayTrayPortfolioModule
@@ -786,42 +760,18 @@ export function ConnectButton({
                   <span className="app-meta-value text-zinc-400 block mt-1">No transaction.</span>
                 </button>
               ) : null}
-              {auth.hasSession ? <div className="mt-auto" /> : null}
               {auth.hasSession ? (
-                <div className="border-t border-white/8 bg-black/20">
-                  <button
-                    type="button"
-                    onClick={() => setShowMenu(false)}
-                    className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
-                  >
-                    <span className="label block text-zinc-300">Help</span>
-                  </button>
-                  <Link
-                    to="/accounts"
-                    onClick={() => setShowMenu(false)}
-                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-                  >
-                    <span className="label block text-zinc-300">Accounts</span>
-                  </Link>
-                  <Link
-                    to="/accounts"
-                    onClick={() => setShowMenu(false)}
-                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-                  >
-                    <span className="label block text-zinc-300">Settings</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void auth.signOut()
-                      setShowMenu(false)
-                    }}
-                    disabled={auth.busy}
-                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
-                  >
-                    <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
-                  </button>
-                </div>
+                <RelayAccountTrayFooter
+                  linkMode="router"
+                  accountsHref="/accounts"
+                  settingsHref="/accounts"
+                  onClose={() => setShowMenu(false)}
+                  onSignOut={() => {
+                    void auth.signOut()
+                    setShowMenu(false)
+                  }}
+                  signOutBusy={auth.busy}
+                />
               ) : null}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
           </AccountTray>
@@ -875,57 +825,51 @@ export function ConnectButton({
           >
               <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
               {traySection === 'identity' ? (
-                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
-                  <div className="mb-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[12px] text-zinc-400">
-                    Signed in. Connect your main wallet to finish setup.
-                  </div>
-                  <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
-                    {creatorEconomy.view.symbolDisplay} economy
-                  </div>
-                  <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
-                    {creatorEconomy.view.statusLabel}
-                  </div>
-                  <CreatorEconomyTrayModule
-                    variant="app"
-                    loading={creatorEconomy.loading}
-                    view={creatorEconomy.view}
-                  />
-                  <div className="mt-4 h-px bg-white/[0.06]" />
-                  {showCanonicalCard ? (
-                    <CanonicalIdentityDropdown
-                      identity={canonicalIdentity}
-                      onRequestConnectWallet={() => {
-                        setShowMenu(false)
-                        setShowOptions(true)
-                      }}
-                      onRequestSignOut={() => {
-                        void auth.signOut()
-                        setShowMenu(false)
-                      }}
-                      signingOut={auth.busy}
-                      onRequestDisconnectMainWallet={() => {
-                        void disconnectMainWallet()
-                      }}
-                      disconnectingMainWallet={disconnectingMainWallet}
-                    />
-                  ) : (
-                    <Link
-                      to="/accounts"
-                      onClick={() => setShowMenu(false)}
-                      className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.03]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-medium text-zinc-200">Account & signing</span>
-                        <span className="mt-0.5 block text-[12px] text-zinc-400">
-                          Session signer: {formatAddress(sessionAddress)}
+                <RelayAccountTrayIdentityPanel
+                  economyView={creatorEconomy.view}
+                  economyLoading={creatorEconomy.loading}
+                  economyVariant="app"
+                  banner={
+                    <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[12px] text-zinc-400">
+                      Signed in. Connect your main wallet to finish setup.
+                    </div>
+                  }
+                  walletSection={
+                    showCanonicalCard ? undefined : (
+                      <Link
+                        to="/accounts"
+                        onClick={() => setShowMenu(false)}
+                        className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.03]"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-medium text-zinc-200">Account & signing</span>
+                          <span className="mt-0.5 block text-[12px] text-zinc-400">
+                            Session signer: {formatAddress(sessionAddress)}
+                          </span>
                         </span>
-                      </span>
-                      <span className="text-[13px] text-zinc-400" aria-hidden>
-                        ›
-                      </span>
-                    </Link>
-                  )}
-                </div>
+                        <span className="text-[13px] text-zinc-400" aria-hidden>
+                          ›
+                        </span>
+                      </Link>
+                    )
+                  }
+                  identityDropdown={{
+                    identity: canonicalIdentity,
+                    onRequestConnectWallet: () => {
+                      setShowMenu(false)
+                      setShowOptions(true)
+                    },
+                    onRequestSignOut: () => {
+                      void auth.signOut()
+                      setShowMenu(false)
+                    },
+                    signingOut: auth.busy,
+                    onRequestDisconnectMainWallet: () => {
+                      void disconnectMainWallet()
+                    },
+                    disconnectingMainWallet,
+                  }}
+                />
               ) : traySection === 'portfolio' ? (
                 <RelayTrayPortfolioModule
                   tab={trayTab}
@@ -957,41 +901,17 @@ export function ConnectButton({
                 />
               )}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-              <div className="mt-auto" />
-              <div className="border-t border-white/8 bg-black/20">
-                <button
-                  type="button"
-                  onClick={() => setShowMenu(false)}
-                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
-                >
-                  <span className="label block text-zinc-300">Help</span>
-                </button>
-                <Link
-                  to="/accounts"
-                  onClick={() => setShowMenu(false)}
-                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-                >
-                  <span className="label block text-zinc-300">Accounts</span>
-                </Link>
-                <Link
-                  to="/accounts"
-                  onClick={() => setShowMenu(false)}
-                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-                >
-                  <span className="label block text-zinc-300">Settings</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void auth.signOut()
-                    setShowMenu(false)
-                  }}
-                  disabled={auth.busy}
-                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
-                >
-                  <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
-                </button>
-              </div>
+              <RelayAccountTrayFooter
+                linkMode="router"
+                accountsHref="/accounts"
+                settingsHref="/accounts"
+                onClose={() => setShowMenu(false)}
+                onSignOut={() => {
+                  void auth.signOut()
+                  setShowMenu(false)
+                }}
+                signOutBusy={auth.busy}
+              />
           </AccountTray>
         )}
 

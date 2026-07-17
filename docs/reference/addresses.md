@@ -156,6 +156,11 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
+
+> **Solana lottery OApp peer (LZ entry sender):** unset. Solana→Base lottery
+> transport is fail-closed until a reviewed peer is authorized on LM
+> `authorizedRemoteOFTs(30168, peer)`. Do not use the retired Twin adapter.
+
 ### Solana ShareOFT identity
 
 Solana has no EVM contract address for the Base `CreatorShareOFT`. Each creator
