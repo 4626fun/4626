@@ -7,15 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv } from '../../../api/__tests__/helpers'
 
 /**
- * Architecture invariants for the Hermit / Pinata creative lane.
+ * Architecture invariants for the Vercel Hermit creative lane.
  *
  * The recommended deployment shape splits AlfaClub responsibilities:
  *
- *   - Vercel cron owns AlfaClub auth + bridge control plane.
+ *   - Vercel owns creative inference and scheduled AlfaClub token refresh.
  *   - Supabase stores shared AlfaClub runtime token state
  *     (alfaclub_runtime_secret).
- *   - Pinata / Hermit owns only creative behavior — `/hermit`, `/meme`,
- *     `/gmeow`, persona / memory seed files.
+ *   - Railway Hermit owns live room ingest and calls Vercel for creative work.
  *
  * These tests are guard-rails: they fail loudly if the Hermit creative
  * lane ever starts importing token-store helpers or otherwise crossing

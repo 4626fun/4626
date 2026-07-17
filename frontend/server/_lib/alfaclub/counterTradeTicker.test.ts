@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { startCounterTradeTicker } from './counterTradeTicker.js'
+import {
+  resolveCounterTradeTickerEffectiveness,
+  startCounterTradeTicker,
+} from './counterTradeTicker.js'
 import type { CounterTradeRunResult } from './counterTradeRunner.js'
 
 function okResult(overrides: Partial<CounterTradeRunResult> = {}): CounterTradeRunResult {
@@ -73,5 +76,37 @@ describe('startCounterTradeTicker', () => {
     expect(result).toBeNull()
     expect(handle.readState().lastError).toBe('boom')
     handle.stop()
+  })
+})
+
+describe('resolveCounterTradeTickerEffectiveness', () => {
+  it('reports a started room-1659 no-op as ineffective', () => {
+    expect(resolveCounterTradeTickerEffectiveness({
+      started: true,
+      reason: null,
+      intervalMs: 120_000,
+      ticks: 1,
+      lastTickAt: '2026-07-17T13:00:00.000Z',
+      lastResult: okResult({ reason: 'staker_pilot_mode' }),
+      lastError: null,
+    })).toEqual({
+      effective: false,
+      reason: 'staker_pilot_mode',
+    })
+  })
+
+  it('reports a successful working loop as effective', () => {
+    expect(resolveCounterTradeTickerEffectiveness({
+      started: true,
+      reason: null,
+      intervalMs: 120_000,
+      ticks: 1,
+      lastTickAt: '2026-07-17T13:00:00.000Z',
+      lastResult: okResult(),
+      lastError: null,
+    })).toEqual({
+      effective: true,
+      reason: null,
+    })
   })
 })

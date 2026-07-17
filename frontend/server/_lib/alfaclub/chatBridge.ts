@@ -3312,6 +3312,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
           roomId: params.roomId,
           messageId: intent.id,
           commandHead: 'inverse-chat',
+          failureMode: 'closed',
         })
     if (!replyClaimed) {
       // Claim is the durable dedupe across Railway redeploys. Never trade again

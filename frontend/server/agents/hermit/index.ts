@@ -22,9 +22,9 @@ import {
   type AlfaClubChatBridgeTickResult,
   startAlfaClubChatBridge,
 } from '../../_lib/alfaclub/chatBridge.js'
-import { startAlfaClubPrivyTokenRefresher, readAlfaClubPrivyRefreshIntervalMs } from '../../_lib/alfaclub/privyTokenRefresher.js'
 import {
   type CounterTradeTickerState,
+  resolveCounterTradeTickerEffectiveness,
   startCounterTradeTicker,
 } from '../../_lib/alfaclub/counterTradeTicker.js'
 import {
@@ -103,7 +103,12 @@ try {
   console.error('[hermit][early] ALFACLUB_CHAT_BRIDGE_ENABLED  :', (process.env.ALFACLUB_CHAT_BRIDGE_ENABLED ?? '').trim() || 'not set')
   console.error('[hermit][early] ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY:', (process.env.ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY ?? '').trim() || 'not set')
   console.error('[hermit][early] Any room targeting            :', hasAnyRoomTargeting ? 'yes' : 'no (bridge may skip most work)')
-  console.error('[hermit][early] Privy Token Refresher         :', parseAlfaClubBoolEnv(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED) ? 'ENABLED (this Hermit owns rotation)' : 'disabled (Vercel hourly backup expected)')
+  console.error(
+    '[hermit][early] Privy Token Refresher         :',
+    parseAlfaClubBoolEnv(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED)
+      ? 'MISCONFIGURED flag enabled (ignored; Vercel cron owns rotation)'
+      : 'disabled (Vercel cron owns rotation)',
+  )
   console.error('[hermit][early] ----------------------------------------------------------------')
 
   if (criticalIssues.length > 0) {
@@ -139,7 +144,7 @@ type RuntimeState = {
   lastTickAt: string | null
   lastTick: Pick<AlfaClubChatBridgeTickResult, 'roomId' | 'fetched' | 'unseen' | 'processed' | 'errors'> | null
   lastError: string | null
-  // Token refresh state (for dynamic Privy token management on Railway Hermit)
+  // Token refresh ownership (Vercel cron writes; Railway only observes expiry).
   tokenRefresherStarted: boolean
   tokenRefresherReason: string | null
   lastSuccessfulTokenRefreshAt: string | null
@@ -187,7 +192,7 @@ const state: RuntimeState = {
   lastTick: null,
   lastError: null,
   tokenRefresherStarted: false,
-  tokenRefresherReason: null,
+  tokenRefresherReason: 'vercel_cron_owner',
   lastSuccessfulTokenRefreshAt: null,
   chatJwtExpiresAt: null,
   accessTokenExpiresAt: null,
@@ -209,7 +214,6 @@ const readTokenExpiryHealthMetadata = createTokenExpiryHealthRefresher({
 })
 
 let stopBridge: (() => void) | null = null
-let stopRefresher: (() => void) | null = null
 let stopCounterTradeTicker: (() => void) | null = null
 let readCounterTradeState: (() => CounterTradeTickerState) | null = null
 let stopInverseOpinionReconciler: (() => void) | null = null
@@ -324,6 +328,14 @@ function startHealthServer(): void {
       if (readVirtualsAcpState) {
         state.virtualsAcp = readVirtualsAcpState()
       }
+      const counterTradeEffectiveness = state.counterTrade
+        ? resolveCounterTradeTickerEffectiveness(state.counterTrade)
+        : {
+            effective: false,
+            reason: state.counterTradeTickerReason ?? (
+              state.counterTradeTickerStarted ? 'awaiting_first_tick' : 'not_started'
+            ),
+          }
       const ready = state.bridgeStarted
       const status = url === '/readyz' && !ready ? 503 : 200
       res.writeHead(status, {
@@ -337,6 +349,8 @@ function startHealthServer(): void {
           probe: url,
           uptimeSeconds: Math.floor(process.uptime()),
           earlyDiagnostics: earlyHermitDiagnostics,
+          counterTradeEffective: counterTradeEffectiveness.effective,
+          counterTradeEffectiveReason: counterTradeEffectiveness.reason,
           ...state,
         }),
       )
@@ -428,30 +442,11 @@ async function startRuntime(): Promise<void> {
     logger.error('[hermit] AlfaClub chat bridge boot failed', { error: message })
   }
 
-  try {
-    const refresher = startAlfaClubPrivyTokenRefresher()
-    state.tokenRefresherStarted = refresher.started
-    state.tokenRefresherReason = refresher.reason ?? null
-
-    if (!refresher.started) {
-      logger.info('[hermit] AlfaClub Privy token refresher not started', {
-        reason: refresher.reason ?? 'unknown',
-      })
-    } else {
-      stopRefresher = refresher.stop
-      logger.info('[hermit] AlfaClub Privy token refresher started', {
-        intervalMinutes: Math.round(readAlfaClubPrivyRefreshIntervalMs() / 60_000),
-        role: 'primary writer for alfaclub_runtime_secret (this Hermit instance owns token rotation)',
-      })
-
-      // Capture initial token expiry for observability
-      void refreshTokenExpiryState()
-    }
-  } catch (error) {
-    logger.warn('[hermit] AlfaClub Privy token refresher not started', {
-      error: asErrorMessage(error),
-    })
-  }
+  logger.info('[hermit] AlfaClub Privy token refresher not started', {
+    reason: state.tokenRefresherReason,
+    role: 'Vercel chat-token-refresh cron owns token rotation',
+  })
+  void refreshTokenExpiryState()
 
   // ACP auth bootstrap must run before the counter-trade ticker so live (non
   // dry-run) trades have an authenticated acp-cli session + persistent signer
@@ -569,9 +564,6 @@ function shutdown(signal: string): void {
   } catch {}
   try {
     stopInverseOpinionReconciler?.()
-  } catch {}
-  try {
-    stopRefresher?.()
   } catch {}
   try {
     stopBridge?.()
