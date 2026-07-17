@@ -114,6 +114,7 @@ const PHASE2_MISSING_SELECTOR = '0xf79c143b'
 const AUCTION_ALREADY_PENDING_SELECTOR = AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
+const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x6004df9c'
 const SELECTOR_PHASE1_DEPLOY = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1
 const SELECTOR_PHASE1_CORE = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1Core
 const SELECTOR_PHASE1_FINALIZE = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1
@@ -664,7 +665,13 @@ function getTupleAddress(value: unknown, name: string, index: number): Address |
 }
 
 function isDeployPhase2CoreCall(call: Call): boolean {
-  if (String(call.data ?? '').slice(0, 10).toLowerCase() === SELECTOR_DEPLOY_PHASE2_CORE) return true
+  const selector = String(call.data ?? '').slice(0, 10).toLowerCase()
+  if (
+    selector === SELECTOR_DEPLOY_PHASE2_CORE ||
+    selector === SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY
+  ) {
+    return true
+  }
   try {
     const decoded = decodeFunctionData({
       abi: DRY_RUN_DEPLOY_PHASE2_CORE_ABI,
