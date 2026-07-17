@@ -282,6 +282,7 @@ function deriveTokenNamesAndSymbols(
 }
 
 async function searchVersionForVaultPrefix(params: {
+  publicClient: ReturnType<typeof createPublicClient>
   creatorToken: Address
   owner: Address
   chainId: number
@@ -327,6 +328,15 @@ async function searchVersionForVaultPrefix(params: {
       initCode: params.vaultInitCode,
     })
     if (vaultAddress.slice(2, 2 + requestedPrefix.length).toLowerCase() === requestedPrefix) {
+      // Skip versions whose CREATE2 vault is already live so a rebuild after a
+      // partial canary does not reuse addresses that trip finalize peer quoting.
+      const code = await params.publicClient.getBytecode({ address: vaultAddress }).catch(() => null)
+      if (code && code !== '0x') {
+        if (attempt > 0 && attempt % 4096 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        continue
+      }
       return { deploymentVersionUsed: version, vaultAddress }
     }
     if (attempt > 0 && attempt % 4096 === 0) {
@@ -335,7 +345,7 @@ async function searchVersionForVaultPrefix(params: {
   }
 
   throw new Error(
-    `Unable to find vault vanity prefix 0x${requestedPrefix} in ${params.maxTries.toLocaleString()} attempts. ` +
+    `Unable to find undeployed vault vanity prefix 0x${requestedPrefix} in ${params.maxTries.toLocaleString()} attempts. ` +
       'Increase the local search budget or run a dedicated vanity grind first.',
   )
 }
@@ -388,6 +398,7 @@ async function resolveVanityPlanLite(params: {
   const vaultInitCode = concatHex([vaultBytecode, vaultArgs])
 
   const { deploymentVersionUsed, vaultAddress } = await searchVersionForVaultPrefix({
+    publicClient: params.publicClient,
     creatorToken: params.creatorToken,
     owner: params.owner,
     chainId: params.chainId,

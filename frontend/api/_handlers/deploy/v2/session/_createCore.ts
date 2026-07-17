@@ -3315,6 +3315,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allCallsForGrant = [
       ...phase1Calls,
       ...phase2CoreCalls,
+      ...phase2PreFinalizeCalls,
       ...phase2FinalizeCalls,
       ...phase3Calls,
       ...phase4Calls,

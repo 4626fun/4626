@@ -7,7 +7,12 @@ import { base } from 'viem/chains'
 import { createBundlerClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
-import { createDeploySessionBundlerTransport, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS, withDeploySessionUserOpGas } from './deployUserOpGas.js'
+import {
+  createDeploySessionBundlerTransport,
+  DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
+  DEPLOY_SESSION_USEROP_GAS,
+  withDeploySessionUserOpGas,
+} from './deployUserOpGas.js'
 import {
   ensurePhase2CoreCreatesPrecreated,
 } from './phase2CorePrecreate.js'
@@ -1100,10 +1105,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         }
-        // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
-        // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
+        const accountGas =
+          toStep === 'phase2_core_sent'
+            ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
+            : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
         lastUserOpHash = await sendUserOperation(bundlerClient, {
-          account: withDeploySessionUserOpGas(account, phase2AccountGas),
+          account: withDeploySessionUserOpGas(account, accountGas),
           calls: userOpCalls,
         })
       } catch (err) {
@@ -1111,7 +1118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const cleanupFailureReason = truncateMessage(normalizeErrorMessage(err), 220)
         attemptedCalls = stageCalls
         lastUserOpHash = await sendUserOperation(bundlerClient, {
-          account: withDeploySessionUserOpGas(account),
+          account: withDeploySessionUserOpGas(account, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS),
           calls: stageCalls,
         })
         payloadPatch = {

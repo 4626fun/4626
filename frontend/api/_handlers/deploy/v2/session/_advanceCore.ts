@@ -21,6 +21,7 @@ import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   createDeploySessionBundlerTransport,
   DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
+  DEPLOY_SESSION_USEROP_GAS,
   peekSelfBundledTxHash,
   readUserOperationEventSuccess,
   withDeploySessionUserOpGas,
@@ -2039,11 +2040,14 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
             }
           }
         }
-        // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
-        // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
-        // When phase2 CREATE2s are already on-chain, use wiring-only gas (fits CDP).
+        // Fat phase2_core (CREATE2 fan-out) self-bundles above CDP's 14.5M cap.
+        // All other stages use wiring-scale gas so CDP paymaster can sponsor.
+        const accountGas =
+          toStep === 'phase2_core_sent'
+            ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
+            : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
         nextHash = await sendUserOperation(bundler, {
-          account: withDeploySessionUserOpGas(account, phase2AccountGas),
+          account: withDeploySessionUserOpGas(account, accountGas),
           calls: userOpCalls,
         })
       } catch (err) {
@@ -2052,7 +2056,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           .trim()
           .slice(0, 220)
         nextHash = await sendUserOperation(bundler, {
-          account: withDeploySessionUserOpGas(account),
+          account: withDeploySessionUserOpGas(account, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS),
           calls,
         })
         payloadPatch = {
@@ -2269,8 +2273,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
     const { bundler, account } = authedCtx
     try {
-      // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
-      // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
       let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
       let userOpCalls = fullCalls
       let payloadPatch: Record<string, unknown> = { [stageUserOpHashKey(sentStep)]: null }
@@ -2291,8 +2293,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           }
         }
       }
+      const accountGas =
+        sentStep === 'phase2_core_sent'
+          ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
+          : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
       const nextHash = await sendUserOperation(bundler, {
-        account: withDeploySessionUserOpGas(account, phase2AccountGas),
+        account: withDeploySessionUserOpGas(account, accountGas),
         calls: userOpCalls,
       })
       await updateDeploySession({

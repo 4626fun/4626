@@ -458,10 +458,12 @@ export function createDeploySessionBundlerTransport(
       ...upstreamTransport,
       async request(args, options) {
         if (args.method === 'eth_estimateUserOperationGas') {
+          // Default to wiring-scale gas so CDP can sponsor. Fat phase2_core
+          // call sites override via withDeploySessionUserOpGas(..., USEROP_GAS).
           return {
-            callGasLimit: toHex(DEPLOY_SESSION_USEROP_GAS.callGasLimit),
-            verificationGasLimit: toHex(DEPLOY_SESSION_USEROP_GAS.verificationGasLimit),
-            preVerificationGas: toHex(DEPLOY_SESSION_USEROP_GAS.preVerificationGas),
+            callGasLimit: toHex(DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS.callGasLimit),
+            verificationGasLimit: toHex(DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS.verificationGasLimit),
+            preVerificationGas: toHex(DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS.preVerificationGas),
           }
         }
         if (args.method !== 'eth_sendUserOperation') {
