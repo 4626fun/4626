@@ -12,6 +12,7 @@ import {
   formatRoomPct,
   formatRoomType,
   formatRoomUsd,
+  formatRoomUsdCompact,
   pnlToneClassName,
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
@@ -46,7 +47,6 @@ const ROOM_SORT_OPTIONS: Array<{ value: AlfaClubRoomSort; label: string }> = [
   { value: 'volume', label: 'Volume' },
   { value: 'pnl', label: 'PnL (all-time)' },
   { value: 'keys', label: 'Key supply' },
-  { value: 'updated', label: 'Recently updated' },
 ]
 
 const ROOM_PAGE_SIZE = 50
@@ -92,8 +92,8 @@ function normalizeRoomTier(value: string | null): RoomTierFilter {
 }
 
 function normalizeRoomSort(value: string | null): AlfaClubRoomSort {
-  if (value === 'keys' || value === 'updated' || value === 'pnl' || value === 'volume') return value
-  if (value === 'points') return 'volume'
+  if (value === 'keys' || value === 'pnl' || value === 'volume') return value
+  if (value === 'points' || value === 'updated') return 'volume'
   return 'volume'
 }
 
@@ -218,8 +218,8 @@ export function AlfaClubExploreRooms() {
 
         <section className="overflow-hidden rounded-2xl bg-black/30 ring-1 ring-white/[0.08]" aria-label="AlfaClub room results">
           <div className="overflow-x-auto scrollbar-hide">
-            <div className="min-w-[1100px]">
-              <div className="grid grid-cols-[minmax(280px,1.6fr)_100px_80px_120px_100px_100px_130px_70px_110px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-[minmax(280px,1.6fr)_100px_80px_150px_110px_110px_150px_70px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
                 <span>Room</span>
                 <span className="text-center">Type</span>
                 <span className="text-center">Tier</span>
@@ -228,7 +228,6 @@ export function AlfaClubExploreRooms() {
                 <span className="text-right">Trading fund</span>
                 <span className="text-right">PnL</span>
                 <span className="text-right">Keys</span>
-                <span className="text-right">Updated</span>
               </div>
 
               {loading ? (
@@ -335,7 +334,7 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
   return (
     <Link
       to={`/rooms?roomId=${encodeURIComponent(room.roomId)}`}
-      className="group grid grid-cols-[minmax(280px,1.6fr)_100px_80px_120px_100px_100px_130px_70px_110px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
+      className="group grid grid-cols-[minmax(280px,1.6fr)_100px_80px_150px_110px_110px_150px_70px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
     >
       <div className="flex min-w-0 items-center gap-3 pr-4">
         {room.imageUrl ? (
@@ -370,11 +369,11 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
       <span className="text-center text-zinc-300">{formatRoomType(room.roomType)}</span>
       <span className="text-center capitalize text-zinc-400">{room.tier ?? '—'}</span>
       <span className="text-right">
-        <span className="block font-medium tabular-nums text-zinc-100">
+        <span className="block whitespace-nowrap font-medium tabular-nums text-zinc-100">
           {formatRoomUsd(room.keyPriceUsdc)}
         </span>
-        <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-zinc-500">
-          ↑ {formatRoomUsd(room.buyPriceUsdc)} · ↓ {formatRoomUsd(room.sellPriceUsdc)}
+        <span className="mt-0.5 block whitespace-nowrap font-mono text-[10px] tabular-nums text-zinc-500">
+          ↑{formatRoomUsdCompact(room.buyPriceUsdc)} · ↓{formatRoomUsdCompact(room.sellPriceUsdc)}
         </span>
       </span>
       <span className="text-right tabular-nums text-zinc-200">
@@ -384,20 +383,17 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
         {formatRoomUsd(room.tradingFundUsdc)}
       </span>
       <span className="text-right">
-        <span className={cn('block font-medium tabular-nums', pnlToneClassName(room.pnlUsdc))}>
+        <span className={cn('block whitespace-nowrap font-medium tabular-nums', pnlToneClassName(room.pnlUsdc))}>
           {formatRoomUsd(room.pnlUsdc)}
           <span className="ml-1 text-[10px]">{formatRoomPct(room.pnlPctAllTime)}</span>
         </span>
-        <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-zinc-500">
+        <span className="mt-0.5 block whitespace-nowrap font-mono text-[10px] tabular-nums text-zinc-500">
           7D {formatRoomPct(room.pnlPct7d)} · 30D {formatRoomPct(room.pnlPct30d)}
         </span>
       </span>
-      <span className="text-right tabular-nums text-zinc-300">
+      <span className="flex items-center justify-end gap-2 text-right tabular-nums text-zinc-300">
         {room.keySupply?.toLocaleString() ?? '—'}
-      </span>
-      <span className="flex items-center justify-end gap-2 text-right text-zinc-500">
-        {formatUpdatedAt(room.ingestedAt)}
-        <ArrowRight className="size-3.5 text-zinc-700 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" aria-hidden />
+        <ArrowRight className="size-3.5 shrink-0 text-zinc-700 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" aria-hidden />
       </span>
     </Link>
   )
@@ -421,14 +417,3 @@ function DirectoryMessage({
   )
 }
 
-function formatUpdatedAt(value: string): string {
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return '—'
-  const elapsed = Math.max(0, Date.now() - timestamp)
-  const minutes = Math.floor(elapsed / 60_000)
-  if (minutes < 1) return 'now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}

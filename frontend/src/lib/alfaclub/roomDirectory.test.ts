@@ -4,6 +4,7 @@ import {
   formatRoomPct,
   formatRoomPoints,
   formatRoomUsd,
+  formatRoomUsdCompact,
   normalizeAlfaClubUsdc,
   readRecentRoomIds,
   rememberRecentRoom,
@@ -54,13 +55,20 @@ describe('AlfaClub room directory helpers', () => {
 
   it('normalizes micro-USDC snapshot amounts and formats USD/PnL metrics', () => {
     expect(normalizeAlfaClubUsdc(102_400_000)).toBe(102.4)
-    expect(normalizeAlfaClubUsdc(628.232661)).toBe(628.232661)
+    expect(normalizeAlfaClubUsdc(225_000)).toBe(0.225)
+    expect(normalizeAlfaClubUsdc(162_500)).toBe(0.1625)
     expect(formatRoomUsd(102.4)).toBe('$102.40')
     expect(formatRoomUsd(-285.01)).toBe('-$285.01')
     expect(formatRoomPct(11.161)).toBe('+11.2%')
     expect(formatRoomPct(-18.17)).toBe('-18.2%')
     expect(formatRoomUsd(null)).toBe('—')
   })
+
+  it('formats compact USD for buy/sell sublines', () => {
+    expect(formatRoomUsdCompact(0.225)).toBe('$0.23')
+    expect(formatRoomUsdCompact(102.4)).toBe('$102.40')
+  })
+
 
   it('sorts by volume, keys, pnl, or freshness', () => {
     const rooms = [

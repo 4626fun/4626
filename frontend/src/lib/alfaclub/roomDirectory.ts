@@ -60,6 +60,18 @@ export function formatRoomUsd(value: number | null | undefined): string {
   })
 }
 
+/** Compact USD for stacked quote sublines (keeps buy/sell on one row). */
+export function formatRoomUsdCompact(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  const digits = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 2 : 4
+  const formatted = abs.toLocaleString('en-US', {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: abs >= 1 || abs === 0 ? Math.min(digits, 2) : digits,
+  })
+  return `${value < 0 ? '-' : ''}$${formatted}`
+}
+
 export function formatRoomPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'
   const sign = value > 0 ? '+' : ''
@@ -67,13 +79,12 @@ export function formatRoomPct(value: number | null | undefined): string {
 }
 
 /**
- * AlfaClub snapshot prices/volumes are typically USDC with 6 decimals.
- * Values already in plain USD (e.g. fund_size, pnl) pass through unchanged.
+ * AlfaClub snapshot buy/sell/mid/volume/fees are always USDC×1e6.
+ * Do not use for fund_size or pnl (those are already plain USD).
  */
 export function normalizeAlfaClubUsdc(raw: number | null | undefined): number | null {
   if (raw == null || !Number.isFinite(raw)) return null
-  if (Math.abs(raw) >= 1_000_000) return raw / 1_000_000
-  return raw
+  return raw / 1_000_000
 }
 
 export function pnlToneClassName(value: number | null | undefined): string {

@@ -66,11 +66,10 @@ function parseNumber(raw: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Snapshot prices/volumes are usually USDC×1e6; fund_size/pnl are already USD. */
+/** Snapshot buy/sell/mid/volume/fees are USDC×1e6; fund_size/pnl are already USD. */
 function normalizeUsdc(raw: number | null): number | null {
   if (raw == null || !Number.isFinite(raw)) return null
-  if (Math.abs(raw) >= 1_000_000) return raw / 1_000_000
-  return raw
+  return raw / 1_000_000
 }
 
 function parseTier(raw: string | null | undefined): AlfaRoomTier | null {

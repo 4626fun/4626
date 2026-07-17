@@ -409,7 +409,6 @@ export function RoomDiscoveryTray({
           Hold a room key to pin it in My Rooms.
         </p>
       ) : null}
-      <Freshness rooms={rooms} />
     </div>
   )
 }
@@ -744,20 +743,5 @@ function RoomSkeletons() {
   )
 }
 
-function Freshness({ rooms }: { rooms: AlfaClubRoomDirectoryItem[] }) {
-  const latest = rooms.reduce<number | null>((current, room) => {
-    const timestamp = Date.parse(room.ingestedAt)
-    if (!Number.isFinite(timestamp)) return current
-    return current == null || timestamp > current ? timestamp : current
-  }, null)
-  if (latest == null) return null
-  const label = `Updated ${new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(latest)}`
-  return <p className="shrink-0 pt-2 text-[10px] text-zinc-600">{label}</p>
-}
 
 export { DEFAULT_FILTERS }

@@ -74,3 +74,35 @@ describe('AlfaClub room directory mapping', () => {
     expect(item.tier).toBe('club')
   })
 })
+
+  it('scales sub-$1 micro-USDC prices (e.g. low-supply Club rooms)', () => {
+    const item = rowToAlfaClubRoomDirectoryItem(
+      snapshotRow({
+        room_id: '385',
+        room_name: 'BORED',
+        creator_twitter_username: 'BoredEloonMusk',
+        room_type: 'trading',
+        tier: 'club',
+        volume_col_raw: '975000',
+        supply_col_raw: '3',
+        buy_price_raw: '225000',
+        sell_price_raw: '100000',
+        mid_price_raw: '162500',
+        fund_size_raw: '0.0585',
+        creator_reward_raw: '19500',
+        pnl_raw: '0',
+        pnl_pct_7d_raw: '0',
+        pnl_pct_30d_raw: '0',
+        pnl_pct_all_raw: '0',
+        featured: false,
+        unique_holders_raw: '3',
+      }),
+    )
+    expect(item.keyPriceUsdc).toBe(0.1625)
+    expect(item.buyPriceUsdc).toBe(0.225)
+    expect(item.sellPriceUsdc).toBe(0.1)
+    expect(item.volumeUsdc).toBe(0.975)
+    expect(item.feesGeneratedUsdc).toBe(0.0195)
+    expect(item.tradingFundUsdc).toBe(0.0585)
+  })
+

@@ -38,6 +38,7 @@ import {
   formatRoomPct,
   formatRoomType,
   formatRoomUsd,
+  formatRoomUsdCompact,
   pnlToneClassName,
   readRecentRoomIds,
   rememberRecentRoom,
@@ -698,7 +699,7 @@ function RoomHeader({
                   ? formatRoomUsd(safetySummary.pricing.currentUsdc)
                   : formatRoomUsd(room?.keyPriceUsdc)
               }
-              detail={`↑ ${formatRoomUsd(room?.buyPriceUsdc)} · ↓ ${formatRoomUsd(room?.sellPriceUsdc)}`}
+              detail={`↑${formatRoomUsdCompact(room?.buyPriceUsdc)} · ↓${formatRoomUsdCompact(room?.sellPriceUsdc)}`}
             />
             <HeaderStat label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
             <HeaderStat
@@ -922,7 +923,7 @@ function OverviewPanel({
             value={
               pricing ? formatUsd(pricing.currentUsdc) : formatRoomUsd(room?.keyPriceUsdc)
             }
-            detail={`↑ ${formatRoomUsd(room?.buyPriceUsdc)} · ↓ ${formatRoomUsd(room?.sellPriceUsdc)}`}
+            detail={`↑${formatRoomUsdCompact(room?.buyPriceUsdc)} · ↓${formatRoomUsdCompact(room?.sellPriceUsdc)}`}
           />
           <FactCard label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
           <FactCard
@@ -950,7 +951,6 @@ function OverviewPanel({
           <FactCard label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
           <FactCard label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
           <FactCard label="Bonding curve" value={room?.tier ?? '—'} />
-          <FactCard label="Last updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
         </dl>
         {pricing ? (
           <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1067,17 +1067,6 @@ function HeaderStat({
   )
 }
 
-function formatUpdatedAt(value: string | null): string {
-  if (!value) return '—'
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return '—'
-  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000))
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.round(hours / 24)}d ago`
-}
 
 function formatUsd(value: number): string {
   if (!Number.isFinite(value)) return '—'
