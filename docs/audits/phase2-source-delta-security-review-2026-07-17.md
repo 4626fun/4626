@@ -36,16 +36,13 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 - `store.get()` before `code.length` short-circuit → residual AA95 / UserOp OOG risk.
 - **Remediation:** hash/pointer path that skips full bytecode copy when address exists.
 
-### F5 — Precreate misses `deployPhase2CoreWithRolePolicy` (Medium / new)
+### F5 — Precreate misses `deployPhase2CoreWithRolePolicy` (Medium / fixed)
 
-- `phase2CorePrecreate.ts` only matches shell selector `deployPhase2Core`; role-policy
-  rewrite can skip precreate → CREATE2 inside UserOp → AA95.
-- **Remediation:** decode both selectors; same salt/args path.
+- Fixed: precreate + dry-run detection accept `0x6004df9c` WithRolePolicy selector.
 
-### F6 — Precreate key fallback too broad (Medium / new)
+### F6 — Precreate key fallback too broad (Medium / fixed)
 
-- Falls back to `PRIVATE_KEY` / `KPR_PRIVATE_KEY` if CREATE2-authorized.
-- **Remediation:** require dedicated `DEPLOY_SESSION_PHASE2_PRECREATE_PRIVATE_KEY` only.
+- Fixed: only `DEPLOY_SESSION_PHASE2_PRECREATE_PRIVATE_KEY` is accepted.
 
 ### F7 — Finalize does not bind gauge/CCA/oracle to vault wiring (Medium / known)
 

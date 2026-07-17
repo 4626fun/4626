@@ -2,8 +2,8 @@
  * Phase2 core CREATE2 fan-out (gauge/cca/oracle) exceeds Base's 2^24 tx gas cap
  * under EntryPoint AA95 when run inside a single UserOp. Pre-create those
  * contracts from an authorized create2 deployer key, then let deployPhase2Core
- * reuse them via DeploymentBatcherPhase2Module._deployOrExisting and spend
- * UserOp gas on wiring only.
+ * (or deployPhase2CoreWithRolePolicy) reuse them via
+ * DeploymentBatcherPhase2Module._deployOrExisting and spend UserOp gas on wiring only.
  */
 import {
   concat,
@@ -24,7 +24,33 @@ import { base } from 'viem/chains'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 
-const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
+/** Shell `deployPhase2Core` selector. */
+export const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
+/** Shell `deployPhase2CoreWithRolePolicy` selector (role-policy rewrite path). */
+export const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x6004df9c'
+
+const PHASE2_PARAMS_COMPONENTS = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'creatorTreasury', type: 'address' },
+  { name: 'payoutRecipient', type: 'address' },
+  { name: 'vault', type: 'address' },
+  { name: 'wrapper', type: 'address' },
+  { name: 'shareOFT', type: 'address' },
+  { name: 'shareSymbol', type: 'string' },
+  { name: 'version', type: 'string' },
+  { name: 'floorPriceQ96', type: 'uint256' },
+] as const
+
+const PHASE2_CODE_IDS_COMPONENTS = [
+  { name: 'vault', type: 'bytes32' },
+  { name: 'wrapper', type: 'bytes32' },
+  { name: 'shareOFT', type: 'bytes32' },
+  { name: 'gauge', type: 'bytes32' },
+  { name: 'cca', type: 'bytes32' },
+  { name: 'oracle', type: 'bytes32' },
+  { name: 'oftBootstrap', type: 'bytes32' },
+] as const
 
 const DEPLOY_PHASE2_CORE_ABI = [
   {
@@ -32,35 +58,22 @@ const DEPLOY_PHASE2_CORE_ABI = [
     name: 'deployPhase2Core',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'creatorTreasury', type: 'address' },
-          { name: 'payoutRecipient', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
-          { name: 'shareSymbol', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-        ],
-      },
-      {
-        name: 'codeIds',
-        type: 'tuple',
-        components: [
-          { name: 'vault', type: 'bytes32' },
-          { name: 'wrapper', type: 'bytes32' },
-          { name: 'shareOFT', type: 'bytes32' },
-          { name: 'gauge', type: 'bytes32' },
-          { name: 'cca', type: 'bytes32' },
-          { name: 'oracle', type: 'bytes32' },
-          { name: 'oftBootstrap', type: 'bytes32' },
-        ],
-      },
+      { name: 'params', type: 'tuple', components: PHASE2_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE2_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase2CoreWithRolePolicy',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE2_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE2_CODE_IDS_COMPONENTS },
+      { name: 'rolePolicyId', type: 'uint256' },
     ],
     outputs: [],
   },
@@ -163,27 +176,85 @@ const STORE_ABI = [
 
 type Call = { to: string; data?: string; value?: string | number | bigint }
 
-function readPrecreatePrivateKey(): Hex | null {
-  for (const key of [
-    'DEPLOY_SESSION_PHASE2_PRECREATE_PRIVATE_KEY',
-    'DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY',
-    'PRIVATE_KEY',
-    'KPR_PRIVATE_KEY',
-  ]) {
-    const raw = String(process.env[key] ?? '').trim()
-    if (!raw) continue
-    const normalized = (raw.startsWith('0x') || raw.startsWith('0X') ? raw : `0x${raw}`) as Hex
-    if (/^0x[0-9a-fA-F]{64}$/.test(normalized)) return normalized
+type Phase2CoreParams = {
+  creatorToken: Address
+  owner: Address
+  creatorTreasury: Address
+  payoutRecipient: Address
+  vault: Address
+  wrapper: Address
+  shareOFT: Address
+  shareSymbol: string
+  version: string
+  floorPriceQ96: bigint
+}
+
+type Phase2CodeIds = {
+  vault: Hex
+  wrapper: Hex
+  shareOFT: Hex
+  gauge: Hex
+  cca: Hex
+  oracle: Hex
+  oftBootstrap: Hex
+}
+
+export function isPhase2CoreCalldata(data: string): boolean {
+  const selector = data.slice(0, 10).toLowerCase()
+  return (
+    selector === SELECTOR_DEPLOY_PHASE2_CORE ||
+    selector === SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY
+  )
+}
+
+/**
+ * Precreate must use a dedicated CREATE2-authorized key — do not fall back to
+ * broad operator / KPR keys that may also hold unrelated authority.
+ */
+export function readPrecreatePrivateKey(
+  env: Record<string, string | undefined> = process.env,
+): Hex | null {
+  const raw = String(env.DEPLOY_SESSION_PHASE2_PRECREATE_PRIVATE_KEY ?? '').trim()
+  if (!raw) return null
+  const normalized = (raw.startsWith('0x') || raw.startsWith('0X') ? raw : `0x${raw}`) as Hex
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) return null
+  return normalized
+}
+
+export function findPhase2CoreCall(calls: Call[]): { to: Address; data: Hex } | null {
+  for (const call of calls) {
+    const data = String(call.data || '')
+    if (!isPhase2CoreCalldata(data)) continue
+    if (!isAddress(call.to)) continue
+    return { to: getAddress(call.to), data: data as Hex }
   }
   return null
 }
 
-function findPhase2CoreCall(calls: Call[]): { to: Address; data: Hex } | null {
-  for (const call of calls) {
-    const data = String(call.data || '')
-    if (!data.toLowerCase().startsWith(SELECTOR_DEPLOY_PHASE2_CORE)) continue
-    if (!isAddress(call.to)) continue
-    return { to: getAddress(call.to), data: data as Hex }
+export function decodePhase2CoreCreateArgs(data: Hex): {
+  params: Phase2CoreParams
+  codeIds: Phase2CodeIds
+  variant: 'deployPhase2Core' | 'deployPhase2CoreWithRolePolicy'
+} | null {
+  const selector = data.slice(0, 10).toLowerCase()
+  try {
+    if (selector === SELECTOR_DEPLOY_PHASE2_CORE) {
+      const decoded = decodeFunctionData({ abi: DEPLOY_PHASE2_CORE_ABI, data })
+      if (decoded.functionName !== 'deployPhase2Core') return null
+      const [params, codeIds] = decoded.args
+      return { params, codeIds, variant: 'deployPhase2Core' }
+    }
+    if (selector === SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY) {
+      const decoded = decodeFunctionData({
+        abi: DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+        data,
+      })
+      if (decoded.functionName !== 'deployPhase2CoreWithRolePolicy') return null
+      const [params, codeIds] = decoded.args
+      return { params, codeIds, variant: 'deployPhase2CoreWithRolePolicy' }
+    }
+  } catch {
+    return null
   }
   return null
 }
@@ -222,14 +293,11 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
     transport: http(rpcUrl, { timeout: 120_000 }),
   })
 
-  const decoded = decodeFunctionData({
-    abi: DEPLOY_PHASE2_CORE_ABI,
-    data: core.data,
-  })
-  if (decoded.functionName !== 'deployPhase2Core') {
+  const decoded = decodePhase2CoreCreateArgs(core.data)
+  if (!decoded) {
     return { skipped: true, reason: 'unexpected_selector', deployed: [], existing: [] }
   }
-  const [params, codeIds] = decoded.args
+  const { params, codeIds } = decoded
 
   const [create2Deployer, utilsHelper, protocolTreasury, registry, chainlinkEthUsd] = await Promise.all([
     publicClient.readContract({ address: core.to, abi: BATCHER_VIEW_ABI, functionName: 'create2Deployer' }),
