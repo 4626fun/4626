@@ -125,6 +125,24 @@ describe('evaluateCanonicalSubmitSession', () => {
     })
   })
 
+  it('allows canonical submit when the session principal is the parent CSW and the signer is the embedded EOA', () => {
+    expect(
+      evaluateCanonicalSubmitSession({
+        executionMode: 'canonical',
+        sessionHydrated: true,
+        hasSession: true,
+        sessionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        expectedSessionAddress: '0x2222222222222222222222222222222222222222',
+      }),
+    ).toEqual({
+      ok: true,
+      code: 'ok',
+      message: null,
+      shouldAttemptRefresh: false,
+    })
+  })
+
   it('does not block non-canonical submit paths', () => {
     expect(
       evaluateCanonicalSubmitSession({
@@ -186,6 +204,29 @@ describe('resolveCanonicalSubmitSession', () => {
       code: 'session-mismatch',
       message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
       shouldAttemptRefresh: true,
+    })
+  })
+
+  it('allows mismatch recovery when refreshed session returns the parent CSW execution address', async () => {
+    const ensureCanonicalSession = async () => '0xab6d5c10b03300326cd7fab7267ae192842967b5'
+
+    await expect(
+      resolveCanonicalSubmitSession(
+        {
+          executionMode: 'canonical',
+          sessionHydrated: true,
+          hasSession: true,
+          sessionAddress: '0x1111111111111111111111111111111111111111',
+          executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          expectedSessionAddress: '0x2222222222222222222222222222222222222222',
+        },
+        ensureCanonicalSession,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      code: 'ok',
+      message: null,
+      shouldAttemptRefresh: false,
     })
   })
 

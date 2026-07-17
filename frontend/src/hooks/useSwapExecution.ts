@@ -184,6 +184,24 @@ function resolveExpectedSessionAddress(input: {
       : null
 }
 
+function canonicalSessionAddressMatches(input: {
+  sessionAddress: string
+  expectedSessionAddress: string | null
+  executionAddress: string | null | undefined
+}): boolean {
+  const session = input.sessionAddress.toLowerCase()
+  if (input.expectedSessionAddress && session === input.expectedSessionAddress.toLowerCase()) {
+    return true
+  }
+  // Cross-host handoff and /api/auth/privy mint the HttpOnly session against
+  // the parent CSW while sponsored canonical swaps sign with the embedded owner
+  // EOA. Treat a CSW session principal as valid when it matches execution.
+  if (input.executionAddress && session === input.executionAddress.toLowerCase()) {
+    return true
+  }
+  return false
+}
+
 export async function resolveCanonicalSubmitSession(
   input: CanonicalSubmitSessionInput,
   ensureCanonicalSession?: (() => Promise<EnsureCanonicalSessionResult>) | null,
@@ -206,7 +224,15 @@ export async function resolveCanonicalSubmitSession(
       executionAddress: input.executionAddress,
     })
     if (!refreshedAddress) return current
-    if (expectedSessionAddress && refreshedAddress.toLowerCase() !== expectedSessionAddress.toLowerCase()) return current
+    if (
+      !canonicalSessionAddressMatches({
+        sessionAddress: refreshedAddress,
+        expectedSessionAddress,
+        executionAddress: input.executionAddress,
+      })
+    ) {
+      return current
+    }
   }
 
   return {
@@ -340,7 +366,15 @@ export function evaluateCanonicalSubmitSession(input: CanonicalSubmitSessionInpu
     expectedSessionAddress: input.expectedSessionAddress,
     executionAddress: input.executionAddress,
   })
-  if (expectedSessionAddress && input.sessionAddress.toLowerCase() !== expectedSessionAddress.toLowerCase()) {
+  if (
+    expectedSessionAddress &&
+    input.sessionAddress &&
+    !canonicalSessionAddressMatches({
+      sessionAddress: input.sessionAddress,
+      expectedSessionAddress,
+      executionAddress: input.executionAddress,
+    })
+  ) {
     return {
       ok: false,
       code: 'session-mismatch',

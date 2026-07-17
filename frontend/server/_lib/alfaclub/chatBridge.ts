@@ -1587,14 +1587,6 @@ function isProxyPathNotAllowedError(error: unknown): boolean {
   )
 }
 
-function isBotMessageForbiddenError(error: unknown): boolean {
-  const message = (error instanceof Error ? error.message : String(error)).trim()
-  return (
-    message.includes('bot_message_failed:403') ||
-    (message.includes('bot_message_failed:404') && message.includes('"error":"forbidden"'))
-  )
-}
-
 function isJwtMessageAuthError(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).trim()
   return (
@@ -1617,7 +1609,7 @@ async function sendRoomMessageViaJwtHttp(params: {
   replyToMessageId?: string
   proxySecret?: string | null
   timeoutMs: number
-}): Promise<void> {
+}): Promise<BotSendResultSummary> {
   const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/message`, params.apiBaseUrl)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
@@ -1646,10 +1638,22 @@ async function sendRoomMessageViaJwtHttp(params: {
     clearTimeout(timeout)
   }
   const bodyText = await response.text().catch(() => '')
+  let parsedBody: unknown = null
+  try {
+    parsedBody = bodyText ? JSON.parse(bodyText) : null
+  } catch {
+    parsedBody = null
+  }
   if (!response.ok) {
     const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
     throw new Error(`jwt_message_failed:${response.status}${detail ? `:${detail}` : ''}`)
   }
+  // Same `/message` response shape as the bot lane — preserve ids for web/XMTP linkage.
+  return summarizeBotSendResponse({
+    status: response.status,
+    parsedBody,
+    bodyText,
+  })
 }
 
 async function sendRoomMessageViaJwtHttpWithProxyFallback(params: {
@@ -1661,9 +1665,9 @@ async function sendRoomMessageViaJwtHttpWithProxyFallback(params: {
   replyToMessageId?: string
   proxySecret?: string | null
   timeoutMs: number
-}): Promise<void> {
+}): Promise<BotSendResultSummary> {
   try {
-    await sendRoomMessageViaJwtHttp(params)
+    return await sendRoomMessageViaJwtHttp(params)
   } catch (error) {
     const usingProxy = params.apiBaseUrl !== params.directApiBaseUrl
     if (!usingProxy || !isProxyPathNotAllowedError(error)) {
@@ -1675,7 +1679,7 @@ async function sendRoomMessageViaJwtHttpWithProxyFallback(params: {
       directApiBaseUrl: params.directApiBaseUrl,
     })
     recordBridgeProxyFallbackDirect()
-    await sendRoomMessageViaJwtHttp({
+    return sendRoomMessageViaJwtHttp({
       ...params,
       apiBaseUrl: params.directApiBaseUrl,
       proxySecret: null,
@@ -2041,21 +2045,10 @@ async function sendCommandReplyToRoom(params: {
     typeof params.replyToMessageDate === 'number' && Number.isFinite(params.replyToMessageDate)
       ? params.replyToMessageDate
       : undefined
-  if (params.stableIdempotencyKey && params.flags.botToken) {
-    await sendRoomMessageViaBotTokenWithProxyFallback({
-      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-      directApiBaseUrl: params.flags.apiBaseUrl,
-      botToken: params.flags.botToken,
-      roomId: params.roomId,
-      text: params.text,
-      replyToMessageId: params.replyToMessageId,
-      proxySecret: resolveAlfaClubProxySecret(params.flags),
-      idempotencyKey: params.stableIdempotencyKey,
-      timeoutMs: params.flags.sendTimeoutMs,
-    })
-    return 'bot_token_stable_idempotency'
-  }
 
+  // Hermit command replies post as the Privy JWT identity (hermit4626).
+  // Never fall through to ALFACLUB_API_KEY — that lane can attribute to a
+  // different bot account and drops attachments / reply threading.
   const lane = await sendRoomMessageViaWebSocket({
     websocketUrl: params.flags.websocketUrl,
     wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
@@ -3229,59 +3222,41 @@ async function sendAlfaClubCommandTextReply(params: {
   replyToMessageId: string
   replyToMessageDate?: number
 }): Promise<void> {
-  if (
-    typeof params.replyToMessageDate === 'number' &&
-    Number.isFinite(params.replyToMessageDate)
-  ) {
-    try {
-      await sendRoomMessageViaWebSocket({
-        websocketUrl: params.flags.websocketUrl,
-        wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
-        wsProxySecret: (params.flags as any).wsProxySecret,
-        jwt: params.jwt,
-        roomId: params.roomId,
-        text: params.text,
-        replyToMessageId: params.replyToMessageId,
-        replyToMessageDate: params.replyToMessageDate,
-        timeoutMs: params.flags.sendTimeoutMs,
-      })
-      return
-    } catch (error) {
-      logger.warn('[alfaclub-chat] ws_followup_reply_failed', {
-        roomId: params.roomId,
-        messageId: params.replyToMessageId,
-        error: error instanceof Error ? error.message.slice(0, 180) : String(error).slice(0, 180),
-      })
-    }
-  }
-  if (params.flags.botToken) {
-    const idempotencyKey = buildBotMessageIdempotencyKey({
-      roomId: params.roomId,
-      messageId: `${params.replyToMessageId}:followup`,
-    })
-    await sendRoomMessageViaBotTokenWithProxyFallback({
-      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
-      directApiBaseUrl: params.flags.apiBaseUrl,
-      botToken: params.flags.botToken,
+  const replyToMessageDate =
+    typeof params.replyToMessageDate === 'number' && Number.isFinite(params.replyToMessageDate)
+      ? params.replyToMessageDate
+      : undefined
+  // Follow-ups stay on JWT/WS — never ALFACLUB_API_KEY (wrong account risk).
+  try {
+    await sendRoomMessageViaWebSocket({
+      websocketUrl: params.flags.websocketUrl,
+      wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+      wsProxySecret: (params.flags as any).wsProxySecret,
+      jwt: params.jwt,
       roomId: params.roomId,
       text: params.text,
       replyToMessageId: params.replyToMessageId,
-      proxySecret: resolveAlfaClubProxySecret(params.flags),
-      idempotencyKey,
+      replyToMessageDate,
       timeoutMs: params.flags.sendTimeoutMs,
     })
-    return
+  } catch (error) {
+    if (replyToMessageDate === undefined) throw error
+    logger.warn('[alfaclub-chat] ws_followup_reply_failed:retry_without_reply_date', {
+      roomId: params.roomId,
+      messageId: params.replyToMessageId,
+      error: error instanceof Error ? error.message.slice(0, 180) : String(error).slice(0, 180),
+    })
+    await sendRoomMessageViaWebSocket({
+      websocketUrl: params.flags.websocketUrl,
+      wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+      wsProxySecret: (params.flags as any).wsProxySecret,
+      jwt: params.jwt,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      timeoutMs: params.flags.sendTimeoutMs,
+    })
   }
-  await sendRoomMessageViaWebSocket({
-    websocketUrl: params.flags.websocketUrl,
-    wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
-    wsProxySecret: (params.flags as any).wsProxySecret,
-    jwt: params.jwt,
-    roomId: params.roomId,
-    text: params.text,
-    replyToMessageId: params.replyToMessageId,
-    timeoutMs: params.flags.sendTimeoutMs,
-  })
 }
 
 async function executeInverseAkitaChatReactionBatch(params: {
@@ -4571,6 +4546,11 @@ async function sendAlfaClubRoomTextInner(params: {
   flags?: AlfaClubChatBridgeFlags
   jwt?: string | null
   attachments?: unknown
+  /**
+   * `jwt` (default): Hermit in-room identity via Privy JWT / WS.
+   * `bot`: force ALFACLUB_API_KEY (daily brief / telegram ingress — needs bot message ids).
+   */
+  auth?: 'jwt' | 'bot'
 }): Promise<AlfaClubRoomSendResult> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
   const roomId = (params.roomId ?? flags.roomId ?? '').trim()
@@ -4578,7 +4558,10 @@ async function sendAlfaClubRoomTextInner(params: {
   const text = String(params.text ?? '').trim()
   if (!text) throw new Error('alfaclub_message_empty')
 
-  const jwt = (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+  const forceBot = params.auth === 'bot'
+  const jwt = forceBot
+    ? ''
+    : ((await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? '')
   const idempotencyKey = buildBotMessageIdempotencyKey({
     roomId,
     messageId:
@@ -4587,117 +4570,107 @@ async function sendAlfaClubRoomTextInner(params: {
       `room-text-${Date.now()}`,
   })
 
-  if (flags.botToken) {
+  // JWT-first (hermit4626 Privy identity). Bot only when auth:'bot' or no JWT.
+  if (jwt) {
     try {
-      const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
+      const sendResult = await sendRoomMessageViaJwtHttpWithProxyFallback({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
         directApiBaseUrl: flags.apiBaseUrl,
-        botToken: flags.botToken,
+        jwt,
         roomId,
         text,
         replyToMessageId: params.replyToMessageId,
         proxySecret: resolveAlfaClubProxySecret(flags),
-        idempotencyKey,
         timeoutMs: flags.sendTimeoutMs,
       })
       return {
-        lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id',
+        lane: params.replyToMessageId ? 'jwt_http_with_reply_id' : 'jwt_http_without_reply_id',
         messageId: sendResult.messageId,
       }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      if (!jwt || !isBotMessageForbiddenError(error)) {
-        throw error
-      }
-      logger.warn('[alfaclub-chat] bot_send_forbidden:fallback_jwt', {
+    } catch (jwtHttpError) {
+      let lastJwtHttpError: unknown = jwtHttpError
+      // Prefer a refreshed JWT for any WS fallback after an auth retry.
+      let jwtForFallback = jwt
+      logger.warn('[alfaclub-chat] jwt_http_send_failed:fallback_ws', {
         roomId,
-        error: detail.slice(0, 180),
+        error: (jwtHttpError instanceof Error ? jwtHttpError.message : String(jwtHttpError)).slice(
+          0,
+          180,
+        ),
       })
-      try {
-        await sendRoomMessageViaJwtHttpWithProxyFallback({
-          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-          directApiBaseUrl: flags.apiBaseUrl,
-          jwt,
-          roomId,
-          text,
-          replyToMessageId: params.replyToMessageId,
-          proxySecret: resolveAlfaClubProxySecret(flags),
-          timeoutMs: flags.sendTimeoutMs,
-        })
-        return {
-          lane: params.replyToMessageId
-            ? 'jwt_http_with_reply_id_after_bot_forbidden'
-            : 'jwt_http_without_reply_id_after_bot_forbidden',
-          messageId: null,
-        }
-      } catch (jwtHttpError) {
-        let lastJwtHttpError: unknown = jwtHttpError
-        logger.warn('[alfaclub-chat] jwt_http_send_failed:fallback_ws', {
-          roomId,
-          error: (jwtHttpError instanceof Error ? jwtHttpError.message : String(jwtHttpError)).slice(
-            0,
-            180,
-          ),
-        })
-        if (isJwtMessageAuthError(jwtHttpError)) {
-          await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
-          const refreshedJwt =
-            (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
-          if (refreshedJwt && refreshedJwt !== jwt) {
-            try {
-              await sendRoomMessageViaJwtHttpWithProxyFallback({
-                apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
-                directApiBaseUrl: flags.apiBaseUrl,
-                jwt: refreshedJwt,
-                roomId,
-                text,
-                replyToMessageId: params.replyToMessageId,
-                proxySecret: resolveAlfaClubProxySecret(flags),
-                timeoutMs: flags.sendTimeoutMs,
-              })
-              return {
-                lane: params.replyToMessageId
-                  ? 'jwt_http_with_reply_id_after_refresh'
-                  : 'jwt_http_without_reply_id_after_refresh',
-                messageId: null,
-              }
-            } catch (retryError) {
-              lastJwtHttpError = retryError
-              logger.warn('[alfaclub-chat] jwt_http_send_failed:after_refresh', {
-                roomId,
-                error: (retryError instanceof Error ? retryError.message : String(retryError)).slice(
-                  0,
-                  180,
-                ),
-              })
+      if (isJwtMessageAuthError(jwtHttpError)) {
+        await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+        const refreshedJwt =
+          (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
+        if (refreshedJwt && refreshedJwt !== jwt) {
+          jwtForFallback = refreshedJwt
+          try {
+            const sendResult = await sendRoomMessageViaJwtHttpWithProxyFallback({
+              apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+              directApiBaseUrl: flags.apiBaseUrl,
+              jwt: refreshedJwt,
+              roomId,
+              text,
+              replyToMessageId: params.replyToMessageId,
+              proxySecret: resolveAlfaClubProxySecret(flags),
+              timeoutMs: flags.sendTimeoutMs,
+            })
+            return {
+              lane: params.replyToMessageId
+                ? 'jwt_http_with_reply_id_after_refresh'
+                : 'jwt_http_without_reply_id_after_refresh',
+              messageId: sendResult.messageId,
             }
+          } catch (retryError) {
+            lastJwtHttpError = retryError
+            logger.warn('[alfaclub-chat] jwt_http_send_failed:after_refresh', {
+              roomId,
+              error: (retryError instanceof Error ? retryError.message : String(retryError)).slice(
+                0,
+                180,
+              ),
+            })
           }
         }
-        if (shouldSkipRawWebSocketSend(flags)) {
-          throw lastJwtHttpError instanceof Error
-            ? lastJwtHttpError
-            : new Error(String(lastJwtHttpError))
-        }
       }
+      if (shouldSkipRawWebSocketSend(flags)) {
+        throw lastJwtHttpError instanceof Error
+          ? lastJwtHttpError
+          : new Error(String(lastJwtHttpError))
+      }
+      const wsLane = await sendRoomMessageViaWebSocket({
+        websocketUrl: flags.websocketUrl,
+        wsProxyHttpSendUrl: flags.wsProxyHttpSendUrl,
+        wsProxySecret: flags.wsProxySecret,
+        jwt: jwtForFallback,
+        roomId,
+        text,
+        attachments: params.attachments,
+        replyToMessageId: params.replyToMessageId,
+        timeoutMs: flags.sendTimeoutMs,
+      })
+      const jwtLane = wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary'
+      return { lane: jwtLane, messageId: null }
     }
   }
 
-  if (!jwt) throw new Error('alfaclub_jwt_missing')
-  const wsLane = await sendRoomMessageViaWebSocket({
-    websocketUrl: flags.websocketUrl,
-    wsProxyHttpSendUrl: flags.wsProxyHttpSendUrl,
-    wsProxySecret: flags.wsProxySecret,
-    jwt,
+  if (!flags.botToken) {
+    throw new Error(forceBot ? 'alfaclub_bot_token_missing' : 'alfaclub_jwt_missing')
+  }
+  const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
+    apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+    directApiBaseUrl: flags.apiBaseUrl,
+    botToken: flags.botToken,
     roomId,
     text,
-    attachments: params.attachments,
     replyToMessageId: params.replyToMessageId,
+    proxySecret: resolveAlfaClubProxySecret(flags),
+    idempotencyKey,
     timeoutMs: flags.sendTimeoutMs,
   })
-  const jwtLane = wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary'
   return {
-    lane: flags.botToken ? `${jwtLane}_after_bot_forbidden` : jwtLane,
-    messageId: null,
+    lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id',
+    messageId: sendResult.messageId,
   }
 }
 
@@ -4710,6 +4683,8 @@ export async function sendAlfaClubRoomText(params: {
   flags?: AlfaClubChatBridgeFlags
   jwt?: string | null
   attachments?: unknown
+  /** Default jwt-first; pass `bot` for cron/relay lanes that need ALFACLUB_API_KEY. */
+  auth?: 'jwt' | 'bot'
   /**
    * Tag the resulting room message as having been posted by a relay, so the
    * outbound Telegram/XMTP fan-out in `ingestLiveMessages` can skip echoing

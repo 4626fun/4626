@@ -182,6 +182,7 @@ import {
   readAlfaClubChatBridgeFlagsForCronTick,
   readAlfaClubCronSkipLiveWebSocket,
   resolveAlfaClubBridgePollRoomIds,
+  sendAlfaClubRoomText,
   type AlfaClubChatBridgeFlags,
 } from './chatBridge.js'
 import {
@@ -1912,5 +1913,106 @@ describe('_resolveTrustedCommandSenderWalletForTests', () => {
       source: 'ingress',
       commandText: '/status',
     })
+  })
+})
+
+describe('sendAlfaClubRoomText JWT message ids + refresh fallback', () => {
+  const realFetch = globalThis.fetch
+
+  beforeEach(() => {
+    readChatTokenMock.mockReset()
+    readChatTokenMock.mockResolvedValue(null)
+    requestImmediatePrivyRefreshMock.mockReset()
+    requestImmediatePrivyRefreshMock.mockResolvedValue({
+      status: 'refreshed',
+      identityTokenExp: null,
+    })
+    recordChatBridgeMessageOriginMock.mockReset()
+    recordChatBridgeMessageOriginMock.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  it('returns messageId from the JWT HTTP /message response', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ messageId: 'jwt-msg-42', roomId: '1484' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch
+
+    const result = await sendAlfaClubRoomText({
+      roomId: '1484',
+      text: 'hello from web',
+      clientMessageId: 'web4626:1484:client-1',
+      flags: makeFlags({
+        roomId: '1484',
+        jwt: 'jwt-current',
+        botToken: null,
+      }),
+      origin: 'web4626',
+    })
+
+    expect(result).toEqual({
+      lane: 'jwt_http_without_reply_id',
+      messageId: 'jwt-msg-42',
+    })
+    expect(recordChatBridgeMessageOriginMock).toHaveBeenCalledWith({
+      roomId: '1484',
+      messageId: 'jwt-msg-42',
+      origin: 'web4626',
+    })
+  })
+
+  it('uses the refreshed JWT on WS fallback after HTTP auth retry fails', async () => {
+    requestImmediatePrivyRefreshMock.mockImplementation(async () => {
+      readChatTokenMock.mockResolvedValue({
+        jwt: 'jwt-refreshed',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      })
+      return { status: 'refreshed' as const, identityTokenExp: null }
+    })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/room/') && url.includes('/message')) {
+        return new Response(JSON.stringify({ error: 'invalid or revoked token' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.includes('ws-proxy-send')) {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    })
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await sendAlfaClubRoomText({
+      roomId: '1484',
+      text: 'retry via ws',
+      flags: makeFlags({
+        roomId: '1484',
+        jwt: 'jwt-stale',
+        botToken: null,
+        wsProxyHttpSendUrl: 'https://relay.example/ws-proxy-send',
+        wsProxySecret: 'secret',
+      }),
+    })
+
+    expect(requestImmediatePrivyRefreshMock).toHaveBeenCalledWith('bridge_auth_fail')
+    expect(result.lane).toBe('ws_proxy_http_primary')
+    const proxyCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes('ws-proxy-send'),
+    )
+    expect(proxyCall).toBeTruthy()
+    const body = JSON.parse(String((proxyCall?.[1] as RequestInit | undefined)?.body ?? '{}')) as {
+      jwt?: string
+    }
+    expect(body.jwt).toBe('jwt-refreshed')
   })
 })

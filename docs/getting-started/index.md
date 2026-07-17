@@ -5,11 +5,11 @@ sidebar_position: 1
 
 # What is 4626?
 
-4626 lets creators deposit a **Zora creator coin** into an **ERC-4626 vault** on Base, sell **tradable shares** through a **fair-launch auction**, and route trading fees and creator-coin external earnings (`creatorCoinPayoutRecipient`) to share holders.
+4626 lets creators **launch a vault** from a Zora creator coin on Base, **auction tradable shares**, **run Charm and Ajna strategies**, and **share fees** with holders onchain.
 
 <div class="docs-at-a-glance">
 
-You have a creator coin on Base and want to launch a vault. Start with the [Launch checklist](/guides/launch-checklist), then read [Fees, auction, and lottery](/overview/how-it-works) for the full product model.
+Creator coin on Base? Start with the [Launch checklist](/guides/launch-checklist). For fees and lottery after trading is live, see [Fees, auction, and lottery](/overview/how-it-works).
 
 </div>
 
@@ -17,17 +17,18 @@ You have a creator coin on Base and want to launch a vault. Start with the [Laun
 
 Creators with a **creator coin on Base** (typically via Zora) who want to:
 
-- Deposit creator coin into a **vault**
-- Run **open price discovery** (fair-launch auction — not a private presale)
-- Share **trade fees** and qualified **creator revenue** with share holders onchain
+- Launch an **ERC-4626 vault** from their creator coin
+- **Auction tradable shares** (open price discovery — not a private sale)
+- Attach **Charm LP** and **Ajna** lending
+- Share **trade fees** and qualified **creator revenue** with holders
 
 ## How it works
 
 1. Pay the **launch bundle** ($499 USDC) — unlocks deploy.
 2. **Deploy** vault, share, gauge, oracle, and auction contracts.
-3. **Activate** — deposit 50M–100M creator coin; batcher wraps `■` and schedules the fair-launch auction (Thursday 00:00 UTC epoch).
-4. After the auction **graduates** and settlement completes, `■` shares trade on Base; lottery and fees apply to qualifying **buys**.
-5. **Solana share bridge at finalize** — ~30% of `■` bridges to Solana (included in launch bundle); creator coin stays on Base.
+3. **Activate** — deposit 50M–100M creator coin; attach strategies; schedule the share auction.
+4. Auction **graduates** → finalize → `■` shares trade on Base; fees and lottery apply to qualifying buys.
+5. **Solana share bridge** runs at finalize (~30% of `■`; included in the launch bundle).
 
 Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
 

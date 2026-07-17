@@ -43,12 +43,11 @@ contract SeedRegistry4626Harness is SeedRegistry4626 {
 }
 
 contract SeedRegistry4626ConfigTest is Test {
-    // Pins must match script/SeedRegistry4626.s.sol constants (v1.18.0 greenfield).
-    address internal constant LIVE_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
-    address internal constant LIVE_OVAULT_FACTORY = 0x70d0D2411D362BA50821389383Fa6B829d736232;
-    // VAULT_BATCHER / VAULT_ACT_BATCHER currently pin v1.18.0 infra (addresses.md)
-    address internal constant LIVE_VAULT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
-    address internal constant LIVE_VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
+    // Pins must match script/SeedRegistry4626.s.sol constants (v1.19.1 greenfield).
+    address internal constant LIVE_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
+    address internal constant LIVE_OVAULT_FACTORY = 0xCAb65a066A4D52DD29ffB418B319819176b89610;
+    address internal constant LIVE_VAULT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
+    address internal constant LIVE_VAULT_ACT_BATCHER = 0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA;
     SeedRegistry4626Harness internal harness;
 
     function setUp() external {

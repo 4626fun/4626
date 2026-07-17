@@ -240,6 +240,7 @@ export async function relayTelegramMessageToAlfaClub(params: {
       roomId,
       replyToMessageId: dedupeKey,
       flags,
+      auth: 'bot',
       origin: 'telegram',
     })
     if (send.messageId) {

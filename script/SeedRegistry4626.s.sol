@@ -33,7 +33,7 @@ contract SeedRegistry4626 is Script {
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    // v1.18.0 greenfield registry.
+    // v1.19.1 greenfield registry.
     address internal constant DEFAULT_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
 
     // ═══════════════════════════════════════════════════════════════════

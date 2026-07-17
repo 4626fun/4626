@@ -5,11 +5,11 @@ sidebar_position: 2
 
 # Fees, auction, and lottery
 
-How a **Zora creator coin** becomes a vault with **tradable shares**, fair-launch price discovery, fee sharing, and an instant lottery on qualifying buys.
+How a Zora creator coin becomes a vault: auction tradable shares, run strategies, share fees, and run an instant lottery on qualifying buys.
 
 <div class="docs-at-a-glance">
 
-[Launch checklist](/guides/launch-checklist) · Creator coin, vault share, and tradable share are three separate token addresses.
+[Launch checklist](/guides/launch-checklist) · Creator coin, vault share (`▢`), and tradable share (`■`) are three separate addresses.
 
 </div>
 

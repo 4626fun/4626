@@ -290,6 +290,12 @@ contract MockAgentLaneCreate2Deployer {
         codeKinds[codeId] = kind;
     }
 
+    /// @dev Phase2 `_deployOrExisting` probes `store()` before CREATE2. Return zero so the
+    ///      mock skips the bytecode-store existing-address path and uses `deploy()` only.
+    function store() external pure returns (address) {
+        return address(0);
+    }
+
     function computeAddress(bytes32 salt, bytes32) external view returns (address) {
         if (salt == bootstrapSalt) return bootstrapAddress;
         return address(uint160(uint256(keccak256(abi.encodePacked("mock-create2", salt)))));

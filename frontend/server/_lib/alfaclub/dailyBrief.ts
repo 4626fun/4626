@@ -267,6 +267,7 @@ export async function sendDailyBriefToCommandRooms(params: {
           text: parentText,
           roomId,
           flags,
+          auth: 'bot',
           clientMessageId: `daily-brief:${snapshotKey}:${roomId}:parent`,
         })
         let threadReplyCount = 0
@@ -278,6 +279,7 @@ export async function sendDailyBriefToCommandRooms(params: {
               text: replyText,
               roomId,
               flags,
+              auth: 'bot',
               replyToMessageId: parentSend.messageId,
               clientMessageId: `daily-brief:${snapshotKey}:${roomId}:reply:${index}`,
             })
@@ -292,6 +294,7 @@ export async function sendDailyBriefToCommandRooms(params: {
             text: messageText,
             roomId,
             flags,
+            auth: 'bot',
             clientMessageId: `daily-brief:${snapshotKey}:${roomId}:flat`,
           })
           posted.push({
@@ -314,6 +317,7 @@ export async function sendDailyBriefToCommandRooms(params: {
         text: messageText,
         roomId,
         flags,
+        auth: 'bot',
         clientMessageId: `daily-brief:${snapshotKey}:${roomId}:single`,
       })
       posted.push({ roomId, lane: send.lane, messageText })

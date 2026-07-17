@@ -44,10 +44,11 @@ contract RegistryDefaultScriptsTest is Test {
     /// @dev Legacy pin still used by DeployTier1Upgrade (pre-v1.18 script).
     address internal constant LEGACY_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
 
-    /// @dev v1.18.0-greenfield pins (docs/reference/addresses.md / contracts.defaults).
-    address internal constant LIVE_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
-    address internal constant LIVE_VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
-    address internal constant LIVE_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
+    /// @dev v1.19.1-greenfield pins (SeedRegistry / RewardsEcosystem / BaseMainnetDeployer /
+    ///      docs/reference/addresses.md).
+    address internal constant LIVE_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
+    address internal constant LIVE_VAULT_ACT_BATCHER = 0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA;
+    address internal constant LIVE_LOTTERY_MANAGER = 0xB45E68a5867935a5734E4185977F81c528006650;
     address internal constant LIVE_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     DeployTier1UpgradeHarness internal tier1Upgrade;
@@ -64,7 +65,7 @@ contract RegistryDefaultScriptsTest is Test {
         assertEq(tier1Upgrade.exposedRegistry(), LEGACY_REGISTRY);
     }
 
-    function testRewardsEcosystemUsesLiveV1180Defaults() external view {
+    function testRewardsEcosystemUsesLiveV1191Defaults() external view {
         assertEq(rewardsEcosystem.exposedDefaultRegistry(), LIVE_REGISTRY);
         assertEq(rewardsEcosystem.exposedDefaultLotteryManager(), LIVE_LOTTERY_MANAGER);
         assertEq(rewardsEcosystem.exposedDefaultProtocolTreasury(), LIVE_PROTOCOL_TREASURY);

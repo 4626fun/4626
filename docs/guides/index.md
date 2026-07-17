@@ -5,15 +5,15 @@ sidebar_position: 0
 
 # Launch a vault
 
-Step-by-step path to launch a **new vault on Base** (release **v1.14.1**). Legacy vaults (e.g. AKITA) may use older infrastructure.
+Step-by-step path to launch a **new vault on Base** (release **v1.19.1**). Legacy vaults may use older infrastructure.
 
 <div class="docs-at-a-glance">
 
 | | |
 |---|---|
 | **You do** | Pay, deploy, and activate in the app |
-| **4626 does** | Fair-launch auction, finalize, Solana bridge, strategy attachment |
-| **Done when** | Milestone **Trading live** — `■` shares tradable on Base |
+| **4626 does** | Share auction, strategies, finalize, Solana bridge |
+| **Done when** | **Trading live** — `■` shares tradable on Base |
 
 </div>
 
