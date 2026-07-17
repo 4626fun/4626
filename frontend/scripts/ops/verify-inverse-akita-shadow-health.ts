@@ -277,24 +277,32 @@ async function checkHermitHealth(results: CheckResult[], url: string): Promise<v
       return
     }
     const body = (await res.json()) as {
-      counterTradeTickerStarted?: boolean
+      counterTradeEffective?: boolean
+      counterTradeEffectiveReason?: string | null
       counterTrade?: {
-        started?: boolean
         lastTickAt?: string | null
         lastResult?: { ok?: boolean; reason?: string }
       }
     }
-    const tickerStarted = Boolean(body.counterTradeTickerStarted ?? body.counterTrade?.started)
+    const effective = body.counterTradeEffective === true
     const lastTickAgeMin = ageMinutes(body.counterTrade?.lastTickAt)
-    const lastReason = body.counterTrade?.lastResult?.reason ?? 'unknown'
+    const lastReason =
+      body.counterTradeEffectiveReason
+      ?? body.counterTrade?.lastResult?.reason
+      ?? 'unknown'
 
-    if (!tickerStarted) {
-      push(results, 'hermit_counter_trade', 'fail', 'counter-trade ticker not started on Hermit health payload')
+    if (!effective) {
+      push(
+        results,
+        'hermit_counter_trade',
+        'fail',
+        `counter_trade_not_effective reason=${lastReason}`,
+      )
       return
     }
 
     const detail = [
-      'counter_trade_ticker=started',
+      'counter_trade_effective=true',
       lastTickAgeMin != null ? `last_tick_age_min=${lastTickAgeMin}` : 'last_tick_age_min=unknown',
       `last_reason=${lastReason}`,
     ].join(' ')

@@ -1,8 +1,9 @@
 # --------------------------------------------------------------------------
 # 4626 Hermit Agent — Dedicated Production Dockerfile
 # --------------------------------------------------------------------------
-# This is a minimal, dedicated image for the Hermit AlfaClub/Pinata creative
-# agent (hermit.4626.fun).
+# This is the dedicated Railway image for Hermit AlfaClub room ingest,
+# command replies, and the single InverseAKITA executor. Creative inference
+# stays on Vercel behind /api/hermit/draft.
 #
 # It is intentionally separate from the general agent image (Dockerfile.agent)
 # to avoid complex entrypoint logic that has been causing repeated healthcheck

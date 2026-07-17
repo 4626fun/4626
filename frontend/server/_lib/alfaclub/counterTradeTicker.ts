@@ -58,6 +58,24 @@ export interface CounterTradeTickerHandle {
   reason?: 'disabled'
 }
 
+export type CounterTradeTickerEffectiveness = {
+  effective: boolean
+  reason: string | null
+}
+
+export function resolveCounterTradeTickerEffectiveness(
+  state: CounterTradeTickerState,
+): CounterTradeTickerEffectiveness {
+  if (!state.started) return { effective: false, reason: state.reason ?? 'not_started' }
+  if (state.lastError) return { effective: false, reason: 'last_tick_failed' }
+  if (!state.lastResult) return { effective: false, reason: 'awaiting_first_tick' }
+  if (state.lastResult.reason) {
+    return { effective: false, reason: state.lastResult.reason }
+  }
+  if (!state.lastResult.ok) return { effective: false, reason: 'loop_not_ready' }
+  return { effective: true, reason: null }
+}
+
 function readTickIntervalMs(): number {
   const raw = String(process.env.ALFACLUB_COUNTER_TRADE_RUNNER_INTERVAL_MS ?? '').trim()
   if (!raw) return DEFAULT_TICK_INTERVAL_MS

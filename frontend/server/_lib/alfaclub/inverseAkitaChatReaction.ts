@@ -41,6 +41,7 @@ import { isInverseOpinionTradeCaptureEnabled } from './inverseOpinionTradeCaptur
 import { reconcileInverseOpinionTrades } from './inverseOpinionTradeReconciler.js'
 import { formatInverseOpinionSkipReply } from './inverseOpinionTerminalReplyFormatter.js'
 import type { OpinionTradeDecision } from './inverseOpinionTradeStore.js'
+import { isRailwayRuntimeEnv } from './keeprAlfaClubSplit.js'
 import {
   isInverseAkitaChatSelfSender,
   isInverseAkitaChatSelfUsername,
@@ -1108,6 +1109,17 @@ export async function executeInverseAkitaChatReaction(params: {
   }
 
   const captureEnabled = isInverseOpinionTradeCaptureEnabled()
+  if (isRailwayRuntimeEnv() && !captureEnabled) {
+    return {
+      ok: false,
+      skipped: true,
+      skipReason: 'capture_required',
+      replyText: '',
+      reactionEmoji: '',
+      counterSide,
+      pair: params.intent.pair,
+    }
+  }
   let decision: OpinionTradeDecision | null = captureEnabled
     ? params.claimedDecision ?? null
     : null

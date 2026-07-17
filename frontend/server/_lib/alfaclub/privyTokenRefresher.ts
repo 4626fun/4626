@@ -25,9 +25,7 @@
  * ## Bootstrap
  *
  * First-time setup: operator pastes a freshly-logged-in triplet into the
- * three env vars on the host platform (Vercel for the canonical cron path;
- * Railway is still available as a long-lived host for non-AlfaClub
- * runtimes if AlfaClub is later moved back in-process):
+ * three env vars on Vercel, which owns the canonical cron path:
  *   - `ALFACLUB_CHAT_JWT`                   (identity token; alfaclub API)
  *   - `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN`    (access token; Privy refresh)
  *   - `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN`   (refresh token; 30-day lifetime)
@@ -80,6 +78,7 @@ import {
   recordRefreshFailure,
   recordRefreshSuccess,
 } from './authHealthStore.js'
+import { isRailwayRuntimeEnv } from './keeprAlfaClubSplit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -600,7 +599,14 @@ export async function runAlfaClubPrivyRefreshOnce(
 
 export function requestImmediatePrivyRefresh(
   reason: 'bridge_auth_fail' | 'manual' = 'manual',
-): Promise<AlfaClubRefresherOutcome | { kind: 'throttled' }> {
+): Promise<AlfaClubRefresherOutcome | { kind: 'disabled' | 'throttled' }> {
+  if (isRailwayRuntimeEnv()) {
+    logger.info('[alfaclub-refresher] immediate refresh skipped on Railway', {
+      reason,
+      owner: 'vercel-cron',
+    })
+    return Promise.resolve({ kind: 'disabled' })
+  }
   const now = Date.now()
   if (immediateRefreshInFlight) return immediateRefreshInFlight
   if (now - lastImmediateRefreshKickAt < MIN_IMMEDIATE_REFRESH_KICK_INTERVAL_MS) {
@@ -632,13 +638,9 @@ export interface AlfaClubRefresherHandle {
  * Reads the long-lived-host opt-in flag for the in-process Privy token
  * refresher.
  *
- * For most Railway services (Keepr primary, etc.): leave this OFF. Vercel cron
- * remains the canonical writer.
- *
- * For the dedicated Hermit creative service (hermit.4626.fun): set to `1`.
- * This service is the primary long-lived consumer of the AlfaClub bridge
- * (especially for 1659 theatrical marketing). It is now the recommended owner
- * of the token rotation loop.
+ * Leave this OFF on Railway services. Vercel cron is the canonical writer.
+ * The helper remains available for isolated tests and deliberate non-Hermit
+ * recovery runtimes, but the Railway Hermit process never starts it.
  */
 function isInProcessRefresherEnabled(): boolean {
   const raw = String(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim().toLowerCase()

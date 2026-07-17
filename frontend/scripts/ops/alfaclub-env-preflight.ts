@@ -28,32 +28,20 @@ function runChecks(): Check[] {
   const checks: Check[] = []
 
   const requiredControl: Array<[string, string]> = [
-    ['CRON_SECRET', 'Cron auth for bridge + token refresh + daily brief'],
+    ['CRON_SECRET', 'Cron auth for token refresh, daily brief, and position alerts'],
     ['DATABASE_URL', 'Supabase pooler for chat_jwt + ingest + policies'],
-    ['ALFACLUB_API_KEY', 'Bot-token sends (preferred over WS-only)'],
+    ['ALFACLUB_API_KEY', 'Only bot credential for scheduled and relay sends'],
   ]
   for (const [key, note] of requiredControl) {
-    const present =
-      key === 'ALFACLUB_API_KEY'
-        ? envPresent('ALFACLUB_API_KEY') ||
-          envPresent('ALFACLUB_BOT_TOKEN') ||
-          envPresent('alfaclub_api_key')
-        : envPresent(key)
-    checks.push({ id: key, required: true, present, note })
+    checks.push({ id: key, required: true, present: envPresent(key), note })
   }
 
-  const bridgeRecommended: Array<[string, string]> = [
-    ['ALFACLUB_CHAT_BRIDGE_ENABLED', 'Must be on for Vercel cron bridge (value=1)'],
-    ['ALFACLUB_CHAT_ROOM_ID', 'Ops/command room (e.g. 1043)'],
-  ]
-  for (const [key, note] of bridgeRecommended) {
-    checks.push({
-      id: key,
-      required: false,
-      present: envPresent(key),
-      note,
-    })
-  }
+  checks.push({
+    id: 'ALFACLUB_RAILWAY_HERMIT_PRIMARY',
+    required: false,
+    present: parseBool(process.env.ALFACLUB_RAILWAY_HERMIT_PRIMARY),
+    note: 'Set after H-05 approval to suppress Vercel bridge ticks while Railway is healthy',
+  })
 
   checks.push({
     id: 'ALFACLUB_CHAT_JWT (inline)',
@@ -77,11 +65,11 @@ function runChecks(): Check[] {
     note: 'Keep off unless you explicitly want non-AlfaClub /gmeow to return tweet URLs.',
   })
 
-  const gmeowPinataMode = String(process.env.HERMIT_GMEOW_HERMIT_CAPTION ?? '').trim().toLowerCase()
+  const gmeowCaptionMode = String(process.env.HERMIT_GMEOW_HERMIT_CAPTION ?? '').trim().toLowerCase()
   checks.push({
     id: 'HERMIT_GMEOW_HERMIT_CAPTION',
     required: false,
-    present: !gmeowPinataMode || gmeowPinataMode === 'prompt' || gmeowPinataMode === 'args',
+    present: !gmeowCaptionMode || gmeowCaptionMode === 'prompt' || gmeowCaptionMode === 'args',
     note:
       'Unset or prompt = bare /gmeow is local-only (fast). Use always only if you want Hermit agent on every /gmeow.',
   })
@@ -101,13 +89,6 @@ function runChecks(): Check[] {
     present: separateBrief,
     note: 'Set 1 on production to stop auto-digest in the bridge/ops room',
   })
-  checks.push({
-    id: 'ALFACLUB_BRIDGE_CRON_SKIP_WS (recommended)',
-    required: false,
-    present: parseBool(process.env.ALFACLUB_BRIDGE_CRON_SKIP_WS ?? '1'),
-    note: 'Default on — Vercel cron should not open live WS each minute',
-  })
-
   const proxyRecommended: Array<[string, string]> = [
     ['ALFACLUB_CHAT_API_PROXY_URL', 'Cloudflare Worker egress for api.alfaclub.app'],
     ['ALFACLUB_CHAT_API_PROXY_SECRET', 'Must match Worker PROXY_SHARED_SECRET'],
@@ -125,8 +106,9 @@ function parseBool(raw: string | undefined): boolean {
 }
 
 const MANUAL_REMINDERS = [
-  'Railway XMTP primary: leave ALFACLUB_CHAT_BRIDGE_ENABLED and ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED unset.',
-  'Vercel production: ALFACLUB_CHAT_BRIDGE_ENABLED=1; token refresh via cron only.',
+  'Railway Hermit: bridge enabled; ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=0; inverse-opinion capture enabled.',
+  'Vercel production: token refresh, daily brief, position alerts, creative drafts, and Telegram webhook only.',
+  'Keepr Railway: XMTP primary; do not start the Hermit bridge or counter-trade executor.',
   'After Privy/Telegram rotation: sync alfaclub_runtime_secret + Vercel env, then redeploy.',
   'GitHub ALFACLUB_HEALTH_CRON_SECRET must match Vercel CRON_SECRET (see docs/operations/alfaclub/token-rotation.md).',
   'Prod smoke: CRON_SECRET=… pnpm -C frontend exec tsx scripts/ops/alfaclub-prod-cron-smoke.ts',

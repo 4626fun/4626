@@ -13,10 +13,10 @@ import { collectAlfaClubCommandMessages } from '../../server/_lib/alfaclub/chatB
  * Privy refresh out of Vercel cron) one of these will fail.
  *
  * Topology summary:
- *   - Vercel: AlfaClub control plane + chat-bridge-run + chat-token-refresh
+ *   - Vercel: creative draft, Telegram webhook, scheduled jobs, chat-token-refresh
  *   - Supabase: alfaclub_runtime_secret (chat_jwt + privy access/refresh)
- *   - Railway: Eliza/XMTP/Telegram/Twitter/Discord (NOT AlfaClub auth)
- *   - Pinata: /hermit, /meme, /gmeow creative agent (no auth writes)
+ *   - Railway Hermit: AlfaClub WS/history ingest, command replies, trade execution
+ *   - Railway Keepr: XMTP consume/send
  */
 describe('alfaclub architecture invariants', () => {
   describe('hermit slash commands route through the hermit family', () => {
@@ -99,6 +99,9 @@ describe('alfaclub architecture invariants', () => {
     const chatBridgeSrc = stripComments(
       readFileSync(resolve(repoRoot, 'server/_lib/alfaclub/chatBridge.ts'), 'utf8'),
     )
+    const hermitRuntimeSrc = stripComments(
+      readFileSync(resolve(repoRoot, 'server/agents/hermit/index.ts'), 'utf8'),
+    )
 
     it('hermit/skillRouter.ts does not import from alfaclub/chatTokenStore or privyTokenRefresher', () => {
       expect(skillRouterSrc).not.toMatch(/from\s+['"][^'"]*alfaclub\/chatTokenStore/)
@@ -122,6 +125,11 @@ describe('alfaclub architecture invariants', () => {
 
     it('alfaclub/chatBridge.ts does not start the in-process Privy refresher', () => {
       expect(chatBridgeSrc).not.toMatch(/\bstartAlfaClubPrivyTokenRefresher\b/)
+    })
+
+    it('Railway Hermit does not start the in-process Privy refresher', () => {
+      expect(hermitRuntimeSrc).not.toMatch(/\bstartAlfaClubPrivyTokenRefresher\b/)
+      expect(hermitRuntimeSrc).toContain('Vercel chat-token-refresh cron owns token rotation')
     })
   })
 })

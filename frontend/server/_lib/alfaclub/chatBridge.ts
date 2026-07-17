@@ -23,10 +23,9 @@
  *     via the deterministic executor's `hermit` family branch. The Hermit
  *     agent itself runs out-of-process; only its API endpoint + bearer
  *     are wired here through `HERMIT_AGENT_*` env.
- *   - Privy session-token rotation — Hermit Railway runs the in-process
- *     refresher when `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1`; Vercel cron
- *     at `/api/v1/alfaclub/chat-token-refresh` is an hourly backup. The bridge
- *     reads the rotated `chat_jwt` row but does not write it.
+ *   - Privy session-token rotation — Vercel cron at
+ *     `/api/v1/alfaclub/chat-token-refresh` is the canonical writer. Railway
+ *     reads the rotated `chat_jwt` row and never refreshes it.
  */
 
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
@@ -3312,6 +3311,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
           roomId: params.roomId,
           messageId: intent.id,
           commandHead: 'inverse-chat',
+          failureMode: 'closed',
         })
     if (!replyClaimed) {
       // Claim is the durable dedupe across Railway redeploys. Never trade again

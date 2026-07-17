@@ -1102,6 +1102,30 @@ describe('inverseAkitaChatReaction', () => {
     },
   )
 
+  it('fails closed on Railway when durable capture is disabled', async () => {
+    vi.stubEnv('RAILWAY_SERVICE_ID', 'hermit-service')
+    delete process.env.ALFACLUB_INVERSE_OPINION_TRADE_CAPTURE_ENABLED
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'railway-capture-required',
+        date: Date.now(),
+        sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+
+    expect(result).toMatchObject({
+      skipped: true,
+      skipReason: 'capture_required',
+    })
+    expect(mockRunArenaOpenPositions).not.toHaveBeenCalled()
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
   it('persists rejected authority and blocked metadata outcomes', async () => {
     mockResolveInverseAkitaChatAuthorAccess.mockResolvedValueOnce({
       eligible: false,

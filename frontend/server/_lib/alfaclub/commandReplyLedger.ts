@@ -44,6 +44,7 @@ export async function tryClaimCommandReply(params: {
   roomId: string
   messageId: string
   commandHead?: string
+  failureMode?: 'open' | 'closed'
 }): Promise<boolean> {
   const roomId = params.roomId.trim()
   const messageId = params.messageId.trim()
@@ -54,6 +55,7 @@ export async function tryClaimCommandReply(params: {
 
   const db = await getDb()
   if (!db) {
+    if (params.failureMode === 'closed') return false
     inMemoryClaimedReplyKeys.add(claimKey)
     return true
   }
@@ -79,6 +81,7 @@ export async function tryClaimCommandReply(params: {
     if (claimed) inMemoryClaimedReplyKeys.add(claimKey)
     return claimed
   } catch {
+    if (params.failureMode === 'closed') return false
     if (inMemoryClaimedReplyKeys.has(claimKey)) return false
     inMemoryClaimedReplyKeys.add(claimKey)
     return true
