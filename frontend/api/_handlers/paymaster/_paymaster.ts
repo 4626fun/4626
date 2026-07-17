@@ -465,6 +465,9 @@ const DEPLOYMENT_BATCHER_PHASE_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'gaugeInitCodeHash', type: 'bytes32' },
+          { name: 'ccaInitCodeHash', type: 'bytes32' },
+          { name: 'oracleInitCodeHash', type: 'bytes32' },
         ],
       },
       {
@@ -816,7 +819,7 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1 = '0xe93fc211'
 const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0xaf399b2b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
-const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
+const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0x07455a76'
 // finalizePhase2 selectors:
 // - current trimmed Phase2FinalizeParams: 0xcafc9348
 // - permit2-backed trimmed tuple: 0x8e782ae1

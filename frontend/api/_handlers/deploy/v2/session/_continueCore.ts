@@ -8,7 +8,10 @@ import { createBundlerClient, sendUserOperation, toCoinbaseSmartAccount } from '
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import { createDeploySessionBundlerTransport, DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS, withDeploySessionUserOpGas } from './deployUserOpGas.js'
-import { ensurePhase2CoreCreatesPrecreated } from './phase2CorePrecreate.js'
+import {
+  ensurePhase2CoreCreatesPrecreated,
+  injectPhase2CoreInitCodeHashes,
+} from './phase2CorePrecreate.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -1069,6 +1072,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let payloadPatch: Record<string, unknown> = { [stageHashKey]: null }
       try {
         let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
+        let userOpCalls = calls
         if (toStep === 'phase2_core_sent') {
           const precreate = await ensurePhase2CoreCreatesPrecreated(calls)
           if (!precreate.skipped) {
@@ -1081,6 +1085,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (precreate.deployed.length + precreate.existing.length >= 3) {
               phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
             }
+            if (precreate.initCodeHashes) {
+              const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
+              if (injected.injected) {
+                userOpCalls = injected.calls
+                payloadPatch = {
+                  ...payloadPatch,
+                  phase2CoreInitCodeHashes: precreate.initCodeHashes,
+                }
+              }
+            }
           } else if (precreate.reason) {
             payloadPatch = {
               ...payloadPatch,
@@ -1092,7 +1106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
         lastUserOpHash = await sendUserOperation(bundlerClient, {
           account: withDeploySessionUserOpGas(account, phase2AccountGas),
-          calls,
+          calls: userOpCalls,
         })
       } catch (err) {
         if (!allowCleanupFallback) throw err

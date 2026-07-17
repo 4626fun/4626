@@ -556,7 +556,10 @@ contract OVaultFactory4626LaneFacadeTest is Test {
             shareOFT: address(0xBEE3),
             shareSymbol: "s",
             version: "v1",
-            floorPriceQ96: 0
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: bytes32(0),
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
         });
     }
 

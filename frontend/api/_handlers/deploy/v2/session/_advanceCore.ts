@@ -25,7 +25,10 @@ import {
   readUserOperationEventSuccess,
   withDeploySessionUserOpGas,
 } from './deployUserOpGas.js'
-import { ensurePhase2CoreCreatesPrecreated } from './phase2CorePrecreate.js'
+import {
+  ensurePhase2CoreCreatesPrecreated,
+  injectPhase2CoreInitCodeHashes,
+} from './phase2CorePrecreate.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -2008,6 +2011,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       let payloadPatch: Record<string, unknown> = { [stageKey]: null }
       try {
         let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
+        let userOpCalls = fullCalls
         if (toStep === 'phase2_core_sent') {
           const precreate = await ensurePhase2CoreCreatesPrecreated(fullCalls)
           if (!precreate.skipped) {
@@ -2019,6 +2023,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
             }
             if (precreate.deployed.length + precreate.existing.length >= 3) {
               phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
+            }
+            if (precreate.initCodeHashes) {
+              const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
+              if (injected.injected) {
+                userOpCalls = injected.calls
+                payloadPatch = {
+                  ...payloadPatch,
+                  phase2CoreInitCodeHashes: precreate.initCodeHashes,
+                }
+              }
             }
           } else if (precreate.reason) {
             payloadPatch = {
@@ -2032,7 +2046,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         // When phase2 CREATE2s are already on-chain, use wiring-only gas (fits CDP).
         nextHash = await sendUserOperation(bundler, {
           account: withDeploySessionUserOpGas(account, phase2AccountGas),
-          calls: fullCalls,
+          calls: userOpCalls,
         })
       } catch (err) {
         if (!allowCleanupFallback) throw err
@@ -2260,22 +2274,36 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       // Fat deploy UserOps self-bundle above CDP's 14.5M gas cap; omit CDP
       // paymaster so EntryPoint deposit (topped up by the self-bundle key) sponsors gas.
       let phase2AccountGas: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS | undefined
+      let userOpCalls = fullCalls
+      let payloadPatch: Record<string, unknown> = { [stageUserOpHashKey(sentStep)]: null }
       if (sentStep === 'phase2_core_sent') {
         const precreate = await ensurePhase2CoreCreatesPrecreated(fullCalls)
-        if (!precreate.skipped && precreate.deployed.length + precreate.existing.length >= 3) {
-          phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
+        if (!precreate.skipped) {
+          if (precreate.deployed.length + precreate.existing.length >= 3) {
+            phase2AccountGas = DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
+          }
+          if (precreate.initCodeHashes) {
+            const injected = injectPhase2CoreInitCodeHashes(userOpCalls, precreate.initCodeHashes)
+            if (injected.injected) {
+              userOpCalls = injected.calls
+              payloadPatch = {
+                ...payloadPatch,
+                phase2CoreInitCodeHashes: precreate.initCodeHashes,
+              }
+            }
+          }
         }
       }
       const nextHash = await sendUserOperation(bundler, {
         account: withDeploySessionUserOpGas(account, phase2AccountGas),
-        calls: fullCalls,
+        calls: userOpCalls,
       })
       await updateDeploySession({
         id: rec.id,
         lastUserOpHash: nextHash,
         lastTxHash: null,
         lastError: null,
-        payloadPatch: { [stageUserOpHashKey(sentStep)]: nextHash },
+        payloadPatch: { ...payloadPatch, [stageUserOpHashKey(sentStep)]: nextHash },
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')

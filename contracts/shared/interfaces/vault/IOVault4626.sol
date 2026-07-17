@@ -10,6 +10,8 @@ pragma solidity ^0.8.20;
 interface IOVault4626 {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
     function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external;
+    function gaugeController() external view returns (address);
+    function ccaLaunchArm() external view returns (address);
     function setGaugeController(address controller_) external;
     function setCcaLaunchArm(address ccaLaunchArm_) external;
     function setWhitelist(address account, bool status) external;
