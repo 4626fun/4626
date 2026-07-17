@@ -9,10 +9,9 @@ import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
   type AlfaClubRoomSort,
-  formatRoomKeyQuote,
   formatRoomPct,
-  formatRoomType,
   formatRoomUsd,
+  formatRoomUsdCompact,
   pnlToneClassName,
   roomCurveTierRingClassName,
   sortAlfaClubRooms,
@@ -164,14 +163,15 @@ export function AlfaClubExploreRooms() {
       />
 
       <main className="mx-auto w-full max-w-[1400px] px-3 pt-6 sm:px-6 sm:pt-10">
-        <header className="border-b border-white/[0.08] pb-7">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-sky-300">
-            AlfaClub Explore
+        <header className="border-b border-white/[0.06] pb-8">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sky-300/90">
+            AlfaClub
           </p>
-          <h1 className="mt-3 text-3xl font-medium text-white sm:text-4xl">Explore rooms</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-            Compare Trading and Social Rooms, then open the room workspace for chat,
-            ownership, liquidity, safety, and live activity.
+          <h1 className="mt-2 text-3xl font-medium tracking-tight text-white sm:text-4xl">
+            Explore rooms
+          </h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
+            Browse Trading and Social Rooms by price, volume, fund size, and PnL.
           </p>
           <dl className="mt-6 grid max-w-xl grid-cols-3 gap-px overflow-hidden rounded-xl bg-white/[0.08] ring-1 ring-white/[0.08]">
             <Metric label="All rooms" value={rooms.length} />
@@ -216,24 +216,25 @@ export function AlfaClubExploreRooms() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl bg-black/30 ring-1 ring-white/[0.08]" aria-label="AlfaClub room results">
+        <section
+          className="overflow-hidden rounded-2xl bg-zinc-950/40 ring-1 ring-white/[0.07]"
+          aria-label="AlfaClub room results"
+        >
           <div className="overflow-x-auto scrollbar-hide">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[minmax(260px,1.5fr)_90px_70px_210px_100px_100px_140px_60px] border-b border-white/[0.08] bg-zinc-950/90 px-3 py-3 font-mono text-[9px] uppercase tracking-[0.15em] text-zinc-600">
+            <div className="min-w-[860px]">
+              <div className="grid grid-cols-[minmax(260px,2.2fr)_minmax(128px,1fr)_minmax(96px,0.85fr)_minmax(96px,0.85fr)_minmax(132px,1.1fr)_72px] items-center gap-x-4 border-b border-white/[0.06] px-4 py-3 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500 sm:px-5">
                 <span>Room</span>
-                <span className="text-center">Type</span>
-                <span className="text-center">Tier</span>
-                <span className="text-right">Key price</span>
+                <span className="text-right">Price</span>
                 <span className="text-right">Volume</span>
-                <span className="text-right">Trading fund</span>
+                <span className="text-right">Fund</span>
                 <span className="text-right">PnL</span>
                 <span className="text-right">Keys</span>
               </div>
 
               {loading ? (
-                <div className="divide-y divide-white/[0.05]">
+                <div className="divide-y divide-white/[0.04]">
                   {Array.from({ length: 10 }).map((_, index) => (
-                    <div key={index} className="h-[68px] animate-pulse bg-white/[0.015]" />
+                    <div key={index} className="h-[72px] animate-pulse bg-white/[0.015]" />
                   ))}
                 </div>
               ) : error ? (
@@ -257,7 +258,7 @@ export function AlfaClubExploreRooms() {
                   detail="Try a broader name, room type, or curve tier."
                 />
               ) : (
-                <div className="divide-y divide-white/[0.05]">
+                <div className="divide-y divide-white/[0.04]">
                   {displayedRooms.map((room) => (
                     <RoomRow key={room.roomId} room={room} />
                   ))}
@@ -327,72 +328,118 @@ function RoomSelect<T extends string>({
   )
 }
 
+function RoomMetaChip({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode
+  tone?: 'neutral' | 'trading' | 'social' | 'featured'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium capitalize tracking-wide',
+        tone === 'trading' && 'bg-cyan-400/10 text-cyan-200/90',
+        tone === 'social' && 'bg-fuchsia-400/10 text-fuchsia-200/90',
+        tone === 'featured' && 'bg-sky-400/10 text-sky-300',
+        tone === 'neutral' && 'bg-white/[0.04] text-zinc-400',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
   const title = alfaclubRoomPrimaryTitle(room)
   const handle = room.creatorHandle?.trim().replace(/^@+/, '')
   const tierRing = roomCurveTierRingClassName(room)
+  const typeTone = room.roomType === 'social' ? 'social' : 'trading'
+  const typeLabel = room.roomType === 'social' ? 'Social' : 'Trading'
+
   return (
     <Link
       to={`/rooms?roomId=${encodeURIComponent(room.roomId)}`}
-      className="group grid grid-cols-[minmax(260px,1.5fr)_90px_70px_210px_100px_100px_140px_60px] items-center px-3 py-2.5 text-xs transition hover:bg-white/[0.035]"
+      className="group grid grid-cols-[minmax(260px,2.2fr)_minmax(128px,1fr)_minmax(96px,0.85fr)_minmax(96px,0.85fr)_minmax(132px,1.1fr)_72px] items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5"
     >
-      <div className="flex min-w-0 items-center gap-3 pr-4">
+      <div className="flex min-w-0 items-center gap-3.5">
         {room.imageUrl ? (
           <img
             src={room.imageUrl}
             alt=""
             className={cn(
-              'size-11 shrink-0 rounded-xl object-cover ring-1 ring-white/[0.08]',
-              tierRing && 'ring-2 ring-offset-1 ring-offset-black',
+              'size-10 shrink-0 rounded-full object-cover ring-1 ring-white/[0.1]',
+              tierRing && 'ring-2 ring-offset-2 ring-offset-zinc-950',
               tierRing,
             )}
           />
         ) : (
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-sm font-semibold text-zinc-500 ring-1 ring-white/[0.08]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/[0.05] text-sm font-semibold text-zinc-500 ring-1 ring-white/[0.08]">
             {title.slice(0, 1).toUpperCase()}
           </span>
         )}
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-zinc-100 group-hover:text-white">
-            {title}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-medium tracking-tight text-zinc-50 group-hover:text-white">
+              {title}
+            </span>
+            {room.featured ? <RoomMetaChip tone="featured">Featured</RoomMetaChip> : null}
           </span>
-          <span className="mt-1 block truncate font-mono text-[10px] text-zinc-600">
-            #{room.roomId}{handle ? ` · @${handle}` : ''}
+          <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[10px] tabular-nums text-zinc-600">#{room.roomId}</span>
+            {handle ? (
+              <span className="truncate text-[11px] text-zinc-500">@{handle}</span>
+            ) : null}
+            <RoomMetaChip tone={typeTone}>{typeLabel}</RoomMetaChip>
+            {room.tier ? <RoomMetaChip>{room.tier}</RoomMetaChip> : null}
           </span>
         </span>
-        {room.featured ? (
-          <span className="shrink-0 rounded-full bg-sky-400/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-sky-300">
-            Featured
-          </span>
-        ) : null}
       </div>
-      <span className="text-center text-zinc-300">{formatRoomType(room.roomType)}</span>
-      <span className="text-center capitalize text-zinc-400">{room.tier ?? '—'}</span>
-      <span className="truncate text-right font-medium tabular-nums text-zinc-100">
-        {formatRoomKeyQuote({
-          midUsdc: room.keyPriceUsdc,
-          buyUsdc: room.buyPriceUsdc,
-          sellUsdc: room.sellPriceUsdc,
-        })}
+
+      <span className="min-w-0 text-right">
+        <span className="block truncate text-sm font-medium tabular-nums text-zinc-50">
+          {formatRoomUsd(room.keyPriceUsdc)}
+        </span>
+        <span className="mt-1 block truncate font-mono text-[10px] tabular-nums text-zinc-500">
+          ↑{formatRoomUsdCompact(room.buyPriceUsdc)}
+          <span className="mx-1 text-zinc-700">·</span>
+          ↓{formatRoomUsdCompact(room.sellPriceUsdc)}
+        </span>
       </span>
-      <span className="text-right tabular-nums text-zinc-200">
+
+      <span className="truncate text-right text-sm tabular-nums text-zinc-200">
         {formatRoomUsd(room.volumeUsdc)}
       </span>
-      <span className="text-right tabular-nums text-zinc-200">
+
+      <span className="truncate text-right text-sm tabular-nums text-zinc-200">
         {formatRoomUsd(room.tradingFundUsdc)}
       </span>
-      <span className="text-right">
-        <span className={cn('block whitespace-nowrap font-medium tabular-nums', pnlToneClassName(room.pnlUsdc))}>
+
+      <span className="min-w-0 text-right">
+        <span
+          className={cn(
+            'block truncate text-sm font-medium tabular-nums',
+            pnlToneClassName(room.pnlUsdc),
+          )}
+        >
           {formatRoomUsd(room.pnlUsdc)}
-          <span className="ml-1 text-[10px]">{formatRoomPct(room.pnlPctAllTime)}</span>
+          <span className="ml-1.5 text-[11px] font-normal opacity-90">
+            {formatRoomPct(room.pnlPctAllTime)}
+          </span>
         </span>
-        <span className="mt-0.5 block whitespace-nowrap font-mono text-[10px] tabular-nums text-zinc-500">
-          7D {formatRoomPct(room.pnlPct7d)} · 30D {formatRoomPct(room.pnlPct30d)}
+        <span className="mt-1 block truncate font-mono text-[10px] tabular-nums text-zinc-600">
+          7D {formatRoomPct(room.pnlPct7d)}
+          <span className="mx-1 text-zinc-700">·</span>
+          30D {formatRoomPct(room.pnlPct30d)}
         </span>
       </span>
-      <span className="flex items-center justify-end gap-2 text-right tabular-nums text-zinc-300">
+
+      <span className="flex items-center justify-end gap-1.5 text-sm tabular-nums text-zinc-300">
         {room.keySupply?.toLocaleString() ?? '—'}
-        <ArrowRight className="size-3.5 shrink-0 text-zinc-700 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" aria-hidden />
+        <ArrowRight
+          className="size-3.5 shrink-0 text-zinc-700 transition group-hover:translate-x-0.5 group-hover:text-zinc-400"
+          aria-hidden
+        />
       </span>
     </Link>
   )
