@@ -16,9 +16,9 @@ CURRENT_RELEASE="v1.19.1"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
 # During an immutable bytecode-epoch rollout, source may intentionally target
 # the next manifest while docs/defaults still describe the live release.
-# v1.19.2 = post-AA95 Phase2Module source (hot-swapped on live batcher); store
-# seed verification still uses sealed CURRENT_RELEASE=v1.19.1.
-SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.2}"
+# Source-ahead Phase2Module (post-AA95 / vaultKind hot-swap). Store seed
+# verification still uses sealed CURRENT_RELEASE=v1.19.1.
+SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.1-phase2-source}"
 SOURCE_MANIFEST="$ROOT_DIR/deployments/base/${SOURCE_RELEASE}-bytecode-manifest.json"
 
 load_env_key_if_unset() {
@@ -63,7 +63,7 @@ bytecode_store="0xF9622613682a12E46b914c7498716F42E44c4d36"
 create2_from_store="0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2"
 batcher="0xa18169caf37fa0347285B16aAFC2B09eCB43F145"
 lottery_manager="0xB45E68a5867935a5734E4185977F81c528006650"
-phase1_module="0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b"
+phase1_module="0x33ABACC30a4179444d9d565245561B3988650bF5"
 phase2_module="0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba"
 phase3_helper="0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74"
 share_mesh_helper="0x73b6efB7196CdFa6c095Dc196559c88818Cd3211"

@@ -33,7 +33,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | CreatorOVaultStrategiesModule | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165` |
 | CreatorOVaultAdminModule | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
 | DeploymentBatcher | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| DeploymentBatcherPhase1Module | `0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b` |
+| DeploymentBatcherPhase1Module | `0x33ABACC30a4179444d9d565245561B3988650bF5` |
 | DeploymentBatcherPhase2Module | `0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba` |
 | DeploymentBatcherPhase3Helper | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | DeploymentBatcherShareMeshHelper | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
@@ -44,7 +44,7 @@ Notes:
 - **v1.19.1** is the shared/global infrastructure epoch and the per-creator
   bytecode/CREATE2 namespace for new launches.
 - Live `DeploymentBatcherPhase2Module` was hot-swapped to `0x3089678d…` (AA95 /
-  vaultKind wiring). Source artifacts track `deployments/base/v1.19.2-bytecode-manifest.json`;
+  vaultKind wiring). Source artifacts track `deployments/base/v1.19.1-phase2-source-bytecode-manifest.json`;
   the sealed store seed set remains `v1.19.1`. Prior module `0x0DDac7f1…` is superseded.
 - Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
   new store/deployer/batcher stack.

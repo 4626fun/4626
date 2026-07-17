@@ -35,11 +35,13 @@ export const PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('02D7abC547F8B1e7E
 export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a18169caf37fa0347285B16aAFC2B09eCB43F145')
 /** Retired v1.19.1 greenfield Phase1Module (agentVaultCoreModule == creator core). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V1191_HANDOFF = addr('7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc')
+/** Interim Phase1 that pointed agentVaultCoreModule at store pointer `0xE935…` (invalid). */
+export const SPLIT_PHASE1_PHASE1_MODULE_V1191_STORE_POINTER = addr('0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b')
 /**
  * Live Phase1Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
- * `agentVaultCoreModule` = AgentOVaultCoreModule `0xE9350e3A…`.
+ * `agentVaultCoreModule` = live AgentOVaultCoreModule instance `0x8c084A63…`.
  */
-export const SPLIT_PHASE1_PHASE1_MODULE = addr('0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b')
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('33ABACC30a4179444d9d565245561B3988650bF5')
 /** Retired v1.13.0 v2 Phase1Module (grandfathered greenfield only). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
@@ -48,7 +50,7 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD
 export const SPLIT_PHASE1_PHASE2_MODULE_V1191_HANDOFF = addr('0DDac7f1A3EA3796b31709Ed2270Cf0876A98460')
 /**
  * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
- * Source-ahead bytecode epoch: `deployments/base/v1.19.2-bytecode-manifest.json`.
+ * Source-ahead bytecode epoch: `deployments/base/v1.19.1-phase2-source-bytecode-manifest.json`.
  */
 export const SPLIT_PHASE1_PHASE2_MODULE = addr('3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba')
 export const SPLIT_PHASE1_PHASE3_HELPER = addr('C54Fb8d8232a8a654E512b3bDf761c8Eb2783B74')
