@@ -96,7 +96,7 @@ Historical v1.16.1 batcher child addresses (deprecated): Phase3 `0xE0971a…`, S
 
 Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F884DB835E8c0`
 
-Retired v1.13.0 v2 Phase1Module (grandfathered vaults only): `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
+Retired v1.13.0 Phase1Module (grandfathered vaults only): `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
 
 Pre-v1.14.1 batcher (deprecated for new greenfield deploys): `0xa99058f424FB3ACC639F59355C65C40149030651`
 

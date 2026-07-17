@@ -6,7 +6,7 @@ import { base } from 'viem/chains'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
-  SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY,
+  SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY,
   isDeprecatedDeploymentBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
@@ -280,8 +280,8 @@ async function main() {
     },
     {
       id: 'phase1_module_not_v2_legacy',
-      ok: phase1ModuleAddress !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY),
-      detail: `live=${phase1ModuleAddress ?? 'n/a'} retired_v2=${SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY}`,
+      ok: phase1ModuleAddress !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY),
+      detail: `live=${phase1ModuleAddress ?? 'n/a'} retired_v1130=${SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY}`,
     },
     {
       id: 'phase1_module_storage_v3',

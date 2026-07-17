@@ -27,7 +27,7 @@ import {
   OVAULT_STRATEGIES_MODULE,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
-  SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY,
+  SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY,
 } from '../../src/config/contracts.defaults.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import {
@@ -96,8 +96,8 @@ async function main(): Promise<void> {
   })
   checks.push({
     id: 'batcher.not_v2_legacy_phase1',
-    ok: livePhase1 !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY),
-    detail: `live=${livePhase1} retired_v2=${SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY}`,
+    ok: livePhase1 !== getAddress(SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY),
+    detail: `live=${livePhase1} retired_v1130=${SPLIT_PHASE1_PHASE1_MODULE_V1130_LEGACY}`,
   })
 
   const aligned = await resolveAlignedPhase1DeployDeps({ publicClient: client, batcherAddress: batcher })
