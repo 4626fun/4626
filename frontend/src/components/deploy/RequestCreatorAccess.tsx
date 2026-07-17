@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, MailQuestion, XCircle } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { useAccount } from 'wagmi'
 
 import { Button } from '@/components/ui/Button'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { canUseSessionApi } from '@/lib/auth/sessionApiGate'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
@@ -47,13 +48,14 @@ async function requestCreatorAccess(params: { coin?: string | null }): Promise<{
 }
 
 export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
-  const { isConnected } = useAccount()
-  const { isSignedIn, busy: authBusy, error: authError, signIn } = useSiweAuth()
+  const auth = useSiweAuth()
+  const { busy: authBusy, error: authError, signIn, hasSession, sessionHydrated } = auth
+  const canFetch = canUseSessionApi(auth)
   const qc = useQueryClient()
 
   const statusQuery = useQuery({
     queryKey: ['creatorAccessStatus'],
-    enabled: isConnected && isSignedIn,
+    enabled: canFetch,
     queryFn: fetchCreatorAccessStatus,
     staleTime: 15_000,
     retry: 1,
@@ -77,7 +79,15 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
     void qc.invalidateQueries({ queryKey: ['creatorAllowlist'] })
   }, [qc, statusQuery.data?.approved])
 
-  if (!isSignedIn) {
+  if (!sessionHydrated) {
+    return (
+      <div className="rounded-xl border border-white/10 bg-black/30 p-5">
+        <LoadingText intent="processing" size="sm" labelOverride="Checking session…" />
+      </div>
+    )
+  }
+
+  if (!hasSession) {
     return (
       <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
         <div className="flex items-center gap-2 text-sm text-zinc-200">

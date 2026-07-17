@@ -13,9 +13,8 @@ import {
   ExternalLink,
   ArrowLeft,
 } from 'lucide-react'
-import { useAccount } from 'wagmi'
-
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { canUseSessionApi } from '@/lib/auth/sessionApiGate'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { Button } from '@/components/ui/Button'
@@ -500,8 +499,8 @@ function DetailPanel({
 // ---------------------------------------------------------------------------
 
 export function AdminWaitlist() {
-  const { isConnected } = useAccount()
-  const { isSignedIn } = useSiweAuth()
+  const auth = useSiweAuth()
+  const canFetch = canUseSessionApi(auth)
 
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<WaitlistListScope>('email')
@@ -514,22 +513,22 @@ export function AdminWaitlist() {
 
   const listQuery = useQuery({
     queryKey: ['adminWaitlistList', scope, query.trim().toLowerCase()],
-    enabled: isConnected && isSignedIn,
+    enabled: canFetch,
     queryFn: () =>
       fetchWaitlistList({
         scope,
         q: query.trim().length > 0 ? query.trim().toLowerCase() : null,
       }),
     staleTime: 5_000,
-    retry: 0,
+    retry: 1,
   })
 
   const detailQuery = useQuery({
     queryKey: ['adminWaitlistDetail', selectedId],
-    enabled: isConnected && isSignedIn && selectedId !== null,
+    enabled: canFetch && selectedId !== null,
     queryFn: () => fetchWaitlistDetail({ id: selectedId as number }),
     staleTime: 5_000,
-    retry: 0,
+    retry: 1,
   })
 
   // Auto-select first item on desktop (don't switch to detail view on mobile)
@@ -706,7 +705,11 @@ export function AdminWaitlist() {
             <span className="text-[10px] sm:text-[11px]">{listQuery.isFetching ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : ''}</span>
           </div>
           <div className="max-h-[50vh] sm:max-h-[56vh] lg:max-h-[640px] overflow-auto divide-y divide-white/5">
-            {items.length === 0 ? (
+            {!canFetch || (listQuery.isPending && items.length === 0) ? (
+              <div className="px-3 sm:px-4 py-6 text-[13px] sm:text-sm text-zinc-600">
+                <LoadingText intent="processing" size="sm" labelOverride="Loading waitlist..." />
+              </div>
+            ) : items.length === 0 ? (
               <div className="px-3 sm:px-4 py-6 text-[13px] sm:text-sm text-zinc-600">No waitlist entries found.</div>
             ) : (
               items.map((item) => (

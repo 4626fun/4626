@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { canUseSessionApi } from '@/lib/auth/sessionApiGate'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingInline } from '@/components/ui/LoadingState'
@@ -93,8 +93,8 @@ async function revokeAddress(params: { address: string; note?: string }): Promis
 }
 
 export function AdminCreatorAccess() {
-  const { isConnected } = useAccount()
-  const { isSignedIn } = useSiweAuth()
+  const auth = useSiweAuth()
+  const canFetch = canUseSessionApi(auth)
   const qc = useQueryClient()
 
   const [notes, setNotes] = useState<Record<number, string>>({})
@@ -104,18 +104,18 @@ export function AdminCreatorAccess() {
 
   const listQuery = useQuery({
     queryKey: ['adminCreatorAccessList'],
-    enabled: isConnected && isSignedIn,
+    enabled: canFetch,
     queryFn: fetchAdminList,
     staleTime: 5_000,
-    retry: 0,
+    retry: 1,
   })
 
   const allowlistListQuery = useQuery({
     queryKey: ['adminCreatorAllowlist', allowlistQuery.trim().toLowerCase()],
-    enabled: isConnected && isSignedIn,
+    enabled: canFetch,
     queryFn: () => fetchAdminAllowlist({ q: allowlistQuery.trim().length > 0 ? allowlistQuery.trim().toLowerCase() : null }),
     staleTime: 10_000,
-    retry: 0,
+    retry: 1,
   })
 
   const approveMutation = useMutation({
