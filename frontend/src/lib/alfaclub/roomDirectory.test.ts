@@ -5,6 +5,7 @@ import {
   formatRoomPoints,
   formatRoomUsd,
   formatRoomUsdCompact,
+  formatRoomKeyQuote,
   normalizeAlfaClubUsdc,
   readRecentRoomIds,
   rememberRecentRoom,
@@ -67,6 +68,12 @@ describe('AlfaClub room directory helpers', () => {
   it('formats compact USD for buy/sell sublines', () => {
     expect(formatRoomUsdCompact(0.225)).toBe('$0.23')
     expect(formatRoomUsdCompact(102.4)).toBe('$102.40')
+  })
+
+  it('keeps mid/buy/sell on a single key-quote line', () => {
+    expect(
+      formatRoomKeyQuote({ midUsdc: 0.1625, buyUsdc: 0.225, sellUsdc: 0.1 }),
+    ).toBe('$0.1625 ↑$0.23 ↓$0.10')
   })
 
 

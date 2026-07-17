@@ -72,6 +72,20 @@ export function formatRoomUsdCompact(value: number | null | undefined): string {
   return `${value < 0 ? '-' : ''}$${formatted}`
 }
 
+/** One-line mid · buy · sell quote (avoids multi-row key-price cells). */
+export function formatRoomKeyQuote(params: {
+  midUsdc: number | null | undefined
+  buyUsdc: number | null | undefined
+  sellUsdc: number | null | undefined
+}): string {
+  const mid = formatRoomUsd(params.midUsdc)
+  if (mid === '—') return '—'
+  const buy = formatRoomUsdCompact(params.buyUsdc)
+  const sell = formatRoomUsdCompact(params.sellUsdc)
+  if (buy === '—' && sell === '—') return mid
+  return `${mid} ↑${buy} ↓${sell}`
+}
+
 export function formatRoomPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'
   const sign = value > 0 ? '+' : ''

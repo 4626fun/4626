@@ -35,10 +35,10 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
+  formatRoomKeyQuote,
   formatRoomPct,
   formatRoomType,
   formatRoomUsd,
-  formatRoomUsdCompact,
   pnlToneClassName,
   readRecentRoomIds,
   rememberRecentRoom,
@@ -694,12 +694,11 @@ function RoomHeader({
           <dl className="grid grid-cols-2 gap-3 text-right sm:grid-cols-3 xl:grid-cols-5">
             <HeaderStat
               label="Key price"
-              value={
-                safetySummary?.pricing
-                  ? formatRoomUsd(safetySummary.pricing.currentUsdc)
-                  : formatRoomUsd(room?.keyPriceUsdc)
-              }
-              detail={`↑${formatRoomUsdCompact(room?.buyPriceUsdc)} · ↓${formatRoomUsdCompact(room?.sellPriceUsdc)}`}
+              value={formatRoomKeyQuote({
+                midUsdc: safetySummary?.pricing?.currentUsdc ?? room?.keyPriceUsdc,
+                buyUsdc: room?.buyPriceUsdc,
+                sellUsdc: room?.sellPriceUsdc,
+              })}
             />
             <HeaderStat label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
             <HeaderStat
@@ -920,10 +919,11 @@ function OverviewPanel({
         <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <FactCard
             label="Key price"
-            value={
-              pricing ? formatUsd(pricing.currentUsdc) : formatRoomUsd(room?.keyPriceUsdc)
-            }
-            detail={`↑${formatRoomUsdCompact(room?.buyPriceUsdc)} · ↓${formatRoomUsdCompact(room?.sellPriceUsdc)}`}
+            value={formatRoomKeyQuote({
+              midUsdc: pricing ? pricing.currentUsdc : room?.keyPriceUsdc,
+              buyUsdc: pricing ? pricing.buyUsdc : room?.buyPriceUsdc,
+              sellUsdc: pricing ? pricing.sellUsdc : room?.sellPriceUsdc,
+            })}
           />
           <FactCard label="Volume" value={formatRoomUsd(room?.volumeUsdc)} />
           <FactCard
@@ -954,8 +954,6 @@ function OverviewPanel({
         </dl>
         {pricing ? (
           <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <FactCard label="Buy next key" value={formatUsd(pricing.buyUsdc)} />
-            <FactCard label="Sell 1 key" value={formatUsd(pricing.sellUsdc)} />
             <FactCard label={pricing.treasuryLabel} value={formatUsd(pricing.treasuryUsdc)} />
           </dl>
         ) : null}

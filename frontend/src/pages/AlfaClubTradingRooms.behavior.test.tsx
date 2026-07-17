@@ -218,7 +218,7 @@ describe('AlfaClub room hub behavior', () => {
     await renderHub('/rooms?roomId=1659')
 
     expect(await screen.findAllByText('$3,491')).not.toHaveLength(0)
-    expect(screen.getAllByText(/↑\$102\.40 · ↓\$99\.23/)).not.toHaveLength(0)
+    expect(screen.getAllByText(/\$100\.81 ↑\$102\.40 ↓\$99\.23/)).not.toHaveLength(0)
     expect(screen.getAllByText(/7D \+11\.2% · 30D \+34\.5%/)).not.toHaveLength(0)
     expect(screen.getAllByText('Trading Room')).not.toHaveLength(0)
 

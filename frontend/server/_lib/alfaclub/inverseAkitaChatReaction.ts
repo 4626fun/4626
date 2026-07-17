@@ -44,10 +44,13 @@ import type { OpinionTradeDecision } from './inverseOpinionTradeStore.js'
 import {
   isInverseAkitaChatSelfSender,
   isInverseAkitaChatSelfUsername,
+  readInverseAkitaChatSelfSenderAddresses,
 } from './inverseAkitaChatSelfSenders.js'
 import {
+  isAlfaClubChipUsername,
   isAlfaClubTradeCompletedSender,
   parseInverseAkitaChatTradeEvent,
+  resolveInverseAkitaTradeEventAuthor,
 } from './inverseAkitaChatTradeEvent.js'
 import { readRoomLabelStatus } from './roomLabelCache.js'
 
@@ -686,13 +689,15 @@ function shouldSkipInverseChatReactionHistoryMessage(params: {
   username?: string | null
   isBot?: boolean | null
   selfAddressLower: string
-  /** Structured `trade-completed` posts are attributed later. */
+  /** Structured Chip / `trade-completed` posts are attributed later. */
   allowTradeCompletedSender?: boolean
 }): boolean {
-  if (params.isBot === true) return true
-  const tradeCompleted =
-    params.allowTradeCompletedSender === true
-    && isAlfaClubTradeCompletedSender(params.senderLower)
+  const looksLikeChip =
+    isAlfaClubTradeCompletedSender(params.senderLower)
+    || isAlfaClubChipUsername(params.username)
+  const tradeCompleted = params.allowTradeCompletedSender === true && looksLikeChip
+  // Chip trade cards may be flagged isBot — still ingest them.
+  if (params.isBot === true && !looksLikeChip) return true
   if (!tradeCompleted && isInvalidInverseChatReactionSender(params.senderLower)) {
     return true
   }
@@ -747,6 +752,10 @@ export async function collectInverseAkitaChatTradeIntents(params: {
   const classifyOpinion = params.classifyOpinion ?? classifyInverseAkitaChatOpinion
   const out: InverseAkitaChatTradeIntentMessage[] = []
   let roomCreatorAddress: string | null | undefined
+  const selfSenders = [
+    self,
+    ...readInverseAkitaChatSelfSenderAddresses(),
+  ].filter(Boolean)
 
   for (const message of params.messages) {
     const id = String(message.id ?? '').trim()
@@ -754,9 +763,9 @@ export async function collectInverseAkitaChatTradeIntents(params: {
     const text = String(message.text ?? '').trim()
     if (!id || !text || isCommandLikeChatText(text)) continue
 
-    const tradeEvent = isAlfaClubTradeCompletedSender(senderRaw)
-      ? parseInverseAkitaChatTradeEvent(text)
-      : null
+    const chipSystem =
+      isAlfaClubTradeCompletedSender(senderRaw) || isAlfaClubChipUsername(message.username)
+    const tradeEvent = chipSystem ? parseInverseAkitaChatTradeEvent(text) : null
 
     if (
       shouldSkipInverseChatReactionHistoryMessage({
@@ -780,19 +789,27 @@ export async function collectInverseAkitaChatTradeIntents(params: {
         }
       | null = null
     let parseMode: InverseOpinionParseMode | undefined
+    let publicAuthorLabel =
+      typeof message.username === 'string' && message.username.trim()
+        ? message.username.trim()
+        : null
 
     if (tradeEvent) {
-      if (tradeEvent.userAddress) {
-        sender = tradeEvent.userAddress
-      } else {
-        if (roomCreatorAddress === undefined) {
-          roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
-        }
-        if (!roomCreatorAddress) continue
-        sender = roomCreatorAddress
+      if (roomCreatorAddress === undefined) {
+        roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
       }
+      const attributed = resolveInverseAkitaTradeEventAuthor({
+        payloadAddress: tradeEvent.userAddress,
+        roomCreatorAddress,
+        messageDate: Number(message.date),
+        excludeAddresses: selfSenders,
+        priorSpeakers: params.messages,
+      })
+      if (!attributed) continue
+      sender = attributed
       parsed = { userSide: tradeEvent.userSide, pair: tradeEvent.pair }
       parseMode = 'strict'
+      publicAuthorLabel = publicAuthorLabel || 'Chip'
     } else {
       const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
       const allowLooseSentiment = replyId.length === 0
@@ -803,7 +820,7 @@ export async function collectInverseAkitaChatTradeIntents(params: {
       parsed = deterministic
       parseMode = deterministic ? resolveInverseOpinionParseMode(text) : undefined
 
-      // LLM only for top-level chatter (not quote-replies of bot trim/add copy).
+      // LLM for any staker's top-level chatter (owners and non-owners alike).
       if (allowLooseSentiment && (!deterministic || parseMode === 'loose')) {
         const llm = await classifyOpinion({
           text,
@@ -832,10 +849,7 @@ export async function collectInverseAkitaChatTradeIntents(params: {
       date: Number.isFinite(date) ? date : 0,
       sender,
       text,
-      publicAuthorLabel:
-        typeof message.username === 'string' && message.username.trim()
-          ? message.username.trim()
-          : null,
+      publicAuthorLabel,
       userSide: parsed.userSide,
       pair: parsed.pair,
       ordinal: 0,

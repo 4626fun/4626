@@ -1,9 +1,9 @@
 /**
- * Deterministic parser for AlfaClub `trade-completed` system chat payloads.
+ * Deterministic parser for AlfaClub Chip / `trade-completed` system chat payloads.
  *
- * These posts use sender=`trade-completed` (not a wallet). Directional HL market
- * opens are treated as the author's lean so InverseAKITA can fade them once a
- * wallet is attributed (payload userAddress, or room creator fallback).
+ * UI label is often "Chip"; the websocket sender is usually `trade-completed`
+ * (empty username). Directional HL opens become InverseAKITA fades once we
+ * attribute a wallet: payload address → recent human speaker → room creator.
  */
 
 import type { CounterTradeSide } from './counterTradeConfig.js'
@@ -11,11 +11,18 @@ import type { CounterTradeSide } from './counterTradeConfig.js'
 export type InverseAkitaChatTradeEventParse = {
   userSide: CounterTradeSide
   pair: string
-  /** Wallet from payload when present (spot fills). */
+  /** Wallet from payload when present. */
   userAddress: string | null
   direction: 'open' | 'close'
-  source: 'hl_market' | 'spot_completed'
+  source: 'hl_market' | 'hl_fill_dir'
 }
+
+const CHIP_SYSTEM_SENDERS = new Set([
+  'trade-completed',
+  'chip',
+  'chipbot',
+  'alfaclub-chip',
+])
 
 function normalizeHexAddress(value: unknown): string | null {
   const address = String(value ?? '')
@@ -62,10 +69,25 @@ function parseVerificationEnvelope(raw: unknown): {
   }
 }
 
+function parseFillDir(raw: unknown): {
+  action: 'open' | 'close' | null
+  side: CounterTradeSide | null
+} {
+  const dir = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+  const match = /^(open|close)\s+(long|short)$/.exec(dir)
+  if (!match) return { action: null, side: null }
+  return {
+    action: match[1] as 'open' | 'close',
+    side: match[2] as CounterTradeSide,
+  }
+}
+
 /**
  * Parse a chat text blob into a directional trade lean, or null when the
- * payload is not an actionable open/close signal (TP/SL fills, position
- * snapshots, token calls, malformed JSON, etc.).
+ * payload is not an actionable open signal (TP/SL fills, position snapshots,
+ * token calls, spot memecoins, malformed JSON, etc.).
  */
 export function parseInverseAkitaChatTradeEvent(
   text: string,
@@ -83,6 +105,20 @@ export function parseInverseAkitaChatTradeEvent(
   if (String(parsed.type ?? '') === 'spot-trade-completed') {
     // Spot memecoins are not InverseAKITA HL perps — skip.
     return null
+  }
+
+  // Compact HL fill cards: {"coin":"BTC","dir":"Open Long",...}
+  if (parsed.dir != null && parsed.coin != null && parsed.order_type == null) {
+    const pair = normalizePair(parsed.coin)
+    const { action, side } = parseFillDir(parsed.dir)
+    if (!pair || action !== 'open' || !side) return null
+    return {
+      userSide: side,
+      pair,
+      userAddress: normalizeHexAddress(parsed.userAddress ?? parsed.user),
+      direction: 'open',
+      source: 'hl_fill_dir',
+    }
   }
 
   if (String(parsed.order_type ?? '') !== 'market') {
@@ -110,14 +146,66 @@ export function parseInverseAkitaChatTradeEvent(
   return {
     userSide,
     pair,
-    userAddress: normalizeHexAddress(parsed.userAddress),
+    userAddress: normalizeHexAddress(parsed.userAddress ?? parsed.user),
     direction,
     source: 'hl_market',
   }
 }
 
+/** True for AlfaClub Chip / trade-completed system senders (not a wallet). */
 export function isAlfaClubTradeCompletedSender(sender: string | null | undefined): boolean {
-  return String(sender ?? '')
+  const normalized = String(sender ?? '')
     .trim()
-    .toLowerCase() === 'trade-completed'
+    .toLowerCase()
+  return CHIP_SYSTEM_SENDERS.has(normalized)
+}
+
+export function isAlfaClubChipUsername(username: string | null | undefined): boolean {
+  const normalized = String(username ?? '')
+    .trim()
+    .toLowerCase()
+  return normalized === 'chip' || normalized === 'chipbot'
+}
+
+/**
+ * Attribute a Chip trade to a wallet for stake gating:
+ * 1) payload userAddress
+ * 2) most recent human hex speaker at/before the trade (any staker can trade)
+ * 3) room creator fallback
+ */
+export function resolveInverseAkitaTradeEventAuthor(params: {
+  payloadAddress?: string | null
+  roomCreatorAddress?: string | null
+  messageDate: number
+  excludeAddresses?: readonly string[]
+  priorSpeakers: ReadonlyArray<{ sender?: string | null; date?: number | null }>
+}): string | null {
+  const fromPayload = normalizeHexAddress(params.payloadAddress)
+  if (fromPayload) return fromPayload
+
+  const excluded = new Set(
+    (params.excludeAddresses ?? [])
+      .map((value) => normalizeHexAddress(value))
+      .filter((value): value is string => Boolean(value)),
+  )
+  const messageDate = Number(params.messageDate)
+  const dated = Number.isFinite(messageDate) ? messageDate : Number.POSITIVE_INFINITY
+
+  const candidates = params.priorSpeakers
+    .map((entry) => ({
+      sender: normalizeHexAddress(entry.sender),
+      date: Number(entry.date),
+    }))
+    .filter(
+      (entry): entry is { sender: string; date: number } =>
+        Boolean(entry.sender) && Number.isFinite(entry.date) && entry.date <= dated,
+    )
+    .sort((a, b) => b.date - a.date)
+
+  for (const candidate of candidates) {
+    if (excluded.has(candidate.sender)) continue
+    return candidate.sender
+  }
+
+  return normalizeHexAddress(params.roomCreatorAddress)
 }
