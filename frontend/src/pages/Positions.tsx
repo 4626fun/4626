@@ -9,6 +9,7 @@ import { PositionsMarketSignal } from '@/components/positions/PositionsMarketSig
 import { PositionsRoomBook } from '@/components/positions/PositionsRoomBook'
 import type { ChartOverlayEvent, TimelineResponse } from '@/components/positions/types'
 import { Button } from '@/components/ui/Button'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 
 function formatTime(value: number): string {
@@ -674,6 +675,7 @@ export function Positions() {
   const PANEL_MIN_WIDTH = 420
   const PANEL_MAX_WIDTH = 760
   const PANEL_DEFAULT_WIDTH = 520
+  const { hasSession, sessionHydrated, signIn } = useSiweAuth()
   const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
@@ -715,9 +717,18 @@ export function Positions() {
   )
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['alfaclub-room-timeline', '1659', windowHours, selectedSymbolForQuery, effectiveInterval],
+    // Session flips includeChat on the API — refetch after sign-in so messages load.
+    queryKey: [
+      'alfaclub-room-timeline',
+      '1659',
+      windowHours,
+      selectedSymbolForQuery,
+      effectiveInterval,
+      hasSession ? 'authed' : 'anon',
+    ],
     queryFn: () => fetchRoomTimelineBySymbol(windowHours, selectedSymbolForQuery, effectiveInterval),
     staleTime: 30_000,
+    enabled: sessionHydrated,
   })
 
   const preferredOpenMarket = useMemo(() => {
@@ -1651,6 +1662,24 @@ export function Positions() {
               </div>
               {!messagePanelCollapsed ? (
                 <>
+                  {!hasSession ? (
+                    <div className="mt-3 rounded-lg bg-white/[0.03] p-4 text-sm text-zinc-300">
+                      <p className="text-zinc-200">Room chat is private.</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Sign in to view messages. Charts and trades stay public.
+                      </p>
+                      <Button
+                        type="button"
+                        className="mt-3"
+                        onClick={() => {
+                          void signIn()
+                        }}
+                      >
+                        Sign in
+                      </Button>
+                    </div>
+                  ) : null}
+                  {hasSession ? (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {(['all', 'host', 'room', 'bot'] as const).map((filter) => (
                       <button
@@ -1667,6 +1696,8 @@ export function Positions() {
                       </button>
                     ))}
                   </div>
+                  ) : null}
+                  {hasSession ? (
                   <div
                     ref={messageTimelineListRef}
                     className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
@@ -1720,6 +1751,7 @@ export function Positions() {
                       </div>
                     </div>
                   </div>
+                  ) : null}
                 </>
               ) : null}
               </div>

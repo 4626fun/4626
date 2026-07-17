@@ -920,6 +920,11 @@ export async function buildRoomTimelineData(params: {
   symbol?: string | null
   interval?: string | null
   windowHours?: number | null
+  /**
+   * When false (default for anonymous callers), skip chat ingest + proliquid
+   * message overlays so room chat text is never world-readable via this API.
+   */
+  includeChat?: boolean
 }): Promise<RoomTimelineData> {
   const MAX_TIMELINE_WINDOW_HOURS = 24 * 90
   const roomId = params.roomId.trim()
@@ -988,20 +993,23 @@ export async function buildRoomTimelineData(params: {
     ...currentPositions.map((position) => position.coin),
   ])
 
-  const [rawChatEvents, proliquidSignalEvents] = await Promise.all([
-    readChatEvents({
-      roomId,
-      hostAddress,
-      startTimeMs,
-      limit: 500,
-      knownSymbols,
-    }),
-    readProliquidSignalEvents({
-      roomId,
-      startTimeMs,
-      knownSymbols,
-    }),
-  ])
+  const includeChat = params.includeChat === true
+  const [rawChatEvents, proliquidSignalEvents] = includeChat
+    ? await Promise.all([
+        readChatEvents({
+          roomId,
+          hostAddress,
+          startTimeMs,
+          limit: 500,
+          knownSymbols,
+        }),
+        readProliquidSignalEvents({
+          roomId,
+          startTimeMs,
+          knownSymbols,
+        }),
+      ])
+    : [[], []]
   const firstSeenBySender = new Set<string>()
   const rawMerged = [...rawChatEvents, ...proliquidSignalEvents]
     .sort((a, b) => a.time - b.time)
@@ -1018,7 +1026,7 @@ export async function buildRoomTimelineData(params: {
   // per-message avatar captured at ingest/read time is missing. This ensures real user
   // avatars render as markers on /positions even for historical messages or senders whose
   // AlfaClub message payloads did not carry a pfp.
-  const chatEvents = await enrichChatSenderProfiles(rawMerged)
+  const chatEvents = includeChat ? await enrichChatSenderProfiles(rawMerged) : []
 
   // Strict market attribution: a message belongs to the market it references, or is
   // room-wide (null) when it references none. Do NOT force unrelated chatter onto the
