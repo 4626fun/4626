@@ -224,6 +224,7 @@ class ElizaLlmService {
   private readonly complexInputChars: number
   private readonly complexProviderPriority: string[]
   private readonly virtualsAcpProviderPriority: string[]
+  private readonly inverseChatProviderPriority: string[]
   private readonly budgetGuard: DailyBudgetGuard
   private readonly circuits = new Map<string, ProviderCircuitState>()
 
@@ -243,6 +244,12 @@ class ElizaLlmService {
     this.virtualsAcpProviderPriority = parsePriority(
       process.env.ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY ??
         'VirtualsCompute,Groq,OpenAI,Anthropic,OpenRouter',
+    )
+    // Inverse chat classifier needs a fast JSON lane — prefer OpenRouter/Groq
+    // over VirtualsCompute (often cancels / 500s under the 8s classifier budget).
+    this.inverseChatProviderPriority = parsePriority(
+      process.env.ELIZA_LLM_INVERSE_CHAT_PROVIDER_PRIORITY ??
+        'OpenRouter,Groq,OpenAI,Anthropic,VirtualsCompute',
     )
     const tokenBudget = Number(String(process.env.ELIZA_DAILY_LLM_TOKEN_BUDGET ?? '').trim())
     const usdBudget = Number(String(process.env.ELIZA_DAILY_LLM_USD_BUDGET ?? '').trim())
@@ -285,6 +292,9 @@ class ElizaLlmService {
     const providers = this.getAvailableProviders()
     if (agentKey === 'virtuals-acp') {
       return this.orderProvidersByPriority(providers, this.virtualsAcpProviderPriority)
+    }
+    if (agentKey === 'inverse-akita-chat-classifier') {
+      return this.orderProvidersByPriority(providers, this.inverseChatProviderPriority)
     }
     if (!this.intentRoutingEnabled) return providers
     if (!messageLooksComplex(userMessage, this.complexInputChars)) return providers
@@ -384,13 +394,20 @@ class ElizaLlmService {
       } catch (error) {
         const externalCancelled = params.abortSignal?.aborted === true
         if (externalCancelled) {
-          throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', {
-            retryable: false,
-            details: {
-              provider: params.provider.name,
-              correlationId: params.correlationId,
+          // Surface as a retryable provider timeout so generateResponse can
+          // try the next provider instead of aborting the whole chain.
+          throw new AgentError(
+            'UPSTREAM_TIMEOUT',
+            `provider_timeout_${params.provider.name.toLowerCase()}`,
+            {
+              retryable: true,
+              details: {
+                provider: params.provider.name,
+                correlationId: params.correlationId,
+                cancelled: true,
+              },
             },
-          })
+          )
         }
         const message = error instanceof Error ? error.message : String(error)
         lastError = message
@@ -418,7 +435,7 @@ class ElizaLlmService {
 
   async generateResponse(params: GenerateParams): Promise<LlmGenerateResult> {
     if (params.abortSignal?.aborted) {
-      throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', { retryable: false })
+      return { text: null, provider: null, attempts: [] }
     }
     const providers = this.providersForMessage(params.agentKey, params.userMessage)
     if (providers.length === 0) {
@@ -454,7 +471,12 @@ class ElizaLlmService {
     const attempts: ProviderAttempt[] = []
     for (const provider of providers) {
       if (params.abortSignal?.aborted) {
-        throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', { retryable: false })
+        attempts.push({
+          provider: provider.name,
+          ok: false,
+          error: 'request_cancelled',
+        })
+        break
       }
       if (this.providerIsCircuitOpen(provider)) {
         attempts.push({
@@ -506,9 +528,6 @@ class ElizaLlmService {
           attempts,
         }
       } catch (error) {
-        if (error instanceof AgentError && error.message === 'request_cancelled') {
-          throw error
-        }
         const message = error instanceof Error ? error.message : String(error)
         this.markProviderFailure(provider, message)
         attempts.push({ provider: provider.name, model: selectedModel, ok: false, error: message })
@@ -526,6 +545,8 @@ class ElizaLlmService {
           error: message,
           attempts: attempts.length,
         })
+        // Shared outer deadline spent — stop trying further providers.
+        if (params.abortSignal?.aborted) break
       }
     }
     void emitTelemetryEvent('llm_provider_exhausted', {

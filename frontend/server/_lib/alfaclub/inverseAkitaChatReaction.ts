@@ -45,6 +45,11 @@ import {
   isInverseAkitaChatSelfSender,
   isInverseAkitaChatSelfUsername,
 } from './inverseAkitaChatSelfSenders.js'
+import {
+  isAlfaClubTradeCompletedSender,
+  parseInverseAkitaChatTradeEvent,
+} from './inverseAkitaChatTradeEvent.js'
+import { readRoomLabelStatus } from './roomLabelCache.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -681,12 +686,20 @@ function shouldSkipInverseChatReactionHistoryMessage(params: {
   username?: string | null
   isBot?: boolean | null
   selfAddressLower: string
+  /** Structured `trade-completed` posts are attributed later. */
+  allowTradeCompletedSender?: boolean
 }): boolean {
   if (params.isBot === true) return true
-  if (isInvalidInverseChatReactionSender(params.senderLower)) return true
+  const tradeCompleted =
+    params.allowTradeCompletedSender === true
+    && isAlfaClubTradeCompletedSender(params.senderLower)
+  if (!tradeCompleted && isInvalidInverseChatReactionSender(params.senderLower)) {
+    return true
+  }
   if (isInverseAkitaChatSelfUsername(params.username)) return true
   if (
-    isInverseAkitaChatSelfSender(params.senderLower, [
+    !tradeCompleted
+    && isInverseAkitaChatSelfSender(params.senderLower, [
       params.selfAddressLower,
     ])
   ) {
@@ -695,6 +708,18 @@ function shouldSkipInverseChatReactionHistoryMessage(params: {
   if (isInverseAkitaBotAuthoredChatText(params.text)) return true
   if (isRegisteredInverseAkitaBotOutboundText(params.text)) return true
   return false
+}
+
+async function resolveRoomCreatorAddress(roomId: string): Promise<string | null> {
+  try {
+    const rows = await readRoomLabelStatus([roomId])
+    const creator = String(rows[0]?.creatorAddress ?? '')
+      .trim()
+      .toLowerCase()
+    return isHexAddress(creator) ? creator : null
+  } catch {
+    return null
+  }
 }
 
 function isCommandLikeChatText(text: string): boolean {
@@ -721,55 +746,85 @@ export async function collectInverseAkitaChatTradeIntents(params: {
   const self = String(params.selfAddress ?? '').trim().toLowerCase()
   const classifyOpinion = params.classifyOpinion ?? classifyInverseAkitaChatOpinion
   const out: InverseAkitaChatTradeIntentMessage[] = []
+  let roomCreatorAddress: string | null | undefined
 
   for (const message of params.messages) {
     const id = String(message.id ?? '').trim()
-    const sender = String(message.sender ?? '').trim().toLowerCase()
+    const senderRaw = String(message.sender ?? '').trim().toLowerCase()
     const text = String(message.text ?? '').trim()
     if (!id || !text || isCommandLikeChatText(text)) continue
+
+    const tradeEvent = isAlfaClubTradeCompletedSender(senderRaw)
+      ? parseInverseAkitaChatTradeEvent(text)
+      : null
+
     if (
       shouldSkipInverseChatReactionHistoryMessage({
-        senderLower: sender,
+        senderLower: senderRaw,
         text,
         username: message.username,
         isBot: message.isBot,
         selfAddressLower: self,
+        allowTradeCompletedSender: tradeEvent != null,
       })
     ) {
       continue
     }
 
-    const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
-    const allowLooseSentiment = replyId.length === 0
-    const deterministic = parseInverseAkitaChatTradeIntent(text, {
-      allowLooseSentiment,
-      availableMarkets: params.availableMarkets,
-    })
-    let parsed = deterministic
-    let parseMode: InverseOpinionParseMode | undefined = deterministic
-      ? resolveInverseOpinionParseMode(text)
-      : undefined
-
-    // LLM only for top-level chatter (not quote-replies of bot trim/add copy).
-    if (allowLooseSentiment && (!deterministic || parseMode === 'loose')) {
-      const llm = await classifyOpinion({
-        text,
-        roomId: params.roomId,
-        availableMarkets: params.availableMarkets,
-        config: params.llmConfig,
-      })
-      if (llm.blocked) continue
-      if (llm.applied && llm.classification) {
-        if (llm.classification.verdict === 'skip') continue
-        parsed = {
-          userSide: llm.classification.userSide,
-          pair: llm.classification.pair,
+    let sender = senderRaw
+    let parsed:
+      | {
+          userSide: CounterTradeSide
+          pair: string
+          marketClarification?: InverseAkitaMarketClarification
         }
-        parseMode = 'llm'
+      | null = null
+    let parseMode: InverseOpinionParseMode | undefined
+
+    if (tradeEvent) {
+      if (tradeEvent.userAddress) {
+        sender = tradeEvent.userAddress
+      } else {
+        if (roomCreatorAddress === undefined) {
+          roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
+        }
+        if (!roomCreatorAddress) continue
+        sender = roomCreatorAddress
+      }
+      parsed = { userSide: tradeEvent.userSide, pair: tradeEvent.pair }
+      parseMode = 'strict'
+    } else {
+      const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
+      const allowLooseSentiment = replyId.length === 0
+      const deterministic = parseInverseAkitaChatTradeIntent(text, {
+        allowLooseSentiment,
+        availableMarkets: params.availableMarkets,
+      })
+      parsed = deterministic
+      parseMode = deterministic ? resolveInverseOpinionParseMode(text) : undefined
+
+      // LLM only for top-level chatter (not quote-replies of bot trim/add copy).
+      if (allowLooseSentiment && (!deterministic || parseMode === 'loose')) {
+        const llm = await classifyOpinion({
+          text,
+          roomId: params.roomId,
+          availableMarkets: params.availableMarkets,
+          config: params.llmConfig,
+        })
+        if (llm.blocked) continue
+        if (llm.applied && llm.classification) {
+          if (llm.classification.verdict === 'skip') continue
+          parsed = {
+            userSide: llm.classification.userSide,
+            pair: llm.classification.pair,
+          }
+          parseMode = 'llm'
+        }
       }
     }
 
     if (!parsed) continue
+    if (isInvalidInverseChatReactionSender(sender)) continue
 
     const date = Number(message.date)
     out.push({

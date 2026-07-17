@@ -75,7 +75,8 @@ export function readInverseAkitaChatLlmClassifierConfig(): InverseAkitaChatLlmCl
     enabled: readBool('ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED', false),
     mode: modeRaw === 'advisory' ? 'advisory' : 'classify',
     failMode: failRaw === 'block' ? 'block' : 'allow',
-    timeoutMs: readPositiveNumber('ALFACLUB_INVERSE_AKITA_CHAT_LLM_TIMEOUT_MS', 8_000),
+    // 15s default: OpenRouter/Groq first; leave room for one fallback hop.
+    timeoutMs: readPositiveNumber('ALFACLUB_INVERSE_AKITA_CHAT_LLM_TIMEOUT_MS', 15_000),
   }
 }
 

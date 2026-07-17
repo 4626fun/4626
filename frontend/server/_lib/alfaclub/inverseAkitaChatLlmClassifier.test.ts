@@ -24,7 +24,7 @@ describe('inverseAkitaChatLlmClassifier', () => {
       enabled: false,
       mode: 'classify',
       failMode: 'allow',
-      timeoutMs: 8_000,
+      timeoutMs: 15_000,
     })
   })
 

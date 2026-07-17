@@ -14,6 +14,7 @@ const ENV_KEYS = [
   'ELIZA_LLM_PROVIDER_PRIORITY',
   'ELIZA_LLM_COMPLEX_PROVIDER_PRIORITY',
   'ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY',
+  'ELIZA_LLM_INVERSE_CHAT_PROVIDER_PRIORITY',
   'ELIZA_LLM_COMPLEX_INPUT_CHARS',
   'ELIZA_LLM_INTENT_ROUTING',
   'ELIZA_PROVIDER_CIRCUIT_FAILS',
@@ -108,6 +109,74 @@ describe('eliza llm service', () => {
     expect(result.provider).toBe('Groq')
     expect(result.text).toBe('groq response')
     expect(result.attempts[0]?.model).toBe('llama-3.3-70b-versatile')
+  })
+
+  it('routes inverse chat classifier with OpenRouter-first priority', async () => {
+    process.env.VIRTUALS_API_KEY = 'virtuals-key'
+    process.env.OPENROUTER_API_KEY = 'openrouter-key'
+    process.env.ELIZA_LLM_INVERSE_CHAT_PROVIDER_PRIORITY = 'OpenRouter,VirtualsCompute'
+    process.env.ELIZA_LLM_MAX_RETRIES = '0'
+    process.env.ELIZA_LLM_TIMEOUT_MS = '250'
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('openrouter.ai')) {
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"verdict":"skip","reason":"ok"}' } }],
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify({ error: 'virtuals down' }), { status: 500 })
+    })
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const { getElizaLlmService } = await import('../llm.ts')
+    const service = getElizaLlmService()
+    const result = await service.generateResponse({
+      agentKey: 'inverse-akita-chat-classifier',
+      userMessage: 'btc looking bullish today',
+      systemPrompt: 'classify',
+      vaultContext: '',
+      correlationId: 'corr-inverse-chat',
+    })
+
+    expect(String(fetchMock.mock.calls[0]?.[0] ?? '')).toContain('openrouter.ai')
+    expect(result.provider).toBe('OpenRouter')
+    expect(result.text).toContain('verdict')
+  })
+
+  it('returns null instead of throwing when the shared abort signal fires', async () => {
+    process.env.GROQ_API_KEY = 'groq-key'
+    process.env.OPENAI_API_KEY = 'openai-key'
+    process.env.ELIZA_LLM_MAX_RETRIES = '0'
+    process.env.ELIZA_LLM_TIMEOUT_MS = '5_000'
+
+    const controller = new AbortController()
+    controller.abort()
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: 'should not run' } }] }),
+        { status: 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const { getElizaLlmService } = await import('../llm.ts')
+    const service = getElizaLlmService()
+    const result = await service.generateResponse({
+      agentKey: 'agent-aborted',
+      userMessage: 'hello',
+      systemPrompt: 'system',
+      vaultContext: '',
+      correlationId: 'corr-aborted',
+      abortSignal: controller.signal,
+    })
+
+    expect(result.text).toBeNull()
+    expect(result.provider).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('routes complex prompts with complex-provider priority', async () => {
