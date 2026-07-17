@@ -22,10 +22,10 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 - **Mitigation shipped:** `v1.19.2` source manifest + guard `SOURCE_RELEASE` split;
   addresses/inventory pin live Phase2.
 
-### F2 — Phase1 `agentVaultCoreModule` still creator core (Info / known ops)
+### F2 — Phase1 `agentVaultCoreModule` (Info / closed on-chain 2026-07-17)
 
-- Full agent Phase1+2 still needs Phase1 agent-core hot-swap
-  (`script/upgrade-v1191-phase1-agent-core.sh`).
+- Live Phase1Module `0x0d12951A…` now exposes AgentOVaultCoreModule `0xE9350e3A…`.
+- Defaults/guard/docs updated; hot-swap helpers retained for future rotations.
 
 ### F3 — Stale script defaults (fixed)
 

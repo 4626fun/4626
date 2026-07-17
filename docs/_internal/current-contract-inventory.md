@@ -146,9 +146,9 @@ The active bytecode manifest must include all three entries.
 3. Run `forge test --match-contract SeedRegistry4626ConfigTest`.
 4. Confirm live batcher wiring onchain (`0xa18169caf37fa0347285B16aAFC2B09eCB43F145`):
    - `cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "phase1Module()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "create2Deployer()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultCoreModule()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultStrategiesModule()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultAdminModule()(address)"`
+   - `cast call 0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b "create2Deployer()(address)"`
+   - `cast call 0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b "vaultCoreModule()(address)"`
+   - `cast call 0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b "vaultStrategiesModule()(address)"`
+   - `cast call 0x0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b "vaultAdminModule()(address)"`
 5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36`.
 6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).
