@@ -24,10 +24,10 @@ import { base } from 'viem/chains'
 
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 
-/** Shell `deployPhase2Core` selector. */
-export const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
+/** Shell `deployPhase2Core` selector (Phase2CoreParams with optional init-code hashes). */
+export const SELECTOR_DEPLOY_PHASE2_CORE = '0x07455a76'
 /** Shell `deployPhase2CoreWithRolePolicy` selector (role-policy rewrite path). */
-export const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x6004df9c'
+export const SELECTOR_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY = '0x5dfdf2d2'
 
 const PHASE2_PARAMS_COMPONENTS = [
   { name: 'creatorToken', type: 'address' },
@@ -190,6 +190,9 @@ type Phase2CoreParams = {
   shareSymbol: string
   version: string
   floorPriceQ96: bigint
+  gaugeInitCodeHash?: Hex
+  ccaInitCodeHash?: Hex
+  oracleInitCodeHash?: Hex
 }
 
 type Phase2CodeIds = {
@@ -238,6 +241,7 @@ export function decodePhase2CoreCreateArgs(data: Hex): {
   params: Phase2CoreParams
   codeIds: Phase2CodeIds
   variant: 'deployPhase2Core' | 'deployPhase2CoreWithRolePolicy'
+  rolePolicyId?: bigint
 } | null {
   const selector = data.slice(0, 10).toLowerCase()
   try {
@@ -253,8 +257,8 @@ export function decodePhase2CoreCreateArgs(data: Hex): {
         data,
       })
       if (decoded.functionName !== 'deployPhase2CoreWithRolePolicy') return null
-      const [params, codeIds] = decoded.args
-      return { params, codeIds, variant: 'deployPhase2CoreWithRolePolicy' }
+      const [params, codeIds, rolePolicyId] = decoded.args
+      return { params, codeIds, variant: 'deployPhase2CoreWithRolePolicy', rolePolicyId }
     }
   } catch {
     return null
@@ -262,11 +266,60 @@ export function decodePhase2CoreCreateArgs(data: Hex): {
   return null
 }
 
+export type Phase2CoreInitCodeHashes = {
+  gauge: Hex
+  cca: Hex
+  oracle: Hex
+}
+
 export type Phase2CorePrecreateResult = {
   skipped: boolean
   reason?: string
   deployed: Array<{ label: string; address: Address; txHash: Hex }>
   existing: Array<{ label: string; address: Address }>
+  /** Present when precreate computed CREATE2 init-code hashes for all three targets. */
+  initCodeHashes?: Phase2CoreInitCodeHashes
+}
+
+/**
+ * Rewrite deployPhase2Core(*) calldata to include AA95-friendly init-code hashes.
+ */
+export function injectPhase2CoreInitCodeHashes(
+  calls: Call[],
+  hashes: Phase2CoreInitCodeHashes,
+): { calls: Call[]; injected: boolean } {
+  let injected = false
+  const next = calls.map((call) => {
+    if (!call?.data || !isPhase2CoreCalldata(call.data)) return call
+    const decoded = decodePhase2CoreCreateArgs(call.data as Hex)
+    if (!decoded) return call
+    const params = {
+      ...decoded.params,
+      gaugeInitCodeHash: hashes.gauge,
+      ccaInitCodeHash: hashes.cca,
+      oracleInitCodeHash: hashes.oracle,
+    }
+    injected = true
+    if (decoded.variant === 'deployPhase2CoreWithRolePolicy') {
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+          functionName: 'deployPhase2CoreWithRolePolicy',
+          args: [params as any, decoded.codeIds as any, decoded.rolePolicyId ?? 0n],
+        }) as Hex,
+      }
+    }
+    return {
+      ...call,
+      data: encodeFunctionData({
+        abi: DEPLOY_PHASE2_CORE_ABI,
+        functionName: 'deployPhase2Core',
+        args: [params as any, decoded.codeIds as any],
+      }) as Hex,
+    }
+  })
+  return { calls: next, injected }
 }
 
 /**
@@ -387,6 +440,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
 
   const deployed: Phase2CorePrecreateResult['deployed'] = []
   const existing: Phase2CorePrecreateResult['existing'] = []
+  const hashByLabel: Partial<Record<'gauge' | 'cca' | 'oracle', Hex>> = {}
 
   for (const item of planned) {
     const salt = await publicClient.readContract({
@@ -402,6 +456,7 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
       args: [item.codeId],
     })) as Hex
     const initCodeHash = keccak256(concat([creationCode, item.args]))
+    hashByLabel[item.label] = initCodeHash
     const predicted = await publicClient.readContract({
       address: create2Deployer,
       abi: CREATE2_ABI,
@@ -433,5 +488,10 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
     deployed.push({ label: item.label, address: predicted, txHash })
   }
 
-  return { skipped: false, deployed, existing }
+  const initCodeHashes =
+    hashByLabel.gauge && hashByLabel.cca && hashByLabel.oracle
+      ? { gauge: hashByLabel.gauge, cca: hashByLabel.cca, oracle: hashByLabel.oracle }
+      : undefined
+
+  return { skipped: false, deployed, existing, initCodeHashes }
 }

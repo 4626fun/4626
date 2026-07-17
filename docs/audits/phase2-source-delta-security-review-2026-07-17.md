@@ -38,7 +38,10 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 
 ### F5 — Precreate misses `deployPhase2CoreWithRolePolicy` (Medium / fixed)
 
-- Fixed: precreate + dry-run detection accept `0x6004df9c` WithRolePolicy selector.
+- Fixed: precreate + dry-run detection accept `0x5dfdf2d2` WithRolePolicy selector
+  (was `0x6004df9c` before optional init-code hashes on `Phase2CoreParams`).
+- Follow-up: deploy-session injects precreate init-code hashes into phase2 UserOp calldata
+  (`injectPhase2CoreInitCodeHashes`); selectors `deployPhase2Core=0x07455a76`.
 
 ### F6 — Precreate key fallback too broad (Medium / fixed)
 
