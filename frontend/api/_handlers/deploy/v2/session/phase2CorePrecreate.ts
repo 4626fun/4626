@@ -40,6 +40,9 @@ const PHASE2_PARAMS_COMPONENTS = [
   { name: 'shareSymbol', type: 'string' },
   { name: 'version', type: 'string' },
   { name: 'floorPriceQ96', type: 'uint256' },
+  { name: 'gaugeInitCodeHash', type: 'bytes32' },
+  { name: 'ccaInitCodeHash', type: 'bytes32' },
+  { name: 'oracleInitCodeHash', type: 'bytes32' },
 ] as const
 
 const PHASE2_CODE_IDS_COMPONENTS = [

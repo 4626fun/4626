@@ -73,7 +73,10 @@ contract RehearseV1190GreenfieldLifecycle is Script {
             shareOFT: phase1Result.shareOFT,
             shareSymbol: "sV119R",
             version: VERSION,
-            floorPriceQ96: 0
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: bytes32(0),
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
         });
         DeploymentBatcher.Phase2Result memory phase2Result = batcher.deployPhase2Core(phase2Core, ids);
 

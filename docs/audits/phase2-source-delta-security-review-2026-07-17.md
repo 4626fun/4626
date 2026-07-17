@@ -31,10 +31,10 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 
 - Upgrade/configure/rehearsal scripts cut over to v1.19.1 pins.
 
-### F4 — `_deployOrExisting` still copies full creation bytecode on reuse (Medium / new)
+### F4 — `_deployOrExisting` store.get on reuse (Medium / fixed)
 
-- `store.get()` before `code.length` short-circuit → residual AA95 / UserOp OOG risk.
-- **Remediation:** hash/pointer path that skips full bytecode copy when address exists.
+- Optional `Phase2CoreParams.*InitCodeHash` skips `store.get()` on reuse when precreate
+  supplies the CREATE2 init-code hash (AA95). Zero keeps the legacy derive-via-get path.
 
 ### F5 — Precreate misses `deployPhase2CoreWithRolePolicy` (Medium / fixed)
 
@@ -44,15 +44,13 @@ cutover hygiene. Not a full re-audit of the sealed v1.19.1 stack.
 
 - Fixed: only `DEPLOY_SESSION_PHASE2_PRECREATE_PRIVATE_KEY` is accepted.
 
-### F7 — Finalize does not bind gauge/CCA/oracle to vault wiring (Medium / known)
+### F7 — Finalize does not bind gauge/CCA/oracle to vault wiring (Medium / fixed)
 
-- Owner can pass diverting `params.ccaLaunchArm` at finalize.
-- **Remediation:** require equality with vault-wired / CREATE2-predicted addresses.
+- `_validateFinalizePhase2` now requires `gauge`/`cca`/`oracle` match vault-wired Phase2 core.
 
-### F8 — Module entry `deployPhase2Core` hardcodes Creator vaultKind (Low / new)
+### F8 — Module entry `deployPhase2Core` hardcodes Creator vaultKind (Low / fixed)
 
-- Shell uses orchestrator (safe today); dead footgun if entry called directly.
-- **Remediation:** delete entry or delegate to `p1state.vaultKind`.
+- Module entry now reverts `UsePhase2Orchestrator`; shell uses orchestrator + `p1state.vaultKind`.
 
 ## Surfaces OK this pass
 

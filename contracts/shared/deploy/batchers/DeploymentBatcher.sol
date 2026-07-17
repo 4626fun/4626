@@ -29,6 +29,7 @@ interface IUniversalCreate2DeployerFromStore {
 
 interface IUniversalBytecodeStoreView {
     function get(bytes32 codeId) external view returns (bytes memory);
+    function pointers(bytes32 codeId) external view returns (address);
 }
 
 /// @dev AUDIT-2026-07-08-NEW-H — phase modules consult the batcher shell for codeId allowlist.
@@ -1006,14 +1007,18 @@ contract DeploymentBatcherPhase2Module {
         batcher = _batcher;
     }
 
+    /// @dev Dead footgun: always hard-coded Creator. Shell routes through
+    ///      `deployPhase2CoreOrchestrator` with `p1state.vaultKind`.
+    error UsePhase2Orchestrator();
+
     function deployPhase2Core(
-        DeploymentBatcher.Phase2CoreParams calldata params,
-        DeploymentBatcher.CodeIds calldata codeIds,
-        bytes32 baseSalt,
-        string calldata shareSymbolLower
-    ) external returns (DeploymentBatcher.Phase2Result memory out) {
+        DeploymentBatcher.Phase2CoreParams calldata, /* params */
+        DeploymentBatcher.CodeIds calldata, /* codeIds */
+        bytes32, /* baseSalt */
+        string calldata /* shareSymbolLower */
+    ) external view returns (DeploymentBatcher.Phase2Result memory) {
         if (address(this) != batcher) revert NotBatcherContext();
-        return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower, DeploymentBatcher.VaultKind.Creator);
+        revert UsePhase2Orchestrator();
     }
 
     function deployPhase2CoreOrchestrator(
@@ -1083,13 +1088,13 @@ contract DeploymentBatcherPhase2Module {
         // exceed a single UserOp budget, so allow pre-created addresses (same salt /
         // codeId / constructor args) and only spend UserOp gas on wiring.
         bytes memory gaugeArgs = abi.encode(params.shareOFT, treasury, protocolTreasury, tempOwner);
-        out.gaugeController = _deployOrExisting(gaugeSalt, codeIds.gauge, gaugeArgs);
+        out.gaugeController = _deployOrExisting(gaugeSalt, codeIds.gauge, gaugeArgs, params.gaugeInitCodeHash);
 
         bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
-        out.ccaLaunchArm = _deployOrExisting(ccaSalt, codeIds.cca, ccaArgs);
+        out.ccaLaunchArm = _deployOrExisting(ccaSalt, codeIds.cca, ccaArgs, params.ccaInitCodeHash);
 
         bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
-        out.oracle = _deployOrExisting(oracleSalt, codeIds.oracle, oracleArgs);
+        out.oracle = _deployOrExisting(oracleSalt, codeIds.oracle, oracleArgs, params.oracleInitCodeHash);
 
         IShareOFT4626(params.shareOFT).setGaugeController(out.gaugeController);
 
@@ -1120,17 +1125,39 @@ contract DeploymentBatcherPhase2Module {
         _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
     }
 
-    function _deployOrExisting(bytes32 salt, bytes32 codeId, bytes memory constructorArgs)
-        internal
-        returns (address addr)
-    {
+    /// @dev When `initCodeHash` is non-zero, reuse checks skip `store.get()` (AA95).
+    ///      Callers that pre-create (deploy-session) should pass the same hash they
+    ///      used for CREATE2 prediction. Zero keeps the legacy derive-via-get path.
+    error InitCodeHashMismatch();
+
+    function _deployOrExisting(
+        bytes32 salt,
+        bytes32 codeId,
+        bytes memory constructorArgs,
+        bytes32 initCodeHash
+    ) internal returns (address addr) {
         address storeAddr = create2Deployer.store();
         if (storeAddr != address(0)) {
-            bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
-            bytes32 initCodeHash = keccak256(bytes.concat(creationCode, constructorArgs));
-            addr = create2Deployer.computeAddress(salt, initCodeHash);
+            bytes32 resolvedHash = initCodeHash;
+            if (resolvedHash == bytes32(0)) {
+                // Legacy path: materialize creation bytecode to derive the hash.
+                if (IUniversalBytecodeStoreView(storeAddr).pointers(codeId) == address(0)) {
+                    // Let deploy() surface CodeNotFound.
+                    return create2Deployer.deploy(salt, codeId, constructorArgs);
+                }
+                bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
+                resolvedHash = keccak256(bytes.concat(creationCode, constructorArgs));
+            }
+            addr = create2Deployer.computeAddress(salt, resolvedHash);
             if (addr.code.length > 0) {
                 return addr;
+            }
+            // Optional integrity: if a hash was supplied, redeploy must match it.
+            if (initCodeHash != bytes32(0)) {
+                bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
+                if (keccak256(bytes.concat(creationCode, constructorArgs)) != initCodeHash) {
+                    revert InitCodeHashMismatch();
+                }
             }
         }
         addr = create2Deployer.deploy(salt, codeId, constructorArgs);
@@ -1306,6 +1333,8 @@ contract DeploymentBatcherPhase2Module {
             .launchAuctionWithReserve(amount, lpReserveAmount, floorPriceQ96, requiredRaise, auctionSteps);
     }
 
+    error Phase2WiringMismatch();
+
     function _validateFinalizePhase2(
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         DeploymentBatcher.Phase1SplitState calldata p1state
@@ -1333,6 +1362,10 @@ contract DeploymentBatcherPhase2Module {
         if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
             revert Phase1StateMismatch();
         }
+        // Bind finalize recipients to vault-wired Phase2 core (blocks diverted LP reserve).
+        if (params.gaugeController != IOVault4626(params.vault).gaugeController()) revert Phase2WiringMismatch();
+        if (params.ccaLaunchArm != IOVault4626(params.vault).ccaLaunchArm()) revert Phase2WiringMismatch();
+        if (params.oracle != ITradeFeeCollector4626(params.gaugeController).oracle()) revert Phase2WiringMismatch();
     }
 
     function finalizePhase2Orchestrator(
@@ -1486,6 +1519,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         string shareSymbol;
         string version;
         uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
+        /// @dev Optional CREATE2 init-code hashes for gauge/cca/oracle reuse without store.get.
+        ///      Zero => derive via store.get (legacy). Non-zero => AA95-friendly reuse path.
+        bytes32 gaugeInitCodeHash;
+        bytes32 ccaInitCodeHash;
+        bytes32 oracleInitCodeHash;
     }
 
     struct Phase2FinalizeParams {

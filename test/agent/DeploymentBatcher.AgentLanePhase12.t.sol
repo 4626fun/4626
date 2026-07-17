@@ -12,15 +12,23 @@ interface IEndpointRegistryLike {
 
 contract MockAgentLaneBytecodeStore {
     mapping(bytes32 => bytes) internal bytecodes;
+    mapping(bytes32 => address) internal _pointers;
 
     function setCode(bytes32 codeId, bytes memory creationCode) external {
         bytecodes[codeId] = creationCode;
+        if (creationCode.length > 0 && _pointers[codeId] == address(0)) {
+            _pointers[codeId] = address(uint160(uint256(codeId) + 1));
+        }
     }
 
     function get(bytes32 codeId) external view returns (bytes memory) {
         bytes memory creationCode = bytecodes[codeId];
         require(creationCode.length > 0, "missing code");
         return creationCode;
+    }
+
+    function pointers(bytes32 codeId) external view returns (address) {
+        return _pointers[codeId];
     }
 }
 
@@ -280,6 +288,7 @@ contract MockAgentLaneCreate2Deployer {
     mapping(bytes32 => uint8) public codeKinds;
     bytes32 public bootstrapSalt;
     address public bootstrapAddress;
+    address public storeAddr;
 
     function configureBootstrap(bytes32 salt, address bootstrap) external {
         bootstrapSalt = salt;
@@ -290,15 +299,19 @@ contract MockAgentLaneCreate2Deployer {
         codeKinds[codeId] = kind;
     }
 
-    /// @dev Phase2 `_deployOrExisting` probes `store()` before CREATE2. Return zero so the
-    ///      mock skips the bytecode-store existing-address path and uses `deploy()` only.
-    function store() external pure returns (address) {
-        return address(0);
+    /// @dev Default zero skips store.get reuse path. Tests that exercise initCodeHash
+    ///      reuse set this to a MockAgentLaneBytecodeStore.
+    function setStore(address store_) external {
+        storeAddr = store_;
     }
 
-    function computeAddress(bytes32 salt, bytes32) external view returns (address) {
+    function store() external view returns (address) {
+        return storeAddr;
+    }
+
+    function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address) {
         if (salt == bootstrapSalt) return bootstrapAddress;
-        return address(uint160(uint256(keccak256(abi.encodePacked("mock-create2", salt)))));
+        return address(uint160(uint256(keccak256(abi.encodePacked("mock-create2", salt, initCodeHash)))));
     }
 
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr) {
@@ -355,16 +368,21 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
     DeploymentBatcher internal batcher;
     MockAgentLaneCreate2Deployer internal create2;
     MockAgentLaneRegistry internal registry;
+    MockAgentLaneBytecodeStore internal store;
     OFTBootstrapRegistry internal bootstrap;
 
     function setUp() public {
         vm.chainId(8453);
         bootstrap = new OFTBootstrapRegistry();
         registry = new MockAgentLaneRegistry(bootstrap.LZ_COMMON_ENDPOINT());
-        MockAgentLaneBytecodeStore store = new MockAgentLaneBytecodeStore();
+        store = new MockAgentLaneBytecodeStore();
         create2 = new MockAgentLaneCreate2Deployer();
         store.setCode(OFT_BOOTSTRAP_CODE_ID, bytes("mock-bootstrap"));
         store.setCode(SHARE_OFT_CODE_ID, bytes("mock-share-oft"));
+        store.setCode(AGENT_GAUGE_CODE_ID, bytes("mock-agent-gauge"));
+        store.setCode(CCA_CODE_ID, bytes("mock-cca"));
+        store.setCode(ORACLE_CODE_ID, bytes("mock-oracle"));
+        store.setCode(CREATOR_GAUGE_CODE_ID, bytes("mock-creator-gauge"));
         create2.configureBootstrap(keccak256("4626:OFTBootstrapRegistry:v1"), address(bootstrap));
         create2.setCodeKind(VAULT_CODE_ID, 1);
         create2.setCodeKind(WRAPPER_CODE_ID, 2);
@@ -476,7 +494,10 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: bytes32(0),
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
         });
 
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
@@ -511,7 +532,10 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
             shareOFT: p1.shareOFT,
             shareSymbol: "sAGNT",
             version: "v1",
-            floorPriceQ96: 0
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: bytes32(0),
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
         });
 
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(phase2, _codeIds(false));
@@ -547,5 +571,81 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         );
 
         assertTrue(creatorHash != agentHash, "vaultKind must affect params hash");
+    }
+
+    function test_phase2_reusesPrecreatedGaugeWhenInitCodeHashProvided() public {
+        create2.setStore(address(store));
+        DeploymentBatcher.Phase1Result memory p1 = _runPhase1(DeploymentBatcher.VaultKind.Agent);
+
+        DeploymentBatcherUtilsHelper helper = DeploymentBatcherUtilsHelper(batcher.utilsHelper());
+        bytes32 baseSalt = helper.deriveBaseSalt(agentToken, address(this), block.chainid, "v1");
+        bytes32 gaugeSalt = helper.saltFor(baseSalt, "gauge");
+        bytes memory gaugeArgs = abi.encode(p1.shareOFT, address(this), address(this), address(batcher));
+        bytes32 gaugeInitHash = keccak256(bytes.concat(store.get(AGENT_GAUGE_CODE_ID), gaugeArgs));
+        address predicted = create2.computeAddress(gaugeSalt, gaugeInitHash);
+
+        MockAgentLaneGauge pre = new MockAgentLaneGauge(address(0), address(0), address(0), address(batcher));
+        vm.etch(predicted, address(pre).code);
+
+        DeploymentBatcher.Phase2CoreParams memory params = DeploymentBatcher.Phase2CoreParams({
+            creatorToken: agentToken,
+            owner: address(this),
+            creatorTreasury: address(0),
+            payoutRecipient: address(0),
+            vault: p1.vault,
+            wrapper: p1.wrapper,
+            shareOFT: p1.shareOFT,
+            shareSymbol: "sAGNT",
+            version: "v1",
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: gaugeInitHash,
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
+        });
+
+        DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
+        assertEq(p2.gaugeController, predicted, "must reuse pre-created gauge");
+    }
+
+    function test_finalizePhase2_revertsWhenCcaDoesNotMatchVaultWiring() public {
+        DeploymentBatcher.Phase1Result memory p1 = _runPhase1(DeploymentBatcher.VaultKind.Agent);
+        DeploymentBatcher.Phase2CoreParams memory params = DeploymentBatcher.Phase2CoreParams({
+            creatorToken: agentToken,
+            owner: address(this),
+            creatorTreasury: address(0),
+            payoutRecipient: address(0),
+            vault: p1.vault,
+            wrapper: p1.wrapper,
+            shareOFT: p1.shareOFT,
+            shareSymbol: "sAGNT",
+            version: "v1",
+            floorPriceQ96: 0,
+            gaugeInitCodeHash: bytes32(0),
+            ccaInitCodeHash: bytes32(0),
+            oracleInitCodeHash: bytes32(0)
+        });
+        DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
+
+        address diverted = makeAddr("divertedCca");
+        vm.etch(diverted, hex"00");
+
+        DeploymentBatcher.Phase2FinalizeParams memory fin = DeploymentBatcher.Phase2FinalizeParams({
+            creatorToken: agentToken,
+            owner: address(this),
+            vault: p1.vault,
+            wrapper: p1.wrapper,
+            shareOFT: p1.shareOFT,
+            gaugeController: p2.gaugeController,
+            ccaLaunchArm: diverted,
+            oracle: p2.oracle,
+            version: "v1",
+            depositAmount: 50_000_000 ether,
+            requiredRaise: 0,
+            floorPriceQ96: 0,
+            auctionSteps: ""
+        });
+
+        vm.expectRevert(); // Phase2WiringMismatch via module delegatecall
+        batcher.finalizePhase2(fin);
     }
 }
