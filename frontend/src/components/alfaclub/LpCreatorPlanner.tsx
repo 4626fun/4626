@@ -45,6 +45,17 @@ function formatRoomType(value: string): string {
   return 'Unknown'
 }
 
+function routeLabel(prefersLp: boolean, side: 'buy' | 'sell'): string {
+  if (side === 'buy') return prefersLp ? 'Pool is cheaper' : 'Room curve is cheaper'
+  return prefersLp ? 'Pool pays more' : 'Room curve pays more'
+}
+
+function routeTone(prefersLp: boolean): string {
+  return prefersLp
+    ? 'bg-emerald-400/10 text-emerald-200 ring-emerald-400/20'
+    : 'bg-amber-400/10 text-amber-200 ring-amber-400/20'
+}
+
 export function LpCreatorPlanner() {
   const [tokenIdInput, setTokenIdInput] = useState('1659')
   const [creatorCoinInput, setCreatorCoinInput] = useState(ROOM_CREATOR_COIN_DEFAULTS['1659'] ?? '')
@@ -69,321 +80,356 @@ export function LpCreatorPlanner() {
     setSelectedKeys((current) => Math.max(2, Math.min(current, maxKeys)))
   }, [planner.roomMeta?.maxKeys])
 
-  const chartData = useMemo(
-    () =>
-      planner.series.map((point) => ({
-        ...point,
-        creatorCoinChartValue: point.creatorCoinUsd,
-      })),
-    [planner.series],
-  )
-
   const selectedOutcome = planner.selectedOutcome
   const roomMeta = planner.roomMeta
   const hasValidInputs = tokenId > 0n && creatorCoinInput.trim().length > 0
+  const isCustomAmount = manualCreatorCoinAmount.trim().length > 0
+  const quickKeyChoices = useMemo(() => {
+    const max = roomMeta?.maxKeys ?? 20
+    return [...new Set([2, Math.min(5, max), Math.min(10, max), max])].filter(
+      (keys) => keys >= 2,
+    )
+  }, [roomMeta?.maxKeys])
 
   return (
-    <section className="mt-8 rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.06] sm:p-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <section className="mt-8 overflow-hidden rounded-3xl bg-black/35 ring-1 ring-white/[0.06]">
+      <div className="border-b border-white/[0.06] p-5 sm:p-6">
         <div>
-          <span className="label">Secondary-market seed planner</span>
-          <h2 className="mt-3 text-2xl font-semibold text-zinc-100 sm:text-3xl">LP planner</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
-            Model how many Creator Coins you would pair with deposited FriendKeys before opening a pool.
-            This planner sizes a secondary-market seed and compares LP pricing against the live bonding
-            curve. It does not mint keys for you.
+          <span className="label">Creator tool</span>
+          <h2 className="mt-3 text-2xl font-semibold text-zinc-100 sm:text-3xl">
+            Plan your key pool
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+            Choose your room and how many keys you want to supply. We’ll calculate the Creator Coin
+            amount that places your pool near the room’s current key price.
           </p>
-        </div>
-        <div className="rounded-2xl bg-white/[0.03] px-4 py-3 text-xs text-zinc-400 ring-1 ring-white/[0.06]">
-          Default room mapping includes room <span className="font-semibold text-zinc-200">1659</span>.
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <label className="block">
-          <span className="text-xs font-medium uppercase tracking-[0.14em] text-zinc-500">Room token ID</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={tokenIdInput}
-            onChange={(event) => setTokenIdInput(event.target.value)}
-            placeholder="1659"
-            className="mt-2 h-11 w-full rounded-2xl bg-black/45 px-4 text-sm text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-medium uppercase tracking-[0.14em] text-zinc-500">Creator coin</span>
-          <input
-            type="text"
-            value={creatorCoinInput}
-            onChange={(event) => setCreatorCoinInput(event.target.value)}
-            placeholder="0x..."
-            className="mt-2 h-11 w-full rounded-2xl bg-black/45 px-4 font-mono text-sm text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
-          />
-        </label>
-
-        <label className="block xl:col-span-2">
-          <span className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-zinc-500">
-            <span>Keys deposited</span>
-            <span className="text-zinc-300">
-              {selectedKeys} / {roomMeta?.maxKeys ?? 20}
-            </span>
-          </span>
-          <input
-            type="range"
-            min={2}
-            max={roomMeta?.maxKeys ?? 20}
-            step={1}
-            value={selectedKeys}
-            onChange={(event) => setSelectedKeys(Number(event.target.value))}
-            className="mt-4 w-full accent-sky-400"
-          />
-          <p className="mt-2 text-xs text-zinc-500">
-            Planner series uses default key counts from 2 up to{' '}
-            <span className="text-zinc-300">{roomMeta?.maxKeys ?? 20}</span>.
-          </p>
-        </label>
-      </div>
-
-      <label className="mt-4 block">
-        <span className="text-xs font-medium uppercase tracking-[0.14em] text-zinc-500">
-          Manual creator-coin override
-        </span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={manualCreatorCoinAmount}
-          onChange={(event) => setManualCreatorCoinAmount(event.target.value)}
-          placeholder="Optional human amount for the selected key count"
-          className="mt-2 h-11 w-full rounded-2xl bg-black/45 px-4 text-sm text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
-        />
-        <p className="mt-2 text-xs text-zinc-500">
-          Leave blank to curve-match automatically. If you enter an amount, only the selected-key outcome
-          card uses the override.
-        </p>
-      </label>
-
-      {planner.manualOverrideInvalid ? (
-        <p className="mt-3 text-sm text-amber-300">Enter a valid creator-coin amount to use the manual override.</p>
-      ) : null}
-
-      {!hasValidInputs ? (
-        <p className="mt-6 text-sm text-zinc-500">Enter a room token ID and creator coin to load the planner.</p>
-      ) : planner.loading ? (
-        <p className="mt-6 text-sm text-zinc-400" role="status">
-          Loading room pricing, creator coin metadata, and Zora spot price…
-        </p>
-      ) : planner.error ? (
-        <p className="mt-6 text-sm text-red-300" role="alert">
-          Unable to load planner inputs: {planner.error.message}
-        </p>
-      ) : roomMeta ? (
-        <>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Room type</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">{formatRoomType(roomMeta.roomTypeKey)}</div>
-              <div className="mt-1 text-xs text-zinc-500">Tier {roomMeta.roomTier ?? '—'}</div>
-            </div>
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Outstanding keys</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">{roomMeta.totalSupply.toString()}</div>
-              <div className="mt-1 text-xs text-zinc-500">Planner cap {roomMeta.maxKeys}</div>
-            </div>
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Curve buy 1 key</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">{formatUsd(roomMeta.curveBuyOneUsdc)}</div>
-              <div className="mt-1 text-xs text-zinc-500">After fee</div>
-            </div>
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Curve sell 1 key</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">{formatUsd(roomMeta.curveSellOneUsdc)}</div>
-              <div className="mt-1 text-xs text-zinc-500">After fee</div>
-            </div>
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Creator coin</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">{roomMeta.creatorCoinSymbol}</div>
-              <div className="mt-1 truncate font-mono text-xs text-zinc-500">{roomMeta.creatorCoin}</div>
-            </div>
-            <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Spot USD</div>
-              <div className="mt-2 text-sm font-semibold text-zinc-100">
-                {formatUsd(roomMeta.creatorCoinUsdPrice)}
+      <div className="p-5 sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-400/15 text-xs font-semibold text-sky-200">
+                  1
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">Choose your room</h3>
+                  <p className="text-xs text-zinc-500">Enter the room’s FriendKey ID and Creator Coin.</p>
+                </div>
               </div>
-              <div className="mt-1 text-xs text-zinc-500">Zora reference</div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
+                <label className="block">
+                  <span className="text-xs text-zinc-400">Room ID</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={tokenIdInput}
+                    onChange={(event) => setTokenIdInput(event.target.value)}
+                    placeholder="1659"
+                    className="mt-2 h-11 w-full rounded-xl bg-black/45 px-3 text-sm text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-zinc-400">Creator Coin address</span>
+                  <input
+                    type="text"
+                    value={creatorCoinInput}
+                    onChange={(event) => setCreatorCoinInput(event.target.value)}
+                    placeholder="0x..."
+                    className="mt-2 h-11 w-full rounded-xl bg-black/45 px-3 font-mono text-xs text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
+                  />
+                </label>
+              </div>
             </div>
+
+            <div className="border-t border-white/[0.06] pt-6">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-400/15 text-xs font-semibold text-sky-200">
+                  2
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">Choose how many keys to supply</h3>
+                  <p className="text-xs text-zinc-500">More keys create a deeper pool with less price movement.</p>
+                </div>
+              </div>
+              <div className="mt-5 flex items-end justify-between">
+                <div>
+                  <span className="text-4xl font-semibold tracking-tight text-white">{selectedKeys}</span>
+                  <span className="ml-2 text-sm text-zinc-400">room keys</span>
+                </div>
+                <span className="text-xs text-zinc-500">Up to {roomMeta?.maxKeys ?? 20}</span>
+              </div>
+              <input
+                aria-label="Keys supplied"
+                type="range"
+                min={2}
+                max={roomMeta?.maxKeys ?? 20}
+                step={1}
+                value={selectedKeys}
+                onChange={(event) => setSelectedKeys(Number(event.target.value))}
+                className="mt-4 w-full accent-sky-400"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {quickKeyChoices.map((keys) => (
+                  <button
+                    key={keys}
+                    type="button"
+                    onClick={() => setSelectedKeys(keys)}
+                    className={`rounded-full px-3 py-1.5 text-xs ring-1 transition ${
+                      selectedKeys === keys
+                        ? 'bg-sky-400/15 text-sky-100 ring-sky-400/30'
+                        : 'bg-white/[0.03] text-zinc-400 ring-white/[0.08] hover:text-zinc-200'
+                    }`}
+                  >
+                    {keys} keys
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <details className="border-t border-white/[0.06] pt-5">
+              <summary className="cursor-pointer text-xs font-medium text-zinc-400 hover:text-zinc-200">
+                Advanced: try a custom Creator Coin amount
+              </summary>
+              <label className="mt-4 block">
+                <span className="text-xs text-zinc-500">
+                  Creator Coins to pair with {selectedKeys} keys
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualCreatorCoinAmount}
+                  onChange={(event) => setManualCreatorCoinAmount(event.target.value)}
+                  placeholder="Leave blank for our recommendation"
+                  className="mt-2 h-11 w-full rounded-xl bg-black/45 px-3 text-sm text-zinc-100 ring-1 ring-white/[0.08] outline-none transition focus:ring-sky-500/40"
+                />
+              </label>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                A custom amount changes the opening pool price. The chart continues to show the recommended
+                curve-matched range.
+              </p>
+              {planner.manualOverrideInvalid ? (
+                <p className="mt-2 text-xs text-amber-300">Enter a positive numeric amount.</p>
+              ) : null}
+            </details>
           </div>
 
-          {chartData.length === 0 ? (
-            <div className="mt-6 rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
-              <p className="text-sm text-zinc-400">
-                This room loaded, but the planner could not resolve a Creator Coin USD price from Zora yet.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
-              <div className="rounded-3xl bg-black/25 p-4 ring-1 ring-white/[0.06]">
-                <div className="mb-3 flex flex-col gap-1">
-                  <h3 className="text-sm font-semibold text-zinc-100">Seed curve</h3>
-                  <p className="text-xs text-zinc-500">
-                    Deposit size vs. estimated LP entry/exit pricing for one key.
+          <div className="min-w-0">
+            {!hasValidInputs ? (
+              <div className="flex min-h-72 items-center justify-center rounded-2xl bg-white/[0.02] p-6 text-center ring-1 ring-white/[0.06]">
+                <p className="max-w-sm text-sm text-zinc-500">
+                  Enter a room ID and Creator Coin address to calculate a pool.
+                </p>
+              </div>
+      ) : planner.loading ? (
+              <div
+                className="flex min-h-72 items-center justify-center rounded-2xl bg-white/[0.02] p-6 text-sm text-zinc-400 ring-1 ring-white/[0.06]"
+                role="status"
+              >
+                Reading the room curve and Creator Coin price…
+              </div>
+      ) : planner.error ? (
+              <div className="flex min-h-72 items-center justify-center rounded-2xl bg-red-400/[0.04] p-6 text-center ring-1 ring-red-400/10">
+                <div>
+                  <p className="text-sm text-red-200">We couldn’t calculate this pool.</p>
+                  <p className="mt-1 max-w-sm text-xs text-zinc-500">
+                    Check the room ID and Creator Coin address, then try again.
                   </p>
-                </div>
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 16, left: 0 }}>
-                      <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                      <XAxis
-                        dataKey="keys"
-                        allowDecimals={false}
-                        tick={{ fill: 'rgba(161,161,170,0.8)', fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                      />
-                      <YAxis
-                        tick={{ fill: 'rgba(161,161,170,0.8)', fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => formatNumber(Number(value), 2)}
-                        width={64}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: 'rgba(9,9,11,0.96)',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: 16,
-                          fontSize: 12,
-                        }}
-                        formatter={(value: unknown, name: unknown) => {
-                          const numeric = Number(value)
-                          if (name === 'Creator coin deposit') {
-                            return [formatUsd(numeric), String(name)]
-                          }
-                          return [formatUsd(numeric), String(name)]
-                        }}
-                      />
-                      <ReferenceLine
-                        y={roomMeta.curveMidUsdc}
-                        stroke="rgba(250,204,21,0.8)"
-                        strokeDasharray="4 4"
-                        label={{
-                          value: 'Curve midpoint',
-                          position: 'insideTopRight',
-                          fill: 'rgba(250,204,21,0.9)',
-                          fontSize: 10,
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="creatorCoinChartValue"
-                        name="Creator coin deposit"
-                        stroke="#f59e0b"
-                        strokeWidth={2.5}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="lpBuyOneUsdc"
-                        name="LP buy 1 key"
-                        stroke="#38bdf8"
-                        strokeWidth={2.5}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="lpSellOneUsdc"
-                        name="LP sell 1 key"
-                        stroke="#34d399"
-                        strokeWidth={2.5}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
                 </div>
               </div>
-
-              <div className="rounded-3xl bg-black/25 p-4 ring-1 ring-white/[0.06]">
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-zinc-100">Selected outcome</h3>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Snapshot for {selectedOutcome?.keys ?? selectedKeys} deposited keys in room #{roomMeta.tokenId.toString()}.
+            ) : roomMeta && selectedOutcome ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl bg-sky-400/[0.07] p-5 ring-1 ring-sky-400/20 sm:p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.14em] text-sky-200">
+                      {isCustomAmount ? 'Your custom pool' : 'Recommended pairing'}
+                    </span>
+                    <span className="rounded-full bg-black/25 px-2.5 py-1 text-[11px] text-zinc-400">
+                      Room #{roomMeta.tokenId.toString()} · {formatRoomType(roomMeta.roomTypeKey)}
+                    </span>
+                  </div>
+                  <p className="mt-5 text-sm text-zinc-300">Pair</p>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                      {formatNumber(selectedOutcome.creatorCoinAmount, 2)}
+                    </span>
+                    <span className="text-lg font-medium text-sky-100">{roomMeta.creatorCoinSymbol}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    worth {formatUsd(selectedOutcome.creatorCoinUsd)}, with{' '}
+                    <span className="font-medium text-zinc-200">{selectedOutcome.keys} room keys</span>
                   </p>
+                  {!isCustomAmount ? (
+                    <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+                      This opening ratio targets the midpoint between the room’s current buy and sell prices.
+                    </p>
+                  ) : null}
                 </div>
 
-                {selectedOutcome ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Coin to deposit</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {formatNumber(selectedOutcome.creatorCoinAmount)} {roomMeta.creatorCoinSymbol}
-                      </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-zinc-300">When someone buys 1 key</span>
+                      <span className={`rounded-full px-2 py-1 text-[10px] ring-1 ${routeTone(selectedOutcome.buyPrefersLp)}`}>
+                        {routeLabel(selectedOutcome.buyPrefersLp, 'buy')}
+                      </span>
                     </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Deposit value</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {formatUsd(selectedOutcome.creatorCoinUsd)}
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <p className="text-zinc-500">Your pool</p>
+                        <p className="mt-1 text-base font-semibold text-zinc-100">
+                          {formatUsd(selectedOutcome.lpBuyOneUsdc)}
+                        </p>
                       </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">LP buy vs curve</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {formatUsd(selectedOutcome.lpBuyOneUsdc)} vs {formatUsd(selectedOutcome.curveBuyOneUsdc)}
+                      <div>
+                        <p className="text-zinc-500">Room curve</p>
+                        <p className="mt-1 text-base font-semibold text-zinc-300">
+                          {formatUsd(selectedOutcome.curveBuyOneUsdc)}
+                        </p>
                       </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">LP sell vs curve</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {formatUsd(selectedOutcome.lpSellOneUsdc)} vs {formatUsd(selectedOutcome.curveSellOneUsdc)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Buyers prefer</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {selectedOutcome.buyPrefersLp ? 'LP / buy from pool' : 'Mint / buy from curve'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Sellers prefer</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {selectedOutcome.sellPrefersLp ? 'LP / burn into pool' : 'Curve / sell to protocol'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Curve midpoint</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">
-                        {formatUsd(selectedOutcome.curveMidUsdc)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Pool fee</div>
-                      <div className="mt-2 text-base font-semibold text-zinc-100">{selectedOutcome.feeBps} bps</div>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-zinc-400">
-                    A selected outcome will appear here once room pricing and the Creator Coin spot price are available.
-                  </p>
-                )}
 
-                <div className="mt-4 rounded-2xl bg-sky-500/10 p-4 text-sm text-sky-100 ring-1 ring-sky-400/20">
-                  Use this to seed a secondary market around live curve pricing, then decide whether LP buys and
-                  sells look better than minting or burning directly.
+                  <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-zinc-300">When someone sells 1 key</span>
+                      <span className={`rounded-full px-2 py-1 text-[10px] ring-1 ${routeTone(selectedOutcome.sellPrefersLp)}`}>
+                        {routeLabel(selectedOutcome.sellPrefersLp, 'sell')}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <p className="text-zinc-500">Your pool</p>
+                        <p className="mt-1 text-base font-semibold text-zinc-100">
+                          {formatUsd(selectedOutcome.lpSellOneUsdc)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-zinc-500">Room curve</p>
+                        <p className="mt-1 text-base font-semibold text-zinc-300">
+                          {formatUsd(selectedOutcome.curveSellOneUsdc)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-500">
-            <span>Creator: {formatAddress(roomMeta.creator)}</span>
-            <span>Creator coin name: {roomMeta.creatorCoinName}</span>
-            <span>Fee lane: {roomMeta.feeBps} bps</span>
+            ) : (
+              <div className="flex min-h-72 items-center justify-center rounded-2xl bg-white/[0.02] p-6 text-center ring-1 ring-white/[0.06]">
+                <p className="max-w-sm text-sm text-zinc-500">
+                  We found the room, but its Creator Coin price is not available yet.
+                </p>
+              </div>
+            )}
           </div>
-        </>
-      ) : null}
+        </div>
+
+        {roomMeta && planner.series.length > 0 ? (
+          <div className="mt-8 border-t border-white/[0.06] pt-7">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100">How pool depth changes the price</h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  More keys narrow the gap between what buyers pay and sellers receive.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 text-[11px] text-zinc-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-4 bg-sky-400" /> Buyer pays
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-4 bg-emerald-400" /> Seller receives
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-4 border-t border-dashed border-amber-300" /> Curve midpoint
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 h-[280px] w-full rounded-2xl bg-black/25 p-3 ring-1 ring-white/[0.06]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={planner.series} margin={{ top: 8, right: 12, bottom: 18, left: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis
+                    dataKey="keys"
+                    allowDecimals={false}
+                    tick={{ fill: 'rgba(161,161,170,0.8)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    label={{
+                      value: 'Keys supplied',
+                      position: 'insideBottom',
+                      offset: -8,
+                      fill: 'rgba(113,113,122,0.9)',
+                      fontSize: 10,
+                    }}
+                    height={38}
+                  />
+                  <YAxis
+                    tick={{ fill: 'rgba(161,161,170,0.8)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => formatUsd(Number(value))}
+                    width={64}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(9,9,11,0.96)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                    labelFormatter={(keys) => `${String(keys)} keys supplied`}
+                    formatter={(value: unknown, name: unknown) => [formatUsd(Number(value)), String(name)]}
+                  />
+                  <ReferenceLine
+                    y={roomMeta.curveMidUsdc}
+                    stroke="rgba(250,204,21,0.72)"
+                    strokeDasharray="4 4"
+                  />
+                  <ReferenceLine
+                    x={selectedKeys}
+                    stroke="rgba(255,255,255,0.22)"
+                    strokeDasharray="3 4"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="lpBuyOneUsdc"
+                    name="Buyer pays"
+                    stroke="#38bdf8"
+                    strokeWidth={2.5}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="lpSellOneUsdc"
+                    name="Seller receives"
+                    stroke="#34d399"
+                    strokeWidth={2.5}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-500">
+              <span>
+                {roomMeta.creatorCoinName} price: {formatUsd(roomMeta.creatorCoinUsdPrice)}
+              </span>
+              <span>Room keys outstanding: {roomMeta.totalSupply.toString()}</span>
+              <span>Pool fee: {(roomMeta.feeBps / 100).toFixed(2)}%</span>
+              <span>Creator: {formatAddress(roomMeta.creator)}</span>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 rounded-xl bg-white/[0.025] px-4 py-3 text-xs leading-relaxed text-zinc-500 ring-1 ring-white/[0.05]">
+          This estimates an ERC-20 / ERC-1155 secondary market. It does not buy, mint, stake, or move
+          keys. Prices can change before a pool is created.
+        </div>
+      </div>
     </section>
   )
 }
