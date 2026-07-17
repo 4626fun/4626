@@ -61,6 +61,7 @@ import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedToken
 import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
+import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -1949,6 +1950,24 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return ctx
   }
 
+  const withFinalizeShareBridgeFees = async (
+    stageCalls: Array<{ to: Address; value: bigint; data: Hex }>,
+  ): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
+    const attached = await attachFinalizeShareBridgeValueToCalls({
+      publicClient,
+      calls: stageCalls.map((call) => ({
+        to: call.to,
+        value: String(call.value),
+        data: call.data,
+      })),
+    })
+    return attached.map((call) => ({
+      to: getAddress(call.to as Address),
+      value: toBigInt(call.value ?? 0),
+      data: call.data as Hex,
+    }))
+  }
+
   const startStage = async (
     fromStep: string,
     toStep: string,
@@ -1974,10 +1993,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     }
 
     const authedCtx = await getCtx()
-    const fullCalls = [...calls]
+    let fullCalls = [...calls]
     const shouldAttachCleanup = attachCleanup && !persistSessionOwner
     const allowCleanupFallback = shouldAttachCleanup && toStep === 'phase4_sent'
     if (shouldAttachCleanup) fullCalls.push(authedCtx.removeOwnerCall)
+    // Resume ticks confirmed→sent via advance (not continue). Mirror continueCore fee attach
+    // so paymaster assertFinalizeShareBridgeCallValue does not reject value=0 finalize calls.
+    if (toStep === PHASE2_FINALIZE_SENT_STEP || toStep === 'phase2_sent') {
+      fullCalls = await withFinalizeShareBridgeFees(fullCalls)
+    }
 
     await validateSponsoredSmartWalletCalls({
       sender: smartWalletAddress,
@@ -2252,9 +2276,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     const plan = getSentStagePlan(sentStep)
     if (!plan) return
     const authedCtx = await getCtx()
-    const fullCalls = [...plan.calls]
+    let fullCalls = [...plan.calls]
     if (plan.attachCleanup && !persistSessionOwner) {
       fullCalls.push(authedCtx.removeOwnerCall)
+    }
+    if (sentStep === PHASE2_FINALIZE_SENT_STEP || sentStep === 'phase2_sent') {
+      fullCalls = await withFinalizeShareBridgeFees(fullCalls)
     }
 
     await validateSponsoredSmartWalletCalls({
