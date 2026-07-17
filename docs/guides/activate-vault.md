@@ -47,4 +47,4 @@ App order: finalize → Phase 3 strategies → Phase 4 `launchDeferredAuction` �
 
 No open DEX trading until the auction settles. Solana bridge runs at Phase 2 finalize. [Solana share bridge](/overview/solana-share-mesh).
 
-Next: [Step 4: After activation](/guides/after-activation) · [Fees & lottery](/overview/how-it-works)
+Prev: [Step 2: Deploy contracts](/guides/launch-token) · Next: [Step 4: After activation](/guides/after-activation)

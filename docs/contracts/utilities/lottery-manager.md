@@ -79,3 +79,5 @@ boostedPPM = basePPM × effectiveMult
 ```
 
 Reader journey: [ve■4626, ve33, and veLottery](/overview/ve4626).
+
+Prev: [Share CCA Launch Arm](/contracts/strategies/cca-launch) · Next: [CreatorOracle](/contracts/utilities/creator-oracle)

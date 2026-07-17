@@ -58,3 +58,5 @@ Assumes standard ERC-20 behavior where `transfer`/`transferFrom` move the exact 
 | **Management** | Strategy configuration |
 | **Keeper** | Profit reporting, tending |
 | **EmergencyAdmin** | Emergency shutdown only |
+
+Prev: [Registry4626](/contracts/core/creator-registry) · Next: [CreatorShareOFT](/contracts/core/creator-share-oft)

@@ -43,6 +43,8 @@ Deploy the per-creator stack in one transaction. **No creator coin moves yet** �
 | CreatorOracle | TWAP |
 | CCA launch arm | Share auction |
 
+Stack reference: [Contracts](/contracts) · [Addresses](/reference/addresses).
+
 ## Deploy phases
 
 | Phase | App step | Effect |
@@ -52,4 +54,4 @@ Deploy the per-creator stack in one transaction. **No creator coin moves yet** �
 | 3 | Automatic | Charm 45% · Ajna 45% · 10% idle |
 | 4 | After activation | Auction scheduled → live → graduate |
 
-Next: [Step 3: Activate vault](/guides/activate-vault) · [Contracts](/contracts) · [Addresses](/reference/addresses)
+Prev: [Step 1: Pay launch fee](/guides/strategy-bundle) · Next: [Step 3: Activate vault](/guides/activate-vault)

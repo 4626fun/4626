@@ -33,3 +33,5 @@ function isPriceFresh() external view returns (bool);
 ## Price Sources
 
 Uniswap V4 pool TWAP and Chainlink price feeds (ETH/USD).
+
+Prev: [LotteryManager4626](/contracts/utilities/lottery-manager) · Next: [Smart contracts](/contracts)

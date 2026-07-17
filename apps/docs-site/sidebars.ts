@@ -45,9 +45,9 @@ const sidebars: SidebarsConfig = {
           link: {type: 'doc', id: 'audits/aristotle/index'},
           items: [
             'audits/aristotle/index',
-            'audits/aristotle/curve-boost',
             'audits/aristotle/base-win-chance',
             'audits/aristotle/post-boost-pipeline',
+            'audits/aristotle/curve-boost',
             'audits/aristotle/vrf-fairness',
             'audits/aristotle/gauge-fee-split',
             'audits/aristotle/jackpot-payout',

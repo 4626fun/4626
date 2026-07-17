@@ -65,4 +65,4 @@ Once live: `■` trades on Base DEXs; fees → [gauge](/contracts/governance/gau
 
 **Auction stuck?** Use in-app support. Onchain: [CCA arm](/contracts/strategies/cca-launch).
 
-[Launch checklist](/guides/launch-checklist) · [Fees & lottery](/overview/how-it-works) · [Solana bridge](/overview/solana-share-mesh)
+Prev: [Step 3: Activate vault](/guides/activate-vault) · Next: [Fees, auction, and lottery](/overview/how-it-works)

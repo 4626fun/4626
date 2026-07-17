@@ -5,7 +5,7 @@ sidebar_position: 0
 
 # Launch a vault
 
-Step-by-step path for a **new vault on Base** (release **v1.19.1**). Legacy vaults may differ.
+Step-by-step path for a **new vault on Base** (**v1.19.1 stack · v1.19.2 epoch**). Legacy vaults may differ.
 
 <div class="docs-at-a-glance">
 
@@ -21,7 +21,7 @@ Step-by-step path for a **new vault on Base** (release **v1.19.1**). Legacy vaul
 
 | Step | Page | Outcome |
 |------|------|---------|
-| Overview | [Launch checklist](/guides/launch-checklist) | Prerequisites + timeline |
+| Prep | [Launch checklist](/guides/launch-checklist) | Prerequisites |
 | 1 | [Pay launch fee](/guides/strategy-bundle) | Deploy unlocked ($499 USDC) |
 | 2 | [Deploy contracts](/guides/launch-token) | Vault stack onchain, unfunded |
 | 3 | [Activate vault](/guides/activate-vault) | Deposit + strategies + auction scheduled |
@@ -29,4 +29,6 @@ Step-by-step path for a **new vault on Base** (release **v1.19.1**). Legacy vaul
 
 **App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
-Activation is **not** trading live — secondary DEX trading waits for auction settlement. [Solana share bridge](/overview/solana-share-mesh) · [What is 4626?](/getting-started)
+Activation is **not** trading live — secondary DEX trading waits for auction settlement.
+
+Prev: [What is 4626?](/getting-started) · Next: [Launch checklist](/guides/launch-checklist)

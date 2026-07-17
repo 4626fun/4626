@@ -6,7 +6,7 @@ slug: /guides/launch-checklist
 
 # Launch checklist
 
-End-to-end checklist for a **new vault on Base** (v1.19.1).
+Prerequisites for a **new vault on Base** (**v1.19.1 stack · v1.19.2 epoch**). For the step map, see [Launch a vault](/guides).
 
 <div class="docs-at-a-glance">
 
@@ -23,33 +23,14 @@ Creator coin on Base · 50M–100M for activation · signing ready · launch bun
 - [ ] **4626 account** with execution-ready signing
 - [ ] **Launch bundle active** ($499 USDC) — [Pay launch fee](/guides/strategy-bundle)
 
-## Procedure
+## Quick check
 
-| Step | Action | Outcome | Guide |
-|------|--------|---------|-------|
-| 1 | Pay launch bundle | Deploy unlocked | [Pay launch fee](/guides/strategy-bundle) |
-| 2 | Deploy stack | Vault, shares, gauge, oracle, auction | [Deploy](/guides/launch-token) |
-| 3 | Activate | Deposit + strategies + auction scheduled | [Activate](/guides/activate-vault) |
-| 4 | Auction → settle | Price discovery → Uniswap v4 LP | [After activation](/guides/after-activation) |
+| Ready? | Means |
+|--------|--------|
+| Bundle paid | Deploy page unlocks |
+| Coin + amount ready | You can activate after deploy |
+| Signing ready | You can submit Deploy / Activate |
 
-**Trading live** = auction graduated + `sweepCurrency()` + `migrate()` + hook alignment — not activation alone.
+**Trading live** is auction settlement + `migrate()` — not activation alone. Milestone definitions: [Glossary](/reference/glossary) · after-activate detail: [Step 4](/guides/after-activation).
 
-## Milestones
-
-| Stage | State | Trading on Base? |
-|-------|-------|------------------|
-| **Deployed** | Contracts onchain; unfunded | No |
-| **Activated** | Deposited; auction scheduled or live | No |
-| **Trading live** | Auction settled + `migrate()` done | Yes |
-
-## When trading is live
-
-- `■` tradable on Base DEXs
-- Qualifying **buys** may enter the [lottery](/contracts/utilities/lottery-manager)
-- Trade fees route via the [gauge](/contracts/governance/gauge-controller)
-
-## Solana bridge
-
-Included in the bundle (~30% of `■` at Phase 2 finalize). Creator coin stays on Base. [Solana share bridge](/overview/solana-share-mesh).
-
-[What is 4626?](/getting-started) · [Addresses](/reference/addresses) · [Glossary](/reference/glossary)
+Prev: [Launch a vault](/guides) · Next: [Step 1: Pay launch fee](/guides/strategy-bundle)

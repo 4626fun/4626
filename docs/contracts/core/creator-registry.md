@@ -54,3 +54,5 @@ event TokenRegistered(
     address wrapper
 );
 ```
+
+Prev: [Smart contracts](/contracts) · Next: [CreatorOVault](/contracts/core/creator-ovault)

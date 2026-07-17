@@ -34,6 +34,5 @@ After launch, vault CREATOR targets ~**45% Charm · 45% Ajna · 10% idle**. Stra
 1. Open **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)**
 2. Pay with **USDC**, **x402**, or **Stripe** (as shown)
 3. Confirm launch bundle is **active**
-4. Continue to [Step 2: Deploy](/guides/launch-token)
 
-[Launch checklist](/guides/launch-checklist) · [Glossary](/reference/glossary)
+Prev: [Launch checklist](/guides/launch-checklist) · Next: [Step 2: Deploy contracts](/guides/launch-token)

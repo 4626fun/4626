@@ -14,7 +14,7 @@ hide_table_of_contents: true
     <p class="home-hero__subtitle">Deposit a Zora creator coin into an ERC-4626 vault. Auction tradable shares, attach Charm and Ajna, and route fees to holders.</p>
     <div class="home-hero__actions">
       <a class="home-btn home-btn--primary" href="/getting-started">What is 4626?<span class="home-btn__arrow" aria-hidden="true">→</span></a>
-      <a class="home-btn home-btn--ghost" href="/guides/launch-checklist">Launch checklist</a>
+      <a class="home-btn home-btn--ghost" href="/guides">Launch a vault</a>
     </div>
   </section>
 </div>
@@ -25,10 +25,10 @@ hide_table_of_contents: true
     <span class="home-card__title">What is 4626?</span>
     <span class="home-card__desc">Vault, shares, and who this is for.</span>
   </a>
-  <a class="home-card" href="/guides/launch-checklist">
+  <a class="home-card" href="/guides">
     <span class="home-card__tag">Launch</span>
-    <span class="home-card__title">Launch checklist</span>
-    <span class="home-card__desc">Pay → deploy → activate → auction → trading live.</span>
+    <span class="home-card__title">Launch a vault</span>
+    <span class="home-card__desc">Pay → deploy → activate → auction → trading live. Checklist under Launch.</span>
   </a>
   <a class="home-card" href="/overview/how-it-works">
     <span class="home-card__tag">Learn</span>
@@ -40,7 +40,7 @@ hide_table_of_contents: true
 <div class="home-links">
   <a class="home-links__item" href="https://app.4626.fun/deploy/vault">Launch app</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
-  <a class="home-links__item" href="/reference/addresses">Addresses (v1.19.1)</a>
+  <a class="home-links__item" href="/reference/addresses">Addresses (v1.19.1 stack · v1.19.2 epoch)</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits">Audits</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
