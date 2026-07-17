@@ -20,7 +20,7 @@ import {RegistryBootstrap4626} from "@4626/shared/deploy/factories/RegistryBoots
  *      - PRIVATE_KEY
  *
  * @dev Env (optional):
- *      - REGISTRY_4626 or REGISTRY  (default: v1.18.0 Registry4626 on Base)
+ *      - REGISTRY_4626 or REGISTRY  (default: v1.19.1 Registry4626 on Base)
  *      - OWNER                      (default: broadcaster) — Ownable owner of the helper
  *      - AUTH_ON_REGISTRY=1|0       (default: 1) call registry.setAuthorizedFactory
  *      - BRIBES_FACTORY=0x...       (default: 0) wire optional bribes factory after deploy
@@ -40,8 +40,8 @@ import {RegistryBootstrap4626} from "@4626/shared/deploy/factories/RegistryBoots
  *        createBribeDepot: false })
  */
 contract DeployRegistryBootstrap4626 is Script {
-    /// @notice v1.18.0 greenfield registry on Base (same default as SeedRegistry4626).
-    address internal constant DEFAULT_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
+    /// @notice v1.19.1 greenfield registry on Base (same default as SeedRegistry4626).
+    address internal constant DEFAULT_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

@@ -12,11 +12,10 @@ POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
 VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
-CURRENT_RELEASE="v1.19.1"
+CURRENT_RELEASE="v1.19.2"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
-# During an immutable bytecode-epoch rollout, source may intentionally target
-# the next manifest while docs/defaults still describe the live release.
-SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.1}"
+# Unified epoch: source artifacts and release-target guard share v1.19.2.
+SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.2}"
 SOURCE_MANIFEST="$ROOT_DIR/deployments/base/${SOURCE_RELEASE}-bytecode-manifest.json"
 
 load_env_key_if_unset() {
@@ -61,8 +60,8 @@ bytecode_store="0xF9622613682a12E46b914c7498716F42E44c4d36"
 create2_from_store="0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2"
 batcher="0xa18169caf37fa0347285B16aAFC2B09eCB43F145"
 lottery_manager="0xB45E68a5867935a5734E4185977F81c528006650"
-phase1_module="0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc"
-phase2_module="0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460"
+phase1_module="0x33ABACC30a4179444d9d565245561B3988650bF5"
+phase2_module="0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba"
 phase3_helper="0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74"
 share_mesh_helper="0x73b6efB7196CdFa6c095Dc196559c88818Cd3211"
 utils_helper="0x8833225A423f4B1BB071702CB68d71fA4af434f2"
@@ -71,7 +70,7 @@ deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e0
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00|0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1|0x700b4BBAf965c013123bAd02a6562FBa487aC0f1|0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae'
 
 require_rg 'new per-creator launches use the' "$ADDRESSES_DOC" 'addresses doc greenfield title'
-require_rg '**v1.19.1** bytecode/CREATE2 namespace.' "$ADDRESSES_DOC" 'addresses doc v1.19.1 epoch'
+require_rg '**v1.19.2**' "$ADDRESSES_DOC" 'addresses doc v1.19.2 epoch'
 require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current infrastructure heading'
 require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
 require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
@@ -86,7 +85,7 @@ require_rg "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC"
 require_rg "DeploymentBatcherShareMeshHelper | \`$share_mesh_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherShareMeshHelper address'
 require_rg "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherUtilsHelper address'
 
-require_rg '`v1.19.1` greenfield shared infrastructure.' "$INVENTORY_DOC" 'inventory v1.19.1 scope'
+require_rg '`v1.19.2`' "$INVENTORY_DOC" 'inventory v1.19.2 scope'
 require_rg "\`lotteryManager\` | \`$lottery_manager\`" "$INVENTORY_DOC" 'inventory LotteryManager4626 address'
 require_rg "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" 'inventory bytecodeStore address'
 require_rg "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" 'inventory create2DeployerFromStore address'
@@ -98,6 +97,8 @@ require_rg "\`deploymentBatcherShareMeshHelper\` | \`$share_mesh_helper\`" "$INV
 require_rg "\`deploymentBatcherUtilsHelper\` | \`$utils_helper\`" "$INVENTORY_DOC" 'inventory deploymentBatcherUtilsHelper address'
 
 require_rg "SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('${batcher#0x}')" "$DEFAULTS" 'frontend split Phase-1 batcher constant'
+require_rg "SPLIT_PHASE1_PHASE1_MODULE = addr('${phase1_module#0x}')" "$DEFAULTS" 'frontend live Phase1Module constant'
+require_rg "SPLIT_PHASE1_PHASE2_MODULE = addr('${phase2_module#0x}')" "$DEFAULTS" 'frontend live Phase2Module constant'
 
 if rg -n 'solanaBridgeAdapter' "$DEFAULTS" >/dev/null; then
   echo "release target guard failed: frontend contracts.defaults still exports solanaBridgeAdapter (LZ ShareOFT only)" >&2

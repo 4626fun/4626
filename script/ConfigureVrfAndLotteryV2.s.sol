@@ -58,8 +58,9 @@ contract ConfigureVrfAndLotteryV2 is Script {
     uint16 internal constant DEFAULT_CONFIRMATIONS = 3;
 
     // New v2 vanity contracts
-    address internal constant DEFAULT_LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
-    address internal constant DEFAULT_VRF_CONSUMER = 0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304;
+    address internal constant DEFAULT_LOTTERY_MANAGER = 0xB45E68a5867935a5734E4185977F81c528006650;
+    /// @notice v1.19.1 greenfield VRFConsumer4626 (docs/reference/addresses.md).
+    address internal constant DEFAULT_VRF_CONSUMER = 0x98fb5e0af3120B32E2E03400B6E51d0bde433670;
 
     function _contains(address[] memory arr, address needle) internal pure returns (bool) {
         for (uint256 i = 0; i < arr.length; i++) {

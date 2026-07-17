@@ -5,13 +5,13 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Updated on: 2026-07-15
-Scope: current live `v1.19.1` greenfield shared infrastructure.
+Updated on: 2026-07-17
+Scope: current live `v1.19.2` shared infrastructure (v1.19.1 greenfield addresses).
 
 ## Sources
 
 1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.19.1-bytecode-manifest.json`
+2. Bytecode / codeId manifest: `deployments/base/v1.19.2-bytecode-manifest.json` (historical seal: `v1.19.1-bytecode-manifest.json`)
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.19.1-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -33,8 +33,8 @@ Scope: current live `v1.19.1` greenfield shared infrastructure.
 | `ovaultStrategiesModule` | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165` |
 | `ovaultAdminModule` | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
 | `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| `deploymentBatcherPhase1Module` | `0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc` |
-| `deploymentBatcherPhase2Module` | `0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460` |
+| `deploymentBatcherPhase1Module` | `0x33ABACC30a4179444d9d565245561B3988650bF5` |
+| `deploymentBatcherPhase2Module` | `0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba` |
 | `deploymentBatcherPhase3Helper` | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | `deploymentBatcherShareMeshHelper` | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
 | `deploymentBatcherUtilsHelper` | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
@@ -86,8 +86,8 @@ before `finalizePhase2`; there is no adapter or global-peer fallback.
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase1Module=0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc`
-- `DeploymentBatcherPhase2Module=0x0DDac7f1A3EA3796b31709Ed2270Cf0876A98460`
+- `DeploymentBatcherPhase1Module=0x33ABACC30a4179444d9d565245561B3988650bF5`
+- `DeploymentBatcherPhase2Module=0x3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba`
 - `DeploymentBatcherPhase3Helper=0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`
 - `DeploymentBatcherShareMeshHelper=0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`
 - `DeploymentBatcherUtilsHelper=0x8833225A423f4B1BB071702CB68d71fA4af434f2`
@@ -96,7 +96,7 @@ Historical v1.16.1 batcher child addresses (deprecated): Phase3 `0xE0971a…`, S
 
 Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F884DB835E8c0`
 
-Retired v1.13.0 v2 Phase1Module (grandfathered vaults only): `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
+Retired v1.13.0 Phase1Module (grandfathered vaults only): `0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87`
 
 Pre-v1.14.1 batcher (deprecated for new greenfield deploys): `0xa99058f424FB3ACC639F59355C65C40149030651`
 
@@ -146,9 +146,9 @@ The active bytecode manifest must include all three entries.
 3. Run `forge test --match-contract SeedRegistry4626ConfigTest`.
 4. Confirm live batcher wiring onchain (`0xa18169caf37fa0347285B16aAFC2B09eCB43F145`):
    - `cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "phase1Module()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "create2Deployer()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultCoreModule()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultStrategiesModule()(address)"`
-   - `cast call 0x7284910e3De3D2150EBe40f39C7E6701B5Cb4Dcc "vaultAdminModule()(address)"`
+   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "create2Deployer()(address)"`
+   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultCoreModule()(address)"`
+   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultStrategiesModule()(address)"`
+   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultAdminModule()(address)"`
 5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36`.
 6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).

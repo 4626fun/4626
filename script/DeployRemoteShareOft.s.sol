@@ -59,7 +59,7 @@ contract DeployRemoteShareOft is Script {
     uint32 internal constant DEFAULT_HUB_EID = 30184;
     uint256 internal constant DEFAULT_ROBINHOOD_CHAIN_ID = 4663;
     bytes32 internal constant OFT_BOOTSTRAP_SALT = keccak256("4626:OFTBootstrapRegistry:v1");
-    address internal constant DEFAULT_DEPLOYMENT_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
+    address internal constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
 
     function run() external returns (address shareOft, address bootstrapRegistry) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");

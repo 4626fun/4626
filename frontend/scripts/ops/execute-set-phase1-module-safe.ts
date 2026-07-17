@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * One-shot: execute setPhase1Module on live split batcher via protocol treasury Safe (1-of-N owner key).
+ * One-shot: approvePhaseModuleCodehash + setPhase1Module on the live split batcher
+ * via the protocol treasury Safe (1-of-N owner key).
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/execute-set-phase1-module-safe.ts \
- *     --phase1-module 0x19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87
+ *     --phase1-module 0x...
  *
- * Loads `frontend/.env` when present (SAFE_API_KEY is optional here; owner PK required to execute).
+ * Loads `frontend/.env` when present.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -15,14 +16,19 @@ import { fileURLToPath } from 'node:url'
 
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
-import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, type Address } from 'viem'
+import {
+  createPublicClient,
+  encodeFunctionData,
+  getAddress,
+  http,
+  isAddress,
+  keccak256,
+  type Hex,
+} from 'viem'
 import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
-import {
-  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
-  SPLIT_PHASE1_PHASE1_MODULE,
-} from '../../src/config/contracts.defaults.js'
+import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
 import { resolveProtocolTreasuryAddress } from '../../server/_lib/wallet/protocolTreasurySafe.js'
 
 function loadFrontendEnvFile(): void {
@@ -65,6 +71,60 @@ const SET_PHASE1_MODULE_ABI = [
   },
 ] as const
 
+const APPROVE_PHASE_MODULE_CODEHASH_ABI = [
+  {
+    type: 'function',
+    name: 'approvePhaseModuleCodehash',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'module', type: 'address' },
+      { name: 'codehash', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const MODULE_IDENTITY_ABI = [
+  {
+    type: 'function',
+    name: 'batcher',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'agentVaultCoreModule',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vaultCoreModule',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const BATCHER_PHASE1_MODULE_ABI = [
+  {
+    type: 'function',
+    name: 'phase1Module',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedPhaseModuleCodehashes',
+    stateMutability: 'view',
+    inputs: [{ name: 'module', type: 'address' }],
+    outputs: [{ type: 'bytes32' }],
+  },
+] as const
+
 function getArg(flag: string): string | undefined {
   const index = process.argv.indexOf(flag)
   if (index === -1) return undefined
@@ -91,9 +151,9 @@ function rpcUrl(): string {
 }
 
 async function main(): Promise<void> {
-  const phase1Raw = getArg('--phase1-module') ?? SPLIT_PHASE1_PHASE1_MODULE
+  const phase1Raw = getArg('--phase1-module')
   if (!phase1Raw || !isAddress(phase1Raw)) {
-    throw new Error('--phase1-module <address> required (default: SPLIT_PHASE1_PHASE1_MODULE)')
+    throw new Error('--phase1-module <address> required')
   }
   const phase1Module = getAddress(phase1Raw)
   const batcher = getAddress(getArg('--batcher') ?? SPLIT_PHASE1_DEPLOYMENT_BATCHER)
@@ -102,15 +162,54 @@ async function main(): Promise<void> {
   const signerAddress = getAddress(privateKeyToAccount(privateKey).address)
   const rpc = rpcUrl()
 
-  const data = encodeFunctionData({
+  const publicClient = createPublicClient({ chain: base, transport: http(rpc) })
+
+  const moduleBatcher = await publicClient.readContract({
+    address: phase1Module,
+    abi: MODULE_IDENTITY_ABI,
+    functionName: 'batcher',
+  })
+  if (getAddress(moduleBatcher) !== batcher) {
+    throw new Error(`module.batcher() = ${moduleBatcher} does not match target batcher ${batcher}`)
+  }
+
+  const agentCore = await publicClient.readContract({
+    address: phase1Module,
+    abi: MODULE_IDENTITY_ABI,
+    functionName: 'agentVaultCoreModule',
+  })
+  const creatorCore = await publicClient.readContract({
+    address: phase1Module,
+    abi: MODULE_IDENTITY_ABI,
+    functionName: 'vaultCoreModule',
+  })
+  if (getAddress(agentCore) === getAddress(creatorCore)) {
+    process.stdout.write(
+      `warn: agentVaultCoreModule === vaultCoreModule (${agentCore}); agent lane will not diverge\n`,
+    )
+  }
+
+  const runtimeBytecode = await publicClient.getBytecode({ address: phase1Module })
+  if (!runtimeBytecode || runtimeBytecode === '0x') {
+    throw new Error(`No runtime bytecode at replacement module ${phase1Module}`)
+  }
+  const runtimeCodehash = keccak256(runtimeBytecode as Hex)
+
+  const approveData = encodeFunctionData({
+    abi: APPROVE_PHASE_MODULE_CODEHASH_ABI,
+    functionName: 'approvePhaseModuleCodehash',
+    args: [phase1Module, runtimeCodehash],
+  })
+  const setModuleData = encodeFunctionData({
     abi: SET_PHASE1_MODULE_ABI,
     functionName: 'setPhase1Module',
     args: [phase1Module],
   })
 
   process.stdout.write(
-    `Executing setPhase1Module(${phase1Module}) on batcher ${batcher} via Safe ${safeAddress} signer ${signerAddress}\n`,
+    `Atomically approving ${runtimeCodehash} and setting phase1 module ${phase1Module} on batcher ${batcher} via Safe ${safeAddress} signer ${signerAddress}\n`,
   )
+  process.stdout.write(`  agentVaultCoreModule=${agentCore}\n  vaultCoreModule=${creatorCore}\n`)
 
   const protocolKit = await Safe.init({
     provider: rpc,
@@ -119,7 +218,10 @@ async function main(): Promise<void> {
   })
 
   const safeTransaction = await protocolKit.createTransaction({
-    transactions: [{ to: batcher, value: '0', data, operation: OperationType.Call }],
+    transactions: [
+      { to: batcher, value: '0', data: approveData, operation: OperationType.Call },
+      { to: batcher, value: '0', data: setModuleData, operation: OperationType.Call },
+    ],
   })
 
   const executeResponse = await protocolKit.executeTransaction(safeTransaction)
@@ -129,16 +231,45 @@ async function main(): Promise<void> {
 
   if (!txHash) throw new Error('Safe execute returned no tx hash')
 
-  const publicClient = createPublicClient({ chain: base, transport: http(rpc) })
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
   if (receipt.status !== 'success') throw new Error(`Safe tx reverted: ${txHash}`)
 
-  process.stdout.write(`${JSON.stringify({ ok: true, txHash, batcher, phase1Module, safeAddress }, null, 2)}\n`)
+  const wired = await publicClient.readContract({
+    address: batcher,
+    abi: BATCHER_PHASE1_MODULE_ABI,
+    functionName: 'phase1Module',
+  })
+  if (getAddress(wired) !== phase1Module) {
+    throw new Error(`post-swap verify failed: batcher.phase1Module() = ${wired}`)
+  }
+  const approvedCodehash = await publicClient.readContract({
+    address: batcher,
+    abi: BATCHER_PHASE1_MODULE_ABI,
+    functionName: 'approvedPhaseModuleCodehashes',
+    args: [phase1Module],
+  })
+  if (approvedCodehash.toLowerCase() !== runtimeCodehash.toLowerCase()) {
+    throw new Error(
+      `post-swap codehash verify failed: approved=${approvedCodehash} runtime=${runtimeCodehash}`,
+    )
+  }
 
-  // Hygiene note (from 2026-05 general audit): After any production module rotation,
-  // record this txHash and ensure the new module's code ID is added to the active
-  // bytecode manifest and seeded into the UniversalBytecodeStore.
-  // See docs/audits/general-audit-2026-05.md (source-vs-deployed section).
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        ok: true,
+        txHash,
+        batcher,
+        phase1Module,
+        agentVaultCoreModule: agentCore,
+        vaultCoreModule: creatorCore,
+        runtimeCodehash,
+        safeAddress,
+      },
+      null,
+      2,
+    )}\n`,
+  )
 }
 
 main().catch((error) => {

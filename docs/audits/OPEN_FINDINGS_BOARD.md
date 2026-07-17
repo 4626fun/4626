@@ -193,3 +193,7 @@ Detail: [2026-07-08-contracts-reaudit/](./2026-07-08-contracts-reaudit/), [arist
 | CO- | `CreatorOVault_aristotle` |
 | AR- | `aristotle/OPEN_VS_FIXED` + oracle audit |
 | M2- / L2- | `july-2-2026` full-stack |
+
+## 2026-07-17 Phase2 / v1.19.2 delta
+
+See [`phase2-source-delta-security-review-2026-07-17.md`](./phase2-source-delta-security-review-2026-07-17.md).

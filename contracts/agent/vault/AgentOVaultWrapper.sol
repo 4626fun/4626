@@ -257,10 +257,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         agentToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // 2. Deposit to vault → get vault shares
-        uint256 vaultShares = vault.deposit(amount, address(this));
+        uint256 vaultShareAmount = vault.deposit(amount, address(this));
 
         // 3. Wrap vault shares → ShareOFT (internal, no extra transfer)
-        shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
+        shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
 
         // 4. Check slippage
         if (shareOFTOut < minOut) revert SlippageExceeded();
@@ -279,8 +279,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         agentToken.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 vaultShares = vault.deposit(amount, address(this));
-        shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
+        uint256 vaultShareAmount = vault.deposit(amount, address(this));
+        shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
 
         // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
         lastWrapperDepositBlock[msg.sender] = block.number;
@@ -304,8 +304,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         agentToken.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 vaultShares = vault.deposit(amount, address(this));
-        shareOFTOut = _wrapInternal(vaultShares, beneficiary, msg.sender);
+        uint256 vaultShareAmount = vault.deposit(amount, address(this));
+        shareOFTOut = _wrapInternal(vaultShareAmount, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
         // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
@@ -336,11 +336,11 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         _requireWrapperCooldown(msg.sender);
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
-        uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
-        _requireSynchronousRedemption(vaultShares);
+        uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
+        _requireSynchronousRedemption(vaultShareAmount);
 
         // 3. Redeem vault shares → Agent token (sent directly to user)
-        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
+        agentTokenOut = vault.redeem(vaultShareAmount, msg.sender, address(this));
 
         // 4. Check slippage
         if (agentTokenOut < minOut) revert SlippageExceeded();
@@ -357,9 +357,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // FIX: M-01 — enforce per-user cooldown
         _requireWrapperCooldown(msg.sender);
 
-        uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
-        _requireSynchronousRedemption(vaultShares);
-        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
+        uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
+        _requireSynchronousRedemption(vaultShareAmount);
+        agentTokenOut = vault.redeem(vaultShareAmount, msg.sender, address(this));
 
         emit Withdrawn(msg.sender, amount, agentTokenOut);
     }
@@ -381,9 +381,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // FIX: M-01 — enforce per-user cooldown
         _requireWrapperCooldown(msg.sender);
 
-        uint256 vaultShares = _unwrapInternal(amount, beneficiary, msg.sender);
-        _requireSynchronousRedemption(vaultShares);
-        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
+        uint256 vaultShareAmount = _unwrapInternal(amount, beneficiary, msg.sender);
+        _requireSynchronousRedemption(vaultShareAmount);
+        agentTokenOut = vault.redeem(vaultShareAmount, msg.sender, address(this));
         if (agentTokenOut < minOut) revert SlippageExceeded();
 
         emit Withdrawn(beneficiary, amount, agentTokenOut);
@@ -561,16 +561,16 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      * @notice Preview how much ShareOFT you'll get for depositing Agent token
      */
     function previewDeposit(uint256 agentTokenAmount) external view returns (uint256) {
-        uint256 vaultShares = vault.previewDeposit(agentTokenAmount);
-        return _previewWrap(vaultShares, msg.sender);
+        uint256 vaultShareAmount = vault.previewDeposit(agentTokenAmount);
+        return _previewWrap(vaultShareAmount, msg.sender);
     }
 
     /**
      * @notice Preview how much Agent token you'll get for withdrawing ShareOFT
      */
     function previewWithdraw(uint256 shareOFTAmount) external view returns (uint256) {
-        uint256 vaultShares = _previewUnwrap(shareOFTAmount, msg.sender);
-        return vault.previewRedeem(vaultShares);
+        uint256 vaultShareAmount = _previewUnwrap(shareOFTAmount, msg.sender);
+        return vault.previewRedeem(vaultShareAmount);
     }
 
     /**
@@ -590,10 +590,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @dev Preview wrap with normalization: vaultShares → share token (◆ATIKA)
      */
-    function _previewWrap(uint256 vaultShares, address user) internal view returns (uint256 shareOFTAmount) {
-        uint256 afterFee = vaultShares;
+    function _previewWrap(uint256 vaultShareAmount, address user) internal view returns (uint256 shareOFTAmount) {
+        uint256 afterFee = vaultShareAmount;
         if (!isWhitelisted[user] && wrapFee > 0) {
-            afterFee = vaultShares - (vaultShares * wrapFee) / BASIS_POINTS;
+            afterFee = vaultShareAmount - (vaultShareAmount * wrapFee) / BASIS_POINTS;
         }
         uint256 normalizedInput = afterFee + userDustShares[user];
         // NORMALIZE: ÷1000
@@ -603,7 +603,11 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @dev Preview unwrap with denormalization: share token (◆ATIKA) → vaultShares
      */
-    function _previewUnwrap(uint256 shareOFTAmount, address user) internal view returns (uint256 vaultShares) {
+    function _previewUnwrap(uint256 shareOFTAmount, address user)
+        internal
+        view
+        returns (uint256 vaultShareAmount)
+    {
         // DENORMALIZE: ×1000 (+ user dust)
         uint256 vaultSharesBeforeFee = shareOFTAmount * NORMALIZATION_FACTOR + userDustShares[user];
 
@@ -680,6 +684,14 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      * @notice Vault shares token address
      */
     function vaultToken() external view returns (address) {
+        return address(vault);
+    }
+
+    /**
+     * @notice Alias for AgentGaugeController / CreatorGaugeController wiring checks.
+     * @dev Same address as `vaultToken()` / the ERC-4626 vault (shares token).
+     */
+    function vaultShares() external view returns (address) {
         return address(vault);
     }
 
@@ -784,7 +796,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         }
     }
 
-    function _requireSynchronousRedemption(uint256 vaultShares) internal view {
+    function _requireSynchronousRedemption(uint256 vaultShareAmount) internal view {
         (bool success, bytes memory data) = address(vault).staticcall(
             abi.encodeWithSelector(IQueueAwareVault.largeWithdrawalThreshold.selector)
         );
@@ -795,7 +807,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 threshold = abi.decode(data, (uint256));
         if (threshold == 0) return;
 
-        uint256 previewAssets = vault.previewRedeem(vaultShares);
+        uint256 previewAssets = vault.previewRedeem(vaultShareAmount);
         if (previewAssets >= threshold) {
             revert AsyncRedemptionRequired(previewAssets, threshold);
         }
