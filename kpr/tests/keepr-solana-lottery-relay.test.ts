@@ -7,7 +7,8 @@ import {
 import { normalizeSolanaOrchestratorAction } from '../solana-keeper-orchestrator.js'
 import {
   assessSolanaLotteryLzTransportReadiness,
-  buildSolanaLotteryLzV2PayloadFields,
+  buildSolanaLotteryLzV3PayloadFields,
+  hashSolanaLotterySourceEventId,
   SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE,
 } from '../utils/solanaLotteryLzTransport.js'
 import { buildSolanaLotterySourceEventId } from '../utils/solanaLotterySourceEventId.js'
@@ -69,33 +70,37 @@ describe('keepr solana lottery relay (LZ-era fail-closed)', () => {
   })
 
   it('forces base-odds coverage 0 in payload builder', () => {
-    const fields = buildSolanaLotteryLzV2PayloadFields({
+    const fields = buildSolanaLotteryLzV3PayloadFields({
       buyer: '0x1111111111111111111111111111111111111111',
       tokenIn: '0x2222222222222222222222222222222222222222',
       amount: 5n,
       sourceChainId: 0,
       buyerCurrentShareBalance: 0n,
+      sourceEventId: 'gen:prog:sig:0:0',
     })
     expect(fields.buyerCurrentShareBalance).toBe(0n)
+    expect(fields.sourceEventId).toBe(hashSolanaLotterySourceEventId('gen:prog:sig:0:0'))
     expect(() =>
-      buildSolanaLotteryLzV2PayloadFields({
+      buildSolanaLotteryLzV3PayloadFields({
         buyer: '0x1111111111111111111111111111111111111111',
         tokenIn: '0x2222222222222222222222222222222222222222',
         amount: 5n,
         sourceChainId: 0,
         buyerCurrentShareBalance: 9n,
+        sourceEventId: 'gen:prog:sig:0:0',
       }),
     ).toThrow('solana_lottery_coverage_must_be_zero')
   })
 
   it('rejects zero buyer/token addresses', () => {
     expect(() =>
-      buildSolanaLotteryLzV2PayloadFields({
+      buildSolanaLotteryLzV3PayloadFields({
         buyer: '0x0000000000000000000000000000000000000000',
         tokenIn: '0x2222222222222222222222222222222222222222',
         amount: 5n,
         sourceChainId: 0,
         buyerCurrentShareBalance: 0n,
+        sourceEventId: 'gen:prog:sig:0:0',
       }),
     ).toThrow('invalid_buyer')
   })

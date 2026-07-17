@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { decodeAbiParameters } from 'viem'
 import {
   assessSolanaLotteryLzTransportReadiness,
-  buildSolanaLotteryLzV2Payload,
+  buildSolanaLotteryLzV3Payload,
+  hashSolanaLotterySourceEventId,
   MSG_TYPE_LOTTERY_ENTRY,
   SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN,
   SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE,
@@ -15,7 +16,9 @@ describe('solanaLotteryLzTransport', () => {
     'SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED',
     'SOLANA_LOTTERY_LZ_TRANSPORT_READY',
     'SOLANA_LOTTERY_OAPP_PEER_BYTES32',
+    'LOTTERY_MANAGER',
     'LOTTERY_MANAGER_ADDRESS',
+    'VITE_LOTTERY_MANAGER',
     'SOLANA_BRIDGE_ADAPTER_ADDRESS',
     'SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP',
   ] as const
@@ -51,13 +54,26 @@ describe('solanaLotteryLzTransport', () => {
     expect(readiness.ready).toBe(false)
   })
 
-  it('builds V2 payload with coverage forced to zero (base-odds-only)', () => {
-    const payload = buildSolanaLotteryLzV2Payload({
+  it('accepts canonical LotteryManager env names when all readiness gates are set', () => {
+    const readiness = assessSolanaLotteryLzTransportReadiness({
+      SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      LOTTERY_MANAGER: '0xb45e68a5867935a5734e4185977f81c528006650',
+    })
+    expect(readiness.ready).toBe(true)
+    expect(readiness.lotteryManager).toBe('0xb45e68a5867935a5734e4185977f81c528006650')
+  })
+
+  it('builds V3 payload with coverage zero and a source-event replay key', () => {
+    const sourceEventId = hashSolanaLotterySourceEventId('g:p:s:0:0')
+    const payload = buildSolanaLotteryLzV3Payload({
       buyer: '0x1111111111111111111111111111111111111111',
       tokenIn: '0x2222222222222222222222222222222222222222',
       amount: 123n,
       sourceChainId: 0,
       buyerCurrentShareBalance: 0n,
+      sourceEventId,
     })
     const decoded = decodeAbiParameters(
       [
@@ -67,23 +83,30 @@ describe('solanaLotteryLzTransport', () => {
         { type: 'uint256' },
         { type: 'uint32' },
         { type: 'uint256' },
+        { type: 'bytes32' },
       ],
       payload,
     )
     expect(decoded[0]).toBe(MSG_TYPE_LOTTERY_ENTRY)
     expect(decoded[5]).toBe(0n)
+    expect(decoded[6]).toBe(sourceEventId)
   })
 
   it('rejects non-zero coverage (boost unavailable)', () => {
     expect(() =>
-      buildSolanaLotteryLzV2Payload({
+      buildSolanaLotteryLzV3Payload({
         buyer: '0x1111111111111111111111111111111111111111',
         tokenIn: '0x2222222222222222222222222222222222222222',
         amount: 1n,
         sourceChainId: 0,
         buyerCurrentShareBalance: 1n,
+        sourceEventId: hashSolanaLotterySourceEventId('g:p:s:0:0'),
       }),
     ).toThrow('solana_lottery_coverage_must_be_zero')
+  })
+
+  it('rejects an empty source-event replay key', () => {
+    expect(() => hashSolanaLotterySourceEventId('   ')).toThrow('invalid_source_event_id')
   })
 
   it('submit fails closed when transport unavailable', async () => {

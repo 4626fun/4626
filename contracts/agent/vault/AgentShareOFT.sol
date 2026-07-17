@@ -1037,7 +1037,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     }
 
     function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
-        if (message.length != 160 && message.length != 192) return false;
+        if (message.length != 160 && message.length != 192 && message.length != 224) return false;
         uint256 word0;
         uint256 word1;
         uint256 word2;

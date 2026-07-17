@@ -20,6 +20,8 @@ export type DecodedLotteryEntryRecorded = {
 }
 
 export type DecodedHookWindowEvent = {
+  /** Zero-based hook-program invocation ordinal in the finalized transaction logs. */
+  instructionIndex: number
   instructionKind: SolanaLotteryInstructionKind
   entries: DecodedLotteryEntryRecorded[]
 }
@@ -142,8 +144,10 @@ export function decodeHookLotteryEventsFromLogs(params: {
   const programId = params.programId.trim()
   const stack: string[] = []
   const out: DecodedHookWindowEvent[] = []
+  let hookInvocationIndex = 0
   let active: {
     depth: number
+    instructionIndex: number
     entries: DecodedLotteryEntryRecorded[]
     sawEntriesRelayed: boolean
   } | null = null
@@ -152,6 +156,7 @@ export function decodeHookLotteryEventsFromLogs(params: {
     if (!active) return
     if (active.entries.length > 0 || active.sawEntriesRelayed) {
       out.push({
+        instructionIndex: active.instructionIndex,
         instructionKind: active.sawEntriesRelayed ? 'relay_entries_reemit' : 'buy_path',
         entries: active.entries,
       })
@@ -166,7 +171,13 @@ export function decodeHookLotteryEventsFromLogs(params: {
       const pid = invoke[1]
       stack.push(pid)
       if (pid === programId && !active) {
-        active = { depth: stack.length, entries: [], sawEntriesRelayed: false }
+        active = {
+          depth: stack.length,
+          instructionIndex: hookInvocationIndex,
+          entries: [],
+          sawEntriesRelayed: false,
+        }
+        hookInvocationIndex += 1
       }
       continue
     }

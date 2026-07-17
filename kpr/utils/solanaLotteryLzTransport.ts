@@ -3,10 +3,13 @@
  * Twin / EOA → processSwapLottery permanently forbidden.
  */
 
+import { keccak256, stringToHex } from 'viem'
+
 export const SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE = 'solana_lottery_lz_transport_unavailable'
 export const SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN = 'solana_lottery_eoa_submit_forbidden'
 export const MSG_TYPE_LOTTERY_ENTRY = 3
 export const SOLANA_LZ_EID = 30168
+export const SOLANA_LOTTERY_SOURCE_EVENT_DOMAIN = '4626.solana.lottery.source-event.v1:'
 
 export type SolanaLotteryLzTransportReadiness = {
   ready: boolean
@@ -49,13 +52,14 @@ export function assessSolanaLotteryLzTransportReadiness(
   }
 }
 
-/** Encode V2 payload fields for tests / dry-run (no live send). */
-export function buildSolanaLotteryLzV2PayloadFields(input: {
+/** Encode Solana-only V3 payload fields for tests / dry-run (no live send). */
+export function buildSolanaLotteryLzV3PayloadFields(input: {
   buyer: string
   tokenIn: string
   amount: bigint
   sourceChainId: number
   buyerCurrentShareBalance: bigint
+  sourceEventId: string
 }): {
   msgType: number
   buyer: string
@@ -63,6 +67,7 @@ export function buildSolanaLotteryLzV2PayloadFields(input: {
   amount: bigint
   sourceChainId: number
   buyerCurrentShareBalance: bigint
+  sourceEventId: `0x${string}`
 } {
   if (input.buyerCurrentShareBalance !== 0n) {
     throw new Error('solana_lottery_coverage_must_be_zero')
@@ -72,6 +77,7 @@ export function buildSolanaLotteryLzV2PayloadFields(input: {
   if (input.buyer.toLowerCase() === ZERO_ADDRESS) throw new Error('invalid_buyer')
   if (input.tokenIn.toLowerCase() === ZERO_ADDRESS) throw new Error('invalid_token_in')
   if (input.amount <= 0n) throw new Error('invalid_amount')
+  const sourceEventId = hashSolanaLotterySourceEventId(input.sourceEventId)
   return {
     msgType: MSG_TYPE_LOTTERY_ENTRY,
     buyer: input.buyer.toLowerCase(),
@@ -79,7 +85,14 @@ export function buildSolanaLotteryLzV2PayloadFields(input: {
     amount: input.amount,
     sourceChainId: input.sourceChainId,
     buyerCurrentShareBalance: 0n,
+    sourceEventId,
   }
+}
+
+export function hashSolanaLotterySourceEventId(sourceEventId: string): `0x${string}` {
+  const normalized = sourceEventId.trim()
+  if (!normalized) throw new Error('invalid_source_event_id')
+  return keccak256(stringToHex(`${SOLANA_LOTTERY_SOURCE_EVENT_DOMAIN}${normalized}`))
 }
 
 export async function submitSolanaLotteryEntryViaLz(_request: {
@@ -95,6 +108,7 @@ export async function submitSolanaLotteryEntryViaLz(_request: {
   if (!readiness.ready) {
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${readiness.reasons.join(',')}`)
   }
+  hashSolanaLotterySourceEventId(_request.sourceEventId)
   throw new Error(
     `${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:solana_lottery_oapp_send_not_implemented`,
   )

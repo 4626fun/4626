@@ -9,8 +9,10 @@ import {
   beginInboxSubmit,
   claimSolanaLotteryInboxLeases,
   getInboxSubmitRecoveryState,
+  markInboxIdentity,
   markInboxSubmitted,
   reclaimStrandedSubmittingQuarantine,
+  releaseInboxLease,
   replayQuarantinedInboxEvent,
   upsertSolanaLotteryInboxEvent,
 } from './solanaLotteryEntryInbox.js'
@@ -60,6 +62,7 @@ const baseRow = {
   base_tx_hash: null,
   submitted_at: null,
   confirmed_at: null,
+  submit_attempt_id: null,
   attempt_count: 0,
   last_error: null,
   created_at: new Date().toISOString(),
@@ -109,15 +112,44 @@ describe('solanaLotteryEntryInbox', () => {
     const { db, calls } = createDb([
       { rows: [{ ...baseRow, status: 'submitting', lease_owner: 'worker-a' }] },
     ])
-    const row = await beginInboxSubmit({ db, id: 1, leaseOwner: 'worker-a' })
+    const row = await beginInboxSubmit({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
+    })
     expect(row.status).toBe('submitting')
     expect(calls[0].strings.join(' ')).toContain('lease_owner')
+    expect(calls[0].strings.join(' ')).toContain('submit_attempt_id')
+    expect(calls[0].strings.join(' ')).toContain('beneficiary_csw IS NOT NULL')
+  })
+
+  it('identity mapping requires the active lease owner', async () => {
+    const { db, calls } = createDb([{ rows: [{ ...baseRow, status: 'leased' }] }])
+    await markInboxIdentity({
+      db,
+      id: 1,
+      beneficiaryCsw: '0x1111111111111111111111111111111111111111',
+      profileId: 'profile-1',
+      shareOft: '0x2222222222222222222222222222222222222222',
+      amountScaled: '100',
+      leaseOwner: 'worker-a',
+    })
+    const sql = calls[0].strings.join(' ')
+    expect(sql).toContain("status = 'leased'")
+    expect(sql).toContain('lease_owner')
+    expect(sql).toContain('lease_expires_at > NOW()')
   })
 
   it('rejects receipt-less markInboxSubmitted', async () => {
     const { db } = createDb([])
     await expect(
-      markInboxSubmitted({ db, id: 1, leaseOwner: 'worker-a' }),
+      markInboxSubmitted({
+        db,
+        id: 1,
+        leaseOwner: 'worker-a',
+        submitAttemptId: 'attempt-a',
+      }),
     ).rejects.toThrow('inbox_submitted_requires_receipt')
   })
 
@@ -138,6 +170,7 @@ describe('solanaLotteryEntryInbox', () => {
       db,
       id: 1,
       leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
       lzGuid: '0xlz',
       baseTxHash: '0xtx',
     })
@@ -145,6 +178,42 @@ describe('solanaLotteryEntryInbox', () => {
     const sql = calls[0].strings.join(' ')
     expect(sql).toContain("status = 'submitting'")
     expect(sql).toContain('lease_owner')
+    expect(sql).toContain('submit_attempt_id')
+    expect(sql).not.toContain('lease_expires_at > NOW()')
+  })
+
+  it('never releases a submitting intent back to pending', async () => {
+    const { db, calls } = createDb([])
+    await expect(releaseInboxLease({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      lastError: 'uncertain_send',
+    })).rejects.toThrow('inbox_release_lease_failed')
+    const sql = calls[0].strings.join(' ')
+    expect(sql).toContain("status = 'leased'")
+    expect(sql).not.toContain("'submitting'")
+  })
+
+  it('can attach a matching late receipt after crash quarantine', async () => {
+    const { db, calls } = createDb([{
+      rows: [{
+        ...baseRow,
+        status: 'submitted',
+        submit_attempt_id: 'attempt-a',
+        lz_guid: '0xlz',
+      }],
+    }])
+    await markInboxSubmitted({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
+      lzGuid: '0xlz',
+    })
+    const sql = calls[0].strings.join(' ')
+    expect(sql).toContain("status = 'quarantined'")
+    expect(sql).toContain("quarantine_reason = 'submit_crash_unconfirmed'")
   })
 
   it('crash after send: submitting blocks auto re-submit', async () => {
@@ -167,6 +236,24 @@ describe('solanaLotteryEntryInbox', () => {
     const { db } = createDb([{ rows: [{ ...baseRow, status: 'pending' }] }])
     const recovery = await getInboxSubmitRecoveryState(db, 'g:p:sig:0:0')
     expect(recovery.canSubmit).toBe(true)
+  })
+
+  it('does not allow a leased row or receipt-less submitted row to resubmit', async () => {
+    const leased = createDb([
+      { rows: [{ ...baseRow, status: 'leased', lease_owner: 'worker-a' }] },
+    ])
+    await expect(getInboxSubmitRecoveryState(leased.db, 'g:p:sig:0:0')).resolves.toMatchObject({
+      canSubmit: false,
+      reason: 'submit_in_flight_or_crash',
+    })
+
+    const submitted = createDb([
+      { rows: [{ ...baseRow, status: 'submitted' }] },
+    ])
+    await expect(getInboxSubmitRecoveryState(submitted.db, 'g:p:sig:0:0')).resolves.toMatchObject({
+      canSubmit: false,
+      reason: 'submitted_missing_receipt',
+    })
   })
 
   it('replay quarantine only via explicit recovery path', async () => {

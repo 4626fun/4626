@@ -130,6 +130,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @notice Message types for hub-centric architecture
     uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
+    uint32 internal constant SOLANA_LZ_EID = 30168;
 
     /// @notice Delay between proposing and committing a boost-source change
     /// once `timelockArmed` is true. See `proposeBoostManager` /
@@ -1193,6 +1194,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @dev Handle a lottery entry from a remote chain OFT
      *      Legacy payload: (msgType, buyer, tokenIn, amount, sourceChainId)
      *      V2 payload:     (msgType, buyer, tokenIn, amount, sourceChainId, buyerCurrentShareBalance)
+     *      Solana V3:      (msgType, buyer, tokenIn, amount, sourceChainId, buyerCurrentShareBalance, sourceEventId)
      */
     function _handleLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata _payload) internal {
         address buyer;
@@ -1200,8 +1202,18 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 amount;
         uint32 sourceChainId;
         uint256 buyerCurrentShareBalance;
+        bytes32 sourceEventId;
 
-        if (_payload.length == 192) {
+        if (_payload.length == 224) {
+            (, // msgType (already checked)
+                buyer,
+                tokenIn,
+                amount,
+                sourceChainId,
+                buyerCurrentShareBalance,
+                sourceEventId
+            ) = abi.decode(_payload, (uint16, address, address, uint256, uint32, uint256, bytes32));
+        } else if (_payload.length == 192) {
             (, // msgType (already checked)
                 buyer,
                 tokenIn,
@@ -1219,6 +1231,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         } else {
             // FIX: CLM-09 — emit event instead of reverting to avoid bricking the LZ inbound lane
             emit InvalidPayloadReceived(srcEid, _payload.length);
+            return;
+        }
+
+        if (srcEid == SOLANA_LZ_EID && (_payload.length != 224 || sourceEventId == bytes32(0))) {
+            return;
+        }
+        if (sourceEventId != bytes32(0) && _processedRemoteLotterySourceEvents[sourceEventId]) {
             return;
         }
 
@@ -1270,6 +1289,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         }
 
         if (entryId > 0) {
+            if (sourceEventId != bytes32(0)) {
+                _processedRemoteLotterySourceEvents[sourceEventId] = true;
+            }
             // Update reference only when an entry is actually created.
             if (oraclePriceUSD1e18 > 0) {
                 lastAcceptedPriceUSD1e18[token] = oraclePriceUSD1e18;
@@ -1719,6 +1741,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     ///      AdminModule MUST declare `jackpotPayoutCursor` in the same relative order
     ///      for DELEGATECALL payout. Do not reorder without a storage migration.
     uint256 public jackpotPayoutCursor;
+
+    /// @notice Solana V3 source-event digests that already created a Base VRF request.
+    /// @dev Appended storage; mirrored in LotteryManager4626AdminModule.
+    mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
 
     /// @notice Emitted when the per-call iteration cap truncated the payout.
     /// Off-chain monitors can use this to reconcile that the remaining coins
@@ -2191,6 +2217,9 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     /// @dev Mirrors main jackpotPayoutCursor (declared later in main source; next storage slot).
     uint256 public jackpotPayoutCursor;
+
+    /// @dev Mirrors main processedRemoteLotterySourceEvents (next appended storage slot).
+    mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
 
     address private immutable _self;
 
