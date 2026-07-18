@@ -53,6 +53,10 @@ import {
   parseInverseAkitaChatTradeEvent,
   resolveInverseAkitaTradeEventAuthor,
 } from './inverseAkitaChatTradeEvent.js'
+import {
+  CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS,
+  listRecentHexChatSpeakersForRoom,
+} from './chatIngestStore.js'
 import { readRoomLabelStatus } from './roomLabelCache.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -796,17 +800,56 @@ export async function collectInverseAkitaChatTradeIntents(params: {
         : null
 
     if (tradeEvent) {
-      if (roomCreatorAddress === undefined) {
-        roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
-      }
-      const attributed = resolveInverseAkitaTradeEventAuthor({
+      const messageDate = Number(message.date)
+      // Prefer in-batch speakers, then durable chat_ingest speakers, then room creator.
+      // Do not jump to creator first — creator may not be the Chip trader / staker.
+      let attributed = resolveInverseAkitaTradeEventAuthor({
         payloadAddress: tradeEvent.userAddress,
-        roomCreatorAddress,
-        messageDate: Number(message.date),
+        roomCreatorAddress: null,
+        messageDate,
         excludeAddresses: selfSenders,
         priorSpeakers: params.messages,
       })
-      if (!attributed) continue
+      if (!attributed) {
+        const dbSpeakers = await listRecentHexChatSpeakersForRoom({
+          roomId: params.roomId,
+          atOrBeforeDateMs: Number.isFinite(messageDate) ? messageDate : null,
+          lookbackMs: CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS,
+          limit: 40,
+        })
+        attributed = resolveInverseAkitaTradeEventAuthor({
+          payloadAddress: tradeEvent.userAddress,
+          roomCreatorAddress: null,
+          messageDate,
+          excludeAddresses: selfSenders,
+          priorSpeakers: dbSpeakers.map((entry) => ({
+            sender: entry.sender,
+            date: entry.dateMs,
+          })),
+        })
+      }
+      if (!attributed) {
+        if (roomCreatorAddress === undefined) {
+          roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
+        }
+        attributed = resolveInverseAkitaTradeEventAuthor({
+          payloadAddress: tradeEvent.userAddress,
+          roomCreatorAddress,
+          messageDate,
+          excludeAddresses: selfSenders,
+          priorSpeakers: [],
+        })
+      }
+      if (!attributed) {
+        logger.warn('inverse_akita.chip_attribution_failed', {
+          roomId: params.roomId,
+          messageId: id,
+          pair: tradeEvent.pair,
+          userSide: tradeEvent.userSide,
+          hasRoomCreator: Boolean(roomCreatorAddress),
+        })
+        continue
+      }
       sender = attributed
       parsed = { userSide: tradeEvent.userSide, pair: tradeEvent.pair }
       parseMode = 'strict'

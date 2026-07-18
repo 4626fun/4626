@@ -439,6 +439,13 @@ export async function readRoomLabelStatus(roomIds: string[]): Promise<RoomLabelS
         FROM public.alfaclub_creators c
         WHERE c.token_id = ANY(${normalized})
       ),
+      snapshot_map AS (
+        SELECT
+          s.room_id::text AS room_id,
+          LOWER(s.creator_address) AS creator_address
+        FROM public.alfaclub_rooms_snapshot s
+        WHERE s.room_id::text = ANY(${normalized})
+      ),
       cache_rows AS (
         SELECT
           r.room_id,
@@ -453,7 +460,7 @@ export async function readRoomLabelStatus(roomIds: string[]): Promise<RoomLabelS
       )
       SELECT
         t.room_id,
-        COALESCE(cr.creator_address, cm.creator_address) AS creator_address,
+        COALESCE(cr.creator_address, cm.creator_address, sm.creator_address) AS creator_address,
         cr.display_label,
         cr.source,
         cr.confidence,
@@ -462,6 +469,7 @@ export async function readRoomLabelStatus(roomIds: string[]): Promise<RoomLabelS
       FROM target_rooms t
       LEFT JOIN cache_rows cr ON cr.room_id = t.room_id
       LEFT JOIN creator_map cm ON cm.room_id = t.room_id
+      LEFT JOIN snapshot_map sm ON sm.room_id = t.room_id
       ORDER BY t.room_id::bigint ASC;
     `
     const rows = (result.rows ?? []) as Array<{

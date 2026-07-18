@@ -163,6 +163,8 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
     vi.resetModules()
     vi.unstubAllEnvs()
     vi.doUnmock('./roomLabelCache.js')
+    vi.doUnmock('./chatIngestStore.js')
+    vi.doUnmock('../infra/logger.js')
   })
 
   it('attributes Chip opens to the most recent human speaker (any staker)', async () => {
@@ -263,5 +265,182 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
       pair: 'HYPE',
       parseMode: 'strict',
     })
+  })
+
+  it('attributes Chip opens via durable chat_ingest speakers when the live batch is narrow', async () => {
+    vi.resetModules()
+    vi.doMock('./roomLabelCache.js', () => ({
+      readRoomLabelStatus: vi.fn(async () => [
+        {
+          roomId: '1484',
+          creatorAddress: '0x1111111111111111111111111111111111111111',
+          displayLabel: 'creator',
+          source: 'test',
+          confidence: 1,
+          expiresAt: null,
+          isFresh: true,
+        },
+      ]),
+    }))
+    vi.doMock('./chatIngestStore.js', async () => {
+      const actual = await vi.importActual<typeof import('./chatIngestStore.js')>(
+        './chatIngestStore.js',
+      )
+      return {
+        ...actual,
+        listRecentHexChatSpeakersForRoom: vi.fn(async () => [
+          {
+            sender: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
+            dateMs: Date.now() - 120_000,
+          },
+        ]),
+      }
+    })
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1484,1659')
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED', '0')
+
+    const { collectInverseAkitaChatTradeIntents } = await import('./inverseAkitaChatReaction.js')
+    const intents = await collectInverseAkitaChatTradeIntents({
+      roomId: '1484',
+      messages: [
+        {
+          id: 'trade-only',
+          sender: 'trade-completed',
+          text: marketOpenPayload({ asset: 'CASHCAT', isBuy: true }),
+          date: Date.now(),
+        },
+      ],
+      llmConfig: {
+        enabled: false,
+        mode: 'classify',
+        failMode: 'allow',
+        timeoutMs: 1_000,
+      },
+    })
+
+    expect(intents).toHaveLength(1)
+    expect(intents[0]).toMatchObject({
+      sender: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
+      userSide: 'long',
+      pair: 'CASHCAT',
+      parseMode: 'strict',
+      publicAuthorLabel: 'Chip',
+    })
+  })
+
+  it('ignores chat_ingest speakers older than the Chip lookback and uses room creator', async () => {
+    vi.resetModules()
+    vi.doMock('./roomLabelCache.js', () => ({
+      readRoomLabelStatus: vi.fn(async () => [
+        {
+          roomId: '1484',
+          creatorAddress: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+          displayLabel: 'creator',
+          source: 'test',
+          confidence: 1,
+          expiresAt: null,
+          isFresh: true,
+        },
+      ]),
+    }))
+    // Empty result simulates SQL lookback excluding a days-old speaker.
+    vi.doMock('./chatIngestStore.js', async () => {
+      const actual = await vi.importActual<typeof import('./chatIngestStore.js')>(
+        './chatIngestStore.js',
+      )
+      return {
+        ...actual,
+        listRecentHexChatSpeakersForRoom: vi.fn(async () => []),
+      }
+    })
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1484,1659')
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED', '0')
+
+    const { collectInverseAkitaChatTradeIntents } = await import('./inverseAkitaChatReaction.js')
+    const intents = await collectInverseAkitaChatTradeIntents({
+      roomId: '1484',
+      messages: [
+        {
+          id: 'trade-stale-room',
+          sender: 'trade-completed',
+          text: marketOpenPayload({ asset: 'HYPE', isBuy: true }),
+          date: Date.now(),
+        },
+      ],
+      llmConfig: {
+        enabled: false,
+        mode: 'classify',
+        failMode: 'allow',
+        timeoutMs: 1_000,
+      },
+    })
+
+    expect(intents).toHaveLength(1)
+    expect(intents[0]).toMatchObject({
+      sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+      pair: 'HYPE',
+      parseMode: 'strict',
+    })
+  })
+
+  it('logs and skips Chip opens when no wallet can be attributed', async () => {
+    vi.resetModules()
+    const warn = vi.fn()
+    vi.doMock('../infra/logger.js', () => ({
+      logger: { info: vi.fn(), warn, error: vi.fn() },
+    }))
+    vi.doMock('./roomLabelCache.js', () => ({
+      readRoomLabelStatus: vi.fn(async () => [
+        {
+          roomId: '1484',
+          creatorAddress: null,
+          displayLabel: null,
+          source: null,
+          confidence: null,
+          expiresAt: null,
+          isFresh: false,
+        },
+      ]),
+    }))
+    vi.doMock('./chatIngestStore.js', async () => {
+      const actual = await vi.importActual<typeof import('./chatIngestStore.js')>(
+        './chatIngestStore.js',
+      )
+      return {
+        ...actual,
+        listRecentHexChatSpeakersForRoom: vi.fn(async () => []),
+      }
+    })
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1484,1659')
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED', '0')
+
+    const { collectInverseAkitaChatTradeIntents } = await import('./inverseAkitaChatReaction.js')
+    const intents = await collectInverseAkitaChatTradeIntents({
+      roomId: '1484',
+      messages: [
+        {
+          id: 'orphan-chip',
+          sender: 'trade-completed',
+          text: marketOpenPayload({ asset: 'HYPE', isBuy: true }),
+          date: Date.now(),
+        },
+      ],
+      llmConfig: {
+        enabled: false,
+        mode: 'classify',
+        failMode: 'allow',
+        timeoutMs: 1_000,
+      },
+    })
+
+    expect(intents).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      'inverse_akita.chip_attribution_failed',
+      expect.objectContaining({
+        roomId: '1484',
+        messageId: 'orphan-chip',
+        pair: 'HYPE',
+      }),
+    )
   })
 })

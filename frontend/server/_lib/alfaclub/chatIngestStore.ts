@@ -455,3 +455,79 @@ export async function upsertAlfaClubIngestMessages(
   return inserted
 }
 
+export type RecentHexChatSpeaker = {
+  sender: string
+  dateMs: number
+}
+
+/** Max age of a chat_ingest speaker relative to the Chip card timestamp. */
+export const CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS = 2 * 60 * 60 * 1000
+
+/**
+ * Recent human wallet speakers for Chip trade attribution when the live/seed
+ * message batch is too narrow (WS single-card batches, first-tick 60s window).
+ * Newest-first, bounded to {@link CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS} before
+ * the card timestamp so quiet rooms do not attribute to stale members.
+ * Fail-open: returns [] when DB is unavailable.
+ */
+export async function listRecentHexChatSpeakersForRoom(params: {
+  roomId: string
+  /** Only speakers at/before this epoch ms (defaults to now). */
+  atOrBeforeDateMs?: number | null
+  /** Lookback window ending at atOrBeforeDateMs. Defaults to 2h. */
+  lookbackMs?: number
+  limit?: number
+}): Promise<RecentHexChatSpeaker[]> {
+  const roomId = String(params.roomId ?? '').trim()
+  if (!/^\d+$/.test(roomId)) return []
+
+  const db = await getDb()
+  if (!db) return []
+
+  const limit = Math.max(1, Math.min(50, Math.floor(params.limit ?? 40)))
+  const lookbackMs = Math.max(
+    60_000,
+    Math.floor(
+      typeof params.lookbackMs === 'number' && Number.isFinite(params.lookbackMs)
+        ? params.lookbackMs
+        : CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS,
+    ),
+  )
+  const atOrBeforeMs =
+    typeof params.atOrBeforeDateMs === 'number' && Number.isFinite(params.atOrBeforeDateMs)
+      ? Math.floor(params.atOrBeforeDateMs)
+      : Date.now()
+  const atOrAfterMs = atOrBeforeMs - lookbackMs
+  const atOrBeforeIso = toIsoOrNull(atOrBeforeMs)
+  const atOrAfterIso = toIsoOrNull(atOrAfterMs)
+  if (!atOrBeforeIso || !atOrAfterIso) return []
+
+  try {
+    const result = await db.sql`
+      SELECT
+        LOWER(ci.sender_address) AS sender_address,
+        (EXTRACT(EPOCH FROM COALESCE(ci.message_date, ci.ingested_at)) * 1000)::bigint AS date_ms
+      FROM alfaclub.chat_ingest ci
+      WHERE ci.room_id = ${roomId}
+        AND ci.deleted_at IS NULL
+        AND ci.sender_address ~ '^0x[a-fA-F0-9]{40}$'
+        AND COALESCE(ci.message_date, ci.ingested_at) <= ${atOrBeforeIso}::timestamptz
+        AND COALESCE(ci.message_date, ci.ingested_at) >= ${atOrAfterIso}::timestamptz
+      ORDER BY COALESCE(ci.message_date, ci.ingested_at) DESC, ci.message_id DESC
+      LIMIT ${limit};
+    `
+    const rows = (result.rows ?? []) as Array<{ sender_address?: string; date_ms?: number | string }>
+    const out: RecentHexChatSpeaker[] = []
+    for (const row of rows) {
+      const sender = String(row.sender_address ?? '').trim().toLowerCase()
+      const dateMs = Number(row.date_ms)
+      if (!/^0x[a-f0-9]{40}$/.test(sender)) continue
+      if (!Number.isFinite(dateMs) || dateMs <= 0) continue
+      if (dateMs < atOrAfterMs || dateMs > atOrBeforeMs) continue
+      out.push({ sender, dateMs: Math.floor(dateMs) })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
