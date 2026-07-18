@@ -9,7 +9,9 @@ Sources: contracts re-audit (`2026-07-08-contracts-reaudit/`), Aristotle tracker
 
 Update statuses in place as work lands. Prefer linking a PR or commit when closing an ID.
 
-**Last code pass:** 2026-07-09 — contracts + stack mediums closed; R-H05 launch default single-vault; ops checklist at [PRE_LOTTERY_OPS_CHECKLIST.md](./PRE_LOTTERY_OPS_CHECKLIST.md).
+**Last code pass:** 2026-07-09
+
+**Analyzer pass:** 2026-07-17 — [security-scan-2026-07-17](./security-scan-2026-07-17/) (Aderyn + focused Slither + semantic pass; One Dollar Audit pending USDC). — contracts + stack mediums closed; R-H05 launch default single-vault; ops checklist at [PRE_LOTTERY_OPS_CHECKLIST.md](./PRE_LOTTERY_OPS_CHECKLIST.md).
 
 ---
 

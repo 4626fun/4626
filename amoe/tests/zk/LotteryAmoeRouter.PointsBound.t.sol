@@ -281,15 +281,19 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         assertEq(managerMock.lastPoints(), provenPoints);
     }
 
-    function test_submitAmoeEntryZK_skipsManager_whenUnset() public {
-        // Clear the manager pointer; entry must still record on-chain but not
-        // attempt the fan-out.
+    function test_submitAmoeEntryZK_revertsManagerNotSet_whenUnset() public {
+        // SCAN-M2: after a timelocked unset, ZK submit must not burn nullifiers.
         vm.prank(owner);
         router.setManager(address(0));
+        vm.warp(block.timestamp + router.CONFIG_UPDATE_TIMELOCK());
+        vm.prank(owner);
+        router.executeManagerUpdate();
 
         uint256[9] memory inp = _defaults(111, 222);
-        uint256 id = _submit(inp);
-        assertEq(id, 1);
+        vm.expectRevert(LotteryAmoeRouter.ManagerNotSet.selector);
+        _submit(inp);
+
+        assertFalse(router.usedPointsBurnNullifier(DEFAULT_NULLIFIER));
         assertEq(managerMock.callCount(), 0);
     }
 

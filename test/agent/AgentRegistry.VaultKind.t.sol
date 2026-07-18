@@ -84,4 +84,49 @@ contract AgentRegistryVaultKindTest is Test {
         registry.setAgentIntegrationMeta(address(token), meta);
         assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Creator));
     }
+
+    function test_setAgentIntegrationMeta_oneShot_blocksOverwrite() public {
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Agent,
+            nativeAgentVault: address(0xBEEF),
+            taxRecipient: address(0),
+            taxAccountingAdapter: address(0),
+            pairToken: address(0),
+            uniswapV2Pair: address(0),
+            implementationFingerprint: bytes32(0)
+        });
+        registry.setAgentIntegrationMeta(address(token), meta);
+
+        IRegistry4626.AgentIntegrationMeta memory overwrite = meta;
+        overwrite.nativeAgentVault = address(0xCAFE);
+        vm.expectRevert(
+            abi.encodeWithSelector(Registry4626.BindingAlreadySet.selector, address(token), address(0xBEEF))
+        );
+        registry.setAgentIntegrationMeta(address(token), overwrite);
+    }
+
+    function test_setAgentIntegrationMeta_liveRebind_ownerOnly() public {
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Agent,
+            nativeAgentVault: address(0xBEEF),
+            taxRecipient: address(0),
+            taxAccountingAdapter: address(0),
+            pairToken: address(0),
+            uniswapV2Pair: address(0),
+            implementationFingerprint: bytes32(0)
+        });
+        registry.setAgentIntegrationMeta(address(token), meta);
+        registry.setLiveRebindEnabled(true);
+        registry.setAuthorizedFactory(factory, true);
+
+        IRegistry4626.AgentIntegrationMeta memory overwrite = meta;
+        overwrite.nativeAgentVault = address(0xCAFE);
+
+        vm.prank(factory);
+        vm.expectRevert(Registry4626.LiveRebindOwnerOnly.selector);
+        registry.setAgentIntegrationMeta(address(token), overwrite);
+
+        registry.setAgentIntegrationMeta(address(token), overwrite);
+        assertEq(registry.getAgentIntegrationMeta(address(token)).nativeAgentVault, address(0xCAFE));
+    }
 }

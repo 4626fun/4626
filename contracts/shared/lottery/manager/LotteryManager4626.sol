@@ -107,6 +107,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     uint256 public constant MIN_SWAP_USD = 1_000_000; // $1 (6 decimals)
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000; // $1M
+    /// @notice Mirror of `LotteryAmoeRouter.MAX_POINTS_AS_USD` (SCAN-L1).
+    uint256 public constant MAX_POINTS_AS_USD = 10_000 * 1_000_000;
     uint256 public constant BASIS_POINTS = 10_000;
 
     /// @notice Hard cap on the number of *active* lane tokens evaluated in
@@ -766,6 +768,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (relayer == address(0) || msg.sender != relayer) revert Unauthorized();
         if (buyer == address(0) || token == address(0)) revert ZeroAddress();
         if (pointsBurnedAsUSD == 0) revert InvalidAmount();
+        // SCAN-L1: mirror router ceiling so a misconfigured / legacy relayer
+        // cannot push an oversize points value past the AMOE protocol cap.
+        if (pointsBurnedAsUSD > MAX_POINTS_AS_USD) revert InvalidAmount();
 
         // Verify lane token is registered AND active. Silent skip preserves
         // off-chain idempotency on inactive tokens.

@@ -89,6 +89,11 @@ contract Registry4626 is IRegistry4626, Ownable {
     /// @notice Agent lane integration metadata keyed by underlying token
     mapping(address => AgentIntegrationMeta) private agentIntegrationMetas;
 
+    /// @notice One-shot latch for `setAgentIntegrationMeta` (SCAN-M3).
+    /// @dev Creator-kind meta can be all-zero (VaultKind.Creator == 0), so we
+    ///      cannot detect "already written" from the struct alone.
+    mapping(address => bool) private agentIntegrationMetaSet;
+
     // =================================
     // CHAIN CONFIGURATION
     // =================================
@@ -1113,7 +1118,19 @@ contract Registry4626 is IRegistry4626, Ownable {
         onlyAuthorizedOrOwner
     {
         if (token == address(0)) revert ZeroAddress();
+        // SCAN-M3: one-shot like vault/shareOFT bindings — Phase2 must not overwrite
+        // vaultKind / nativeAgentVault for a live token while core bindings stay put.
+        // First write always allowed; replace requires owner + liveRebindEnabled.
+        if (agentIntegrationMetaSet[token]) {
+            if (!liveRebindEnabled) {
+                address existingMarker = agentIntegrationMetas[token].nativeAgentVault;
+                if (existingMarker == address(0)) existingMarker = address(uint160(1));
+                revert BindingAlreadySet(token, existingMarker);
+            }
+            if (msg.sender != owner()) revert LiveRebindOwnerOnly();
+        }
         agentIntegrationMetas[token] = meta;
+        agentIntegrationMetaSet[token] = true;
         emit AgentIntegrationMetaSet(token, meta.vaultKind);
     }
 

@@ -1,0 +1,11 @@
+{
+  "jobId": 420,
+  "status": "complete",
+  "description": "Base CreatorShareOFT + wrapper mint/backing security review for 4626 protocol. Source: contracts/creator/vault/CreatorShareOFT.sol and CreatorOVaultWrapper.sol in github.com/wenakita/4626. Focus: mint authority, vault-backing checks, LayerZero credit path, fee flush, lottery coverage snapshots.",
+  "createdAt": "2026-07-18T06:49:43.000Z",
+  "startedAt": "2026-07-18T06:54:25.000Z",
+  "completedAt": "2026-07-18T07:35:47.000Z",
+  "reportUrl": "https://bafkreihhspbysuy36uiuymllscj4h6mzoumb5x36evo6omjzsv344jdxee.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/420.html",
+  "trackUrl": "https://onedollaraudit.com/audit/420"
+}

@@ -1,0 +1,11 @@
+{
+  "jobId": 421,
+  "status": "complete",
+  "description": "Base DeploymentBatcher greenfield deploy orchestrator security review. Live: DeploymentBatcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145, Phase2Module 0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad. Repo: github.com/wenakita/4626 contracts/shared/deploy/batchers/DeploymentBatcher.sol. Focus: privilege, CREATE2 reuse, init-code hash binding, Phase1/2/3 trust boundaries, pending management handoff.",
+  "createdAt": "2026-07-18T06:49:49.000Z",
+  "startedAt": "2026-07-18T07:29:51.000Z",
+  "completedAt": "2026-07-18T07:59:17.000Z",
+  "reportUrl": "https://bafkreic3ymeou4pktyex36twpzrmg2okncj7d6vtmhyzaha3uw4rijwe54.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/421.html",
+  "trackUrl": "https://onedollaraudit.com/audit/421"
+}

@@ -12,6 +12,7 @@ pragma solidity ^0.8.20;
  */
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {OApp, MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
@@ -25,10 +26,13 @@ interface IRandomWordsCallbackV2_5 {
     function receiveRandomWords(uint256[] memory randomWords, uint256 requestId) external;
 }
 
-contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
+contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
     using OptionsBuilder for bytes;
 
     error UnauthorizedSponsoredCaller();
+    error InvalidRequest();
+    error CallbackAlreadySucceeded();
+    error NoCallbackTarget();
 
     bytes32 internal constant IGNORE_REQUEST_NOT_FOUND = bytes32("REQUEST_NOT_FOUND");
     bytes32 internal constant IGNORE_ALREADY_FULFILLED = bytes32("ALREADY_FULFILLED");
@@ -67,6 +71,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         uint256 randomWord;
         uint256 timestamp;
         bool isContract;
+        /// @notice True after a successful consumer callback (SCAN-M1 / hub M-11 parity).
+        bool callbackSucceeded;
     }
     mapping(uint64 => RequestStatus) public s_requests;
     mapping(uint64 => address) public randomWordsProviders;
@@ -210,12 +216,41 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
         if (request.isContract) {
             try IRandomWordsCallbackV2_5(provider).receiveRandomWords(randomWords, uint256(sequence)) {
+                request.callbackSucceeded = true;
                 emit CallbackSucceeded(sequence, provider);
             } catch Error(string memory reason) {
                 emit CallbackFailed(sequence, provider, reason);
             } catch {
                 emit CallbackFailed(sequence, provider, "Low-level callback failure");
             }
+        }
+    }
+
+    /// @notice Retry a failed spoke VRF consumer callback (SCAN-M1).
+    /// @dev Permissionless after fulfill: recovers when the first lzReceive callback
+    ///      reverts (e.g. temporary OOG). Mirrors hub `VRFConsumer4626.retryLocalCallback`.
+    function retryCallback(uint64 requestId) external nonReentrant {
+        RequestStatus storage request = s_requests[requestId];
+        if (!request.exists) revert InvalidRequest();
+        require(request.fulfilled, "Not fulfilled");
+        if (request.callbackSucceeded) revert CallbackAlreadySucceeded();
+        require(request.isContract, "No callback target");
+
+        address provider = request.provider;
+        if (provider == address(0) || provider.code.length == 0) revert NoCallbackTarget();
+
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = request.randomWord;
+
+        try IRandomWordsCallbackV2_5(provider).receiveRandomWords(randomWords, uint256(requestId)) {
+            request.callbackSucceeded = true;
+            emit CallbackSucceeded(requestId, provider);
+        } catch Error(string memory reason) {
+            emit CallbackFailed(requestId, provider, reason);
+            revert(reason);
+        } catch {
+            emit CallbackFailed(requestId, provider, "Low-level callback failure");
+            revert("Callback retry failed");
         }
     }
 
@@ -322,7 +357,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
             provider: msg.sender,
             randomWord: 0,
             timestamp: block.timestamp,
-            isContract: isContract
+            isContract: isContract,
+            callbackSucceeded: false
         });
         randomWordsProviders[requestId] = msg.sender;
 

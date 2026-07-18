@@ -1,0 +1,11 @@
+{
+  "jobId": 419,
+  "status": "complete",
+  "description": "Base CreatorOVault ERC-4626 vault + core module security review for 4626 protocol. Source in github.com/wenakita/4626 contracts/creator/vault/CreatorOVault.sol and CreatorOVaultCoreModule.sol. Focus: share/backing invariants, module delegatecall storage, impairment side-pocket, strategy withdraw griefing, profit unlock, emergency drains, slippage mins.",
+  "createdAt": "2026-07-18T06:49:35.000Z",
+  "startedAt": "2026-07-18T06:52:59.000Z",
+  "completedAt": "2026-07-18T07:29:17.000Z",
+  "reportUrl": "https://bafkreig2rt6ssqzgr7d75yediwx5b3ljg26pjhlowurfhy356sih7mrycq.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/419.html",
+  "trackUrl": "https://onedollaraudit.com/audit/419"
+}

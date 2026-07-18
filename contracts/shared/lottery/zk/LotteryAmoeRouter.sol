@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAmoePlonkVerifier} from "@4626/shared/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @title LotteryAmoeRouter (v2)
@@ -58,7 +59,7 @@ interface IAmoeManager {
     ) external returns (uint256 entryId);
 }
 
-contract LotteryAmoeRouter {
+contract LotteryAmoeRouter is ReentrancyGuard {
     // -------------------------------------------------------------------------
     // Roles & config
     // -------------------------------------------------------------------------
@@ -182,6 +183,8 @@ contract LotteryAmoeRouter {
     error EpochAlreadyPublished();
     error ZeroRoot();
     error ManagerDeclinedEntry();
+    /// @notice ZK path requires a wired manager so nullifiers are not burned without fan-out (SCAN-M2).
+    error ManagerNotSet();
     error DeadlineExpired();
     error DeadlineTooSoon();
     error UpdateTimelockActive(uint256 executeAfter);
@@ -371,8 +374,11 @@ contract LotteryAmoeRouter {
         uint64 epoch,
         uint256[24] calldata proof,
         uint256[9] calldata pubInputs
-    ) external returns (uint256 entryId) {
+    ) external nonReentrant returns (uint256 entryId) {
         if (address(verifier) == address(0)) revert VerifierNotSet();
+        // SCAN-M2: require manager before any nullifier burns so an unset fan-out
+        // cannot permanently consume AMOE credits without creating a lottery entry.
+        if (address(manager) == address(0)) revert ManagerNotSet();
 
         // 1. Bind public inputs to the calldata-asserted (creatorCoin, epoch, buyer)
         //    so the proof can't be re-used against a different on-chain entry.
@@ -408,7 +414,7 @@ contract LotteryAmoeRouter {
         bytes32 pointsBurnNullifier = bytes32(pubInputs[7]);
         if (usedPointsBurnNullifier[pointsBurnNullifier]) revert PointsBurnReplayed();
 
-        // 6. Verify the PLONK proof.
+        // 6. Verify the PLONK proof (before effects; SCAN-L2).
         if (!verifier.verifyProof(proof, pubInputs)) revert InvalidProof();
 
         // 7. Effects.
@@ -429,9 +435,9 @@ contract LotteryAmoeRouter {
         );
 
         // 8. Fan-out.
-        //    Manager fan-out is the production path: the router calls
-        //    `processAmoeEntry` directly with the proven points value, so the
-        //    manager-side `authorizedAmoeRelayer` gate now only ever admits
+        //    Manager fan-out is required on the ZK path (see ManagerNotSet above).
+        //    The router calls `processAmoeEntry` with the proven points value so
+        //    the manager-side `authorizedAmoeRelayer` gate only admits
         //    cryptographically-bound values.
         //
         //    `LotteryManager4626.processAmoeEntry` returns 0 on several
@@ -442,11 +448,8 @@ contract LotteryAmoeRouter {
         //    Revert in that case so the proof + nullifiers stay un-consumed
         //    (state is rolled back atomically) and the user can resubmit
         //    when conditions become favorable.
-        uint256 managerEntryId = 0;
-        if (address(manager) != address(0)) {
-            managerEntryId = manager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD);
-            if (managerEntryId == 0) revert ManagerDeclinedEntry();
-        }
+        uint256 managerEntryId = manager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD);
+        if (managerEntryId == 0) revert ManagerDeclinedEntry();
 
         //    Legacy event-only consumer hook (optional, kept for compat with
         //    deployments that wired the router as a passive broadcaster).

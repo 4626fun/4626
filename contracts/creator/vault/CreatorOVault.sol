@@ -110,6 +110,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     uint64 public constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
     uint64 public constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
 
+    /// @notice Bounds for `impairmentChallengeWindow` (SCAN-L3).
+    uint64 public constant MIN_IMPAIRMENT_CHALLENGE_WINDOW = 1 hours;
+    uint64 public constant MAX_IMPAIRMENT_CHALLENGE_WINDOW = 30 days;
+
     uint8 internal constant RISK_KIND_NONE = 0;
     uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
     uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2;
@@ -621,6 +625,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error RecoveryEscrowNotConfigured();
     error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
     error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
+    error InvalidImpairmentChallengeWindow(uint64 provided, uint64 min, uint64 max);
     error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
 
     // Protocol rescue errors

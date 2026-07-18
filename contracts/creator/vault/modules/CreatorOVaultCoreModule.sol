@@ -65,6 +65,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     // FIX: M-2 (docs/audits/CreatorOVault_aristotle) — bounds for maxImpairmentTripDuration.
     uint64 internal constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
     uint64 internal constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
+    uint64 internal constant MIN_IMPAIRMENT_CHALLENGE_WINDOW = 1 hours;
+    uint64 internal constant MAX_IMPAIRMENT_CHALLENGE_WINDOW = 30 days;
     uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
     uint256 internal constant OP_DEPOSIT = 1 << 0;
     uint256 internal constant OP_WITHDRAW = 1 << 1;
@@ -155,6 +157,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
     error CcaAuctionDepositBlocked();
     error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
+    error InvalidImpairmentChallengeWindow(uint64 provided, uint64 min, uint64 max);
     error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
 
     // =================================
@@ -956,6 +959,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     // =================================
 
     function setImpairmentChallengeWindow(uint64 window) external onlyDelegateCall {
+        // SCAN-L3: reject zero / unbounded windows that defeat challenge or freeze ops.
+        if (window < MIN_IMPAIRMENT_CHALLENGE_WINDOW || window > MAX_IMPAIRMENT_CHALLENGE_WINDOW) {
+            revert InvalidImpairmentChallengeWindow(
+                window, MIN_IMPAIRMENT_CHALLENGE_WINDOW, MAX_IMPAIRMENT_CHALLENGE_WINDOW
+            );
+        }
         impairmentChallengeWindow = window;
         emit ImpairmentChallengeWindowUpdated(window);
     }

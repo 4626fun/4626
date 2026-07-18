@@ -513,6 +513,7 @@ interface IRegistry4626 {
     event AgentIntegrationMetaSet(address indexed token, VaultKind vaultKind);
 
     /// @notice Set lane meta for `token`. Caller must be registry owner or an authorized factory.
+    /// @dev One-shot by default (SCAN-M3). Replacing an existing meta requires owner + live rebind.
     function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external;
 
     function getAgentIntegrationMeta(address token) external view returns (AgentIntegrationMeta memory);

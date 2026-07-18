@@ -12,8 +12,14 @@ contract MockRandomWordsCallback is IRandomWordsCallbackV2_5 {
     uint256 public calls;
     uint256 public lastRequestId;
     uint256 public lastRandomWord;
+    bool public shouldRevert;
+
+    function setShouldRevert(bool v) external {
+        shouldRevert = v;
+    }
 
     function receiveRandomWords(uint256[] memory randomWords, uint256 requestId) external {
+        if (shouldRevert) revert("callback boom");
         calls += 1;
         lastRequestId = requestId;
         lastRandomWord = randomWords.length > 0 ? randomWords[0] : 0;
@@ -168,6 +174,34 @@ contract ChainlinkVRFIntegratorV2_5NonblockingLzReceiveTest is Test {
         (uint256 word, bool fulfilled) = integrator.getRandomWord(seq);
         assertFalse(fulfilled);
         assertEq(word, 0);
+    }
+
+    function test_retryCallback_recoversFailedConsumerCallback() external {
+        provider.setShouldRevert(true);
+
+        vm.prank(address(provider));
+        (, uint64 seq) = integrator.requestRandomWordsPayable{value: 0.02 ether}();
+
+        integrator.exposedLzReceive(_originFromHub(), _newFormatPayload(seq, 777), hex"");
+
+        (uint256 storedWord, bool fulfilled) = integrator.getRandomWord(seq);
+        assertTrue(fulfilled);
+        assertEq(storedWord, 777);
+        assertEq(provider.calls(), 0);
+
+        (,,,,,, bool callbackSucceeded) = integrator.s_requests(seq);
+        assertFalse(callbackSucceeded);
+
+        provider.setShouldRevert(false);
+        integrator.retryCallback(seq);
+
+        assertEq(provider.calls(), 1);
+        assertEq(provider.lastRandomWord(), 777);
+        (,,,,,, callbackSucceeded) = integrator.s_requests(seq);
+        assertTrue(callbackSucceeded);
+
+        vm.expectRevert(ChainlinkVRFIntegratorV2_5.CallbackAlreadySucceeded.selector);
+        integrator.retryCallback(seq);
     }
 }
 

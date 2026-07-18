@@ -1,0 +1,11 @@
+{
+  "jobId": 422,
+  "status": "complete",
+  "description": "Base Registry4626 binding registry security review. Live: 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2. Source: contracts/shared/core/Registry4626.sol in github.com/wenakita/4626. Focus: one-shot vault/shareOFT/wrapper bindings, live rebind gates, setAgentIntegrationMeta overwrite, factory authorization, remote OFT peers.",
+  "createdAt": "2026-07-18T06:49:55.000Z",
+  "startedAt": "2026-07-18T07:46:39.000Z",
+  "completedAt": "2026-07-18T08:25:11.000Z",
+  "reportUrl": "https://bafkreih3vbr2p7al7i2exqxcuysubzgl6ibv2a4ltjg5tdlkyrea2jth7a.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/422.html",
+  "trackUrl": "https://onedollaraudit.com/audit/422"
+}
