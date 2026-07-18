@@ -25,11 +25,11 @@ function formatHermitCreativeSection(): string[] {
     '• `/position` — Hyperliquid positions + alert setup',
     '• `/signal` — multi-factor LONG/SHORT/STAY OUT (7d counter-trade + Funding/OI)',
     '• `/market` — broader majors + AlfaClub market scope',
-    '• `/h arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; room 1659 routes to InverseAKITA room-default wallet; stakers with ≥1 staked key have operator-equivalent pilot access)',
+    '• `/h arena ...` — Virtuals Arena / Degenerate Claw (room-gated; 1659 → InverseAKITA; ≥1 staked key = pilot)',
     '• `/h arena long|short|close` · `/h pos` · `/h rules` · `/h status` — InverseAKITA pilot (room 1659; stake ≥1 key)',
     '• `/h pnl` — InverseAKITA realized-PnL scorecard (win rate, fees, volume from Hyperliquid fills)',
     '• `/h start` · `/h stop` · `/h resume` — mirrored trading (non-1659 rooms only)',
-    '• `/gmeow [vibe]` — GIF + one-liner',
+    '• `/gmeow [vibe]` · `/keep` — GIF drop / pin replied media',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
     '• `/hermit alert` — Hyperliquid alerts via Telegram and/or 4626 agent XMTP',
@@ -42,7 +42,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/h arena long|short|close` · `/h rules` · `/h pos` · `/position` · `/signal` · `/gmeow`',
+    '• `/h arena long|short|close` · `/h rules` · `/h pos` · `/position` · `/signal` · `/gmeow` · `/keep`',
   ]
 }
 
@@ -132,7 +132,7 @@ export function formatHermitCommandRoomHelp(
     ...formatCooldownSection(),
     ...(formatRoomContextSection(id).length > 0 ? ['', ...formatRoomContextSection(id)] : []),
     '',
-    '**Examples** — `/gmeow stressed market` · `/meme akita dark luxury` · `/hermit announce reward drop in 30m`',
+    '**Examples** — `/gmeow` · `/keep` (reply GIF) · `/meme akita` · `/hermit announce …`',
     'Send `/help` or `/halp` anytime for this list.',
   ].join('\n')
   return trimHelpToBudget(body)
@@ -148,6 +148,7 @@ export function formatHermitRoomIntro(roomId: string): string {
     '',
     'Try:',
     '• `/gmeow` — GIF + one-liner (fastest demo)',
+    '• `/keep` — reply to GIF/photo to pin it',
     '• `/meme <prompt>` — meme / image idea',
     '• `/hermit copy <idea>` — short post + alternates',
     '• `/help` or `/halp` — your position + command list',

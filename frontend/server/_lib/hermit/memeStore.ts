@@ -1,5 +1,7 @@
 import type { HermitMeme } from './types.js'
 
+export type HermitMemePoolEntry = HermitMeme
+
 declare const process: { env: Record<string, string | undefined> }
 
 /** Rotate away from the last N picks so /gmeow does not spam the same GIF. */
@@ -154,4 +156,43 @@ export function pickGmeowLocalLine(meme: HermitMeme): string {
   if (tagHook && Math.random() < 0.35) return tagHook
   const idx = Math.floor(Math.random() * LOCAL_GMEOW_HOOKS.length)
   return LOCAL_GMEOW_HOOKS[idx] ?? meme.caption
+}
+
+
+/** Merge static library + DB kept memes (DB first so new keeps surface sooner). */
+export function mergeHermitMemePools(
+  staticMemes: readonly HermitMeme[],
+  dbMemes: readonly HermitMeme[],
+): HermitMeme[] {
+  const out: HermitMeme[] = []
+  const seenUrls = new Set<string>()
+  for (const meme of [...dbMemes, ...staticMemes]) {
+    const url = asString(meme.url)
+    if (!url || seenUrls.has(url)) continue
+    seenUrls.add(url)
+    out.push({
+      id: asString(meme.id) || `meme-${out.length + 1}`,
+      url,
+      caption: asString(meme.caption) || 'Hermit meme drop.',
+      tags: Array.isArray(meme.tags)
+        ? meme.tags.map((tag) => normalizeTag(asString(tag))).filter(Boolean)
+        : [],
+    })
+  }
+  return out.length > 0 ? out : [...DEFAULT_MEMES]
+}
+
+export function pickRandomHermitMemeFromPool(
+  pool: readonly HermitMeme[],
+  tag?: string,
+): HermitMeme {
+  const normalizedTag = normalizeTag(tag ?? '')
+  const tagged = normalizedTag ? pool.filter((meme) => meme.tags.includes(normalizedTag)) : [...pool]
+  const source = tagged.length > 0 ? tagged : [...pool]
+  const fresh = source.filter((meme) => !recentMemeIds.includes(meme.id))
+  const candidates = fresh.length > 0 ? fresh : source
+  const index = Math.floor(Math.random() * candidates.length)
+  const picked = candidates[index] ?? DEFAULT_MEMES[0]
+  rememberRecentMeme(picked.id)
+  return picked
 }

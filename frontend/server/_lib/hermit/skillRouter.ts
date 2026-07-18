@@ -1,7 +1,7 @@
 /**
  * Hermit creative lane — strict architectural boundary.
  *
- * This module owns ONLY creative generation (`/hermit`, `/meme`, `/gmeow`)
+ * This module owns ONLY creative generation (`/hermit`, `/meme`, `/gmeow`, `/keep`)
  * by delegating to a Hermit-hosted creative agent endpoint. It must not:
  *
  *   - read or write `alfaclub_runtime_secret` rows (auth state),
@@ -17,7 +17,14 @@
  * If you find yourself adding an import from `../alfaclub/chatTokenStore.js`
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
-import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
+import {
+  listHermitMemes as listStaticHermitMemes,
+  mergeHermitMemePools,
+  pickGmeowLocalLine,
+  pickRandomHermitMemeFromPool,
+} from './memeStore.js'
+import { keepHermitMemeFromMedia, pickKeepableMediaUrl } from './keepMeme.js'
+import { listHermitMemesRecent } from './repository.js'
 import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
 import { resolveHermitCreativePolicy, type HermitCreativePolicy, type HermitDraftMode } from './creativePolicy.js'
 import {
@@ -1684,6 +1691,7 @@ function buildHermitSetupReply(): string {
     '- `/hermit copy|announce|quest|tone <text>` — draft copy',
     '- `/meme <prompt>` — image meme prompt',
     '- `/gmeow [vibe]` — saved meme + Hermit one-liner',
+    '- `/keep [caption]` — reply to a GIF/photo to pin it into Hermit\'s arsenal',
   ].join('\n')
 }
 
@@ -3952,9 +3960,77 @@ export async function executeHermitCommand(
     }
   }
 
+
+  if (command === '/keep') {
+    const roomId = String(params.roomId ?? '').trim()
+    if (!roomId) {
+      return {
+        kind: 'keep',
+        provider: 'local',
+        reply: 'Reply to a GIF or photo with `/keep` inside a Hermit room to save it.',
+      }
+    }
+    const media = pickKeepableMediaUrl(params.replyMedia ?? [])
+    if (!media) {
+      return {
+        kind: 'keep',
+        provider: 'local',
+        reply: 'Reply to a GIF or photo with `/keep` (optional caption) to pin it into Hermit\'s arsenal.',
+      }
+    }
+    const kept = await keepHermitMemeFromMedia({
+      ownerAddress: params.senderAddress,
+      roomId,
+      media,
+      caption: args.trim() || null,
+      extraTags: args.trim() ? args.trim().toLowerCase().split(/\s+/).slice(0, 4) : [],
+    })
+    if (!kept.ok) {
+      const hint =
+        kept.error === 'pinata_jwt_missing'
+          ? 'Pinata is not configured (`PINATA_JWT`).'
+          : kept.error.startsWith('media_too_large')
+            ? 'That file is too large to pin (max ~12MB).'
+            : kept.error === 'unsupported_media_type'
+              ? 'Only GIF/JPEG/PNG/WebP are supported.'
+              : 'Could not pin that media right now.'
+      return {
+        kind: 'keep',
+        provider: 'local',
+        reply: hint,
+      }
+    }
+    const attachment = inferPublicMediaAttachment(kept.pinnedUrl)
+    return {
+      kind: 'keep',
+      provider: 'local',
+      meme: {
+        id: `db-${kept.meme.id}`,
+        url: kept.meme.url,
+        caption: kept.meme.caption,
+        tags: kept.meme.tags,
+      },
+      reply: kept.reused
+        ? `Already in the arsenal.\n${kept.meme.url}`
+        : `Kept — Hermit arsenal updated.\n${kept.meme.url}`,
+      ...(attachment ? { mediaAttachments: [attachment] } : {}),
+    }
+  }
+
   if (command === '/gmeow') {
     const vibeTag = args.trim() || undefined
-    const meme = pickRandomHermitMeme(vibeTag)
+    const dbRows = await listHermitMemesRecent({
+      limit: 80,
+      ...(vibeTag ? { tag: vibeTag } : {}),
+    })
+    const dbMemes = dbRows.map((row) => ({
+      id: `db-${row.id}`,
+      url: row.url,
+      caption: row.caption,
+      tags: row.tags,
+    }))
+    const pool = mergeHermitMemePools(listStaticHermitMemes(), dbMemes)
+    const meme = pickRandomHermitMemeFromPool(pool, vibeTag)
     const attachment = inferPublicMediaAttachment(meme.url)
     const localLine = pickGmeowLocalLine(meme)
     const localReply = `${localLine}\n${meme.url}`

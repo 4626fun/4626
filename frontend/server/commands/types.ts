@@ -19,4 +19,11 @@ export type ExecuteCommandParams = {
   chatId?: string
   userId?: string
   roleOverrides?: ExecuteCommandRoleOverrides
+  /** AlfaClub reply-to media for `/keep` (bridge-supplied). */
+  replyMedia?: Array<{
+    url: string
+    type: string
+    filename?: string
+    mime_type?: string
+  }> | null
 }

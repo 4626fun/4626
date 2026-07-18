@@ -16,6 +16,7 @@ type ExecuteDeterministicCommandParams = {
   userId?: string
   emptyResponseFallback?: string
   roleOverrides?: ExecuteCommandRoleOverrides
+  replyMedia?: ExecuteCommandParams['replyMedia']
 }
 
 function normalizeKeeprCommandResult(params: {
@@ -42,6 +43,7 @@ export async function executeDeterministicCommand(
     ...(params.chatId ? { chatId: params.chatId } : {}),
     ...(params.userId ? { userId: params.userId } : {}),
     ...(params.roleOverrides ? { roleOverrides: params.roleOverrides } : {}),
+    ...(params.replyMedia ? { replyMedia: params.replyMedia } : {}),
   })
 
   return normalizeKeeprCommandResult({

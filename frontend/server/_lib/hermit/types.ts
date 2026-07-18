@@ -12,7 +12,7 @@ export type HermitMediaAttachment = {
   mime_type?: string
 }
 
-export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme'
+export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme' | 'keep'
 
 /**
  * Per-user style preferences resolved from the AlfaClub control plane.
@@ -104,6 +104,11 @@ export type HermitExecutionParams = {
   // === Room 1659 specific market data ===
   /** Live hype, liquidation, and user position data (only for room 1659) */
   room1659Market?: import('../../commands/execute.js').HermitRoomContext['room1659Market']
+  /**
+   * Media from the message this command replies to (AlfaClub bridge).
+   * Used by `/keep` so skillRouter never imports chatIngestStore.
+   */
+  replyMedia?: HermitMediaAttachment[] | null
 }
 
 export type HermitExecutionResult = {

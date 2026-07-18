@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  mergeHermitMemePools,
   pickGmeowLocalLine,
   pickRandomHermitMeme,
+  pickRandomHermitMemeFromPool,
   resetHermitMemeRecentForTests,
 } from './memeStore.js'
 
@@ -35,5 +37,26 @@ describe('memeStore', () => {
     const meme = pickRandomHermitMeme('gm')
     const line = pickGmeowLocalLine(meme)
     expect(line.length).toBeGreaterThan(8)
+  })
+})
+
+describe('mergeHermitMemePools', () => {
+  it('prefers db memes and dedupes by url', () => {
+    const merged = mergeHermitMemePools(
+      [{ id: 's1', url: 'https://a.example/1.gif', caption: 's', tags: ['static'] }],
+      [
+        { id: 'db-1', url: 'https://b.example/2.gif', caption: 'd', tags: ['kept'] },
+        { id: 'db-dup', url: 'https://a.example/1.gif', caption: 'dup', tags: ['kept'] },
+      ],
+    )
+    expect(merged.map((m) => m.id)).toEqual(['db-1', 'db-dup'])
+  })
+
+  it('picks from a custom pool', () => {
+    resetHermitMemeRecentForTests()
+    const picked = pickRandomHermitMemeFromPool([
+      { id: 'only', url: 'https://c.example/3.gif', caption: 'c', tags: ['kept'] },
+    ])
+    expect(picked.id).toBe('only')
   })
 })

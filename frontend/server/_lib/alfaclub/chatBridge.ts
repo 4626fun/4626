@@ -265,6 +265,10 @@ export type AlfaClubCommandMessage = {
   date: number
   sender: string
   text: string
+  /** Parent message id when this command is a threaded reply. */
+  replyId?: string | null
+  /** Media on the parent message (for `/keep`). */
+  replyAttachments?: AlfaClubMessageAttachment[]
 }
 
 type BridgeJwtSource = 'db' | 'env' | 'none'
@@ -275,6 +279,7 @@ type NormalizedHistoryMessage = {
   sender: string
   text: string
   isBot: boolean
+  replyId: string | null
   attachments: AlfaClubMessageAttachment[]
   replyAttachments: AlfaClubMessageAttachment[]
 }
@@ -660,12 +665,14 @@ function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): Normalize
   if (!Number.isFinite(date) || date <= 0) return null
   const sender = String(message.sender ?? '').trim().toLowerCase()
   const text = String(message.text ?? '')
+  const replyIdRaw = String(message.reply_id ?? '').trim()
   return {
     id,
     date,
     sender,
     text,
     isBot: message.isBot === true,
+    replyId: replyIdRaw || null,
     attachments: normalizeAlfaClubAttachments(message.attachments),
     replyAttachments: normalizeAlfaClubAttachments(message.reply_attachments),
   }
@@ -864,11 +871,20 @@ export function collectAlfaClubCommandMessages(params: {
     const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
     const bareArena = normalizeBareArenaCommand(commandText)
     if (!trustedBareGmeow && !bareArena && !isAlfaClubSlashCommandText(commandText)) continue
+    let replyAttachments = entry.replyAttachments
+    if ((!replyAttachments || replyAttachments.length === 0) && entry.replyId) {
+      const parent = normalized.find((candidate) => candidate.id === entry.replyId)
+      if (parent?.attachments?.length) {
+        replyAttachments = parent.attachments
+      }
+    }
     commands.push({
       id: entry.id,
       date: entry.date,
       sender: entry.sender,
       text: trustedBareGmeow ? '/gmeow' : bareArena ? bareArena : commandText.trim(),
+      replyId: entry.replyId,
+      ...(replyAttachments.length > 0 ? { replyAttachments } : {}),
     })
   }
   return commands
@@ -3149,6 +3165,9 @@ function ensureLiveCommandSocket(params: {
         date: message.date,
         sender: message.sender,
         text: message.text,
+        reply_id: message.replyId,
+        attachments: message.attachments,
+        reply_attachments: message.replyAttachments,
       }))
     if (!bridgeState.liveFallbackActive) return
     const commands = collectAlfaClubCommandMessages({
@@ -3483,6 +3502,12 @@ async function executeCommandBatch(params: {
       const { executeDeterministicCommand } = await import(
         '../../agents/core/executeDeterministicCommand.js'
       )
+      const replyMedia = (command.replyAttachments ?? []).map((attachment) => ({
+        url: attachment.url,
+        type: attachment.type,
+        ...(attachment.filename ? { filename: attachment.filename } : {}),
+        ...(attachment.mime_type ? { mime_type: attachment.mime_type } : {}),
+      }))
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
         senderWallet: trustedSender.senderWallet,
@@ -3490,6 +3515,7 @@ async function executeCommandBatch(params: {
         chatId: `alfaclub:${params.roomId}`,
         userId: trustedSender.senderWallet,
         emptyResponseFallback: 'No response generated.',
+        ...(replyMedia.length > 0 ? { replyMedia } : {}),
       })
       logger.info('[alfaclub-chat] command_issuer_resolved', {
         roomId: params.roomId,

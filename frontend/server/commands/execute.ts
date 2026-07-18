@@ -64,7 +64,7 @@ function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | nul
 }
 
 /**
- * `/hermit`, `/meme`, `/gmeow` are open to any room user when invoked
+ * `/hermit`, `/meme`, `/gmeow`, `/keep` are open to any room user when invoked
  * through the AlfaClub bridge (`chatId = 'alfaclub:<roomId>'`). Other
  * surfaces (Telegram, direct HTTP, etc.) keep the
  * `HERMIT_ALLOWED_USERS` allowlist gate so an unrelated caller cannot
@@ -539,6 +539,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           senderAddress: params.senderWallet as `0x${string}`,
           isTrustedOperator: canPilotInverseAkitaInRoom,
           sourceIdentity: isAlfaClubChatId(params.chatId) ? 'alfaclub-bridge-runner' : null,
+          ...(params.replyMedia?.length ? { replyMedia: params.replyMedia } : {}),
           ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
           ...(hermitRoomContext.userPreferences
             ? { userPreferences: hermitRoomContext.userPreferences }

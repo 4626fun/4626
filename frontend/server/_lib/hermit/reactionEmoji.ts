@@ -2,6 +2,7 @@ const KIND_TO_EMOJI: Readonly<Record<string, string>> = {
   gmeow: '😼',
   meme: '🖼️',
   hermit: '🦔',
+  keep: '📌',
 }
 
 const TAG_TO_EMOJI: Readonly<Record<string, string>> = {

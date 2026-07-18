@@ -221,7 +221,7 @@ export function formatAlfaClubOpsRoomHelp(roomId: string): string {
     `Room **${roomId}** = commands + daily digest (not a creator trading room).`,
     '',
     '**/alfa** — `/alfa` · `/alfa brief` · `/alfa brief post` (digest room) · `/alfa status`',
-    '**/gmeow** · **/meme** — GIF in chat first, X link second when posted',
+    '**/gmeow** · **/meme** · **/keep** — GIF drops + reply `/keep` to save into arsenal',
     '**/help** or **/halp** — your position + command list',
     '',
     'Creator rooms: `alfaclub.app/room/{id}` (their trading room — not this ops room).',
@@ -246,7 +246,7 @@ export function formatAlfaClubCommandHelp(): string {
     '  `/alfa quote-key` · `/alfa buy-key` · `/alfa create-room` — onchain room keys',
     '  `/h arena status|register|identity ...|join|activate|...` — Arena controls (1659 + flags; supports per-sender "mine" bindings; gated to allowlist/owner in AlfaClub)',
     '',
-    '**Hermit** (ops room): `/gmeow` · `/meme` — GIF in chat first, then X link when posted.',
+    '**Hermit** (ops room): `/gmeow` · `/meme` · `/keep` — GIF drops; reply `/keep` to save.',
     '',
     'Chart kinds: `top-volume` · `tier-mix` · `pnl-distribution`',
   ].join('\n')

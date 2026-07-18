@@ -179,7 +179,7 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
   {
     head: 'hermit',
     family: 'hermit',
-    aliases: ['h', 'gmeow', 'meme', 'position', 'market', 'signal'],
+    aliases: ['h', 'gmeow', 'meme', 'keep', 'position', 'market', 'signal'],
   },
 ] as const
 

@@ -154,6 +154,98 @@ export async function listHermitMemes(params: {
   return result.rows.map((row) => mapMemeRow(row as DbRow))
 }
 
+
+export async function findHermitMemeByUrlOrCid(params: {
+  url?: string | null
+  cid?: string | null
+}): Promise<HermitMemeRecord | null> {
+  if (!(await ensureHermitSchema())) return null
+  const db = await getDb()
+  if (!db) return null
+  const url = typeof params.url === 'string' ? params.url.trim() : ''
+  const cid = typeof params.cid === 'string' ? params.cid.trim() : ''
+  if (!url && !cid) return null
+
+  if (url && cid) {
+    const result = await db.sql`
+      SELECT id, owner_address, room_id, cid, url, caption, tags, created_by, created_at
+      FROM hermit_memes
+      WHERE deleted_at IS NULL AND (url = ${url} OR cid = ${cid})
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `
+    return result.rows[0] ? mapMemeRow(result.rows[0] as DbRow) : null
+  }
+  if (url) {
+    const result = await db.sql`
+      SELECT id, owner_address, room_id, cid, url, caption, tags, created_by, created_at
+      FROM hermit_memes
+      WHERE deleted_at IS NULL AND url = ${url}
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `
+    return result.rows[0] ? mapMemeRow(result.rows[0] as DbRow) : null
+  }
+  const result = await db.sql`
+    SELECT id, owner_address, room_id, cid, url, caption, tags, created_by, created_at
+    FROM hermit_memes
+    WHERE deleted_at IS NULL AND cid = ${cid}
+    ORDER BY created_at DESC
+    LIMIT 1;
+  `
+  return result.rows[0] ? mapMemeRow(result.rows[0] as DbRow) : null
+}
+
+/** Recent kept memes across rooms — used to grow the shared /gmeow arsenal. */
+export async function listHermitMemesRecent(params: {
+  limit: number
+  tag?: string
+}): Promise<HermitMemeRecord[]> {
+  if (!(await ensureHermitSchema())) return []
+  const db = await getDb()
+  if (!db) return []
+  const limit = Math.max(1, Math.min(200, Math.floor(params.limit)))
+
+  if (params.tag?.trim()) {
+    const result = await db.sql`
+      SELECT
+        id,
+        owner_address,
+        room_id,
+        cid,
+        url,
+        caption,
+        tags,
+        created_by,
+        created_at
+      FROM hermit_memes
+      WHERE deleted_at IS NULL
+        AND tags ? ${params.tag.trim().toLowerCase()}
+      ORDER BY created_at DESC
+      LIMIT ${limit};
+    `
+    return result.rows.map((row) => mapMemeRow(row as DbRow))
+  }
+
+  const result = await db.sql`
+    SELECT
+      id,
+      owner_address,
+      room_id,
+      cid,
+      url,
+      caption,
+      tags,
+      created_by,
+      created_at
+    FROM hermit_memes
+    WHERE deleted_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT ${limit};
+  `
+  return result.rows.map((row) => mapMemeRow(row as DbRow))
+}
+
 export async function softDeleteHermitMeme(params: {
   id: number
   ownerAddress: string
