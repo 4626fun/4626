@@ -84,8 +84,14 @@ describe('AlfaClubLiquidityPools write gate', () => {
 
     expect(screen.getByText('Room markets')).toBeTruthy()
     expect(screen.getByTestId('eth-to-room-route')).toBeTruthy()
-    expect(screen.getByText('ETH funding path')).toBeTruthy()
+    expect(screen.getByText('ETH funding path (planned)')).toBeTruthy()
     expect(screen.getByText('FriendKey #1659')).toBeTruthy()
+    expect(
+      screen.getByText(/currently accept AKITA Creator Coin only/i),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/does not submit ETH, ZORA, or Uniswap legs/i),
+    ).toBeTruthy()
     expect(screen.getByText(/Market trades require access/i)).toBeTruthy()
     expect(
       screen

@@ -808,7 +808,10 @@ export async function collectInverseAkitaChatTradeIntents(params: {
         roomCreatorAddress: null,
         messageDate,
         excludeAddresses: selfSenders,
-        priorSpeakers: params.messages,
+        priorSpeakers: params.messages.map((message) => ({
+          sender: message.sender,
+          date: message.date == null ? null : Number(message.date),
+        })),
       })
       if (!attributed) {
         const dbSpeakers = await listRecentHexChatSpeakersForRoom({

@@ -1,5 +1,5 @@
 import { executeCommand } from '../../commands/execute.js'
-import type { ExecuteCommandRoleOverrides, KeeprCommandResult } from '../../commands/types.js'
+import type { ExecuteCommandParams, ExecuteCommandRoleOverrides, KeeprCommandResult } from '../../commands/types.js'
 
 export type DeterministicCommandResult = {
   ok: boolean

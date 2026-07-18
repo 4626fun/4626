@@ -54,21 +54,21 @@ function roomTypeLabel(roomType: number | null): string {
 function AlfaClubEthFundingRoute() {
   return (
     <section
-      aria-label="ETH funding route"
+      aria-label="Planned ETH funding route"
       data-testid="eth-to-room-route"
       className="mt-6 rounded-3xl bg-sky-500/[0.07] p-4 ring-1 ring-sky-400/20 sm:p-5"
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-2xl">
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300">
-            ETH funding path
+            ETH funding path (planned)
           </span>
           <h2 className="mt-2 text-base font-semibold text-zinc-100">
-            Buy Room 1659 FriendKeys with ETH
+            ETH → Room 1659 FriendKeys (planned)
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-            ETH can route through the Zora and AKITA Creator Coin markets before
-            settling into the official Sudoswap ERC-1155 pool.
+            ETH → ZORA → AKITA → FriendKey is a planned funding path. The live
+            controls below currently accept AKITA Creator Coin only.
           </p>
         </div>
         <span className="self-start rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium text-sky-200 ring-1 ring-sky-300/20 lg:self-auto">
@@ -92,8 +92,8 @@ function AlfaClubEthFundingRoute() {
       </div>
 
       <p className="mt-3 text-xs text-zinc-500">
-        The route is shown here as the funding path; execution still uses the
-        selected market controls below.
+        Informational only — this page does not submit ETH, ZORA, or Uniswap
+        legs. Hold AKITA Creator Coin to use the live Sudoswap controls below.
       </p>
     </section>
   )

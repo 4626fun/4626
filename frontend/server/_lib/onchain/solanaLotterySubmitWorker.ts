@@ -164,7 +164,7 @@ export async function processSolanaLotteryInboxSubmitBatch(params: {
           sourceEventId: row.sourceEventId,
           buyer: row.beneficiaryCsw as `0x${string}`,
           tokenIn: row.shareOft as `0x${string}`,
-          amount: BigInt(row.amountScaled),
+          amount: BigInt(amountScaled),
         })
         await markInboxSubmitted({
           db: params.db,

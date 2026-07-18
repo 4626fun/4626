@@ -204,7 +204,7 @@ export function readUserOperationEventSuccess(
         abi: ENTRY_POINT_V06_ABI,
         data: log.data,
         topics: log.topics,
-      })
+      }) as { eventName?: string; args?: unknown }
       if (decoded.eventName !== 'UserOperationEvent') continue
       const args = decoded.args as {
         userOpHash?: Hex
