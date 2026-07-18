@@ -435,7 +435,10 @@ contract ve4626RightsSplitAndDualDecayTest is Test {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
         utility.claimVe33(LOCK_AMOUNT);
+        // ODA-433-F4: clearing utility after bootstrap is 48h-timelocked.
         gauges.setUtility(address(0));
+        vm.warp(block.timestamp + gauges.UTILITY_TIMELOCK_DURATION());
+        gauges.executeUtilityUpdate();
         vm.warp(block.timestamp + 8 days);
 
         address vault = makeAddr("raw-token-cap-vault");

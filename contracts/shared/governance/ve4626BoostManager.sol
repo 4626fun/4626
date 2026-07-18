@@ -63,6 +63,11 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     /// @notice Preferred: ve4626Utility for decay-safe effective veLottery.
     Ive4626UtilityForBoost public utility;
 
+    /// @notice ODA-433-F4: queued utility rewiring (48h, first set instant).
+    Ive4626UtilityForBoost public pendingUtility;
+    uint256 public utilityTimelockExpiry;
+    uint256 public constant UTILITY_TIMELOCK_DURATION = 48 hours;
+
     /// @notice Neutral mult when position is zero / flash-gated (leave base odds unchanged).
     uint256 public baseBoost = 10_000;
     /// @notice Maximum tokenless-normalized multiplier (2.5× by default).
@@ -85,6 +90,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     event BalanceTrackingUpdated(address indexed user, uint256 blockNumber);
     event VeLotteryTokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
+    event UtilityUpdateQueued(address indexed utility, uint256 executeAfter);
 
     error ZeroAddress();
     error InvalidBoostParameters();
@@ -93,6 +99,8 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     // FIX: G-13 — timelock errors
     error TimelockNotExpired();
     error NoPendingBoostUpdate();
+    error NoPendingUtilityUpdate();
+    error UtilityTimelockNotExpired(uint256 executeAfter);
 
     constructor(address _ve4626, address _owner) Ownable(_owner) {
         if (_ve4626 == address(0)) revert ZeroAddress();
@@ -105,6 +113,26 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     function setUtility(address utility_) external onlyOwner {
+        // ODA-433-F4: first set instant; rewires match boost-parameter 48h timelock.
+        if (address(utility) == address(0)) {
+            _applyUtility(utility_);
+            return;
+        }
+        pendingUtility = Ive4626UtilityForBoost(utility_);
+        utilityTimelockExpiry = block.timestamp + UTILITY_TIMELOCK_DURATION;
+        emit UtilityUpdateQueued(utility_, utilityTimelockExpiry);
+    }
+
+    function executeUtilityUpdate() external onlyOwner {
+        if (utilityTimelockExpiry == 0) revert NoPendingUtilityUpdate();
+        if (block.timestamp < utilityTimelockExpiry) revert UtilityTimelockNotExpired(utilityTimelockExpiry);
+        address next = address(pendingUtility);
+        pendingUtility = Ive4626UtilityForBoost(address(0));
+        utilityTimelockExpiry = 0;
+        _applyUtility(next);
+    }
+
+    function _applyUtility(address utility_) internal {
         utility = Ive4626UtilityForBoost(utility_);
         emit UtilityUpdated(utility_);
         if (utility_ != address(0)) {

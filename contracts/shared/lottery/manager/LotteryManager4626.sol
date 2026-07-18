@@ -277,6 +277,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     ///      Settlement is head-only so owners cannot cherry-pick wins; batch flush
     ///      avoids OOG on large queues (apply up to DEFERRED_VRF_FLUSH_BATCH_MAX).
     uint256[] internal _deferredVrfRequestIds;
+
+    /// @notice ODA-426-F6: true while admin flush settles a deferred result (skip re-enqueue).
+    bool private _settlingDeferredVrf;
     /// @notice Hard cap on deferred VRF FIFO length (M2-07).
     uint256 public constant MAX_DEFERRED_VRF_QUEUE = 128;
     /// @notice Max items settled per `processDeferredVrfBatch` / single call (M2-07).
@@ -896,7 +899,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /**
      * @notice Settle up to `maxCount` deferred VRF results in FIFO order (M2-07).
      * @dev Caps at `DEFERRED_VRF_FLUSH_BATCH_MAX` to avoid OOG. Safe to call repeatedly
-     *      until `deferredVrfQueueLength() == 0`. Works while paused or unpaused.
+     *      until `deferredVrfQueueLength() == 0`. Settles while paused or unpaused (ODA-426-F6).
      */
     function processDeferredVrfBatch(uint256 maxCount) external nonReentrant returns (uint256 processed) {
         if (msg.sender != owner()) revert Unauthorized();
@@ -950,7 +953,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         // Deferred results are settled after an admin pause window. Refresh the
         // staleness reference so a long pause does not discard already-arrived VRF.
         vrfRequests[requestId].requestTimestamp = block.timestamp;
+        // ODA-426-F6: force settle even if still paused (do not re-enqueue to FIFO tail).
+        _settlingDeferredVrf = true;
         _processVRFResult(requestId, randomWords);
+        _settlingDeferredVrf = false;
     }
 
     /**
@@ -1013,7 +1019,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
         // If paused, defer settlement and preserve the request for later FIFO flush.
         // M2-07 / H-02: enqueue once so unpause-time settlement cannot cherry-pick.
-        if (paused()) {
+        // ODA-426-F6: admin flush sets `_settlingDeferredVrf` to settle without re-enqueue.
+        if (paused() && !_settlingDeferredVrf) {
             if (!hasPendingRandomWord[requestId]) {
                 pendingRandomWord[requestId] = randomWords[0];
                 hasPendingRandomWord[requestId] = true;

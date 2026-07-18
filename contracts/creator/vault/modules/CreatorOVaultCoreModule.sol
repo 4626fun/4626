@@ -1286,6 +1286,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             // cached coinBalance used by totalAssets(), leaving the recovered
             // amount double-counted (escrow + vault book) until the next sync.
             _pushCreatorCoinExact(impairmentRecoveryEscrow, amount);
+            // ODA-427-F7: keep report baseline symmetric with other principal outflows.
+            _decreaseReportBaselineForPrincipalOutflow(amount);
         } else {
             IERC20(epoch.recoveryAsset).safeTransfer(impairmentRecoveryEscrow, amount);
         }

@@ -76,6 +76,8 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
     // FIX: G-14 — error for bribes on non-whitelisted vault
     error VaultNotWhitelisted();
     error GraceBelowMinimum(uint256 provided, uint256 minimum);
+    /// @notice Live token balance cannot cover this claim (rebasing/deflationary bribe).
+    error InsufficientBribeBalance(uint256 needed, uint256 available);
 
     /// @param _owner Protocol/ops owner for rollover + grace (not the CREATE2 factory).
     constructor(address _vault, address _gaugeVoting, address _owner) Ownable(_owner) {
@@ -129,11 +131,18 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
         amount = (totalAmount * userWeight) / totalWeight;
         if (amount == 0 && userWeight > 0) revert NoUserVotes();
 
-        claimed[epoch][token][msg.sender] = true;
-        claimedAmount[epoch][token] += amount;
+        // ODA-433-F6: effects after checks — transfer against live balance first, then
+        // mark claimed. Cap to available so a deflationary/rebasing bribe cannot leave
+        // later claimants permanently stuck on `AlreadyClaimed` after a failed transfer.
         if (amount > 0) {
+            uint256 available = IERC20(token).balanceOf(address(this));
+            if (available == 0) revert InsufficientBribeBalance(amount, 0);
+            if (amount > available) amount = available;
             IERC20(token).safeTransfer(msg.sender, amount);
         }
+
+        claimed[epoch][token][msg.sender] = true;
+        claimedAmount[epoch][token] += amount;
 
         emit Claimed(msg.sender, token, amount, epoch);
     }

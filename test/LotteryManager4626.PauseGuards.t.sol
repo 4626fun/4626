@@ -490,6 +490,48 @@ contract LotteryManager4626PauseGuardsTest is Test {
         assertEq(gauge.payCount(), 1, "paused time must not age deferred VRF beyond grace");
     }
 
+    /// ODA-426-F6: admin flush must settle while still paused (no FIFO re-enqueue / reorder).
+    function test_applyDeferredVrf_settlesWhileStillPaused() public {
+        address buyer2 = makeAddr("buyer2pausedSettle");
+        shareToken.mint(buyer2, 100 ether);
+        ve4626.setLock(buyer2, shareOFT, 100 ether, 100 ether);
+
+        uint256 rawVrfId1 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId1 = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
+
+        uint256 rawVrfId2 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId2 = lotteryManager.processSwapLottery(buyer2, shareOFT, 1 ether, 100 ether);
+
+        vm.prank(owner);
+        lotteryManager.pause();
+
+        uint256[] memory words1 = new uint256[](1);
+        words1[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId1, words1);
+
+        uint256[] memory words2 = new uint256[](1);
+        words2[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId2, words2);
+
+        assertEq(lotteryManager.deferredVrfQueueLength(), 2);
+
+        // Settle head while still paused — must not rotate to tail.
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId1);
+        assertEq(gauge.payCount(), 1, "head settles while paused");
+        assertEq(lotteryManager.deferredVrfQueueLength(), 1, "head removed, not re-enqueued");
+        assertEq(lotteryManager.deferredVrfQueueHead(), requestId2, "FIFO order preserved");
+
+        vm.prank(owner);
+        lotteryManager.processDeferredVrfBatch(8);
+        assertEq(gauge.payCount(), 2, "batch flush also settles while paused");
+        assertEq(lotteryManager.deferredVrfQueueLength(), 0);
+    }
+
     function test_VrfCallback_DiscardsTrulyStaleResultWhenActive() public {
         uint256 rawVrfId = localVrfConsumer.nextRequestId();
         vm.prank(authorizedSwap);

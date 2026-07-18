@@ -44,6 +44,8 @@ interface Ive4626 {
     error LockExpired();
     error LockNotExpired();
     error BoostManagerNotConfigured();
+    error NoPendingBoostManagerUpdate();
+    error BoostManagerTimelockNotExpired(uint256 executeAfter);
 
     // Events
     event Locked(address indexed user, address indexed token, uint256 amount, uint256 lockEnd, uint256 votingPower);
@@ -91,6 +93,10 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
     /// @notice Boost manager address
     address public boostManager;
+    /// @notice ODA-433-F4: queued boostManager rewiring (48h, first set instant).
+    address public pendingBoostManager;
+    uint256 public boostManagerTimelockExpiry;
+    uint256 public constant BOOST_MANAGER_TIMELOCK_DURATION = 48 hours;
 
     /// @notice User locks
     mapping(address => Lock) private _locks;
@@ -572,8 +578,31 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         vault = _vault;
     }
 
+    event BoostManagerUpdateQueued(address indexed boostManager, uint256 executeAfter);
+    event BoostManagerUpdated(address indexed boostManager);
+
     function setBoostManager(address _boostManager) external onlyOwner {
-        boostManager = _boostManager;
+        // ODA-433-F4: first set instant; rewires are 48h-timelocked like boost params.
+        if (boostManager == address(0)) {
+            boostManager = _boostManager;
+            emit BoostManagerUpdated(_boostManager);
+            return;
+        }
+        pendingBoostManager = _boostManager;
+        boostManagerTimelockExpiry = block.timestamp + BOOST_MANAGER_TIMELOCK_DURATION;
+        emit BoostManagerUpdateQueued(_boostManager, boostManagerTimelockExpiry);
+    }
+
+    function executeBoostManagerUpdate() external onlyOwner {
+        if (boostManagerTimelockExpiry == 0) revert NoPendingBoostManagerUpdate();
+        if (block.timestamp < boostManagerTimelockExpiry) {
+            revert BoostManagerTimelockNotExpired(boostManagerTimelockExpiry);
+        }
+        address next = pendingBoostManager;
+        pendingBoostManager = address(0);
+        boostManagerTimelockExpiry = 0;
+        boostManager = next;
+        emit BoostManagerUpdated(next);
     }
 
     // ================================

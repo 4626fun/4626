@@ -783,6 +783,26 @@ contract ve4626GaugeVotingTest is Test {
         voting.vote(vaults, weights);
     }
 
+    /// ODA-433-F4: rewiring utility after bootstrap is 48h-timelocked.
+    function testSetUtility_RewireIsTimelocked() public {
+        address other = address(new ve4626Utility(address(ve), owner));
+        voting.setUtility(other);
+        assertEq(address(voting.pendingUtility()), other);
+        assertEq(address(voting.utility()), address(utility));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ve4626GaugeVoting.UtilityTimelockNotExpired.selector, voting.utilityTimelockExpiry()
+            )
+        );
+        voting.executeUtilityUpdate();
+
+        vm.warp(block.timestamp + voting.UTILITY_TIMELOCK_DURATION());
+        voting.executeUtilityUpdate();
+        assertEq(address(voting.utility()), other);
+        assertEq(voting.utilityTimelockExpiry(), 0);
+    }
+
     /// ODA-433-F1: cannot forfeit ve33 while an epoch vote still references that power.
     function testForfeitVe33_RevertsWhileVotedThisEpoch() public {
         uint256 genesis = voting.genesisEpochStart();

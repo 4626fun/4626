@@ -131,6 +131,11 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective ve33.
     Ive4626Utility public utility;
 
+    /// @notice ODA-433-F4: queued utility rewiring (48h, first set is instant).
+    Ive4626Utility public pendingUtility;
+    uint256 public utilityTimelockExpiry;
+    uint256 public constant UTILITY_TIMELOCK_DURATION = 48 hours;
+
     /// @notice Optional registry for auto-whitelisting vaults
     IRegistry4626VaultWhitelist public registry;
 
@@ -199,11 +204,14 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     // Power-split / epoch freeze
     error VoteFreezeWindow();
     error UtilityNotConfigured();
+    error NoPendingUtilityUpdate();
+    error UtilityTimelockNotExpired(uint256 executeAfter);
     /// @notice ODA-433-F3 — emergency reset must leave time for voters to re-cast.
     error EmergencyResetInFreezeWindow();
 
     event Ve33TokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
+    event UtilityUpdateQueued(address indexed utility, uint256 executeAfter);
 
     // ================================
     // CONSTRUCTOR
@@ -237,12 +245,32 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     }
 
     /// @notice Wire ve4626Utility so votes use decay-safe power (sync + effective ve33).
-    /// @dev After this, also call `ve4626Utility.setGaugeVoting(this)` (owner) so forfeits
+    /// @dev First set is instant (bootstrap). Rewires are 48h-timelocked (ODA-433-F4).
+    ///      After applying, also call `ve4626Utility.setGaugeVoting(this)` (owner) so forfeits
     ///      are escrowed while an epoch vote is live (ODA-433-F1).
     function setUtility(address utility_) external onlyOwner {
+        if (address(utility) == address(0)) {
+            _applyUtility(utility_);
+            return;
+        }
+        pendingUtility = Ive4626Utility(utility_);
+        utilityTimelockExpiry = block.timestamp + UTILITY_TIMELOCK_DURATION;
+        emit UtilityUpdateQueued(utility_, utilityTimelockExpiry);
+    }
+
+    /// @notice Execute a queued `setUtility` after the 48h timelock.
+    function executeUtilityUpdate() external onlyOwner {
+        if (utilityTimelockExpiry == 0) revert NoPendingUtilityUpdate();
+        if (block.timestamp < utilityTimelockExpiry) revert UtilityTimelockNotExpired(utilityTimelockExpiry);
+        address next = address(pendingUtility);
+        pendingUtility = Ive4626Utility(address(0));
+        utilityTimelockExpiry = 0;
+        _applyUtility(next);
+    }
+
+    function _applyUtility(address utility_) internal {
         utility = Ive4626Utility(utility_);
         emit UtilityUpdated(utility_);
-        // Keep ve33Token pointer aligned when utility is set (for explorers / integrators).
         if (utility_ != address(0)) {
             ve33Token = Ive4626ve33(Ive4626Utility(utility_).ve33());
             emit Ve33TokenUpdated(address(ve33Token));

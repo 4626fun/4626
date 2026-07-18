@@ -10,7 +10,7 @@
 | **3** | Medium (~70) | Instant `setAuthorizedSwapContract` / `rewardPercentage` / `setVRFIntegrator`; AMOE roots not timelocked | **Open** — ops/timelock hardening (overlaps AR-GOV) |
 | **4** | Low-Med (~70) | `processSwapLottery` keeps `msg.value` on early-return paths | **Fixed** — `_refundCallerFeeOrRevert` on early returns |
 | **5** | Low | `VRFConsumer4626` / manager `_payNative` exact fee only | **Fixed** (LotteryManager) — accept `msg.value >= fee`, return `msg.value` for LZ refund |
-| **6** | Low-Med (58) | Deferred VRF settle while paused re-enqueues | **Open** |
+| **6** | Low-Med (58) | Deferred VRF settle while paused re-enqueues | **Fixed** — `_settlingDeferredVrf` forces settle without FIFO re-enqueue |
 | **7–23** | Low / Info | AMOE chainid binding, Ownable2Step, ECDSA stub, CEI, jackpot window, grace vs timeout, etc. | Backlog |
 
 **Confirmed safe in report (do not re-open):** win-chance not steerable post-request; oracle fail-closed; AMOE nullifier rollback; local `retryLocalCallback` / cleanup not griefable for outcomes.

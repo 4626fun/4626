@@ -8,9 +8,9 @@
 | **F1** | Medium | Capacity double-use: vote then forfeit ve33 → claim veLottery | **Fixed** — `utility.setGaugeVoting` + block `forfeitVe33`/`forfeitAll` while `hasVotedThisEpoch` |
 | **F2** | Medium | Seasoning bypass via `increaseLock`/`extendLock` | **Fixed** — reset `Lock.start` on both |
 | **F3** | High | `emergencyResetAllVotes` in freeze strands bribes | **Fixed** — revert `EmergencyResetInFreezeWindow` |
-| **F4** | Medium | Instant `setUtility` / `setBoostManager` vs timelocked boost params | Open / ops |
+| **F4** | Medium | Instant `setUtility` / `setBoostManager` vs timelocked boost params | **Fixed** — 48h queue/execute on rewire (first set instant) |
 | **F5** | Medium | No Ownable2Step across suite | Open / backlog |
-| **F6** | Medium | Bribe claim vs frozen `totalBribes` balance | Open — follow-up |
+| **F6** | Medium | Bribe claim vs frozen `totalBribes` balance | **Fixed** — live-balance check/cap; transfer before `claimed` |
 | **F7–F14** | Low | Various hygiene / DOS / checkpoint | Backlog |
 
 ## Note

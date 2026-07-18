@@ -685,7 +685,17 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _;
     }
 
+    /// @notice Emergency drain / strategy pull — owner, management, emergencyAdmin only.
+    /// @dev ODA-427-F9: impairmentGuardian is intentionally excluded (trip/clear only).
     modifier onlyEmergencyAuthorized() {
+        if (msg.sender != emergencyAdmin && msg.sender != management && msg.sender != owner()) {
+            revert Unauthorized();
+        }
+        _;
+    }
+
+    /// @notice Shutdown may also be triggered by the impairment guardian (incident response).
+    modifier onlyShutdownAuthorized() {
         if (
             msg.sender != emergencyAdmin && msg.sender != management && msg.sender != owner()
                 && msg.sender != impairmentGuardian
@@ -1703,7 +1713,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
         for (uint256 i = 0; i < length && remaining > 0; i++) {
             address strategy = queue[i];
-            if (activeStrategies[strategy]) {
+            // ODA-427-F8: skip impaired/side-pocketed strategies (parity with totalAssets /
+            // OVaultStrategiesModule).
+            if (activeStrategies[strategy] && !strategyImpaired[strategy]) {
                 uint256 currentDebt = strategyDebt[strategy];
                 uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
 
@@ -1921,7 +1933,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // EMERGENCY CONTROLS
     // =================================
 
-    function shutdownVault() external onlyEmergencyAuthorized {
+    function shutdownVault() external onlyShutdownAuthorized {
         _delegate(_adminModule);
     }
 
