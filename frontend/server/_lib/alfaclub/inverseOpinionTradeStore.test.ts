@@ -165,6 +165,30 @@ describe('inverseOpinionTradeStore', () => {
     expect(sql).not.toHaveBeenCalled()
   })
 
+  it('casts nullable transition params so Postgres can type null terminal outcomes', async () => {
+    const sql = vi.fn(async () => ({
+      rows: [{ ...DECISION_ROW, execution_phase: 'submitted', terminal_outcome: null }],
+      rowCount: 1,
+    }))
+    getDbMock.mockResolvedValue({ sql })
+    const { transitionOpinionDecision } = await import('./inverseOpinionTradeStore.js')
+
+    await transitionOpinionDecision({
+      decisionId: DECISION_ROW.decision_id,
+      executionPhase: 'submitted',
+      terminalOutcome: null,
+      executionClaimToken: '11111111-1111-4111-8111-111111111111',
+    })
+
+    expect(sql).toHaveBeenCalledTimes(1)
+    const strings = sql.mock.calls[0]?.[0] as TemplateStringsArray
+    const joined = Array.from(strings).join('?')
+    expect(joined).toContain('terminal_outcome = ?::text')
+    expect(joined).toContain('reason_code = ?::text')
+    expect(joined).toContain('::text IS NULL')
+    expect(joined).toContain('execution_claim_token = ?::uuid')
+  })
+
   it('opens one lifecycle and appends later add/trim influence events', async () => {
     const lifecycleRow = {
       lifecycle_id: '44444444-4444-4444-8444-444444444444',

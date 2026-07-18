@@ -829,10 +829,10 @@ export async function transitionOpinionDecision(params: {
   try {
     const result = await db.sql<DecisionRow>`
       UPDATE alfaclub.inverse_opinion_trade_decisions
-      SET execution_phase = ${params.executionPhase},
-          terminal_outcome = ${terminalOutcome},
-          reason_code = ${reasonCode},
-          executor_wallet = COALESCE(${executorWallet}, executor_wallet),
+      SET execution_phase = ${params.executionPhase}::text,
+          terminal_outcome = ${terminalOutcome}::text,
+          reason_code = ${reasonCode}::text,
+          executor_wallet = COALESCE(${executorWallet}::text, executor_wallet),
           requested_parameters = COALESCE(
             ${params.requestedParameters == null ? null : JSON.stringify(params.requestedParameters)}::jsonb,
             requested_parameters
@@ -853,49 +853,49 @@ export async function transitionOpinionDecision(params: {
             ELSE execution_claim_expires_at
           END,
           submitted_at = CASE
-            WHEN ${params.executionPhase} = 'submitted' THEN COALESCE(submitted_at, NOW())
+            WHEN ${params.executionPhase}::text = 'submitted' THEN COALESCE(submitted_at, NOW())
             ELSE submitted_at
           END,
           recovery_deadline_at = CASE
-            WHEN ${params.executionPhase} IN ('submitted', 'unknown')
+            WHEN ${params.executionPhase}::text IN ('submitted', 'unknown')
               THEN COALESCE(recovery_deadline_at, NOW() + INTERVAL '15 minutes')
             ELSE recovery_deadline_at
           END,
           resolved_at = CASE
-            WHEN ${params.executionPhase} = 'resolved' THEN COALESCE(resolved_at, NOW())
+            WHEN ${params.executionPhase}::text = 'resolved' THEN COALESCE(resolved_at, NOW())
             ELSE NULL
           END,
           updated_at = NOW()
       WHERE decision_id = ${decisionId}::uuid
         AND (
           (execution_phase = 'resolved'
-            AND ${params.executionPhase} = 'resolved'
-            AND terminal_outcome IS NOT DISTINCT FROM ${terminalOutcome})
-          OR (execution_phase = 'observed' AND ${params.executionPhase} = 'claimed' AND ${terminalOutcome} IS NULL)
+            AND ${params.executionPhase}::text = 'resolved'
+            AND terminal_outcome IS NOT DISTINCT FROM ${terminalOutcome}::text)
+          OR (execution_phase = 'observed' AND ${params.executionPhase}::text = 'claimed' AND ${terminalOutcome}::text IS NULL)
           OR (
             execution_phase = 'claimed'
             AND execution_claim_token = ${executionClaimToken}::uuid
             AND execution_claim_expires_at > NOW()
-            AND ${params.executionPhase} = 'submitted'
-            AND ${terminalOutcome} IS NULL
+            AND ${params.executionPhase}::text = 'submitted'
+            AND ${terminalOutcome}::text IS NULL
           )
           OR (
             execution_phase = 'claimed'
             AND execution_claim_token = ${executionClaimToken}::uuid
             AND execution_claim_expires_at > NOW()
-            AND ${params.executionPhase} = 'resolved'
-            AND ${terminalOutcome} IN ('rejected', 'blocked')
+            AND ${params.executionPhase}::text = 'resolved'
+            AND ${terminalOutcome}::text IN ('rejected', 'blocked')
           )
           OR (
             execution_phase = 'submitted'
-            AND ${params.executionPhase} = 'resolved'
-            AND ${terminalOutcome} IN ('executed', 'failed')
+            AND ${params.executionPhase}::text = 'resolved'
+            AND ${terminalOutcome}::text IN ('executed', 'failed')
           )
-          OR (execution_phase = 'submitted' AND ${params.executionPhase} = 'unknown' AND ${terminalOutcome} IS NULL)
+          OR (execution_phase = 'submitted' AND ${params.executionPhase}::text = 'unknown' AND ${terminalOutcome}::text IS NULL)
           OR (
             execution_phase = 'unknown'
-            AND ${params.executionPhase} = 'resolved'
-            AND ${terminalOutcome} IN ('executed', 'failed', 'incomplete')
+            AND ${params.executionPhase}::text = 'resolved'
+            AND ${terminalOutcome}::text IN ('executed', 'failed', 'incomplete')
           )
         )
       RETURNING
