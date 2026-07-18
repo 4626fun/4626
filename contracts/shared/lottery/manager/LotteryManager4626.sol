@@ -242,7 +242,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     enum CallbackDropReason {
         BUYER_RATE_LIMITED,
         ORIGIN_RATE_LIMITED,
-        SPONSORSHIP_UNAVAILABLE
+        SPONSORSHIP_UNAVAILABLE,
+        /// @notice Messaging-layer failure (`_quote` / `_lzSend`) — ODA-426-F1.
+        SEND_FAILED
     }
 
     struct SponsorshipPolicy {
@@ -950,13 +952,38 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Receive a remote lottery entry forwarded by a hub ShareOFT peer.
      * @dev Remote chains deliver to the hub ShareOFT; the OFT forwards here with the
      *      original LayerZero origin preserved for `authorizedRemoteOFTs` checks.
+     *      ODA-426-F2: independently re-verify `originSender` against
+     *      `authorizedRemoteOFTs` (do not trust forwarder-supplied origin alone),
+     *      require MSG_TYPE_LOTTERY_ENTRY, and require a V3 non-zero `sourceEventId`
+     *      replay key for every forwarder lane (parity with Solana).
      */
     function receiveRemoteLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata payload)
         external
         nonReentrant
     {
         if (!authorizedHubShareOftForwarders[msg.sender]) revert Unauthorized();
+        if (!authorizedRemoteOFTs[srcEid][originSender]) revert Unauthorized();
         _requireNotPaused();
+
+        // Forwarder path: V3 only (224 bytes) with non-zero message-level replay id.
+        if (payload.length != 224) {
+            emit InvalidPayloadReceived(srcEid, payload.length);
+            return;
+        }
+        (
+            uint16 msgType,
+            ,
+            ,
+            ,
+            ,
+            ,
+            bytes32 sourceEventId
+        ) = abi.decode(payload, (uint16, address, address, uint256, uint32, uint256, bytes32));
+        if (msgType != MSG_TYPE_LOTTERY_ENTRY || sourceEventId == bytes32(0)) {
+            emit InvalidPayloadReceived(srcEid, payload.length);
+            return;
+        }
+
         _handleLotteryEntry(srcEid, originSender, payload);
     }
 
@@ -1159,12 +1186,29 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 localPayout = _payoutLocalJackpot(token, user, uint16(lotteryConfig.rewardPercentage));
 
         // If the trade originated on a remote chain, send a winner callback
-        // so the user gets notified on the chain they traded on
+        // so the user gets notified on the chain they traded on.
+        // ODA-426-F1: never let a messaging-layer revert unwind the hub payout —
+        // `_quote`/`_lzSend` can fail (unset peer, endpoint issues). Isolate via
+        // external self-call try/catch and emit WinnerCallbackDropped instead.
         if (sourceChainEid != 0) {
-            _sendWinnerCallback(sourceChainEid, user, token, localPayout);
+            try this.sendWinnerCallbackExternal(sourceChainEid, user, token, localPayout) {}
+            catch {
+                emit WinnerCallbackDropped(
+                    sourceChainEid, user, token, localPayout, uint8(CallbackDropReason.SEND_FAILED)
+                );
+            }
         }
 
         return localPayout;
+    }
+
+    /// @notice External entry for try/catch isolation of winner callbacks (ODA-426-F1).
+    /// @dev Only callable by this contract (`_processWin` self-call).
+    function sendWinnerCallbackExternal(uint32 dstEid, address winner, address token, uint256 totalSharesPaid)
+        external
+    {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _sendWinnerCallback(dstEid, winner, token, totalSharesPaid);
     }
 
     // ================================

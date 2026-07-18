@@ -240,4 +240,44 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         lotteryManager.exposedLzReceive(_origin(solanaPeer), payload);
         assertEq(integrator.requestCount(), 0, "digest must remain consumed after VRF skip");
     }
+
+    // --- ODA-426-F2: forwarder lane peer re-check + V3 replay ---
+
+    function test_forwarderRejectsUnauthorizedOriginSender() public {
+        bytes memory payload = _v3Payload(keccak256("event-1"));
+        vm.prank(hubForwarder);
+        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, bytes32(uint256(0x99)), payload);
+    }
+
+    function test_forwarderRejectsZeroV3ReplayKey() public {
+        // Build payload before prank — `_v3Payload` staticcalls the manager and would consume it.
+        bytes memory payload = _v3Payload(bytes32(0));
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
+        assertEq(integrator.requestCount(), 0, "forwarder zero sourceEventId must fail closed");
+    }
+
+    function test_forwarderRejectsV2PayloadMissingReplayKey() public {
+        bytes memory v2Payload = abi.encode(
+            uint16(lotteryManager.MSG_TYPE_LOTTERY_ENTRY()),
+            buyer,
+            address(shareOFT),
+            uint256(1 ether),
+            uint32(0),
+            uint256(0)
+        );
+        assertEq(v2Payload.length, 192);
+
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, v2Payload);
+        assertEq(integrator.requestCount(), 0, "forwarder V2 payload must be rejected");
+    }
+
+    function test_forwarderAuthorizedV3EntryCreatesRequest() public {
+        bytes memory payload = _v3Payload(keccak256("forwarder-ok"));
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
+        assertEq(integrator.requestCount(), 1);
+    }
 }

@@ -112,6 +112,17 @@ contract LotteryManager4626Harness is LotteryManager4626 {
         _sendWinnerCallback(dstEid, winner, creatorCoin, totalSharesPaid);
     }
 
+    /// @dev Exposes hub win settlement for ODA-426-F1 isolation tests.
+    function exposedProcessWin(
+        address token,
+        address user,
+        uint256 swapAmountUSD,
+        uint256 requestId,
+        uint32 sourceChainEid
+    ) external returns (uint256) {
+        return _processWin(token, user, swapAmountUSD, requestId, sourceChainEid);
+    }
+
     function exposedLzReceive(Origin calldata origin, bytes calldata payload) external {
         _lzReceive(origin, bytes32(0), payload, address(0), payload[:0]);
     }
@@ -402,6 +413,38 @@ contract LotteryManager4626FeeSponsorshipTest is Test {
         vm.prank(unauthorizedSwap);
         vm.expectRevert(LotteryManager4626.Unauthorized.selector);
         lotteryManager.processSwapLottery(buyer, shareOFT, SWAP_AMOUNT, 0);
+    }
+
+    /// @notice ODA-426-F1: messaging failure must not unwind hub win accounting.
+    function test_ProcessWin_CallbackSendFailureDoesNotUnwindPayout() public {
+        // No quote/send mocks → `_quote` reverts inside the external self-call.
+        // Payout path returns 0 (no vault/gauge in mock registry) but must still
+        // complete and emit WinnerCallbackDropped(SEND_FAILED).
+        uint256 winnersBefore = lotteryManager.totalWinners();
+
+        vm.recordLogs();
+        uint256 paid = lotteryManager.exposedProcessWin(creatorCoin, buyer, 1_000_000, 42, REMOTE_ENTRY_EID);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        assertEq(paid, 0, "mock registry has no jackpot reserve");
+        assertEq(lotteryManager.totalWinners(), winnersBefore + 1, "win must commit despite callback failure");
+
+        bytes32 droppedSig = keccak256("WinnerCallbackDropped(uint32,address,address,uint256,uint8)");
+        bool sawSendFailed;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] != droppedSig) continue;
+            (uint256 totalSharesPaid, uint8 reason) = abi.decode(logs[i].data, (uint256, uint8));
+            if (reason == uint8(LotteryManager4626.CallbackDropReason.SEND_FAILED)) {
+                sawSendFailed = true;
+                assertEq(totalSharesPaid, paid);
+            }
+        }
+        assertTrue(sawSendFailed, "SEND_FAILED drop must be emitted");
+    }
+
+    function test_SendWinnerCallbackExternal_OnlySelf() public {
+        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
+        lotteryManager.sendWinnerCallbackExternal(REMOTE_ENTRY_EID, buyer, creatorCoin, 1);
     }
 
     function _processSwap(uint256 msgValue) internal returns (uint256) {

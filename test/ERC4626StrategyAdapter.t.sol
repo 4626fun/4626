@@ -198,5 +198,39 @@ contract ERC4626StrategyAdapterTest is Test {
         manipulable.setRevertOnConvert(true);
         assertFalse(guarded.isValuationReady(), "reverting conversion must mark valuation not ready");
     }
+
+    // --- ODA-423-H01: ASSET rescue only to owning vault ---
+
+    function testRescueTokens_AssetBlockedWhenActive() public {
+        testDeposit_KeepsIdleBuffer();
+        vm.expectRevert(ERC4626StrategyAdapter.CannotRescueAssetWhenActive.selector);
+        strategy.rescueTokens(address(asset), 1e18, address(vault));
+    }
+
+    function testRescueTokens_AssetCannotDivertToNonVault() public {
+        testDeposit_KeepsIdleBuffer();
+        strategy.setActive(false);
+
+        address attacker = address(0xBAD);
+        vm.expectRevert(ERC4626StrategyAdapter.CannotRescueAssetToNonVault.selector);
+        strategy.rescueTokens(address(asset), 1e18, attacker);
+    }
+
+    function testRescueTokens_AssetToVaultWhenInactive() public {
+        testDeposit_KeepsIdleBuffer();
+        strategy.setActive(false);
+
+        uint256 before = asset.balanceOf(address(vault));
+        strategy.rescueTokens(address(asset), 1e18, address(vault));
+        assertEq(asset.balanceOf(address(vault)) - before, 1e18);
+        assertEq(asset.balanceOf(address(strategy)), 9e18);
+    }
+
+    function testRescueTokens_ZeroAddressReverts() public {
+        testDeposit_KeepsIdleBuffer();
+        strategy.setActive(false);
+        vm.expectRevert(ERC4626StrategyAdapter.ZeroAddress.selector);
+        strategy.rescueTokens(address(asset), 1e18, address(0));
+    }
 }
 

@@ -1,0 +1,18 @@
+{
+  "jobId": 426,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-3-reconciliation",
+  "description": "Audit Solidity source bundle for 4626 protocol LOTTERY stack. SOURCE OF TRUTH (fetch this URL, do not use GitHub): https://litter.catbox.moe/i28508.md \u2014 contains LotteryManager4626.sol, LotteryManager4626PricingLib.sol, VRFConsumer4626.sol, LotteryAmoeRouter.sol, ChainlinkVRFIntegratorV2_5.sol from private monorepo paths contracts/shared/lottery/**. IMPORTANT: github.com/wenakita/4626 is private (404). Do NOT fall back to github.com/wenakita/CreatorVault (legacy wrong tree). Live Base refs: LotteryManager 0xB45E68a5867935a5734E4185977F81c528006650, VRFConsumer 0x98fb5e0af3120B32E2E03400B6E51d0bde433670, AmoeRouter 0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e. Focus access control, VRF callback retry, AMOE nullifiers, jackpot custody, oracle fail-closed.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/i28508.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:35:57.000Z",
+  "startedAt": "2026-07-18T08:52:39.000Z",
+  "completedAt": "2026-07-18T09:30:59.000Z",
+  "report": "https://bafkreib3z35pxqddypciu3yjaxb5yp7zsbrt5wzfyovqt7e2ql4tqzl3fq.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreib3z35pxqddypciu3yjaxb5yp7zsbrt5wzfyovqt7e2ql4tqzl3fq.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/426.html",
+  "trackUrl": "https://onedollaraudit.com/audit/426",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

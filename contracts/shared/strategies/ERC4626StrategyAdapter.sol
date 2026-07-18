@@ -34,6 +34,9 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     error InnerDepositFailed();
     error CannotRescueAssetWhenActive();
     error CannotRescuePositionShares();
+    /// @notice ODA-423-H01 — idle ASSET may only return to the owning vault.
+    error CannotRescueAssetToNonVault();
+    error ZeroAddress();
 
     // ================================
     // STATE
@@ -385,10 +388,15 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     }
 
     function rescueTokens(address token, uint256 amount, address to) external onlyOwner {
-        // Don't allow rescuing the underlying while active.
-        if (token == address(ASSET) && _isActive) revert CannotRescueAssetWhenActive();
+        if (to == address(0)) revert ZeroAddress();
         // Never allow rescuing ERC-4626 position shares.
         if (token == address(ERC4626_VAULT)) revert CannotRescuePositionShares();
+        // ODA-423-H01: ASSET outflows must go to the owning vault only — mirrors
+        // CharmStrategy4626.ownerEmergencyWithdraw. Prevents owner from diverting
+        // idle principal via setActive(false) + rescue to an arbitrary address.
+        if (token == address(ASSET) && to != vault) revert CannotRescueAssetToNonVault();
+        // Defense-in-depth: still block ASSET rescue while the strategy is live.
+        if (token == address(ASSET) && _isActive) revert CannotRescueAssetWhenActive();
         IERC20(token).safeTransfer(to, amount);
     }
 
