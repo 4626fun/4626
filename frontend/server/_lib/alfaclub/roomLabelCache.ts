@@ -1,5 +1,6 @@
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubSchema } from '../db/schemaBootstrap.js'
+import { logger } from '../infra/logger.js'
 import {
   ALFACLUB_API_COMMON_BROWSER_HEADERS,
   readAlfaClubApiAuthFlags,
@@ -164,18 +165,18 @@ async function listRoomLabelCandidates(params: {
           FROM public.alfaclub_creators c
           LEFT JOIN public.alfaclub_rooms_snapshot s
             ON LOWER(s.creator_address) = LOWER(c.creator_address)
-           AND s.room_id::text = c.token_id
+           AND s.room_id::text = c.token_id::text
           LEFT JOIN LATERAL (
             SELECT
               e2.creator_twitter_username,
               e2.room_name
             FROM public.alfaclub_explore_latest e2
-            WHERE e2.room_id::text = c.token_id
+            WHERE e2.room_id::text = c.token_id::text
             ORDER BY e2.ingested_at DESC NULLS LAST
             LIMIT 1
           ) e ON TRUE
           WHERE c.token_id IS NOT NULL
-            AND c.token_id = ANY(${roomIds})
+            AND c.token_id::text = ANY(${roomIds})
           ORDER BY c.token_id;
         `
       : await db.sql`
@@ -195,13 +196,13 @@ async function listRoomLabelCandidates(params: {
           FROM public.alfaclub_creators c
           LEFT JOIN public.alfaclub_rooms_snapshot s
             ON LOWER(s.creator_address) = LOWER(c.creator_address)
-           AND s.room_id::text = c.token_id
+           AND s.room_id::text = c.token_id::text
           LEFT JOIN LATERAL (
             SELECT
               e2.creator_twitter_username,
               e2.room_name
             FROM public.alfaclub_explore_latest e2
-            WHERE e2.room_id::text = c.token_id
+            WHERE e2.room_id::text = c.token_id::text
             ORDER BY e2.ingested_at DESC NULLS LAST
             LIMIT 1
           ) e ON TRUE
@@ -434,10 +435,10 @@ export async function readRoomLabelStatus(roomIds: string[]): Promise<RoomLabelS
       ),
       creator_map AS (
         SELECT
-          c.token_id AS room_id,
+          c.token_id::text AS room_id,
           LOWER(c.creator_address) AS creator_address
         FROM public.alfaclub_creators c
-        WHERE c.token_id = ANY(${normalized})
+        WHERE c.token_id::text = ANY(${normalized})
       ),
       snapshot_map AS (
         SELECT
@@ -490,7 +491,11 @@ export async function readRoomLabelStatus(roomIds: string[]): Promise<RoomLabelS
       expiresAt: row.expires_at ? String(row.expires_at) : null,
       isFresh: Boolean(row.is_fresh),
     }))
-  } catch {
+  } catch (error) {
+    logger.warn('[alfaclub] room_label_status_read_failed', {
+      roomIds: normalized.slice(0, 8),
+      error: error instanceof Error ? error.message : String(error),
+    })
     return []
   }
 }
