@@ -699,6 +699,26 @@
       "dest": "/api/telegram/hermit-webhook"
     },
     {
+      "src": "/readyz",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "https://4626-production.up.railway.app/readyz"
+    },
+    {
+      "src": "/healthz",
+      "has": [
+        {
+          "type": "host",
+          "value": "hermit.4626.fun"
+        }
+      ],
+      "dest": "https://4626-production.up.railway.app/healthz"
+    },
+    {
       "src": "/",
       "has": [
         {

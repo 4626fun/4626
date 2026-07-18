@@ -36,6 +36,32 @@ describe('alfaclub vigilante — vercel wiring', () => {
     ))).toEqual([entry])
   })
 
+  it('frontend/vercel.json proxies hermit.4626.fun /readyz and /healthz to Railway Hermit', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{
+        src?: string
+        dest?: string
+        has?: Array<{ type?: string; value?: string }>
+      }>
+    }
+    const hermitHostRoutes = (parsed.routes ?? []).filter((route) =>
+      (route.has ?? []).some((h) => h.type === 'host' && h.value === 'hermit.4626.fun'),
+    )
+    const readyz = hermitHostRoutes.find((route) => route.src === '/readyz')
+    const healthz = hermitHostRoutes.find((route) => route.src === '/healthz')
+    expect(readyz?.dest).toBe('https://4626-production.up.railway.app/readyz')
+    expect(healthz?.dest).toBe('https://4626-production.up.railway.app/healthz')
+
+    const catchAllIdx = hermitHostRoutes.findIndex(
+      (route) => route.src === '/' && route.dest === '/api/telegram/hermit-webhook',
+    )
+    const readyzIdx = hermitHostRoutes.findIndex((route) => route.src === '/readyz')
+    expect(catchAllIdx).toBeGreaterThanOrEqual(0)
+    expect(readyzIdx).toBeGreaterThanOrEqual(0)
+    expect(readyzIdx).toBeLessThan(catchAllIdx)
+  })
+
   it('frontend/vercel.json does not register the retired minute bridge cron', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
@@ -178,7 +204,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     ])
   })
 
-  it('redirects AlfaClub safety and pools aliases into room hub tabs', async () => {
+  it('redirects AlfaClub safety and pools aliases on alfaclub.4626.fun', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
       routes?: Array<{
@@ -199,7 +225,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
       )
 
     expect(hostRoute('/safety')).toMatchObject({ status: 308, dest: '/rooms?tab=safety' })
-    expect(hostRoute('/pools')).toMatchObject({ status: 308, dest: '/rooms?tab=liquidity' })
+    expect(hostRoute('/pools')).toMatchObject({ status: 308, dest: '/explore/pools' })
   })
 
   it('v1 route map exposes the stable daily dispatcher and manual trade-journal surface', async () => {
