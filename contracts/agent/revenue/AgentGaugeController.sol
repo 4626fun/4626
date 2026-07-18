@@ -282,6 +282,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error PendingWethFeesProtected();
     error NoPendingLotteryManager();
     error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
+    error FallbackMinOutputDisabled();
+    error OwnershipRenounceDisabled();
 
     // ================================
     // CONSTRUCTOR
@@ -485,9 +487,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         uint256 minAmountOut = _calculateMinOutput(wethAmount);
         if (minAmountOut == 0) revert MinOutputUnavailable();
 
-        // Derive an on-chain price bound from the oracle-derived minOut.
-        // This forces the swap to revert if the pool price is pushed beyond the acceptable range.
-        uint160 sqrtPriceLimitX96 = _sqrtPriceLimitX96(wethAmount, minAmountOut);
+        // ODA-424-M3: rely on amountOutMinimum only — average-derived
+        // sqrtPriceLimitX96 + exact-spend check enabled griefable partial fills.
+        uint160 sqrtPriceLimitX96 = 0;
 
         // Step 2: Swap WETH → AgentToken
         IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);
@@ -971,6 +973,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param _oracle AgentOracle address
      */
     function setOracle(address _oracle) external onlyOwner {
+        // ODA-424-L10: disallow zero; disable slippage via `setOracleConfig(_, false)`.
+        if (_oracle == address(0)) revert ZeroAddress();
         oracle = IOracle4626(_oracle);
         emit OracleSet(_oracle);
     }
@@ -987,10 +991,15 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         emit OracleConfigUpdated(_twapDuration, _useOracle);
     }
 
-    // FIX: G-12 — allow owner to set a fallback minimum output when oracle is unavailable
+    // ODA-424-M1: unit-mismatched fallback removed; only clearing to 0 is allowed.
     function setFallbackMinOutputBps(uint256 _bps) external onlyOwner {
-        require(_bps <= MAX_BPS, "Exceeds MAX_BPS");
-        fallbackMinOutputBps = _bps;
+        if (_bps != 0) revert FallbackMinOutputDisabled();
+        fallbackMinOutputBps = 0;
+    }
+
+    /// @notice Ownable renounce disabled — bricks config + emergency response (ODA-424-L8).
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     /**
@@ -1229,8 +1238,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
                 accountedOFTBalance -= amount;
             }
         }
-        if (token == WETH && pendingWETHFees > 0) {
-            revert PendingWethFeesProtected();
+        // ODA-424-L3: protect only earmarked pending WETH; surplus remains withdrawable.
+        if (token == WETH) {
+            uint256 bal = IERC20(WETH).balanceOf(address(this));
+            uint256 free = bal > pendingWETHFees ? bal - pendingWETHFees : 0;
+            if (amount > free) revert PendingWethFeesProtected();
         }
         IERC20(token).safeTransfer(to, amount);
     }

@@ -101,7 +101,7 @@ contract LaneInterfaceSemantics4626Test is Test {
         assertTrue(agentOft.isHub());
     }
 
-    function testAgentLotteryManagerUpdatesAreTimelockedAfterFirstSet() public {
+    function testLotteryManagerUpdatesAreTimelockedAfterFirstSet_BothLanes() public {
         MockShareOftToken share = new MockShareOftToken();
         AgentGaugeController agentGauge =
             new AgentGaugeController(address(share), address(0), address(this), address(this));
@@ -116,8 +116,11 @@ contract LaneInterfaceSemantics4626Test is Test {
         assertEq(address(agentGauge.lotteryManager()), firstManager);
         assertEq(address(creatorGauge.lotteryManager()), firstManager);
 
+        // ODA-424-M2: Creator matches Agent — reassignment queues, does not apply instantly.
         ITradeFeeCollector4626(address(creatorGauge)).setLotteryManager(secondManager);
-        assertEq(address(creatorGauge.lotteryManager()), secondManager);
+        assertEq(address(creatorGauge.lotteryManager()), firstManager);
+        assertEq(address(creatorGauge.pendingLotteryManager()), secondManager);
+        assertGt(creatorGauge.pendingLotteryManagerAt(), block.timestamp);
 
         ITradeFeeCollector4626(address(agentGauge)).setLotteryManager(secondManager);
         assertEq(address(agentGauge.lotteryManager()), firstManager);
@@ -126,7 +129,9 @@ contract LaneInterfaceSemantics4626Test is Test {
 
         vm.warp(agentGauge.pendingLotteryManagerAt());
         agentGauge.executeLotteryManagerUpdate();
+        creatorGauge.executeLotteryManagerUpdate();
         assertEq(address(agentGauge.lotteryManager()), secondManager);
+        assertEq(address(creatorGauge.lotteryManager()), secondManager);
     }
 
     function testCreatorRouterKeepsSpendCapSurfaceAgentDoesNot() public pure {

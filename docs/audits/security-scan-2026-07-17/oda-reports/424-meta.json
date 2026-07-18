@@ -1,0 +1,9 @@
+{
+  "jobId": 424,
+  "status": "complete",
+  "description": "Base CreatorGaugeController jackpot/fee-split security review for 4626. Source: contracts/creator/revenue/CreatorGaugeController.sol in github.com/wenakita/4626. Focus: payJackpot custody/auth, fee-split conservation, WETH swap slippage, reentrancy, owner privileges.",
+  "reportUrl": "https://bafkreihs7ydhh3nh4fiobq4wderysb7t4wv4kny3qk37whhel4zhsgvq5q.ipfs.community.bgipfs.com/",
+  "trackUrl": "https://onedollaraudit.com/audit/424",
+  "completedAt": "2026-07-18T09:23:15.000Z",
+  "stage": "audit-pass-2-pashov"
+}

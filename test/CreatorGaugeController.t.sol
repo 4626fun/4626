@@ -360,7 +360,7 @@ contract MockToken is IERC20 {
             assertEq(gauge.pendingWETHFees(), wethAmount);
         }
 
-        function test_processWETHFees_passesNonZeroSqrtPriceLimit() public {
+        function test_processWETHFees_usesZeroSqrtPriceLimit_amountOutMinimumOnly() public {
             uint256 wethAmount = 5 ether;
             uint256 creatorPerEth = 2e18;
             uint256 creatorOut = 10 ether;
@@ -375,7 +375,40 @@ contract MockToken is IERC20 {
 
             gauge.processWETHFees();
 
-            assertGt(router.lastSqrtPriceLimitX96(), 0);
+            // ODA-424-M3: average-derived sqrtPriceLimit removed; rely on minOut.
+            assertEq(router.lastSqrtPriceLimitX96(), 0);
+            assertGt(router.lastAmountOutMinimum(), 0);
+        }
+
+        function test_setFallbackMinOutputBps_nonzeroReverts() public {
+            vm.expectRevert(CreatorGaugeController.FallbackMinOutputDisabled.selector);
+            gauge.setFallbackMinOutputBps(9000);
+        }
+
+        function test_renounceOwnership_disabled() public {
+            vm.expectRevert(CreatorGaugeController.OwnershipRenounceDisabled.selector);
+            gauge.renounceOwnership();
+        }
+
+        function test_executeEmergencyWithdraw_wethAllowsSurplusOnly() public {
+            uint256 pending = 5 ether;
+            uint256 surplus = 1 ether;
+            _depositPendingWeth(pending);
+            weth.mint(address(gauge), surplus);
+
+            gauge.emergencyWithdraw(WETH_ADDR, surplus, address(this));
+            vm.warp(block.timestamp + gauge.EMERGENCY_WITHDRAW_DELAY());
+            gauge.executeEmergencyWithdraw();
+
+            assertEq(weth.balanceOf(address(this)), surplus);
+            assertEq(gauge.pendingWETHFees(), pending);
+            assertEq(weth.balanceOf(address(gauge)), pending);
+
+            // Cannot drain earmarked pending fees.
+            gauge.emergencyWithdraw(WETH_ADDR, 1, address(this));
+            vm.warp(block.timestamp + gauge.EMERGENCY_WITHDRAW_DELAY());
+            vm.expectRevert(CreatorGaugeController.PendingWethFeesProtected.selector);
+            gauge.executeEmergencyWithdraw();
         }
 
         function _depositPendingWeth(uint256 amount) internal {

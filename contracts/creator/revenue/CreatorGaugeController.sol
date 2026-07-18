@@ -77,6 +77,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
     uint256 public constant MAX_BPS = 10000;
     uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
+    /// @notice Delay before a lottery-manager reassignment can execute (ODA-424-M2).
+    uint256 public constant LOTTERY_MANAGER_UPDATE_TIMELOCK = 1 days;
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -113,6 +115,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
     /// @notice Lottery manager for jackpot
     ILotteryManager4626 public lotteryManager;
+    /// @notice Pending lottery-manager reassignment (timelocked after first set).
+    ILotteryManager4626 public pendingLotteryManager;
+    uint256 public pendingLotteryManagerAt;
 
     /// @notice Creator's treasury wallet
     address public creatorTreasury;
@@ -135,8 +140,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @notice Whether to use oracle for slippage (if false, uses 0 minimum)
     bool public useOracleSlippage = true;
 
-    // FIX: G-12 — fallback minimum output percentage when oracle is disabled/unavailable
-    // Expressed in bps (e.g., 9000 = 90% of input value assumed 1:1 as floor)
+    // DEPRECATED / unused (ODA-424-M1): raw WETH-unit fallback mixed output units.
+    // Kept for storage layout; setter rejects nonzero values. Fail closed instead.
     uint256 public fallbackMinOutputBps = 0;
 
     /// @notice ve4626GaugeVoting for ve(3,3) probability direction
@@ -248,6 +253,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     event VaultSet(address indexed vault);
     event WrapperSet(address indexed wrapper);
     event LotteryManagerSet(address indexed manager);
+    event LotteryManagerUpdateQueued(address indexed pendingManager, uint256 executeAfter);
     event CreatorTreasurySet(address indexed treasury);
     event ProtocolTreasurySet(address indexed treasury);
     event CreatorCoinSet(address indexed coin);
@@ -288,6 +294,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error PendingWethFeesProtected();
     error NoPendingEmergencyWithdraw();
     error EmergencyWithdrawTooEarly(uint256 executeAfter);
+    error NoPendingLotteryManager();
+    error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
+    error FallbackMinOutputDisabled();
+    error OwnershipRenounceDisabled();
     error InvalidAmount();
 
     // ================================
@@ -504,9 +514,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         uint256 minAmountOut = _calculateMinOutput(wethAmount);
         if (minAmountOut == 0) revert MinOutputUnavailable();
 
-        // Derive an on-chain price bound from the oracle-derived minOut.
-        // This forces the swap to revert if the pool price is pushed beyond the acceptable range.
-        uint160 sqrtPriceLimitX96 = _sqrtPriceLimitX96(wethAmount, minAmountOut);
+        // ODA-424-M3: do not derive sqrtPriceLimitX96 from average minOut/amountIn.
+        // That marginal-price bound + exact-spend check made permissionless swaps
+        // griefable via partial fills. Rely on amountOutMinimum only (limit = 0).
+        uint160 sqrtPriceLimitX96 = 0;
 
         // Step 2: Swap WETH → CreatorCoin
         IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);
@@ -553,11 +564,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @return minOut Minimum Creator Coin to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
-        // FIX: G-12 — when oracle is disabled, use fallback minimum if configured
+        // ODA-424-M1: WETH and creatorCoin are different units. A fallback derived
+        // from raw `wethAmount` collapses both slippage layers. Fail closed when
+        // oracle pricing is unavailable (parity with AgentGaugeController).
         if (!useOracleSlippage || address(oracle) == address(0)) {
-            if (fallbackMinOutputBps > 0) {
-                return (wethAmount * fallbackMinOutputBps) / MAX_BPS;
-            }
             return 0;
         }
 
@@ -890,12 +900,34 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the lottery manager
+     * @dev First set is immediate (deploy wiring). Later reassignments are
+     *      timelocked (ODA-424-M2) so jackpot custody cannot be drained via
+     *      instant `setLotteryManager` → `payJackpot` without the delay that
+     *      `executeEmergencyWithdraw` already enforces.
      * @param _lotteryManager Lottery manager address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
         if (_lotteryManager == address(0)) revert ZeroAddress();
-        lotteryManager = ILotteryManager4626(_lotteryManager);
-        emit LotteryManagerSet(_lotteryManager);
+        if (address(lotteryManager) == address(0)) {
+            lotteryManager = ILotteryManager4626(_lotteryManager);
+            emit LotteryManagerSet(_lotteryManager);
+            return;
+        }
+        pendingLotteryManager = ILotteryManager4626(_lotteryManager);
+        pendingLotteryManagerAt = block.timestamp + LOTTERY_MANAGER_UPDATE_TIMELOCK;
+        emit LotteryManagerUpdateQueued(_lotteryManager, pendingLotteryManagerAt);
+    }
+
+    function executeLotteryManagerUpdate() external onlyOwner {
+        uint256 executeAfter = pendingLotteryManagerAt;
+        if (executeAfter == 0) revert NoPendingLotteryManager();
+        if (block.timestamp < executeAfter) revert LotteryManagerUpdateTimelockActive(executeAfter);
+
+        ILotteryManager4626 next = pendingLotteryManager;
+        pendingLotteryManager = ILotteryManager4626(address(0));
+        pendingLotteryManagerAt = 0;
+        lotteryManager = next;
+        emit LotteryManagerSet(address(next));
     }
 
     /**
@@ -969,6 +1001,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @param _oracle CreatorOracle address
      */
     function setOracle(address _oracle) external onlyOwner {
+        // ODA-424-L10: disallow zero; disable slippage via `setOracleConfig(_, false)`.
+        if (_oracle == address(0)) revert ZeroAddress();
         oracle = IOracle4626(_oracle);
         emit OracleSet(_oracle);
     }
@@ -985,10 +1019,15 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         emit OracleConfigUpdated(_twapDuration, _useOracle);
     }
 
-    // FIX: G-12 — allow owner to set a fallback minimum output when oracle is unavailable
+    // ODA-424-M1: unit-mismatched fallback removed; only clearing to 0 is allowed.
     function setFallbackMinOutputBps(uint256 _bps) external onlyOwner {
-        require(_bps <= MAX_BPS, "Exceeds MAX_BPS");
-        fallbackMinOutputBps = _bps;
+        if (_bps != 0) revert FallbackMinOutputDisabled();
+        fallbackMinOutputBps = 0;
+    }
+
+    /// @notice Ownable renounce disabled — bricks config + emergency response (ODA-424-L8).
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     /**
@@ -1263,13 +1302,13 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
                 accountedOFTBalance -= amount;
             }
         }
-        // FIX: L-4 (audit `docs/audits/aristotle/oracle`) — `emergencyWithdraw` only
-        // protected `shareOFT`; WETH fees held in `pendingWETHFees` (awaiting
-        // `_processWETHFees`) are an in-flight balance too and were previously fully
-        // drainable by the owner. Mirror the shareOFT/jackpotReserve pattern instead
-        // of leaving this centralization gap undocumented.
-        if (token == WETH && pendingWETHFees > 0) {
-            revert PendingWethFeesProtected();
+        // ODA-424-L3: protect only earmarked pending WETH fees. Owner may withdraw
+        // surplus WETH (donations / dust) so griefers cannot block rescue by
+        // donating 1 wei via `receive()` after the timelock elapses.
+        if (token == WETH) {
+            uint256 bal = IERC20(WETH).balanceOf(address(this));
+            uint256 free = bal > pendingWETHFees ? bal - pendingWETHFees : 0;
+            if (amount > free) revert PendingWethFeesProtected();
         }
         IERC20(token).safeTransfer(to, amount);
     }

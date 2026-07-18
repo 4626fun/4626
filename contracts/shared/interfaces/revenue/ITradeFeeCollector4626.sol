@@ -13,10 +13,10 @@ pragma solidity ^0.8.20;
  *        return is the ongoing-treasury slice for both lanes.
  *      - `receiveFees` accounting: Creator credits the observed balance delta;
  *        Agent credits the requested `amount`.
- *      - `setLotteryManager`: Creator applies immediately; Agent first set is
- *        immediate, later updates are 1-day timelocked via
- *        `executeLotteryManagerUpdate()`.
- *      - WETH fee oracle fallback behavior differs when the oracle is disabled.
+ *      - `setLotteryManager`: both lanes — first set is immediate; later
+ *        updates are 1-day timelocked via `executeLotteryManagerUpdate()`.
+ *      - WETH fee path fails closed when the oracle is unavailable (no
+ *        unit-mismatched raw-input fallback).
  */
 interface ITradeFeeCollector4626 {
     function vault() external view returns (address);
