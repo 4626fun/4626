@@ -1,471 +1,522 @@
-import { useCallback, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Coins, Droplets, Minus, Plus, Repeat, ShoppingCart } from 'lucide-react'
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownUp, Coins, ShoppingCart } from "lucide-react";
+import { erc20Abi, formatUnits, getAddress, type Address } from "viem";
+import { base } from "viem/chains";
 import {
-  encodeFunctionData,
-  erc20Abi,
-  formatUnits,
-  getAddress,
-  isAddress,
-  parseUnits,
-  type Address,
-} from 'viem'
-import { base } from 'viem/chains'
-import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+  useAccount,
+  usePublicClient,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
 
-import { toast } from '@/components/ui/Toast'
-import { CONTRACTS } from '@/config/contracts'
-import { formatAlfaClubPoolFee } from '@/hooks/useAlfaClubLiquidityPools'
+import { toast } from "@/components/ui/Toast";
+import { CONTRACTS } from "@/config/contracts";
 import {
-  ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-  ALFA_CREATOR_KEY_POOL_ABI,
   ALFACLUB,
+  ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+  ALFACLUB_UNIVERSAL_ROUTER_ABI,
   FRIEND_KEY_ABI,
-} from '@/lib/alfaclub/contracts'
-import { creatorCoinRawLogo } from '@/lib/uniswap/swapUtils'
-import { buildAndSendCalls, type TxRouterContext, type UserExecutionTrack } from '@/lib/tx/txRouter'
-import type { TransactionRequest } from '@/lib/uniswap/tradingApi'
-import { useAccountContext } from '@/wallet/accountContext'
+  PERMIT2_ALLOWANCE_TRANSFER_ABI,
+  SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+  SUDOSWAP_PAIR_FACTORY_ABI,
+} from "@/lib/alfaclub/contracts";
+import {
+  addSlippageBps,
+  buildAlfaClubSudoswapCalls,
+  subtractSlippageBps,
+  type AlfaClubSudoswapDirection,
+  type Permit2AllowanceSnapshot,
+} from "@/lib/alfaclub/sudoswapRouter";
+import {
+  buildAndSendCalls,
+  type TxRouterContext,
+  type UserExecutionTrack,
+} from "@/lib/tx/txRouter";
+import { creatorCoinRawLogo } from "@/lib/uniswap/swapUtils";
+import { useAccountContext } from "@/wallet/accountContext";
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
-const MAX_UINT256 = (1n << 256n) - 1n
-const BPS = 10_000n
-const ROOM_1659_CREATOR_COIN = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-const ROOM_1659_TOKEN_ID = 1659n
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const ROOM_1659_CREATOR_COIN = getAddress(
+  "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+);
+const ROOM_1659_TOKEN_ID = 1659n;
+const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n;
+const QUOTE_DEADLINE_SECONDS = 600n;
 
-type Mode = 'create' | 'add' | 'buy' | 'sell' | 'remove'
+export const ALFACLUB_MAX_KEY_AMOUNT = 100n;
+export const ALFACLUB_MAX_SLIPPAGE_BPS = 500n;
+
+type LegacyMode = "create" | "add" | "buy" | "sell" | "remove";
+type Mode = AlfaClubSudoswapDirection;
+
+type Quote = {
+  errorCode: bigint;
+  amount: bigint;
+  protocolFee: bigint;
+  royaltyAmount: bigint;
+};
+
+export type AlfaClubSudoswapSnapshot = {
+  creatorCoinName: string;
+  creatorCoinSymbol: string;
+  creatorCoinDecimals: number;
+  creatorCoinBalance: bigint;
+  keyBalance: bigint;
+  erc20AllowanceToPermit2: bigint;
+  permit2AllowanceToAdapter: Permit2AllowanceSnapshot;
+  keyApprovedForAdapter: boolean;
+  pairCreatorCoinBalance: bigint;
+  pairKeyBalance: bigint;
+  spotPrice: bigint;
+  delta: bigint;
+  fee: bigint;
+  buyQuote: Quote;
+  sellQuote: Quote;
+};
 
 export function getAlfaClubLiquidityDisabledReason(params: {
-  factoryReady: boolean
-  creatorCoin: Address | null
-  tokenId: bigint | null
-  executionAddress: Address | null
-  executionMode: 'canonical' | 'eoa'
-  loading: boolean
-  snapshot: Pick<LpSnapshot, 'pool' | 'pairAllowed' | 'creatorAllowed'> | null
-  mode: Mode
-  hasCreateAmount: boolean
+  configReady: boolean;
+  requestedMarketMatches: boolean;
+  executionAddress: Address | null;
+  loading: boolean;
+  snapshot: AlfaClubSudoswapSnapshot | null;
+  mode: Mode;
+  keyAmount: bigint | null;
 }): string | null {
-  if (!params.factoryReady) return 'Pool factory deployment is not configured'
-  if (!params.creatorCoin || !params.tokenId) return 'Enter a valid Creator Coin and room token ID'
-  if (!params.executionAddress) return 'Connect an execution-ready wallet'
-  if (
-    params.executionMode === 'canonical' &&
-    (params.creatorCoin !== ROOM_1659_CREATOR_COIN || params.tokenId !== ROOM_1659_TOKEN_ID)
-  ) {
-    return 'Canonical sponsorship is limited to the verified room 1659 / AKITA pair'
+  if (!params.configReady)
+    return "Official Sudoswap market deployment is not configured";
+  if (!params.requestedMarketMatches)
+    return "No official Sudoswap market is configured for this room";
+  if (!params.executionAddress) return "Connect an execution-ready wallet";
+  if (!params.keyAmount) return "Enter a positive key amount";
+  if (params.keyAmount > ALFACLUB_MAX_KEY_AMOUNT)
+    return "Room key amount exceeds the supported maximum of 100";
+  if (params.loading) return "Verifying the live Sudoswap market";
+  if (!params.snapshot) return "Onchain market verification failed";
+
+  const quote =
+    params.mode === "buy"
+      ? params.snapshot.buyQuote
+      : params.snapshot.sellQuote;
+  if (quote.errorCode !== 0n || quote.amount <= 0n)
+    return "A live Sudoswap quote is unavailable";
+  if (params.mode === "buy") {
+    if (params.snapshot.pairKeyBalance < params.keyAmount)
+      return "The pair has insufficient key inventory";
+    if (params.snapshot.creatorCoinBalance < quote.amount)
+      return "Creator Coin balance is too low";
+  } else {
+    if (params.snapshot.keyBalance < params.keyAmount)
+      return "FriendKey balance is too low";
+    if (
+      params.snapshot.pairCreatorCoinBalance <
+      quote.amount + quote.protocolFee + quote.royaltyAmount
+    ) {
+      return "The pair has insufficient Creator Coin inventory";
+    }
   }
-  if (params.loading) return 'Loading onchain readiness'
-  if (!params.snapshot) return 'Onchain readiness could not be verified'
-  if (params.mode === 'create' && !params.snapshot.pairAllowed) return 'Pair allowlist is closed'
-  if (params.mode === 'create' && !params.snapshot.creatorAllowed) return 'Pool creator allowlist is closed'
-  if (params.mode !== 'create' && !params.snapshot.pool) return 'Pool is not deployed'
-  if (params.mode === 'create' && !params.hasCreateAmount) return 'Enter the initial Creator Coin amount'
-  return null
+  return null;
 }
 
-const modeTabs: Array<{ id: Mode; label: string; icon: typeof Plus }> = [
-  { id: 'create', label: 'Create', icon: Plus },
-  { id: 'add', label: 'Add', icon: Droplets },
-  { id: 'buy', label: 'Buy', icon: ShoppingCart },
-  { id: 'sell', label: 'Sell', icon: Repeat },
-  { id: 'remove', label: 'Remove', icon: Minus },
-]
-
-function normalizeAddressInput(value: string): Address | null {
-  const trimmed = value.trim()
-  if (!isAddress(trimmed)) return null
-  return getAddress(trimmed) as Address
+function configuredAddress(value: Address | null | undefined): Address | null {
+  if (!value || value.toLowerCase() === ZERO_ADDRESS) return null;
+  return getAddress(value);
 }
 
 function parsePositiveBigInt(value: string): bigint | null {
-  const trimmed = value.trim()
-  if (!/^\d+$/.test(trimmed)) return null
-  const parsed = BigInt(trimmed)
-  return parsed > 0n ? parsed : null
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) return null;
+  const amount = BigInt(normalized);
+  return amount > 0n ? amount : null;
 }
 
-function parseBps(value: string): bigint {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 0) return 100n
-  return BigInt(Math.min(5_000, Math.floor(parsed * 100)))
+export function parseSlippageBps(value: string): bigint {
+  const percent = Number(value);
+  if (!Number.isFinite(percent) || percent < 0) return 100n;
+  return BigInt(
+    Math.min(Number(ALFACLUB_MAX_SLIPPAGE_BPS), Math.floor(percent * 100)),
+  );
 }
 
-function addSlippage(value: bigint, bps: bigint): bigint {
-  return (value * (BPS + bps) + BPS - 1n) / BPS
+function normalizeQuote(
+  value: readonly [number, bigint, bigint, bigint, bigint, bigint],
+): Quote {
+  return {
+    errorCode: BigInt(value[0]),
+    amount: value[3],
+    protocolFee: value[4],
+    royaltyAmount: value[5],
+  };
 }
 
-function subtractSlippage(value: bigint, bps: bigint): bigint {
-  return (value * (BPS - bps)) / BPS
-}
-
-function formatTokenAmount(value: bigint | null | undefined, decimals: number, fallback = '--'): string {
-  if (value === null || value === undefined) return fallback
-  const formatted = formatUnits(value, decimals)
-  const parts = formatted.split('.')
-  const whole = parts[0] ?? '0'
-  const fraction = parts[1] ?? ''
-  const shortFraction = fraction.replace(/0+$/, '').slice(0, 6)
-  return shortFraction ? `${whole}.${shortFraction}` : whole
+function formatTokenAmount(
+  value: bigint | null | undefined,
+  decimals: number,
+): string {
+  if (value === null || value === undefined) return "--";
+  const [whole = "0", fraction = ""] = formatUnits(value, decimals).split(".");
+  const shortFraction = fraction.replace(/0+$/, "").slice(0, 6);
+  return shortFraction ? `${whole}.${shortFraction}` : whole;
 }
 
 function shortAddress(value: string | null | undefined): string {
-  if (!value) return '--'
-  return `${value.slice(0, 6)}...${value.slice(-4)}`
-}
-
-function roomTypeLabel(value: number | null | undefined): string {
-  if (value === 0) return 'Trading'
-  if (value === 1) return 'Social'
-  return '--'
-}
-
-function roomTierLabel(value: number | null | undefined): string {
-  if (value === 0) return 'Casual'
-  if (value === 1) return 'Club'
-  if (value === 2) return 'Exclusive'
-  return '--'
-}
-
-type LpSnapshot = {
-  creator: Address
-  roomType: number | null
-  roomTier: number | null
-  totalSupply: bigint
-  bondingToken: Address
-  primaryBuyQuote: bigint | null
-  primarySellQuote: bigint | null
-  pool: Address | null
-  pairAllowed: boolean
-  creatorAllowed: boolean
-  creatorCoinName: string
-  creatorCoinSymbol: string
-  creatorCoinDecimals: number
-  creatorCoinBalance: bigint
-  creatorCoinAllowanceToFactory: bigint
-  creatorCoinAllowanceToPool: bigint
-  keyBalance: bigint
-  keyApprovedForFactory: boolean
-  keyApprovedForPool: boolean
-  poolCreatorReserve: bigint | null
-  poolKeyReserve: bigint | null
-  lpBalance: bigint | null
-  lpTotalSupply: bigint | null
-  addQuote: bigint | null
-  addLpShares: bigint | null
-  buyQuote: bigint | null
-  sellQuote: bigint | null
-  feeBps: number | null
+  return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "--";
 }
 
 type AlfaClubLiquidityProps = {
-  initialCreatorCoin?: Address | null
-  initialTokenId?: bigint | null
-  initialMode?: Mode
-  embedded?: boolean
-}
+  initialCreatorCoin?: Address | null;
+  initialTokenId?: bigint | null;
+  initialMode?: LegacyMode;
+  embedded?: boolean;
+};
 
 export function AlfaClubLiquidity({
   initialCreatorCoin = null,
   initialTokenId = null,
-  initialMode = 'create',
+  initialMode = "buy",
   embedded = false,
 }: AlfaClubLiquidityProps = {}) {
-  const queryClient = useQueryClient()
-  const account = useAccount()
-  const accountContext = useAccountContext()
-  const { switchChainAsync, isPending: switchingChain } = useSwitchChain()
-  const publicClient = usePublicClient({ chainId: base.id })
-  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const queryClient = useQueryClient();
+  const account = useAccount();
+  const accountContext = useAccountContext();
+  const publicClient = usePublicClient({ chainId: base.id });
+  const { data: walletClient } = useWalletClient({ chainId: base.id });
+  const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
 
-  const [mode, setMode] = useState<Mode>(initialMode)
-  const [creatorCoinInput, setCreatorCoinInput] = useState(initialCreatorCoin ?? '')
-  const [tokenIdInput, setTokenIdInput] = useState(initialTokenId?.toString() ?? '')
-  const [keyAmountInput, setKeyAmountInput] = useState('1')
-  const [creatorCoinAmountInput, setCreatorCoinAmountInput] = useState('')
-  const [lpAmountInput, setLpAmountInput] = useState('')
-  const [slippageInput, setSlippageInput] = useState('1')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [lastHash, setLastHash] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>(
+    initialMode === "sell" ? "sell" : "buy",
+  );
+  const [keyAmountInput, setKeyAmountInput] = useState("1");
+  const [slippageInput, setSlippageInput] = useState("1");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastHash, setLastHash] = useState<string | null>(null);
 
-  const factory = CONTRACTS.alfaCreatorKeyLpFactory
-  const factoryReady = factory && factory.toLowerCase() !== ZERO_ADDRESS
-  const creatorCoin = useMemo(() => normalizeAddressInput(creatorCoinInput), [creatorCoinInput])
-  const tokenId = useMemo(() => parsePositiveBigInt(tokenIdInput), [tokenIdInput])
-  const keyAmount = useMemo(() => parsePositiveBigInt(keyAmountInput), [keyAmountInput])
-  const slippageBps = useMemo(() => parseBps(slippageInput), [slippageInput])
-  const executionAddress = (accountContext.activeAccount ?? accountContext.signerAddress ?? null) as Address | null
-  const executionMode = accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const router = configuredAddress(CONTRACTS.alfaClubUniversalRouter);
+  const adapter = configuredAddress(CONTRACTS.alfaClubSudoswapAdapter);
+  const pair = configuredAddress(CONTRACTS.room1659SudoswapPair);
+  const factory = configuredAddress(CONTRACTS.sudoswapPairFactory);
+  const xykCurve = configuredAddress(CONTRACTS.sudoswapXykCurve);
+  const permit2 = configuredAddress(CONTRACTS.permit2);
+  const configReady = Boolean(
+    router && adapter && pair && factory && xykCurve && permit2,
+  );
+  const requestedMarketMatches =
+    (!initialCreatorCoin ||
+      getAddress(initialCreatorCoin) === ROOM_1659_CREATOR_COIN) &&
+    (!initialTokenId || initialTokenId === ROOM_1659_TOKEN_ID);
+  const keyAmount = useMemo(
+    () => parsePositiveBigInt(keyAmountInput),
+    [keyAmountInput],
+  );
+  const slippageBps = useMemo(
+    () => parseSlippageBps(slippageInput),
+    [slippageInput],
+  );
+
+  const executionMode =
+    accountContext.activeAccountType === "SMART_WALLET" ? "canonical" : "eoa";
+  const executionAddress = (accountContext.activeAccount ??
+    (executionMode === "eoa"
+      ? accountContext.signerAddress
+      : null)) as Address | null;
 
   const snapshotQuery = useQuery({
     queryKey: [
-      'alfaclub-liquidity',
-      factory,
-      creatorCoin?.toLowerCase() ?? '',
-      tokenId?.toString() ?? '',
-      keyAmount?.toString() ?? '',
-      executionAddress?.toLowerCase() ?? '',
+      "alfaclub-sudoswap-market",
+      pair?.toLowerCase() ?? "",
+      executionAddress?.toLowerCase() ?? "",
+      keyAmount?.toString() ?? "",
     ],
-    enabled: Boolean(factoryReady && publicClient && creatorCoin && tokenId && executionAddress),
-    staleTime: 12_000,
-    queryFn: async (): Promise<LpSnapshot> => {
-      if (!publicClient || !creatorCoin || !tokenId || !executionAddress) throw new Error('Missing inputs')
+    enabled: Boolean(
+      configReady &&
+        requestedMarketMatches &&
+        publicClient &&
+        executionAddress &&
+        keyAmount,
+    ),
+    staleTime: 8_000,
+    queryFn: async (): Promise<AlfaClubSudoswapSnapshot> => {
+      if (
+        !publicClient ||
+        !executionAddress ||
+        !keyAmount ||
+        !router ||
+        !adapter ||
+        !pair ||
+        !factory ||
+        !xykCurve ||
+        !permit2
+      ) {
+        throw new Error("Official AlfaClub market configuration is incomplete");
+      }
 
-      const [creatorRaw, roomTypeRaw, roomTierRaw, totalSupplyRaw, bondingTokenRaw, poolRaw, pairAllowedRaw, creatorAllowedRaw] =
-        await Promise.all([
-          publicClient.readContract({
-            address: ALFACLUB.friendKey,
-            abi: FRIEND_KEY_ABI,
-            functionName: 'creatorByTokenId',
-            args: [tokenId],
-          }),
-          publicClient.readContract({
-            address: ALFACLUB.friendKey,
-            abi: FRIEND_KEY_ABI,
-            functionName: 'roomTypes',
-            args: [tokenId],
-          }).catch(() => null),
-          publicClient.readContract({
-            address: ALFACLUB.friendKey,
-            abi: FRIEND_KEY_ABI,
-            functionName: 'roomTiers',
-            args: [tokenId],
-          }).catch(() => null),
-          publicClient.readContract({
-            address: ALFACLUB.friendKey,
-            abi: FRIEND_KEY_ABI,
-            functionName: 'totalSupply',
-            args: [tokenId],
-          }),
-          publicClient.readContract({
-            address: ALFACLUB.friendKey,
-            abi: FRIEND_KEY_ABI,
-            functionName: 'bondingToken',
-          }),
-          publicClient.readContract({
-            address: factory,
-            abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-            functionName: 'getPool',
-            args: [creatorCoin, tokenId],
-          }),
-          publicClient.readContract({
-            address: factory,
-            abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-            functionName: 'pairAllowed',
-            args: [creatorCoin, tokenId],
-          }),
-          publicClient.readContract({
-            address: factory,
-            abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-            functionName: 'poolCreatorAllowed',
-            args: [executionAddress],
-          }),
-        ])
-
-      const pool = poolRaw && poolRaw.toLowerCase() !== ZERO_ADDRESS ? (poolRaw as Address) : null
       const [
-        creatorCoinNameRaw,
-        creatorCoinSymbolRaw,
-        creatorCoinDecimalsRaw,
-        creatorCoinBalanceRaw,
-        creatorCoinAllowanceFactoryRaw,
-        creatorCoinAllowancePoolRaw,
-        keyBalanceRaw,
-        keyApprovedFactoryRaw,
-        keyApprovedPoolRaw,
-        primaryBuyQuoteRaw,
-        primarySellQuoteRaw,
+        validPair,
+        pairFactory,
+        pairVariant,
+        poolType,
+        pairToken,
+        pairNft,
+        pairTokenId,
+        pairCurve,
+        pairFee,
+        adapterFactory,
+        adapterPermit2,
+        adapterFriendKey,
+        adapterCurve,
+        adapterRouter,
+        market,
+        routerAdapter,
       ] = await Promise.all([
-        publicClient.readContract({ address: creatorCoin, abi: erc20Abi, functionName: 'name' }).catch(() => ''),
-        publicClient.readContract({ address: creatorCoin, abi: erc20Abi, functionName: 'symbol' }).catch(() => 'CREATOR'),
-        publicClient.readContract({ address: creatorCoin, abi: erc20Abi, functionName: 'decimals' }).catch(() => 18),
         publicClient.readContract({
-          address: creatorCoin,
+          address: factory,
+          abi: SUDOSWAP_PAIR_FACTORY_ABI,
+          functionName: "isValidPair",
+          args: [pair],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "factory",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "pairVariant",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "poolType",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "token",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "nft",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "nftId",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "bondingCurve",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "fee",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "factory",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "permit2",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "friendKey",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "xykCurve",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "universalRouter",
+        }),
+        publicClient.readContract({
+          address: adapter,
+          abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+          functionName: "markets",
+          args: [pair],
+        }),
+        publicClient.readContract({
+          address: router,
+          abi: ALFACLUB_UNIVERSAL_ROUTER_ABI,
+          functionName: "SUDOSWAP_ADAPTER",
+        }),
+      ]);
+
+      const invariantOk =
+        validPair &&
+        getAddress(pairFactory) === factory &&
+        Number(pairVariant) === 3 &&
+        Number(poolType) === 2 &&
+        getAddress(pairToken) === ROOM_1659_CREATOR_COIN &&
+        getAddress(pairNft) === ALFACLUB.friendKey &&
+        pairTokenId === ROOM_1659_TOKEN_ID &&
+        getAddress(pairCurve) === xykCurve &&
+        pairFee === ROOM_1659_TRADING_PAIR_FEE &&
+        getAddress(adapterFactory) === factory &&
+        getAddress(adapterPermit2) === permit2 &&
+        getAddress(adapterFriendKey) === ALFACLUB.friendKey &&
+        getAddress(adapterCurve) === xykCurve &&
+        getAddress(adapterRouter) === router &&
+        getAddress(routerAdapter) === adapter &&
+        getAddress(market[0]) === ROOM_1659_CREATOR_COIN &&
+        market[1] === ROOM_1659_TOKEN_ID &&
+        market[2];
+      if (!invariantOk)
+        throw new Error(
+          "Configured Sudoswap market failed live invariant checks",
+        );
+
+      const [
+        name,
+        symbol,
+        decimals,
+        creatorCoinBalance,
+        erc20AllowanceToPermit2,
+        permit2Allowance,
+        keyBalance,
+        keyApprovedForAdapter,
+        pairCreatorCoinBalance,
+        pairKeyBalance,
+        spotPrice,
+        delta,
+        fee,
+        buyQuote,
+        sellQuote,
+      ] = await Promise.all([
+        publicClient
+          .readContract({
+            address: ROOM_1659_CREATOR_COIN,
+            abi: erc20Abi,
+            functionName: "name",
+          })
+          .catch(() => "Creator Coin"),
+        publicClient
+          .readContract({
+            address: ROOM_1659_CREATOR_COIN,
+            abi: erc20Abi,
+            functionName: "symbol",
+          })
+          .catch(() => "CREATOR"),
+        publicClient
+          .readContract({
+            address: ROOM_1659_CREATOR_COIN,
+            abi: erc20Abi,
+            functionName: "decimals",
+          })
+          .catch(() => 18),
+        publicClient.readContract({
+          address: ROOM_1659_CREATOR_COIN,
           abi: erc20Abi,
-          functionName: 'balanceOf',
+          functionName: "balanceOf",
           args: [executionAddress],
         }),
         publicClient.readContract({
-          address: creatorCoin,
+          address: ROOM_1659_CREATOR_COIN,
           abi: erc20Abi,
-          functionName: 'allowance',
-          args: [executionAddress, factory],
+          functionName: "allowance",
+          args: [executionAddress, permit2],
         }),
-        pool
-          ? publicClient.readContract({
-              address: creatorCoin,
-              abi: erc20Abi,
-              functionName: 'allowance',
-              args: [executionAddress, pool],
-            })
-          : Promise.resolve(0n),
         publicClient.readContract({
-          address: ALFACLUB.friendKey,
-          abi: FRIEND_KEY_ABI,
-          functionName: 'balanceOf',
-          args: [executionAddress, tokenId],
+          address: permit2,
+          abi: PERMIT2_ALLOWANCE_TRANSFER_ABI,
+          functionName: "allowance",
+          args: [executionAddress, ROOM_1659_CREATOR_COIN, adapter],
         }),
         publicClient.readContract({
           address: ALFACLUB.friendKey,
           abi: FRIEND_KEY_ABI,
-          functionName: 'isApprovedForAll',
-          args: [executionAddress, factory],
+          functionName: "balanceOf",
+          args: [executionAddress, ROOM_1659_TOKEN_ID],
         }),
-        pool
-          ? publicClient.readContract({
-              address: ALFACLUB.friendKey,
-              abi: FRIEND_KEY_ABI,
-              functionName: 'isApprovedForAll',
-              args: [executionAddress, pool],
-            })
-          : Promise.resolve(false),
-        keyAmount
-          ? publicClient.readContract({
-              address: ALFACLUB.friendKey,
-              abi: FRIEND_KEY_ABI,
-              functionName: 'getBuyPriceAfterFee',
-              args: [tokenId, keyAmount],
-            }).catch(() => null)
-          : Promise.resolve(null),
-        keyAmount
-          ? publicClient.readContract({
-              address: ALFACLUB.friendKey,
-              abi: FRIEND_KEY_ABI,
-              functionName: 'getSellPriceAfterFee',
-              args: [tokenId, keyAmount],
-            }).catch(() => null)
-          : Promise.resolve(null),
-      ])
-
-      let poolCreatorReserve: bigint | null = null
-      let poolKeyReserve: bigint | null = null
-      let lpBalance: bigint | null = null
-      let lpTotalSupply: bigint | null = null
-      let addQuote: bigint | null = null
-      let addLpShares: bigint | null = null
-      let buyQuote: bigint | null = null
-      let sellQuote: bigint | null = null
-      let feeBps: number | null = null
-
-      if (pool) {
-        const [reservesRaw, lpBalanceRaw, lpTotalRaw, addQuoteRaw, buyQuoteRaw, sellQuoteRaw, feeBpsRaw] = await Promise.all([
-          publicClient.readContract({
-            address: pool,
-            abi: ALFA_CREATOR_KEY_POOL_ABI,
-            functionName: 'getReserves',
-          }),
-          publicClient.readContract({
-            address: pool,
-            abi: ALFA_CREATOR_KEY_POOL_ABI,
-            functionName: 'balanceOf',
-            args: [executionAddress],
-          }),
-          publicClient.readContract({
-            address: pool,
-            abi: ALFA_CREATOR_KEY_POOL_ABI,
-            functionName: 'totalSupply',
-          }),
-          keyAmount
-            ? publicClient.readContract({
-                address: pool,
-                abi: ALFA_CREATOR_KEY_POOL_ABI,
-                functionName: 'quoteAddLiquidity',
-                args: [keyAmount],
-              }).catch(() => null)
-            : Promise.resolve(null),
-          keyAmount
-            ? publicClient.readContract({
-                address: pool,
-                abi: ALFA_CREATOR_KEY_POOL_ABI,
-                functionName: 'quoteBuyKeys',
-                args: [keyAmount],
-              }).catch(() => null)
-            : Promise.resolve(null),
-          keyAmount
-            ? publicClient.readContract({
-                address: pool,
-                abi: ALFA_CREATOR_KEY_POOL_ABI,
-                functionName: 'quoteSellKeys',
-                args: [keyAmount],
-              }).catch(() => null)
-            : Promise.resolve(null),
-          publicClient.readContract({
-            address: pool,
-            abi: ALFA_CREATOR_KEY_POOL_ABI,
-            functionName: 'feeBps',
-          }).catch(() => null),
-        ])
-        poolCreatorReserve = reservesRaw[0]
-        poolKeyReserve = reservesRaw[1]
-        lpBalance = lpBalanceRaw
-        lpTotalSupply = lpTotalRaw
-        if (addQuoteRaw) {
-          addQuote = addQuoteRaw[0]
-          addLpShares = addQuoteRaw[1]
-        }
-        buyQuote = buyQuoteRaw
-        sellQuote = sellQuoteRaw
-        feeBps = feeBpsRaw === null ? null : Number(feeBpsRaw)
-      }
+        publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: "isApprovedForAll",
+          args: [executionAddress, adapter],
+        }),
+        publicClient.readContract({
+          address: ROOM_1659_CREATOR_COIN,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [pair],
+        }),
+        publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: "balanceOf",
+          args: [pair, ROOM_1659_TOKEN_ID],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "spotPrice",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "delta",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "fee",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getBuyNFTQuote",
+          args: [ROOM_1659_TOKEN_ID, keyAmount],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getSellNFTQuote",
+          args: [ROOM_1659_TOKEN_ID, keyAmount],
+        }),
+      ]);
 
       return {
-        creator: creatorRaw as Address,
-        roomType: typeof roomTypeRaw === 'number' ? roomTypeRaw : roomTypeRaw === null ? null : Number(roomTypeRaw),
-        roomTier: typeof roomTierRaw === 'number' ? roomTierRaw : roomTierRaw === null ? null : Number(roomTierRaw),
-        totalSupply: totalSupplyRaw,
-        bondingToken: bondingTokenRaw as Address,
-        primaryBuyQuote: primaryBuyQuoteRaw,
-        primarySellQuote: primarySellQuoteRaw,
-        pool,
-        pairAllowed: Boolean(pairAllowedRaw),
-        creatorAllowed: Boolean(creatorAllowedRaw),
-        creatorCoinName: typeof creatorCoinNameRaw === 'string' ? creatorCoinNameRaw : '',
-        creatorCoinSymbol: typeof creatorCoinSymbolRaw === 'string' ? creatorCoinSymbolRaw : 'CREATOR',
-        creatorCoinDecimals: typeof creatorCoinDecimalsRaw === 'number' ? creatorCoinDecimalsRaw : Number(creatorCoinDecimalsRaw),
-        creatorCoinBalance: creatorCoinBalanceRaw,
-        creatorCoinAllowanceToFactory: creatorCoinAllowanceFactoryRaw,
-        creatorCoinAllowanceToPool: creatorCoinAllowancePoolRaw,
-        keyBalance: keyBalanceRaw,
-        keyApprovedForFactory: Boolean(keyApprovedFactoryRaw),
-        keyApprovedForPool: Boolean(keyApprovedPoolRaw),
-        poolCreatorReserve,
-        poolKeyReserve,
-        lpBalance,
-        lpTotalSupply,
-        addQuote,
-        addLpShares,
-        buyQuote,
-        sellQuote,
-        feeBps,
-      }
+        creatorCoinName: name,
+        creatorCoinSymbol: symbol,
+        creatorCoinDecimals: Number(decimals),
+        creatorCoinBalance,
+        keyBalance,
+        erc20AllowanceToPermit2,
+        permit2AllowanceToAdapter: {
+          amount: permit2Allowance[0],
+          expiration: BigInt(permit2Allowance[1]),
+        },
+        keyApprovedForAdapter,
+        pairCreatorCoinBalance,
+        pairKeyBalance,
+        spotPrice,
+        delta,
+        fee,
+        buyQuote: normalizeQuote(buyQuote),
+        sellQuote: normalizeQuote(sellQuote),
+      };
     },
-  })
+  });
 
-  const snapshot = snapshotQuery.data ?? null
-  const decimals = snapshot?.creatorCoinDecimals ?? 18
-  const creatorCoinAmount = useMemo(() => {
-    if (!creatorCoinAmountInput.trim()) return null
-    try {
-      const parsed = parseUnits(creatorCoinAmountInput.trim(), decimals)
-      return parsed > 0n ? parsed : null
-    } catch {
-      return null
-    }
-  }, [creatorCoinAmountInput, decimals])
-  const lpAmount = useMemo(() => {
-    if (!lpAmountInput.trim()) return null
-    try {
-      const parsed = parseUnits(lpAmountInput.trim(), 18)
-      return parsed > 0n ? parsed : null
-    } catch {
-      return null
-    }
-  }, [lpAmountInput])
-
-  const logoUrl = creatorCoin ? creatorCoinRawLogo(creatorCoin, base.id) : null
+  const snapshot = snapshotQuery.data ?? null;
+  const quote = mode === "buy" ? snapshot?.buyQuote : snapshot?.sellQuote;
+  const decimals = snapshot?.creatorCoinDecimals ?? 18;
+  const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
 
   const buildTxContext = useCallback((): TxRouterContext => {
-    if (!walletClient || !publicClient || !executionAddress) throw new Error('Wallet execution is not ready')
+    if (!walletClient || !publicClient || !executionAddress)
+      throw new Error("Wallet execution is not ready");
     return {
       chainId: base.id,
       executionMode,
@@ -479,8 +530,8 @@ export function AlfaClubLiquidity({
       connectorId: account.connector?.id ?? null,
       connectorName: account.connector?.name ?? null,
       capabilities: accountContext.capabilities,
-      requireCanonicalSponsorship: executionMode === 'canonical',
-    }
+      requireCanonicalSponsorship: executionMode === "canonical",
+    };
   }, [
     account.connector?.id,
     account.connector?.name,
@@ -492,440 +543,384 @@ export function AlfaClubLiquidity({
     executionMode,
     publicClient,
     walletClient,
-  ])
+  ]);
 
   const submit = useCallback(async () => {
-    if (!factoryReady || !creatorCoin || !tokenId || !snapshot || !keyAmount) {
-      toast.error('Enter a valid Creator Coin, room tokenId, and key amount.')
-      return
-    }
-    if (!executionAddress) {
-      toast.error('Connect an execution-ready wallet.')
-      return
+    if (
+      !publicClient ||
+      !executionAddress ||
+      !keyAmount ||
+      !router ||
+      !adapter ||
+      !pair ||
+      !permit2
+    ) {
+      toast.error(
+        "The official AlfaClub market or execution wallet is not ready.",
+      );
+      return;
     }
     if (account.chainId !== base.id) {
-      await switchChainAsync({ chainId: base.id })
-      return
+      await switchChainAsync({ chainId: base.id });
+      return;
     }
 
-    const calls: TransactionRequest[] = []
-    const pushApproval = (spender: Address, required: bigint, allowance: bigint) => {
-      if (required > 0n && allowance < required) {
-        calls.push({
-          to: creatorCoin,
-          from: executionAddress,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'approve',
-            args: [spender, MAX_UINT256],
-          }),
-          value: '0',
-          chainId: base.id,
-        })
-      }
-    }
-    const pushKeyApproval = (operator: Address, approved: boolean) => {
-      if (!approved) {
-        calls.push({
-          to: ALFACLUB.friendKey,
-          from: executionAddress,
-          data: encodeFunctionData({
-            abi: FRIEND_KEY_ABI,
-            functionName: 'setApprovalForAll',
-            args: [operator, true],
-          }),
-          value: '0',
-          chainId: base.id,
-        })
-      }
-    }
-
+    setIsSubmitting(true);
     try {
-      if (mode === 'create') {
-        if (!creatorCoinAmount) throw new Error('Enter the initial Creator Coin amount.')
-        if (snapshot.pool) throw new Error('A pool already exists for this pair.')
-        pushApproval(factory, creatorCoinAmount, snapshot.creatorCoinAllowanceToFactory)
-        pushKeyApproval(factory, snapshot.keyApprovedForFactory)
-        calls.push({
-          to: factory,
-          from: executionAddress,
-          data: encodeFunctionData({
-            abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-            functionName: 'createPoolWithInitialLiquidity',
-            args: [creatorCoin, tokenId, keyAmount, creatorCoinAmount, executionAddress],
-          }),
-          value: '0',
-          chainId: base.id,
-        })
-      } else {
-        if (!snapshot.pool) throw new Error('Create the pool before using this action.')
-        if (mode === 'add') {
-          if (!snapshot.addQuote || !snapshot.addLpShares) throw new Error('Add-liquidity quote unavailable.')
-          const maxCreatorCoin = addSlippage(snapshot.addQuote, slippageBps)
-          pushApproval(snapshot.pool, maxCreatorCoin, snapshot.creatorCoinAllowanceToPool)
-          pushKeyApproval(snapshot.pool, snapshot.keyApprovedForPool)
-          calls.push({
-            to: snapshot.pool,
-            from: executionAddress,
-            data: encodeFunctionData({
-              abi: ALFA_CREATOR_KEY_POOL_ABI,
-              functionName: 'addLiquidity',
-              args: [keyAmount, maxCreatorCoin, snapshot.addLpShares, executionAddress],
-            }),
-            value: '0',
-            chainId: base.id,
-          })
-        }
-        if (mode === 'buy') {
-          if (!snapshot.buyQuote) throw new Error('LP buy quote unavailable.')
-          const maxCreatorCoin = addSlippage(snapshot.buyQuote, slippageBps)
-          pushApproval(snapshot.pool, maxCreatorCoin, snapshot.creatorCoinAllowanceToPool)
-          calls.push({
-            to: snapshot.pool,
-            from: executionAddress,
-            data: encodeFunctionData({
-              abi: ALFA_CREATOR_KEY_POOL_ABI,
-              functionName: 'buyKeys',
-              args: [keyAmount, maxCreatorCoin, executionAddress],
-            }),
-            value: '0',
-            chainId: base.id,
-          })
-        }
-        if (mode === 'sell') {
-          if (!snapshot.sellQuote) throw new Error('LP sell quote unavailable.')
-          pushKeyApproval(snapshot.pool, snapshot.keyApprovedForPool)
-          calls.push({
-            to: snapshot.pool,
-            from: executionAddress,
-            data: encodeFunctionData({
-              abi: ALFA_CREATOR_KEY_POOL_ABI,
-              functionName: 'sellKeys',
-              args: [keyAmount, subtractSlippage(snapshot.sellQuote, slippageBps), executionAddress],
-            }),
-            value: '0',
-            chainId: base.id,
-          })
-        }
-        if (mode === 'remove') {
-          if (!lpAmount) throw new Error('Enter the LP share amount.')
-          const lpSupply = snapshot.lpTotalSupply ?? 0n
-          const reserveCoin = snapshot.poolCreatorReserve ?? 0n
-          const reserveKeys = snapshot.poolKeyReserve ?? 0n
-          const expectedCoin = lpSupply > 0n ? (reserveCoin * lpAmount) / lpSupply : 0n
-          const expectedKeys = lpSupply > 0n ? (reserveKeys * lpAmount) / lpSupply : 0n
-          calls.push({
-            to: snapshot.pool,
-            from: executionAddress,
-            data: encodeFunctionData({
-              abi: ALFA_CREATOR_KEY_POOL_ABI,
-              functionName: 'removeLiquidity',
-              args: [
-                lpAmount,
-                subtractSlippage(expectedCoin, slippageBps),
-                subtractSlippage(expectedKeys, slippageBps),
-                executionAddress,
-              ],
-            }),
-            value: '0',
-            chainId: base.id,
-          })
-        }
+      const deadline =
+        BigInt(Math.floor(Date.now() / 1000)) + QUOTE_DEADLINE_SECONDS;
+      const [
+        freshQuoteRaw,
+        freshPairFee,
+        erc20Allowance,
+        permit2Allowance,
+        keyApproved,
+        keyBalance,
+        pairKeyBalance,
+        pairCoinBalance,
+      ] = await Promise.all([
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: mode === "buy" ? "getBuyNFTQuote" : "getSellNFTQuote",
+          args: [ROOM_1659_TOKEN_ID, keyAmount],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "fee",
+        }),
+        publicClient.readContract({
+          address: ROOM_1659_CREATOR_COIN,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [executionAddress, permit2],
+        }),
+        publicClient.readContract({
+          address: permit2,
+          abi: PERMIT2_ALLOWANCE_TRANSFER_ABI,
+          functionName: "allowance",
+          args: [executionAddress, ROOM_1659_CREATOR_COIN, adapter],
+        }),
+        publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: "isApprovedForAll",
+          args: [executionAddress, adapter],
+        }),
+        publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: "balanceOf",
+          args: [executionAddress, ROOM_1659_TOKEN_ID],
+        }),
+        publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: "balanceOf",
+          args: [pair, ROOM_1659_TOKEN_ID],
+        }),
+        publicClient.readContract({
+          address: ROOM_1659_CREATOR_COIN,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [pair],
+        }),
+      ]);
+      const freshQuote = normalizeQuote(freshQuoteRaw);
+      if (freshPairFee !== ROOM_1659_TRADING_PAIR_FEE) {
+        throw new Error(
+          "The Sudoswap pair trading fee no longer matches the AlfaClub market",
+        );
+      }
+      if (freshQuote.errorCode !== 0n || freshQuote.amount <= 0n) {
+        throw new Error("Sudoswap returned a non-executable quote");
+      }
+      if (mode === "buy" && pairKeyBalance < keyAmount)
+        throw new Error("The pair no longer has enough keys");
+      if (mode === "sell" && keyBalance < keyAmount)
+        throw new Error("FriendKey balance is too low");
+      if (
+        mode === "sell" &&
+        pairCoinBalance <
+          freshQuote.amount + freshQuote.protocolFee + freshQuote.royaltyAmount
+      ) {
+        throw new Error("The pair no longer has enough Creator Coin inventory");
       }
 
-      setIsSubmitting(true)
-      const result = await buildAndSendCalls({ context: buildTxContext(), calls })
+      const limit =
+        mode === "buy"
+          ? addSlippageBps(freshQuote.amount, slippageBps)
+          : subtractSlippageBps(freshQuote.amount, slippageBps);
+      const calls = buildAlfaClubSudoswapCalls({
+        direction: mode,
+        router,
+        adapter,
+        permit2,
+        friendKey: ALFACLUB.friendKey,
+        creatorCoin: ROOM_1659_CREATOR_COIN,
+        pair,
+        sender: executionAddress,
+        keyAmount,
+        limit,
+        deadline,
+        erc20AllowanceToPermit2: erc20Allowance,
+        permit2AllowanceToAdapter: {
+          amount: permit2Allowance[0],
+          expiration: BigInt(permit2Allowance[1]),
+        },
+        keyApprovedForAdapter: keyApproved,
+      });
+
+      const result = await buildAndSendCalls({
+        context: buildTxContext(),
+        calls,
+      });
       const hash =
         result.send.transactionHash ??
-        result.send.txHashes[result.send.txHashes.length - 1] ??
+        result.send.txHashes.at(-1) ??
         result.send.callsId ??
-        null
-      setLastHash(hash)
-      toast.success('AlfaClub liquidity transaction submitted.')
-      await queryClient.invalidateQueries({ queryKey: ['alfaclub-liquidity'] })
+        null;
+      setLastHash(hash);
+      toast.success(`AlfaClub ${mode} submitted through the Universal Router.`);
+      await queryClient.invalidateQueries({
+        queryKey: ["alfaclub-sudoswap-market"],
+      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Transaction failed'
-      toast.error(message)
+      toast.error(
+        error instanceof Error ? error.message : "AlfaClub swap failed",
+      );
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
   }, [
     account.chainId,
+    adapter,
     buildTxContext,
-    creatorCoin,
-    creatorCoinAmount,
     executionAddress,
-    factory,
-    factoryReady,
     keyAmount,
-    lpAmount,
     mode,
+    pair,
+    permit2,
+    publicClient,
     queryClient,
+    router,
     slippageBps,
-    snapshot,
     switchChainAsync,
-    tokenId,
-  ])
-
-  const primaryQuote = mode === 'sell' ? snapshot?.primarySellQuote : snapshot?.primaryBuyQuote
-  const lpQuote =
-    mode === 'add'
-      ? snapshot?.addQuote
-      : mode === 'buy'
-        ? snapshot?.buyQuote
-        : mode === 'sell'
-          ? snapshot?.sellQuote
-          : null
+  ]);
 
   const disabledReason = getAlfaClubLiquidityDisabledReason({
-    factoryReady: Boolean(factoryReady),
-    creatorCoin,
-    tokenId,
+    configReady,
+    requestedMarketMatches,
     executionAddress,
-    executionMode,
     loading: snapshotQuery.isLoading,
     snapshot,
     mode,
-    hasCreateAmount: creatorCoinAmount !== null,
-  })
+    keyAmount,
+  });
 
   return (
-    <div className={embedded ? 'relative' : 'relative pb-24 md:pb-0'}>
-      <section className={embedded ? '' : 'cinematic-section'}>
-        <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6'}>
+    <div className={embedded ? "relative" : "relative pb-24 md:pb-0"}>
+      <section className={embedded ? "" : "cinematic-section"}>
+        <div className={embedded ? "" : "mx-auto max-w-6xl px-4 sm:px-6"}>
           {!embedded ? (
-            <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <span className="label">AlfaClub Liquidity</span>
-              <h1 className="headline text-3xl sm:text-5xl mt-3">Creator Coin / Key LP</h1>
-            </div>
-            <div className="text-xs text-zinc-500 font-mono">
-              {factoryReady ? shortAddress(factory) : 'factory unset'}
-            </div>
+            <div className="mb-8 flex items-end justify-between gap-4">
+              <div>
+                <span className="label">AlfaClub secondary market</span>
+                <h1 className="headline mt-3 text-3xl sm:text-5xl">
+                  Room keys / Creator Coin
+                </h1>
+              </div>
+              <div className="font-mono text-xs text-zinc-500">
+                {shortAddress(pair)}
+              </div>
             </div>
           ) : null}
 
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-            <div className="space-y-5">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">Creator Coin</span>
-                    <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2.5">
-                      {logoUrl ? (
-                        <img src={logoUrl} alt="" className="h-8 w-8 rounded-full bg-white/10" />
-                      ) : (
-                        <Coins className="h-8 w-8 rounded-full bg-white/10 p-1.5 text-zinc-400" />
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-black/30 p-1.5">
+                {(["buy", "sell"] as const).map((direction) => (
+                  <button
+                    key={direction}
+                    type="button"
+                    onClick={() => setMode(direction)}
+                    className={`h-10 rounded-lg text-sm font-medium transition ${
+                      mode === direction
+                        ? "bg-brand-primary text-white"
+                        : "text-zinc-500 hover:text-zinc-200"
+                    }`}
+                  >
+                    {direction === "buy" ? "Buy room keys" : "Sell room keys"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs text-zinc-500">Room keys</span>
+                  <input
+                    value={keyAmountInput}
+                    onChange={(event) =>
+                      setKeyAmountInput(
+                        event.target.value.replace(/[^\d]/g, ""),
+                      )
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-white outline-none"
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs text-zinc-500">
+                    Maximum slippage
+                  </span>
+                  <div className="flex rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                    <input
+                      type="number"
+                      value={slippageInput}
+                      onChange={(event) => setSlippageInput(event.target.value)}
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      inputMode="decimal"
+                      className="min-w-0 flex-1 bg-transparent text-white outline-none"
+                    />
+                    <span className="text-zinc-500">%</span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/25 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                      <img
+                        src={logoUrl}
+                        alt=""
+                        className="h-9 w-9 rounded-full"
+                      />
+                    ) : (
+                      <Coins className="h-9 w-9 p-1.5 text-zinc-500" />
+                    )}
+                    <div>
+                      <div className="text-sm text-zinc-200">
+                        {snapshot?.creatorCoinName ?? "AKITA Creator Coin"}
+                      </div>
+                      <div className="font-mono text-xs text-zinc-600">
+                        Room #{ROOM_1659_TOKEN_ID.toString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg text-white">
+                      {formatTokenAmount(quote?.amount, decimals)}
+                    </div>
+                    <div className="text-xs text-zinc-600">
+                      {snapshot?.creatorCoinSymbol ?? "CREATOR"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={
+                  Boolean(disabledReason) || isSubmitting || switchingChain
+                }
+                onClick={() => void submit()}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
+              >
+                {mode === "buy" ? (
+                  <ShoppingCart className="h-4 w-4" />
+                ) : (
+                  <ArrowDownUp className="h-4 w-4" />
+                )}
+                {switchingChain
+                  ? "Switching chain"
+                  : isSubmitting
+                    ? "Submitting"
+                    : (disabledReason ??
+                      (mode === "buy" ? "Buy keys" : "Sell keys"))}
+              </button>
+              {disabledReason ? (
+                <div className="text-xs text-amber-300" role="status">
+                  {disabledReason}
+                </div>
+              ) : null}
+              {snapshotQuery.error ? (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+                  {snapshotQuery.error instanceof Error
+                    ? snapshotQuery.error.message
+                    : "Market verification failed"}
+                </div>
+              ) : null}
+              {lastHash ? (
+                <div className="truncate font-mono text-xs text-zinc-600">
+                  {lastHash}
+                </div>
+              ) : null}
+            </div>
+
+            <aside className="space-y-5">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <h2 className="text-sm font-semibold text-zinc-100">
+                  Official Sudoswap v2 market
+                </h2>
+                <dl className="mt-4 grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <dt className="text-zinc-600">Actual keys</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {snapshot?.pairKeyBalance.toString() ?? "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-600">Actual coin</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {formatTokenAmount(
+                        snapshot?.pairCreatorCoinBalance,
+                        decimals,
                       )}
-                      <input
-                        value={creatorCoinInput}
-                        onChange={(event) => setCreatorCoinInput(event.target.value)}
-                        placeholder="0x..."
-                        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-700"
-                      />
-                    </div>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">Room TokenId</span>
-                    <input
-                      value={tokenIdInput}
-                      onChange={(event) => setTokenIdInput(event.target.value.replace(/[^\d]/g, ''))}
-                      placeholder="1"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-700"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">Keys</span>
-                    <input
-                      value={keyAmountInput}
-                      onChange={(event) => setKeyAmountInput(event.target.value.replace(/[^\d]/g, ''))}
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">Creator Coin Amount</span>
-                    <input
-                      value={creatorCoinAmountInput}
-                      onChange={(event) => setCreatorCoinAmountInput(event.target.value)}
-                      disabled={mode !== 'create'}
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none disabled:text-zinc-700"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">LP Shares</span>
-                    <input
-                      value={lpAmountInput}
-                      onChange={(event) => setLpAmountInput(event.target.value)}
-                      disabled={mode !== 'remove'}
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none disabled:text-zinc-700"
-                    />
-                  </label>
-                </div>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-600">Virtual keys</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {snapshot?.delta.toString() ?? "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-600">Virtual coin</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {formatTokenAmount(snapshot?.spotPrice, decimals)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-600">Pair fee</dt>
+                    <dd className="mt-1 text-zinc-200">
+                      {snapshot ? `${formatUnits(snapshot.fee, 16)}%` : "--"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-600">Adapter</dt>
+                    <dd className="mt-1 font-mono text-zinc-200">
+                      {shortAddress(adapter)}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="grid grid-cols-5 gap-2">
-                  {modeTabs.map((tab) => {
-                    const Icon = tab.icon
-                    const active = mode === tab.id
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setMode(tab.id)}
-                        className={`flex h-12 items-center justify-center gap-2 rounded-lg text-xs transition ${
-                          active
-                            ? 'bg-brand-primary text-white'
-                            : 'bg-black/30 text-zinc-500 hover:bg-white/8 hover:text-zinc-200'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span className="hidden sm:inline">{tab.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-xs text-zinc-500">
+                <p>
+                  Approvals and the swap are submitted atomically by your
+                  execution account.
+                </p>
+                <p className="mt-2">
+                  Canonical wallets require sponsorship for the complete batch
+                  and never fall back to a direct signer transaction.
+                </p>
               </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <div className="text-xs text-zinc-500">Primary AlfaClub curve</div>
-                    <div className="mt-2 text-xl text-white">
-                      {formatTokenAmount(primaryQuote, 6, '--')}
-                    </div>
-                    <div className="text-xs text-zinc-600">bonding token units</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Creator Coin LP</div>
-                    <div className="mt-2 text-xl text-white">
-                      {formatTokenAmount(lpQuote, decimals, '--')} {snapshot?.creatorCoinSymbol ?? ''}
-                    </div>
-                    <div className="text-xs text-zinc-600">secondary quote</div>
-                  </div>
-                  <label className="space-y-2">
-                    <span className="text-xs text-zinc-500">Slippage</span>
-                    <div className="flex items-center rounded-lg border border-white/10 bg-black/30 px-3 py-2.5">
-                      <input
-                        value={slippageInput}
-                        onChange={(event) => setSlippageInput(event.target.value)}
-                        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none"
-                      />
-                      <span className="text-xs text-zinc-600">%</span>
-                    </div>
-                  </label>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={Boolean(disabledReason) || isSubmitting || switchingChain}
-                  onClick={submit}
-                  className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-medium text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
-                >
-                  <Droplets className="h-4 w-4" />
-                  {switchingChain ? 'Switching Chain' : isSubmitting ? 'Submitting' : disabledReason ?? modeTabs.find((x) => x.id === mode)?.label}
-                </button>
-                {disabledReason ? (
-                  <div className="mt-3 text-xs text-amber-300" role="status">
-                    {disabledReason}
-                  </div>
-                ) : null}
-                {lastHash ? <div className="mt-3 truncate text-xs font-mono text-zinc-500">{lastHash}</div> : null}
-              </div>
-            </div>
-
-            <div className="space-y-5">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-xs text-zinc-500">Room Creator</div>
-                    <div className="mt-1 font-mono text-zinc-200">{shortAddress(snapshot?.creator)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Room</div>
-                    <div className="mt-1 text-zinc-200">
-                      {roomTypeLabel(snapshot?.roomType)} / {roomTierLabel(snapshot?.roomTier)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Key Balance</div>
-                    <div className="mt-1 text-zinc-200">{snapshot?.keyBalance?.toString() ?? '--'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Creator Coin Balance</div>
-                    <div className="mt-1 text-zinc-200">
-                      {formatTokenAmount(snapshot?.creatorCoinBalance, decimals)} {snapshot?.creatorCoinSymbol ?? ''}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Pair Allowlist</div>
-                    <div className="mt-1 text-zinc-200">{snapshot?.pairAllowed ? 'Allowed' : 'Closed'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Creator Allowlist</div>
-                    <div className="mt-1 text-zinc-200">{snapshot?.creatorAllowed ? 'Allowed' : 'Closed'}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs text-zinc-500">Pool</div>
-                    <div className="mt-1 font-mono text-sm text-zinc-200">{shortAddress(snapshot?.pool)}</div>
-                  </div>
-                  <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-500">
-                    {snapshot?.feeBps == null ? '--' : formatAlfaClubPoolFee(snapshot.feeBps)} LP fee
-                  </div>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-xs text-zinc-500">Creator Coin Reserve</div>
-                    <div className="mt-1 text-zinc-200">
-                      {formatTokenAmount(snapshot?.poolCreatorReserve, decimals)} {snapshot?.creatorCoinSymbol ?? ''}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Key Reserve</div>
-                    <div className="mt-1 text-zinc-200">{snapshot?.poolKeyReserve?.toString() ?? '--'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">LP Balance</div>
-                    <div className="mt-1 text-zinc-200">{formatTokenAmount(snapshot?.lpBalance, 18)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">LP Supply</div>
-                    <div className="mt-1 text-zinc-200">{formatTokenAmount(snapshot?.lpTotalSupply, 18)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="text-xs text-zinc-500">Creator Coin Identity</div>
-                <div className="mt-3 flex items-center gap-3">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="" className="h-10 w-10 rounded-full bg-white/10" />
-                  ) : null}
-                  <div className="min-w-0">
-                    <div className="truncate text-sm text-zinc-200">{snapshot?.creatorCoinName || 'Creator Coin'}</div>
-                    <div className="truncate font-mono text-xs text-zinc-600">
-                      {snapshot?.creatorCoinSymbol ?? '--'} / {creatorCoin ? shortAddress(creatorCoin) : '--'}
-                    </div>
-                  </div>
-                </div>
-                {snapshotQuery.error ? (
-                  <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
-                    {snapshotQuery.error instanceof Error ? snapshotQuery.error.message : 'Snapshot read failed'}
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            </aside>
           </div>
         </div>
       </section>
     </div>
-  )
+  );
 }

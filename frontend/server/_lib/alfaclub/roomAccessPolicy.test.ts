@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   syncRoomChannelBridgeMembershipMock,
@@ -21,6 +21,7 @@ const {
   readContractMock: vi.fn(),
   // Mutable box so tests can tweak on-chain quote/balances without re-mocking modules.
   eligibilityState: {
+    quoteErrorCode: 0,
     quoteRaw: 1000n,
     balances: new Map<string, bigint>(),
   },
@@ -44,6 +45,9 @@ vi.mock('../keepr/keeprGating.js', () => ({
 }))
 
 vi.mock('../wallet/alfaclub.js', () => ({
+  ALFACLUB: {
+    friendKey: '0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F',
+  },
   getAlfaClubPublicClient: getAlfaClubPublicClientMock,
 }))
 
@@ -58,12 +62,17 @@ vi.mock('viem', async () => {
 
 import {
   joinAlfaClubRoomAccess,
+  preloadAlfaClubRoomAccessPolicyPoolAddress,
   recheckAlfaClubRoomAccessMemberships,
 } from './roomAccessPolicy.js'
 
 const ROOM_ID = '1659'
 const CREATOR_COIN_ADDRESS = `0x${'11'.repeat(20)}` as `0x${string}`
 const POOL_ADDRESS = `0x${'22'.repeat(20)}` as `0x${string}`
+const FACTORY_ADDRESS = `0x${'33'.repeat(20)}` as `0x${string}`
+const XYK_CURVE_ADDRESS = `0x${'44'.repeat(20)}` as `0x${string}`
+const OTHER_ADDRESS = `0x${'55'.repeat(20)}` as `0x${string}`
+const FRIEND_KEY_ADDRESS = '0xaf0bf8593dc6ca973df2132731b0f9b5f974fa9f'
 const WALLET_A = `0x${'aa'.repeat(20)}` as `0x${string}`
 
 type MembershipRow = {
@@ -171,7 +180,9 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     getAlfaClubPublicClientMock.mockResolvedValue({})
     readContractMock.mockReset()
     readContractMock.mockImplementation(async (args: { functionName: string; args: unknown[] }) => {
-      if (args.functionName === 'quoteBuyKeys') return eligibilityState.quoteRaw
+      if (args.functionName === 'getBuyNFTQuote') {
+        return [eligibilityState.quoteErrorCode, 111n, 222n, eligibilityState.quoteRaw, 333n, 444n]
+      }
       if (args.functionName === 'balanceOf') {
         const wallet = String(args.args[0]).toLowerCase()
         return eligibilityState.balances.get(wallet) ?? 0n
@@ -183,9 +194,14 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       getBlockNumber: vi.fn(async () => 1_000n),
       readContract: readContractMock,
     })
+    eligibilityState.quoteErrorCode = 0
     eligibilityState.quoteRaw = 1000n
     eligibilityState.balances = new Map()
     getDbMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('joinAlfaClubRoomAccess syncs an XMTP group add for a wallet that meets the enter threshold', async () => {
@@ -203,6 +219,25 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       walletAddress: WALLET_A,
       action: 'add',
     })
+    expect(readContractMock).toHaveBeenCalledWith(expect.objectContaining({
+      address: POOL_ADDRESS,
+      functionName: 'getBuyNFTQuote',
+      args: [7n, 1n],
+    }))
+  })
+
+  it('fails closed when Sudoswap returns a non-zero buy-quote error code', async () => {
+    eligibilityState.quoteErrorCode = 2
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    const fakeDb = createFakeDb({ policyRow: makePolicyRow() })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await joinAlfaClubRoomAccess({ roomId: ROOM_ID, walletAddress: WALLET_A })
+
+    expect(result.eligible).toBe(false)
+    expect(result.reason).toBe('onchain_read_failed')
+    expect(result.membership.status).toBe('unknown_stale')
+    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
   it('joinAlfaClubRoomAccess does not sync when the wallet is below the enter threshold', async () => {
@@ -334,5 +369,110 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       walletAddress: WALLET_A,
       action: 'remove',
     })
+  })
+})
+
+describe('preloadAlfaClubRoomAccessPolicyPoolAddress', () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs()
+    getAlfaClubPublicClientMock.mockReset()
+    vi.stubEnv('ALFACLUB_ROOM_1659_SUDOSWAP_PAIR', POOL_ADDRESS)
+    vi.stubEnv('VITE_SUDOSWAP_PAIR_FACTORY', FACTORY_ADDRESS)
+    vi.stubEnv('VITE_SUDOSWAP_XYK_CURVE', XYK_CURVE_ADDRESS)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function mockPair(overrides: Partial<Record<string, unknown>> = {}) {
+    const values: Record<string, unknown> = {
+      factory: FACTORY_ADDRESS,
+      pairVariant: 3,
+      poolType: 2,
+      token: CREATOR_COIN_ADDRESS,
+      nft: FRIEND_KEY_ADDRESS,
+      nftId: 1659n,
+      bondingCurve: XYK_CURVE_ADDRESS,
+      fee: 69_000_000_000_000_000n,
+      isValidPair: true,
+      ...overrides,
+    }
+    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => values[functionName])
+    getAlfaClubPublicClientMock.mockResolvedValue({ readContract })
+    return readContract
+  }
+
+  it('returns the configured official ERC1155/ERC20 TRADE pair after validating every pin', async () => {
+    const readContract = mockPair()
+
+    const resolved = await preloadAlfaClubRoomAccessPolicyPoolAddress({
+      roomId: ROOM_ID,
+      creatorCoinAddress: CREATOR_COIN_ADDRESS,
+      tokenId: ROOM_ID,
+    })
+
+    expect(readContract).toHaveBeenCalledTimes(9)
+    await expect(Promise.all(readContract.mock.results.map((result) => result.value))).resolves.toEqual([
+      FACTORY_ADDRESS,
+      3,
+      2,
+      CREATOR_COIN_ADDRESS,
+      FRIEND_KEY_ADDRESS,
+      1659n,
+      XYK_CURVE_ADDRESS,
+      69_000_000_000_000_000n,
+      true,
+    ])
+    expect(readContract).toHaveBeenCalledWith(expect.objectContaining({
+      address: FACTORY_ADDRESS,
+      functionName: 'isValidPair',
+      args: [POOL_ADDRESS],
+    }))
+    expect(resolved).toBe(POOL_ADDRESS)
+  })
+
+  it('rejects an explicit pair that differs from the configured room pair without reading it', async () => {
+    const readContract = mockPair()
+
+    await expect(preloadAlfaClubRoomAccessPolicyPoolAddress({
+      roomId: ROOM_ID,
+      creatorCoinAddress: CREATOR_COIN_ADDRESS,
+      tokenId: ROOM_ID,
+      pairAddress: OTHER_ADDRESS,
+    })).resolves.toBeNull()
+    expect(readContract).not.toHaveBeenCalled()
+  })
+
+  it('accepts the VITE-prefixed room pair pin when the server-only alias is absent', async () => {
+    vi.stubEnv('ALFACLUB_ROOM_1659_SUDOSWAP_PAIR', '')
+    vi.stubEnv('VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR', POOL_ADDRESS)
+    mockPair()
+
+    await expect(preloadAlfaClubRoomAccessPolicyPoolAddress({
+      roomId: ROOM_ID,
+      creatorCoinAddress: CREATOR_COIN_ADDRESS,
+      tokenId: ROOM_ID,
+    })).resolves.toBe(POOL_ADDRESS)
+  })
+
+  it('fails closed when live pair introspection does not match the configured market', async () => {
+    mockPair({ token: OTHER_ADDRESS })
+
+    await expect(preloadAlfaClubRoomAccessPolicyPoolAddress({
+      roomId: ROOM_ID,
+      creatorCoinAddress: CREATOR_COIN_ADDRESS,
+      tokenId: ROOM_ID,
+    })).resolves.toBeNull()
+  })
+
+  it('rejects an otherwise official pair when its fee is not exactly 6.9%', async () => {
+    mockPair({ fee: 68_999_999_999_999_999n })
+
+    await expect(preloadAlfaClubRoomAccessPolicyPoolAddress({
+      roomId: ROOM_ID,
+      creatorCoinAddress: CREATOR_COIN_ADDRESS,
+      tokenId: ROOM_ID,
+    })).resolves.toBeNull()
   })
 })

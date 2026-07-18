@@ -14,32 +14,86 @@ name: AlfaClub Preflight
 on:
   pull_request:
     paths:
-      - 'contracts/other/alfaclub/**'
-      - 'test/integrations/alfaclub/**'
-      - 'frontend/src/pages/AlfaClubLiquidity.tsx'
-      - 'frontend/src/pages/AlfaClubLiquidityPools.tsx'
-      - 'frontend/src/lib/alfaclub/**'
-      - 'frontend/server/_lib/paymaster/alfaclubLpPolicy.ts'
-      - 'frontend/api/_handlers/paymaster/_paymaster.ts'
-      - '.github/workflows/alfaclub-preflight.yml'
+      - ".gitmodules"
+      - "foundry.toml"
+      - "remappings.txt"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".env.example"
+      - "lib/universal-router"
+      - "lib/sudoswap-lssvm2"
+      - "alfaclub/contracts/script/CreateRoom1659SudoswapPair.s.sol"
+      - "alfaclub/contracts/script/DeployAlfaClubUniversalRouterBase.s.sol"
+      - "alfaclub/contracts/script/DeploySudoswapV2Base.s.sol"
+      - "contracts/other/alfaclub/**"
+      - "test/fixtures/universal-router/**"
+      - "test/integrations/alfaclub/**"
+      - "frontend/package.json"
+      - "frontend/.env.example"
+      - "frontend/scripts/ops/*alfaclub*.ts"
+      - "frontend/scripts/ops/create-room1659-sudoswap-pair-csw.ts"
+      - "frontend/src/components/alfaclub/CreatorCoinLinkPanel*"
+      - "frontend/src/config/contracts*"
+      - "frontend/src/hooks/useAlfaClubLiquidityPools*"
+      - "frontend/src/pages/AlfaClubLiquidity.tsx"
+      - "frontend/src/pages/AlfaClubLiquidityPools.tsx"
+      - "frontend/src/lib/alfaclub/**"
+      - "frontend/src/lib/aa/coinbaseErc4337*"
+      - "frontend/server/_lib/alfaclub/roomAccessPolicy*"
+      - "frontend/server/_lib/alfaclub/roomPolicySync*"
+      - "frontend/server/_lib/onchain/contracts.ts"
+      - "frontend/server/_lib/paymaster/alfaclubLpPolicy.ts"
+      - "frontend/server/_lib/paymaster/alfaclubLpPolicy.test.ts"
+      - "frontend/api/_handlers/paymaster/_paymaster.ts"
+      - "frontend/api/_handlers/v1/alfaclub/_room-access-policy.ts"
+      - "frontend/api/__tests__/alfaclubRoomAccessEndpoints.test.ts"
+      - "frontend/api/__tests__/paymasterUniversalRouterOpcodes.test.ts"
+      - ".github/workflows/alfaclub-preflight.yml"
   push:
     branches:
       - main
     paths:
-      - 'contracts/other/alfaclub/**'
-      - 'test/integrations/alfaclub/**'
-      - 'frontend/src/pages/AlfaClubLiquidity.tsx'
-      - 'frontend/src/pages/AlfaClubLiquidityPools.tsx'
-      - 'frontend/src/lib/alfaclub/**'
-      - 'frontend/server/_lib/paymaster/alfaclubLpPolicy.ts'
-      - 'frontend/api/_handlers/paymaster/_paymaster.ts'
-      - '.github/workflows/alfaclub-preflight.yml'
+      - ".gitmodules"
+      - "foundry.toml"
+      - "remappings.txt"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".env.example"
+      - "lib/universal-router"
+      - "lib/sudoswap-lssvm2"
+      - "alfaclub/contracts/script/CreateRoom1659SudoswapPair.s.sol"
+      - "alfaclub/contracts/script/DeployAlfaClubUniversalRouterBase.s.sol"
+      - "alfaclub/contracts/script/DeploySudoswapV2Base.s.sol"
+      - "contracts/other/alfaclub/**"
+      - "test/fixtures/universal-router/**"
+      - "test/integrations/alfaclub/**"
+      - "frontend/package.json"
+      - "frontend/.env.example"
+      - "frontend/scripts/ops/*alfaclub*.ts"
+      - "frontend/scripts/ops/create-room1659-sudoswap-pair-csw.ts"
+      - "frontend/src/components/alfaclub/CreatorCoinLinkPanel*"
+      - "frontend/src/config/contracts*"
+      - "frontend/src/hooks/useAlfaClubLiquidityPools*"
+      - "frontend/src/pages/AlfaClubLiquidity.tsx"
+      - "frontend/src/pages/AlfaClubLiquidityPools.tsx"
+      - "frontend/src/lib/alfaclub/**"
+      - "frontend/src/lib/aa/coinbaseErc4337*"
+      - "frontend/server/_lib/alfaclub/roomAccessPolicy*"
+      - "frontend/server/_lib/alfaclub/roomPolicySync*"
+      - "frontend/server/_lib/onchain/contracts.ts"
+      - "frontend/server/_lib/paymaster/alfaclubLpPolicy.ts"
+      - "frontend/server/_lib/paymaster/alfaclubLpPolicy.test.ts"
+      - "frontend/api/_handlers/paymaster/_paymaster.ts"
+      - "frontend/api/_handlers/v1/alfaclub/_room-access-policy.ts"
+      - "frontend/api/__tests__/alfaclubRoomAccessEndpoints.test.ts"
+      - "frontend/api/__tests__/paymasterUniversalRouterOpcodes.test.ts"
+      - ".github/workflows/alfaclub-preflight.yml"
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Git ref to preflight (branch, tag, or SHA). Defaults to the ref the workflow was dispatched on.'
+        description: "Git ref to preflight (branch, tag, or SHA). Defaults to the ref the workflow was dispatched on."
         required: false
-        default: ''
+        default: ""
 
 env:
   FOUNDRY_PROFILE: ci
@@ -68,8 +122,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -82,5 +136,39 @@ jobs:
       - name: Forge build
         run: forge build
 
+      - name: Compile exact-pragmas Universal Router fixtures
+        run: forge build test/fixtures/universal-router/CompilePermit2.sol test/fixtures/universal-router/CompileUniswapV2.sol
+
+      - name: AlfaClub Universal Router size gate
+        run: forge build contracts/other/alfaclub/universal-router/AlfaClubUniversalRouter.sol contracts/other/alfaclub/universal-router/AlfaClubSudoswapAdapter.sol --sizes
+
       - name: Forge test (test/integrations/alfaclub/**)
         run: forge test --match-path "test/integrations/alfaclub/**" -vvv
+
+      - name: Frontend AlfaClub router policy tests
+        run: >-
+          pnpm -C frontend exec vitest run
+          src/lib/alfaclub/sudoswapRouter.test.ts
+          src/pages/AlfaClubLiquidity.readiness.test.ts
+          src/hooks/useAlfaClubLiquidityPools.test.ts
+          src/pages/AlfaClubLiquidityPools.writeGate.test.tsx
+          src/components/alfaclub/CreatorCoinLinkPanel.test.tsx
+          server/_lib/paymaster/alfaclubLpPolicy.test.ts
+          server/_lib/alfaclub/roomAccessPolicy.test.ts
+          server/_lib/alfaclub/room1659SudoswapPairPlan.test.ts
+          server/_lib/alfaclub/roomPolicySync.test.ts
+          api/__tests__/alfaclubRoomAccessEndpoints.test.ts
+          api/__tests__/paymasterUniversalRouterOpcodes.test.ts
+
+      - name: Frontend app typecheck
+        run: pnpm -C frontend exec tsc --noEmit -p tsconfig.app.json
+
+      - name: AlfaClub Sudoswap operations typecheck
+        run: >-
+          pnpm -C frontend exec tsc --noEmit --strict --target ES2022
+          --module ESNext --moduleResolution bundler --allowSyntheticDefaultImports
+          --skipLibCheck --types node
+          scripts/ops/preflight-alfaclub-base-dependencies.ts
+          scripts/ops/configure-alfaclub-sudoswap-safe.ts
+          scripts/ops/create-room1659-sudoswap-pair-csw.ts
+          scripts/ops/monitor-alfaclub-sudoswap.ts

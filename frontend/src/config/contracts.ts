@@ -10,13 +10,22 @@ import {
   normalizeDeploymentBatcherAddress,
 } from './contracts.defaults'
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function isZeroAddress(value?: string): boolean {
+  return (value ?? '').trim().toLowerCase() === ZERO_ADDRESS
+}
+
 // Prefer env overrides for local/dev flexibility. In production, default to repo-controlled BASE_DEFAULTS
 // to avoid mismatches between frontend + backend configs (which can break paymaster validation).
 function envAddress(name: string, fallback?: `0x${string}` | undefined): `0x${string}` | undefined {
   const env: any = (import.meta as any)?.env ?? {}
   const isProd = Boolean(env.PROD)
   const allowOverrides = String(env.VITE_ALLOW_CONTRACT_OVERRIDES ?? '').trim() === '1'
-  if (isProd && !allowOverrides) return fallback
+  // An explicit zero default marks greenfield infrastructure that has not been
+  // pinned in-repo yet. Allow its deployment env pin through in production,
+  // while keeping nonzero repo defaults authoritative.
+  if (isProd && !allowOverrides && !isZeroAddress(fallback)) return fallback
 
   const v = env?.[name] as string | undefined
   if (!v) return fallback
@@ -111,9 +120,25 @@ export const CONTRACTS = {
 
   // Helpers
   strategyDeploymentBatcher: envAddress('VITE_STRATEGY_DEPLOYMENT_BATCHER'), // Deploy with: forge create StrategyDeploymentBatcher
-  alfaCreatorKeyLpFactory: envAddress(
-    'VITE_ALFA_CREATOR_KEY_LP_FACTORY',
-    BASE_DEFAULTS.alfaCreatorKeyLpFactory,
+  alfaClubUniversalRouter: envAddress(
+    'VITE_ALFACLUB_UNIVERSAL_ROUTER',
+    BASE_DEFAULTS.alfaClubUniversalRouter,
+  )!,
+  alfaClubSudoswapAdapter: envAddress(
+    'VITE_ALFACLUB_SUDOSWAP_ADAPTER',
+    BASE_DEFAULTS.alfaClubSudoswapAdapter,
+  )!,
+  sudoswapPairFactory: envAddress(
+    'VITE_SUDOSWAP_PAIR_FACTORY',
+    BASE_DEFAULTS.sudoswapPairFactory,
+  )!,
+  sudoswapXykCurve: envAddress(
+    'VITE_SUDOSWAP_XYK_CURVE',
+    BASE_DEFAULTS.sudoswapXykCurve,
+  )!,
+  room1659SudoswapPair: envAddress(
+    'VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR',
+    BASE_DEFAULTS.room1659SudoswapPair,
   )!,
   impairmentClaims: envAddress('VITE_IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
   impairmentRecoveryEscrow: envAddress(

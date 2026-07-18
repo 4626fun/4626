@@ -20,3 +20,9 @@
 [submodule "dgclaw-skill"]
 	path = dgclaw-skill
 	url = https://github.com/wenakita/dgclaw-skill.git
+[submodule "sudoswap-lssvm2"]
+	path = lib/sudoswap-lssvm2
+	url = https://github.com/sudoswap/lssvm2.git
+[submodule "uniswap-universal-router"]
+	path = lib/universal-router
+	url = https://github.com/Uniswap/universal-router.git

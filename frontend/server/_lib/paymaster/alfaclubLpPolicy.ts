@@ -1,377 +1,739 @@
 import {
+  decodeAbiParameters,
   decodeFunctionData,
+  encodeAbiParameters,
   getAddress,
   isAddress,
   parseAbi,
+  parseAbiParameters,
   toFunctionSelector,
   type Address,
   type Hex,
-} from 'viem'
+} from "viem";
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
-export const ALFACLUB_FRIEND_KEY = getAddress('0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F')
-export const ROOM_1659_CREATOR_COIN = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-export const ROOM_1659_TOKEN_ID = 1659n
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const MSG_SENDER_RECIPIENT =
+  "0x0000000000000000000000000000000000000001" as Address;
+const CANONICAL_PERMIT2 = getAddress(
+  "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+);
+const ALFACLUB_SUDOSWAP_BUY_COMMAND = 0x41;
+const ALFACLUB_SUDOSWAP_SELL_COMMAND = 0x42;
 
-const FACTORY_ABI = parseAbi([
-  'function poolCreatorAllowed(address account) view returns (bool)',
-  'function pairAllowed(address creatorCoin, uint256 tokenId) view returns (bool)',
-  'function getPool(address creatorCoin, uint256 tokenId) view returns (address)',
-  'function createPoolWithInitialLiquidity(address creatorCoin, uint256 tokenId, uint256 keyAmount, uint256 creatorCoinAmount, address recipient) returns (address)',
-])
-const POOL_ABI = parseAbi([
-  'function factory() view returns (address)',
-  'function friendKey() view returns (address)',
-  'function creatorCoin() view returns (address)',
-  'function keyTokenId() view returns (uint256)',
-  'function getReserves() view returns (uint256 creatorCoinReserve, uint256 keyReserve)',
-  'function totalSupply() view returns (uint256)',
-  'function quoteAddLiquidity(uint256 keyAmount) view returns (uint256 creatorCoinAmount, uint256 lpShares)',
-  'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
-  'function quoteSellKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountOut)',
-  'function addLiquidity(uint256 keyAmount, uint256 maxCreatorCoinAmount, uint256 minLpShares, address recipient) returns (uint256 creatorCoinAmount, uint256 lpShares)',
-  'function removeLiquidity(uint256 lpShares, uint256 minCreatorCoinAmount, uint256 minKeyAmount, address recipient) returns (uint256 creatorCoinAmount, uint256 keyAmount)',
-  'function buyKeys(uint256 keyAmount, uint256 maxCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountIn)',
-  'function sellKeys(uint256 keyAmount, uint256 minCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountOut)',
-])
-const POOL_ACTION_ABI = parseAbi([
-  'function addLiquidity(uint256 keyAmount, uint256 maxCreatorCoinAmount, uint256 minLpShares, address recipient) returns (uint256 creatorCoinAmount, uint256 lpShares)',
-  'function removeLiquidity(uint256 lpShares, uint256 minCreatorCoinAmount, uint256 minKeyAmount, address recipient) returns (uint256 creatorCoinAmount, uint256 keyAmount)',
-  'function buyKeys(uint256 keyAmount, uint256 maxCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountIn)',
-  'function sellKeys(uint256 keyAmount, uint256 minCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountOut)',
-])
-const ERC20_APPROVE_ABI = parseAbi([
-  'function approve(address spender, uint256 amount) returns (bool)',
-])
-const ERC1155_APPROVAL_ABI = parseAbi([
-  'function setApprovalForAll(address operator, bool approved)',
-])
+export const ALFACLUB_FRIEND_KEY = getAddress(
+  "0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F",
+);
+export const ROOM_1659_CREATOR_COIN = getAddress(
+  "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+);
+export const ROOM_1659_TOKEN_ID = 1659n;
+export const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n;
 
-const CREATE_SELECTOR = toFunctionSelector(
-  'createPoolWithInitialLiquidity(address,uint256,uint256,uint256,address)',
-)
-const POOL_SELECTORS = new Set<Hex>([
-  toFunctionSelector('addLiquidity(uint256,uint256,uint256,address)'),
-  toFunctionSelector('removeLiquidity(uint256,uint256,uint256,address)'),
-  toFunctionSelector('buyKeys(uint256,uint256,address)'),
-  toFunctionSelector('sellKeys(uint256,uint256,address)'),
-])
-const APPROVE_SELECTOR = toFunctionSelector('approve(address,uint256)')
-const SET_APPROVAL_FOR_ALL_SELECTOR = toFunctionSelector('setApprovalForAll(address,bool)')
+const ERC20_ABI = parseAbi([
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
+]);
+const ERC1155_ABI = parseAbi([
+  "function setApprovalForAll(address operator, bool approved)",
+  "function balanceOf(address account, uint256 id) view returns (uint256)",
+]);
+const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
+  "function factory() view returns (address)",
+  "function pairVariant() pure returns (uint8)",
+  "function poolType() view returns (uint8)",
+  "function token() view returns (address)",
+  "function nft() view returns (address)",
+  "function nftId() pure returns (uint256)",
+  "function bondingCurve() view returns (address)",
+  "function fee() view returns (uint96)",
+  "function getBuyNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 inputAmount, uint256 protocolFee, uint256 royaltyAmount)",
+  "function getSellNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 outputAmount, uint256 protocolFee, uint256 royaltyAmount)",
+]);
+const SUDOSWAP_PAIR_FACTORY_ABI = parseAbi([
+  "function isValidPair(address pair) view returns (bool)",
+  "function routerStatus(address router) view returns (bool allowed, bool wasEverTouched)",
+]);
+const ALFACLUB_SUDOSWAP_ADAPTER_ABI = parseAbi([
+  "function factory() view returns (address)",
+  "function permit2() view returns (address)",
+  "function friendKey() view returns (address)",
+  "function xykCurve() view returns (address)",
+  "function universalRouter() view returns (address)",
+  "function markets(address pair) view returns (address creatorCoin, uint256 tokenId, bool allowed)",
+]);
+export const ALFACLUB_SPONSORED_ROUTER_ABI = parseAbi([
+  "function execute(bytes commands, bytes[] inputs, uint256 deadline) payable",
+  "function SUDOSWAP_ADAPTER() view returns (address)",
+]);
+const PERMIT2_ALLOWANCE_TRANSFER_ABI = parseAbi([
+  "function approve(address token, address spender, uint160 amount, uint48 expiration)",
+]);
+const SUDOSWAP_INPUT_PARAMETERS = parseAbiParameters(
+  "address pair, address recipient, uint256 keyAmount, uint256 limit, bool payerIsUser",
+);
+
+const EXECUTE_SELECTOR = toFunctionSelector("execute(bytes,bytes[],uint256)");
+const APPROVE_SELECTOR = toFunctionSelector("approve(address,uint256)");
+const PERMIT2_APPROVE_SELECTOR = toFunctionSelector(
+  "approve(address,address,uint160,uint48)",
+);
+const SET_APPROVAL_FOR_ALL_SELECTOR = toFunctionSelector(
+  "setApprovalForAll(address,bool)",
+);
+
+function decodeAlfaClubSudoswapInput(input: Hex): {
+  pair: Address;
+  recipient: Address;
+  keyAmount: bigint;
+  limit: bigint;
+  payerIsUser: boolean;
+} {
+  if ((input.length - 2) / 2 !== 160)
+    throw new Error("alfaclub_sudoswap_input_length_invalid");
+  const decoded = decodeAbiParameters(SUDOSWAP_INPUT_PARAMETERS, input);
+  const result = {
+    pair: getAddress(decoded[0]),
+    recipient: getAddress(decoded[1]),
+    keyAmount: decoded[2],
+    limit: decoded[3],
+    payerIsUser: decoded[4],
+  };
+  const canonical = encodeAbiParameters(SUDOSWAP_INPUT_PARAMETERS, [
+    result.pair,
+    result.recipient,
+    result.keyAmount,
+    result.limit,
+    result.payerIsUser,
+  ]);
+  if (canonical.toLowerCase() !== input.toLowerCase()) {
+    throw new Error("alfaclub_sudoswap_input_noncanonical");
+  }
+  return result;
+}
 
 export type AlfaClubLpInnerCall = {
-  target: Address
-  value: bigint
-  data: Hex
-}
+  target: Address;
+  value: bigint;
+  data: Hex;
+};
 
 type ReadClient = {
   readContract: (params: {
-    address: Address
-    abi: typeof FACTORY_ABI | typeof POOL_ABI
-    functionName: string
-    args?: readonly unknown[]
-  }) => Promise<unknown>
-}
+    address: Address;
+    abi: readonly unknown[];
+    functionName: string;
+    args?: readonly unknown[];
+  }) => Promise<unknown>;
+};
 
 export type AlfaClubLpPolicyResult = {
-  creatorCoin: Address
-  tokenId: bigint
-  pool: Address | null
-}
+  creatorCoin: Address;
+  tokenId: bigint;
+  pool: Address;
+};
+
+export type AlfaClubLpPolicyConfig = {
+  router: Address;
+  adapter: Address;
+  pair: Address;
+  factory: Address;
+  xykCurve: Address;
+  permit2: Address;
+  creatorCoin: Address;
+  tokenId: bigint;
+  maxKeyAmount: bigint;
+  maxSlippageBps: bigint;
+  maxDeadlineSeconds: bigint;
+};
 
 function selector(data: Hex): Hex {
-  return data.slice(0, 10) as Hex
+  return data.slice(0, 10) as Hex;
 }
 
-function readConfiguredAddress(raw: string | undefined, error: string): Address {
-  const value = String(raw ?? '').trim()
-  if (!isAddress(value) || getAddress(value) === ZERO_ADDRESS) throw new Error(error)
-  return getAddress(value)
+function optionalConfiguredAddress(raw: string | undefined): Address | null {
+  const value = String(raw ?? "").trim();
+  if (!isAddress(value)) return null;
+  const address = getAddress(value);
+  return address === ZERO_ADDRESS ? null : address;
 }
 
-export function resolveAlfaClubLpPolicyConfig(env: Record<string, string | undefined>): {
-  factory: Address
-  creatorCoin: Address
-  tokenId: bigint
-  maxKeyAmount: bigint
-  maxSlippageBps: bigint
-} {
-  const factory = readConfiguredAddress(
-    env.ALFA_CREATOR_KEY_LP_FACTORY ?? env.VITE_ALFA_CREATOR_KEY_LP_FACTORY,
-    'alfaclub_lp_factory_not_configured',
-  )
-  const creatorCoinRaw = env.ALFACLUB_LP_CREATOR_COIN?.trim()
-  const creatorCoin = creatorCoinRaw
-    ? readConfiguredAddress(creatorCoinRaw, 'alfaclub_lp_creator_coin_not_configured')
-    : ROOM_1659_CREATOR_COIN
-  const tokenIdRaw = String(env.ALFACLUB_LP_TOKEN_ID ?? ROOM_1659_TOKEN_ID).trim()
-  const maxKeyAmountRaw = String(env.ALFACLUB_LP_MAX_KEY_AMOUNT ?? '100').trim()
-  const maxSlippageBpsRaw = String(env.ALFACLUB_LP_MAX_SLIPPAGE_BPS ?? '500').trim()
-  if (!/^\d+$/.test(tokenIdRaw) || BigInt(tokenIdRaw) <= 0n) {
-    throw new Error('alfaclub_lp_token_id_invalid')
+function readConfiguredAddress(
+  raw: string | undefined,
+  error: string,
+): Address {
+  const address = optionalConfiguredAddress(raw);
+  if (!address) throw new Error(error);
+  return address;
+}
+
+function readPositiveInteger(
+  raw: string | undefined,
+  fallback: string,
+  error: string,
+): bigint {
+  const value = String(raw ?? fallback).trim();
+  if (!/^\d+$/.test(value) || BigInt(value) <= 0n) throw new Error(error);
+  return BigInt(value);
+}
+
+export function resolveAlfaClubLpPolicyConfig(
+  env: Record<string, string | undefined>,
+): AlfaClubLpPolicyConfig {
+  const creatorCoinRaw = env.ALFACLUB_LP_CREATOR_COIN?.trim();
+  const tokenId = readPositiveInteger(
+    env.ALFACLUB_LP_TOKEN_ID,
+    ROOM_1659_TOKEN_ID.toString(),
+    "alfaclub_sudoswap_token_id_invalid",
+  );
+  const maxSlippageRaw = String(
+    env.ALFACLUB_LP_MAX_SLIPPAGE_BPS ?? "500",
+  ).trim();
+  if (!/^\d+$/.test(maxSlippageRaw) || BigInt(maxSlippageRaw) >= 10_000n) {
+    throw new Error("alfaclub_sudoswap_max_slippage_bps_invalid");
   }
-  if (!/^\d+$/.test(maxKeyAmountRaw) || BigInt(maxKeyAmountRaw) <= 0n) {
-    throw new Error('alfaclub_lp_max_key_amount_invalid')
-  }
-  if (
-    !/^\d+$/.test(maxSlippageBpsRaw) ||
-    BigInt(maxSlippageBpsRaw) < 0n ||
-    BigInt(maxSlippageBpsRaw) >= 10_000n
-  ) {
-    throw new Error('alfaclub_lp_max_slippage_bps_invalid')
-  }
+
   return {
-    factory,
-    creatorCoin,
-    tokenId: BigInt(tokenIdRaw),
-    maxKeyAmount: BigInt(maxKeyAmountRaw),
-    maxSlippageBps: BigInt(maxSlippageBpsRaw),
-  }
+    router: readConfiguredAddress(
+      env.ALFACLUB_UNIVERSAL_ROUTER ?? env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
+      "alfaclub_sudoswap_router_not_configured",
+    ),
+    adapter: readConfiguredAddress(
+      env.ALFACLUB_SUDOSWAP_ADAPTER ?? env.VITE_ALFACLUB_SUDOSWAP_ADAPTER,
+      "alfaclub_sudoswap_adapter_not_configured",
+    ),
+    pair: readConfiguredAddress(
+      env.ALFACLUB_ROOM_1659_SUDOSWAP_PAIR ??
+        env.VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR,
+      "alfaclub_sudoswap_pair_not_configured",
+    ),
+    factory: readConfiguredAddress(
+      env.SUDOSWAP_PAIR_FACTORY ?? env.VITE_SUDOSWAP_PAIR_FACTORY,
+      "alfaclub_sudoswap_factory_not_configured",
+    ),
+    xykCurve: readConfiguredAddress(
+      env.SUDOSWAP_XYK_CURVE ?? env.VITE_SUDOSWAP_XYK_CURVE,
+      "alfaclub_sudoswap_curve_not_configured",
+    ),
+    permit2:
+      optionalConfiguredAddress(env.PERMIT2 ?? env.VITE_PERMIT2) ??
+      CANONICAL_PERMIT2,
+    creatorCoin: creatorCoinRaw
+      ? readConfiguredAddress(
+          creatorCoinRaw,
+          "alfaclub_sudoswap_creator_coin_not_configured",
+        )
+      : ROOM_1659_CREATOR_COIN,
+    tokenId,
+    maxKeyAmount: readPositiveInteger(
+      env.ALFACLUB_LP_MAX_KEY_AMOUNT,
+      "100",
+      "alfaclub_sudoswap_max_key_amount_invalid",
+    ),
+    maxSlippageBps: BigInt(maxSlippageRaw),
+    maxDeadlineSeconds: readPositiveInteger(
+      env.ALFACLUB_LP_MAX_DEADLINE_SECONDS,
+      "1200",
+      "alfaclub_sudoswap_max_deadline_invalid",
+    ),
+  };
 }
 
-function assertPositiveAmount(value: bigint, error: string): void {
-  if (value <= 0n) throw new Error(error)
+function addressResult(value: unknown, error: string): Address {
+  if (typeof value !== "string" || !isAddress(value)) throw new Error(error);
+  return getAddress(value);
 }
 
-function assertKeyAmount(value: bigint, maxKeyAmount: bigint): void {
-  assertPositiveAmount(value, 'alfaclub_lp_key_amount_invalid')
-  if (value > maxKeyAmount) throw new Error('alfaclub_lp_key_amount_exceeds_policy')
+function integerResult(value: unknown, error: string): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
+    return BigInt(value);
+  throw new Error(error);
 }
 
-function maxWithSlippage(value: bigint, slippageBps: bigint): bigint {
-  return (value * (10_000n + slippageBps) + 9_999n) / 10_000n
+function tupleResult(
+  value: unknown,
+  length: number,
+  error: string,
+): readonly unknown[] {
+  if (!Array.isArray(value) || value.length < length) throw new Error(error);
+  return value;
 }
 
 function minWithSlippage(value: bigint, slippageBps: bigint): bigint {
-  return (value * (10_000n - slippageBps)) / 10_000n
+  return (value * (10_000n - slippageBps)) / 10_000n;
+}
+
+function maxWithSlippage(value: bigint, slippageBps: bigint): bigint {
+  return (value * (10_000n + slippageBps) + 9_999n) / 10_000n;
+}
+
+async function validateLiveMarket(params: {
+  client: ReadClient;
+  config: AlfaClubLpPolicyConfig;
+  direction: "buy" | "sell";
+  keyAmount: bigint;
+}): Promise<{
+  quoteAmount: bigint;
+  protocolFee: bigint;
+  royaltyAmount: bigint;
+}> {
+  const { client, config } = params;
+  const [
+    validPair,
+    pairFactory,
+    pairVariant,
+    poolType,
+    pairToken,
+    pairNft,
+    pairTokenId,
+    pairCurve,
+    pairFee,
+    adapterFactory,
+    adapterPermit2,
+    adapterFriendKey,
+    adapterCurve,
+    adapterRouter,
+    adapterMarket,
+    routerAdapter,
+    quoteRaw,
+    pairKeyBalance,
+    pairCoinBalance,
+  ] = await Promise.all([
+    client.readContract({
+      address: config.factory,
+      abi: SUDOSWAP_PAIR_FACTORY_ABI,
+      functionName: "isValidPair",
+      args: [config.pair],
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "factory",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "pairVariant",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "poolType",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "token",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "nft",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "nftId",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "bondingCurve",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "fee",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "factory",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "permit2",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "friendKey",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "xykCurve",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "universalRouter",
+    }),
+    client.readContract({
+      address: config.adapter,
+      abi: ALFACLUB_SUDOSWAP_ADAPTER_ABI,
+      functionName: "markets",
+      args: [config.pair],
+    }),
+    client.readContract({
+      address: config.router,
+      abi: ALFACLUB_SPONSORED_ROUTER_ABI,
+      functionName: "SUDOSWAP_ADAPTER",
+    }),
+    client.readContract({
+      address: config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName:
+        params.direction === "buy" ? "getBuyNFTQuote" : "getSellNFTQuote",
+      args: [config.tokenId, params.keyAmount],
+    }),
+    client.readContract({
+      address: ALFACLUB_FRIEND_KEY,
+      abi: ERC1155_ABI,
+      functionName: "balanceOf",
+      args: [config.pair, config.tokenId],
+    }),
+    client.readContract({
+      address: config.creatorCoin,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [config.pair],
+    }),
+  ]);
+
+  if (validPair !== true) throw new Error("alfaclub_sudoswap_pair_invalid");
+  if (
+    addressResult(pairFactory, "alfaclub_sudoswap_pair_factory_unavailable") !==
+    config.factory
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_factory_mismatch");
+  }
+  if (
+    integerResult(pairVariant, "alfaclub_sudoswap_pair_variant_unavailable") !==
+    3n
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_variant_mismatch");
+  }
+  if (
+    integerResult(poolType, "alfaclub_sudoswap_pool_type_unavailable") !== 2n
+  ) {
+    throw new Error("alfaclub_sudoswap_pool_type_mismatch");
+  }
+  if (
+    addressResult(pairToken, "alfaclub_sudoswap_pair_token_unavailable") !==
+    config.creatorCoin
+  ) {
+    throw new Error("alfaclub_sudoswap_creator_coin_mismatch");
+  }
+  if (
+    addressResult(pairNft, "alfaclub_sudoswap_pair_nft_unavailable") !==
+    ALFACLUB_FRIEND_KEY
+  ) {
+    throw new Error("alfaclub_sudoswap_friend_key_mismatch");
+  }
+  if (
+    integerResult(
+      pairTokenId,
+      "alfaclub_sudoswap_pair_token_id_unavailable",
+    ) !== config.tokenId
+  ) {
+    throw new Error("alfaclub_sudoswap_token_id_mismatch");
+  }
+  if (
+    addressResult(pairCurve, "alfaclub_sudoswap_pair_curve_unavailable") !==
+    config.xykCurve
+  ) {
+    throw new Error("alfaclub_sudoswap_curve_mismatch");
+  }
+  if (
+    integerResult(pairFee, "alfaclub_sudoswap_pair_fee_unavailable") !==
+    ROOM_1659_TRADING_PAIR_FEE
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_fee_mismatch");
+  }
+
+  if (
+    addressResult(
+      adapterFactory,
+      "alfaclub_sudoswap_adapter_factory_unavailable",
+    ) !== config.factory
+  ) {
+    throw new Error("alfaclub_sudoswap_adapter_factory_mismatch");
+  }
+  if (
+    addressResult(
+      adapterPermit2,
+      "alfaclub_sudoswap_adapter_permit2_unavailable",
+    ) !== config.permit2
+  ) {
+    throw new Error("alfaclub_sudoswap_adapter_permit2_mismatch");
+  }
+  if (
+    addressResult(
+      adapterFriendKey,
+      "alfaclub_sudoswap_adapter_friend_key_unavailable",
+    ) !== ALFACLUB_FRIEND_KEY
+  ) {
+    throw new Error("alfaclub_sudoswap_adapter_friend_key_mismatch");
+  }
+  if (
+    addressResult(
+      adapterCurve,
+      "alfaclub_sudoswap_adapter_curve_unavailable",
+    ) !== config.xykCurve
+  ) {
+    throw new Error("alfaclub_sudoswap_adapter_curve_mismatch");
+  }
+  if (
+    addressResult(
+      adapterRouter,
+      "alfaclub_sudoswap_adapter_router_unavailable",
+    ) !== config.router
+  ) {
+    throw new Error("alfaclub_sudoswap_adapter_router_mismatch");
+  }
+  if (
+    addressResult(
+      routerAdapter,
+      "alfaclub_sudoswap_router_adapter_unavailable",
+    ) !== config.adapter
+  ) {
+    throw new Error("alfaclub_sudoswap_router_adapter_mismatch");
+  }
+
+  const market = tupleResult(
+    adapterMarket,
+    3,
+    "alfaclub_sudoswap_market_unavailable",
+  );
+  if (
+    addressResult(market[0], "alfaclub_sudoswap_market_coin_unavailable") !==
+      config.creatorCoin ||
+    integerResult(
+      market[1],
+      "alfaclub_sudoswap_market_token_id_unavailable",
+    ) !== config.tokenId ||
+    market[2] !== true
+  ) {
+    throw new Error("alfaclub_sudoswap_market_not_allowed");
+  }
+
+  const quote = tupleResult(quoteRaw, 6, "alfaclub_sudoswap_quote_unavailable");
+  if (
+    integerResult(quote[0], "alfaclub_sudoswap_quote_error_unavailable") !== 0n
+  ) {
+    throw new Error("alfaclub_sudoswap_quote_error");
+  }
+  const quoteAmount = integerResult(
+    quote[3],
+    "alfaclub_sudoswap_quote_amount_unavailable",
+  );
+  const protocolFee = integerResult(
+    quote[4],
+    "alfaclub_sudoswap_quote_fee_unavailable",
+  );
+  const royaltyAmount = integerResult(
+    quote[5],
+    "alfaclub_sudoswap_quote_royalty_unavailable",
+  );
+  if (quoteAmount <= 0n)
+    throw new Error("alfaclub_sudoswap_quote_amount_invalid");
+
+  if (params.direction === "buy") {
+    if (
+      integerResult(
+        pairKeyBalance,
+        "alfaclub_sudoswap_key_inventory_unavailable",
+      ) < params.keyAmount
+    ) {
+      throw new Error("alfaclub_sudoswap_key_inventory_insufficient");
+    }
+  } else if (
+    integerResult(
+      pairCoinBalance,
+      "alfaclub_sudoswap_coin_inventory_unavailable",
+    ) <
+    quoteAmount + protocolFee + royaltyAmount
+  ) {
+    throw new Error("alfaclub_sudoswap_coin_inventory_insufficient");
+  }
+
+  return { quoteAmount, protocolFee, royaltyAmount };
 }
 
 export async function validateAlfaClubLpCalls(params: {
-  calls: AlfaClubLpInnerCall[]
-  sender: Address
-  client: ReadClient
-  env: Record<string, string | undefined>
+  calls: AlfaClubLpInnerCall[];
+  sender: Address;
+  client: ReadClient;
+  env: Record<string, string | undefined>;
+  nowSeconds?: bigint;
 }): Promise<AlfaClubLpPolicyResult | null> {
-  const hasLpSelector = params.calls.some((call) => {
-    const callSelector = selector(call.data)
-    return callSelector === CREATE_SELECTOR || POOL_SELECTORS.has(callSelector)
-  })
-  if (!hasLpSelector) return null
-  if (params.calls.length > 3) throw new Error('alfaclub_lp_call_count_not_allowed')
+  const configuredRouter = optionalConfiguredAddress(
+    params.env.ALFACLUB_UNIVERSAL_ROUTER ??
+      params.env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
+  );
+  if (
+    !configuredRouter ||
+    !params.calls.some((call) => call.target === configuredRouter)
+  )
+    return null;
+
+  const config = resolveAlfaClubLpPolicyConfig(params.env);
+  if (params.calls.length > 3 || params.calls.length === 0) {
+    throw new Error("alfaclub_sudoswap_call_count_not_allowed");
+  }
   if (params.calls.some((call) => call.value !== 0n)) {
-    throw new Error('alfaclub_lp_value_not_allowed')
+    throw new Error("alfaclub_sudoswap_value_not_allowed");
   }
 
-  const config = resolveAlfaClubLpPolicyConfig(params.env)
-  const primaryCalls = params.calls.filter((call) => {
-    const callSelector = selector(call.data)
-    return callSelector === CREATE_SELECTOR || POOL_SELECTORS.has(callSelector)
-  })
-  if (primaryCalls.length !== 1) throw new Error('alfaclub_lp_primary_call_count_invalid')
-  const primary = primaryCalls[0]
-  const primarySelector = selector(primary.data)
+  const routerCalls = params.calls.filter(
+    (call) => call.target === config.router,
+  );
+  if (routerCalls.length !== 1)
+    throw new Error("alfaclub_sudoswap_router_call_count_invalid");
+  const routerCall = routerCalls[0]!;
+  if (params.calls[params.calls.length - 1] !== routerCall) {
+    throw new Error("alfaclub_sudoswap_router_call_order_invalid");
+  }
+  if (selector(routerCall.data) !== EXECUTE_SELECTOR) {
+    throw new Error("alfaclub_sudoswap_router_selector_not_allowed");
+  }
 
-  let pool: Address | null = null
-  let approvalOperator = config.factory
+  const decoded = decodeFunctionData({
+    abi: ALFACLUB_SPONSORED_ROUTER_ABI,
+    data: routerCall.data,
+  });
+  if (decoded.functionName !== "execute")
+    throw new Error("alfaclub_sudoswap_execute_decode_failed");
+  const [commands, inputs, deadline] = decoded.args;
+  const buyCommand = `0x${ALFACLUB_SUDOSWAP_BUY_COMMAND.toString(16)}` as Hex;
+  const sellCommand = `0x${ALFACLUB_SUDOSWAP_SELL_COMMAND.toString(16)}` as Hex;
+  const direction =
+    commands === buyCommand ? "buy" : commands === sellCommand ? "sell" : null;
+  if (!direction) throw new Error("alfaclub_sudoswap_command_not_allowed");
+  if (inputs.length !== 1 || !inputs[0])
+    throw new Error("alfaclub_sudoswap_input_count_invalid");
 
-  if (primarySelector === CREATE_SELECTOR) {
-    if (primary.target !== config.factory) throw new Error('alfaclub_lp_factory_mismatch')
-    const decoded = decodeFunctionData({ abi: FACTORY_ABI, data: primary.data })
-    if (decoded.functionName !== 'createPoolWithInitialLiquidity') {
-      throw new Error('alfaclub_lp_create_decode_failed')
-    }
-    const [creatorCoin, tokenId, keyAmount, creatorCoinAmount, recipient] = decoded.args
-    if (getAddress(creatorCoin) !== config.creatorCoin) {
-      throw new Error('alfaclub_lp_creator_coin_mismatch')
-    }
-    if (tokenId !== config.tokenId) throw new Error('alfaclub_lp_token_id_mismatch')
-    assertKeyAmount(keyAmount, config.maxKeyAmount)
-    assertPositiveAmount(creatorCoinAmount, 'alfaclub_lp_creator_coin_amount_invalid')
-    if (getAddress(recipient) !== params.sender) throw new Error('alfaclub_lp_recipient_mismatch')
+  const input = decodeAlfaClubSudoswapInput(inputs[0]);
+  if (input.pair !== config.pair)
+    throw new Error("alfaclub_sudoswap_pair_mismatch");
+  if (
+    input.recipient !== params.sender &&
+    input.recipient !== MSG_SENDER_RECIPIENT
+  ) {
+    throw new Error("alfaclub_sudoswap_recipient_mismatch");
+  }
+  if (!input.payerIsUser)
+    throw new Error("alfaclub_sudoswap_payer_must_be_user");
+  if (input.keyAmount <= 0n)
+    throw new Error("alfaclub_sudoswap_key_amount_invalid");
+  if (input.keyAmount > config.maxKeyAmount)
+    throw new Error("alfaclub_sudoswap_key_amount_exceeds_policy");
+  if (input.limit <= 0n) throw new Error("alfaclub_sudoswap_limit_invalid");
 
-    const [creatorAllowed, pairAllowed, existingPool] = await Promise.all([
-      params.client.readContract({
-        address: config.factory,
-        abi: FACTORY_ABI,
-        functionName: 'poolCreatorAllowed',
-        args: [params.sender],
-      }),
-      params.client.readContract({
-        address: config.factory,
-        abi: FACTORY_ABI,
-        functionName: 'pairAllowed',
-        args: [config.creatorCoin, config.tokenId],
-      }),
-      params.client.readContract({
-        address: config.factory,
-        abi: FACTORY_ABI,
-        functionName: 'getPool',
-        args: [config.creatorCoin, config.tokenId],
-      }),
-    ])
-    if (creatorAllowed !== true) throw new Error('alfaclub_lp_creator_not_allowed')
-    if (pairAllowed !== true) throw new Error('alfaclub_lp_pair_not_allowed')
-    if (typeof existingPool !== 'string' || !isAddress(existingPool) || getAddress(existingPool) !== ZERO_ADDRESS) {
-      throw new Error('alfaclub_lp_pool_already_exists')
-    }
-  } else {
-    pool = primary.target
-    approvalOperator = pool
-    const [factory, friendKey, creatorCoin, tokenId, registeredPool] = await Promise.all([
-      params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'factory' }),
-      params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'friendKey' }),
-      params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'creatorCoin' }),
-      params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'keyTokenId' }),
-      params.client.readContract({
-        address: config.factory,
-        abi: FACTORY_ABI,
-        functionName: 'getPool',
-        args: [config.creatorCoin, config.tokenId],
-      }),
-    ])
-    if (typeof factory !== 'string' || !isAddress(factory) || getAddress(factory) !== config.factory) {
-      throw new Error('alfaclub_lp_pool_factory_mismatch')
-    }
-    if (typeof friendKey !== 'string' || !isAddress(friendKey) || getAddress(friendKey) !== ALFACLUB_FRIEND_KEY) {
-      throw new Error('alfaclub_lp_friend_key_mismatch')
-    }
-    if (typeof creatorCoin !== 'string' || !isAddress(creatorCoin) || getAddress(creatorCoin) !== config.creatorCoin) {
-      throw new Error('alfaclub_lp_creator_coin_mismatch')
-    }
-    if (tokenId !== config.tokenId) throw new Error('alfaclub_lp_token_id_mismatch')
+  const nowSeconds = params.nowSeconds ?? BigInt(Math.floor(Date.now() / 1000));
+  if (
+    deadline < nowSeconds ||
+    deadline > nowSeconds + config.maxDeadlineSeconds
+  ) {
+    throw new Error("alfaclub_sudoswap_deadline_not_allowed");
+  }
+
+  const live = await validateLiveMarket({
+    client: params.client,
+    config,
+    direction,
+    keyAmount: input.keyAmount,
+  });
+  if (direction === "buy") {
     if (
-      typeof registeredPool !== 'string' ||
-      !isAddress(registeredPool) ||
-      getAddress(registeredPool) !== pool
+      input.limit < live.quoteAmount ||
+      input.limit > maxWithSlippage(live.quoteAmount, config.maxSlippageBps)
     ) {
-      throw new Error('alfaclub_lp_pool_not_registered')
+      throw new Error("alfaclub_sudoswap_slippage_exceeds_policy");
     }
-
-    const decoded = decodeFunctionData({ abi: POOL_ACTION_ABI, data: primary.data })
-    switch (decoded.functionName) {
-      case 'addLiquidity': {
-        const [keyAmount, maxCreatorCoinAmount, minLpShares, recipient] = decoded.args
-        assertKeyAmount(keyAmount, config.maxKeyAmount)
-        assertPositiveAmount(maxCreatorCoinAmount, 'alfaclub_lp_max_creator_coin_invalid')
-        assertPositiveAmount(minLpShares, 'alfaclub_lp_min_lp_shares_invalid')
-        if (getAddress(recipient) !== params.sender) throw new Error('alfaclub_lp_recipient_mismatch')
-        const quote = await params.client.readContract({
-          address: pool,
-          abi: POOL_ABI,
-          functionName: 'quoteAddLiquidity',
-          args: [keyAmount],
-        })
-        if (!Array.isArray(quote) || typeof quote[0] !== 'bigint' || typeof quote[1] !== 'bigint') {
-          throw new Error('alfaclub_lp_quote_unavailable')
-        }
-        if (
-          maxCreatorCoinAmount > maxWithSlippage(quote[0], config.maxSlippageBps) ||
-          minLpShares < minWithSlippage(quote[1], config.maxSlippageBps)
-        ) {
-          throw new Error('alfaclub_lp_slippage_exceeds_policy')
-        }
-        break
-      }
-      case 'removeLiquidity': {
-        const [lpShares, minCreatorCoinAmount, minKeyAmount, recipient] = decoded.args
-        assertPositiveAmount(lpShares, 'alfaclub_lp_shares_invalid')
-        if (minCreatorCoinAmount < 0n || minKeyAmount < 0n) {
-          throw new Error('alfaclub_lp_min_output_invalid')
-        }
-        if (getAddress(recipient) !== params.sender) throw new Error('alfaclub_lp_recipient_mismatch')
-        const [reserves, supply] = await Promise.all([
-          params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'getReserves' }),
-          params.client.readContract({ address: pool, abi: POOL_ABI, functionName: 'totalSupply' }),
-        ])
-        if (
-          !Array.isArray(reserves) ||
-          typeof reserves[0] !== 'bigint' ||
-          typeof reserves[1] !== 'bigint' ||
-          typeof supply !== 'bigint' ||
-          supply <= 0n
-        ) {
-          throw new Error('alfaclub_lp_quote_unavailable')
-        }
-        const expectedCoin = (reserves[0] * lpShares) / supply
-        const expectedKeys = (reserves[1] * lpShares) / supply
-        if (
-          minCreatorCoinAmount < minWithSlippage(expectedCoin, config.maxSlippageBps) ||
-          minKeyAmount < minWithSlippage(expectedKeys, config.maxSlippageBps)
-        ) {
-          throw new Error('alfaclub_lp_slippage_exceeds_policy')
-        }
-        break
-      }
-      case 'buyKeys': {
-        const [keyAmount, maxCreatorCoinAmount, recipient] = decoded.args
-        assertKeyAmount(keyAmount, config.maxKeyAmount)
-        assertPositiveAmount(maxCreatorCoinAmount, 'alfaclub_lp_max_creator_coin_invalid')
-        if (getAddress(recipient) !== params.sender) throw new Error('alfaclub_lp_recipient_mismatch')
-        const quote = await params.client.readContract({
-          address: pool,
-          abi: POOL_ABI,
-          functionName: 'quoteBuyKeys',
-          args: [keyAmount],
-        })
-        if (
-          typeof quote !== 'bigint' ||
-          maxCreatorCoinAmount > maxWithSlippage(quote, config.maxSlippageBps)
-        ) {
-          throw new Error('alfaclub_lp_slippage_exceeds_policy')
-        }
-        break
-      }
-      case 'sellKeys': {
-        const [keyAmount, minCreatorCoinAmount, recipient] = decoded.args
-        assertKeyAmount(keyAmount, config.maxKeyAmount)
-        assertPositiveAmount(minCreatorCoinAmount, 'alfaclub_lp_min_creator_coin_invalid')
-        if (getAddress(recipient) !== params.sender) throw new Error('alfaclub_lp_recipient_mismatch')
-        const quote = await params.client.readContract({
-          address: pool,
-          abi: POOL_ABI,
-          functionName: 'quoteSellKeys',
-          args: [keyAmount],
-        })
-        if (
-          typeof quote !== 'bigint' ||
-          minCreatorCoinAmount < minWithSlippage(quote, config.maxSlippageBps)
-        ) {
-          throw new Error('alfaclub_lp_slippage_exceeds_policy')
-        }
-        break
-      }
-      default: {
-        const exhaustive: never = decoded
-        throw new Error(`alfaclub_lp_selector_not_allowed:${String(exhaustive)}`)
-      }
-    }
+  } else if (
+    input.limit > live.quoteAmount ||
+    input.limit < minWithSlippage(live.quoteAmount, config.maxSlippageBps)
+  ) {
+    throw new Error("alfaclub_sudoswap_slippage_exceeds_policy");
   }
 
+  let seenErc20Approval = false;
+  let seenPermit2Approval = false;
+  let seenKeyApproval = false;
   for (const call of params.calls) {
-    if (call === primary) continue
-    const callSelector = selector(call.data)
-    if (callSelector === APPROVE_SELECTOR) {
-      if (call.target !== config.creatorCoin) throw new Error('alfaclub_lp_approval_token_mismatch')
-      const decoded = decodeFunctionData({ abi: ERC20_APPROVE_ABI, data: call.data })
-      const [spender, amount] = decoded.args
-      if (getAddress(spender) !== approvalOperator) {
-        throw new Error('alfaclub_lp_approval_spender_mismatch')
+    if (call === routerCall) continue;
+    const callSelector = selector(call.data);
+    if (direction === "buy" && callSelector === APPROVE_SELECTOR) {
+      if (seenErc20Approval || seenPermit2Approval)
+        throw new Error("alfaclub_sudoswap_approval_order_invalid");
+      if (call.target !== config.creatorCoin)
+        throw new Error("alfaclub_sudoswap_approval_token_mismatch");
+      const approval = decodeFunctionData({ abi: ERC20_ABI, data: call.data });
+      if (approval.functionName !== "approve")
+        throw new Error("alfaclub_sudoswap_approval_decode_failed");
+      if (
+        getAddress(approval.args[0]) !== config.permit2 ||
+        approval.args[1] !== input.limit
+      ) {
+        throw new Error("alfaclub_sudoswap_erc20_approval_mismatch");
       }
-      assertPositiveAmount(amount, 'alfaclub_lp_approval_amount_invalid')
-      continue
+      seenErc20Approval = true;
+      continue;
     }
-    if (callSelector === SET_APPROVAL_FOR_ALL_SELECTOR) {
-      if (call.target !== ALFACLUB_FRIEND_KEY) throw new Error('alfaclub_lp_friend_key_mismatch')
-      const decoded = decodeFunctionData({ abi: ERC1155_APPROVAL_ABI, data: call.data })
-      const [operator, approved] = decoded.args
-      if (getAddress(operator) !== approvalOperator || approved !== true) {
-        throw new Error('alfaclub_lp_key_approval_mismatch')
+    if (direction === "buy" && callSelector === PERMIT2_APPROVE_SELECTOR) {
+      if (seenPermit2Approval)
+        throw new Error("alfaclub_sudoswap_permit2_approval_duplicate");
+      if (call.target !== config.permit2)
+        throw new Error("alfaclub_sudoswap_permit2_target_mismatch");
+      const approval = decodeFunctionData({
+        abi: PERMIT2_ALLOWANCE_TRANSFER_ABI,
+        data: call.data,
+      });
+      if (approval.functionName !== "approve")
+        throw new Error("alfaclub_sudoswap_permit2_decode_failed");
+      if (
+        getAddress(approval.args[0]) !== config.creatorCoin ||
+        getAddress(approval.args[1]) !== config.adapter ||
+        approval.args[2] !== input.limit ||
+        BigInt(approval.args[3]) !== deadline
+      ) {
+        throw new Error("alfaclub_sudoswap_permit2_approval_mismatch");
       }
-      continue
+      seenPermit2Approval = true;
+      continue;
     }
-    throw new Error('alfaclub_lp_selector_not_allowed')
+    if (
+      direction === "sell" &&
+      callSelector === SET_APPROVAL_FOR_ALL_SELECTOR
+    ) {
+      if (seenKeyApproval)
+        throw new Error("alfaclub_sudoswap_key_approval_duplicate");
+      if (call.target !== ALFACLUB_FRIEND_KEY)
+        throw new Error("alfaclub_sudoswap_friend_key_mismatch");
+      const approval = decodeFunctionData({
+        abi: ERC1155_ABI,
+        data: call.data,
+      });
+      if (approval.functionName !== "setApprovalForAll")
+        throw new Error("alfaclub_sudoswap_key_approval_decode_failed");
+      if (
+        getAddress(approval.args[0]) !== config.adapter ||
+        approval.args[1] !== true
+      ) {
+        throw new Error("alfaclub_sudoswap_key_approval_mismatch");
+      }
+      seenKeyApproval = true;
+      continue;
+    }
+    throw new Error("alfaclub_sudoswap_selector_not_allowed");
   }
 
-  return { creatorCoin: config.creatorCoin, tokenId: config.tokenId, pool }
+  return {
+    creatorCoin: config.creatorCoin,
+    tokenId: config.tokenId,
+    pool: config.pair,
+  };
 }

@@ -7,7 +7,9 @@
  *
  * Env:
  *   DATABASE_URL — required
- *   ALFACLUB_DEFAULT_POOL_ADDRESS — optional XYK pool for placeholder policy rows
+ *   ALFACLUB_ROOM_1659_SUDOSWAP_PAIR or VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR
+ *   SUDOSWAP_PAIR_FACTORY or VITE_SUDOSWAP_PAIR_FACTORY
+ *   SUDOSWAP_XYK_CURVE or VITE_SUDOSWAP_XYK_CURVE
  */
 import { isDbConfigured } from '../server/_lib/db/postgres.js'
 import { syncCreatorRoomPoliciesFromSnapshot } from '../server/_lib/alfaclub/roomPolicySync.js'
@@ -37,11 +39,15 @@ async function main(): Promise<void> {
   }
 
   const limitRaw = parseArg('--limit')
-  const limit = limitRaw && /^\d+$/.test(limitRaw) ? Math.min(5000, Number.parseInt(limitRaw, 10)) : 500
+  const limit =
+    limitRaw && /^\d+$/.test(limitRaw) ? Math.min(5000, Number.parseInt(limitRaw, 10)) : 500
   const execute = hasFlag('--execute')
 
   if (!execute) {
-    const preview = await syncCreatorRoomPoliciesFromSnapshot({ limit, dryRun: true })
+    const preview = await syncCreatorRoomPoliciesFromSnapshot({
+      limit,
+      dryRun: true,
+    })
     console.log(
       JSON.stringify(
         {
@@ -57,7 +63,10 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  const result = await syncCreatorRoomPoliciesFromSnapshot({ limit, dryRun: false })
+  const result = await syncCreatorRoomPoliciesFromSnapshot({
+    limit,
+    dryRun: false,
+  })
   console.log(JSON.stringify({ ok: result.ok, limit, ...result }, null, 2))
 }
 

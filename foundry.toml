@@ -2,7 +2,6 @@
 src = "contracts"
 out = "out"
 libs = ["node_modules", "lib"]
-solc = "0.8.30"
 auto_detect_solc = true
 evm_version = "cancun"
 via_ir = true
@@ -24,6 +23,24 @@ fs_permissions = [
 remappings = [
     "test/=test/",
     "@4626/=contracts/",
+    "sudoswap/=lib/sudoswap-lssvm2/src/",
+    "lib/sudoswap-lssvm2/:@manifoldxyz/=lib/sudoswap-lssvm2/lib/",
+    "lib/sudoswap-lssvm2/:manifoldxyz/=lib/sudoswap-lssvm2/lib/royalty-registry-solidity/contracts/",
+    "lib/sudoswap-lssvm2/:@openzeppelin/contracts/=lib/sudoswap-lssvm2/lib/openzeppelin-contracts/contracts/",
+    "lib/sudoswap-lssvm2/:@openzeppelin/contracts-upgradeable/=lib/sudoswap-lssvm2/lib/openzeppelin-contracts-upgradeable/contracts/",
+    "lib/sudoswap-lssvm2/:@prb/math/=lib/sudoswap-lssvm2/lib/prb-math/src/",
+    "lib/sudoswap-lssvm2/:clones-with-immutable-args/=lib/sudoswap-lssvm2/lib/clones-with-immutable-args/src/",
+    "lib/sudoswap-lssvm2/:create3-factory/=lib/sudoswap-lssvm2/lib/create3-factory/src/",
+    "lib/sudoswap-lssvm2/:solmate/=lib/sudoswap-lssvm2/lib/solmate/src/",
+    "universal-router/=lib/universal-router/contracts/",
+    "lib/universal-router/:solmate/=lib/universal-router/lib/solmate/",
+    "lib/universal-router/:permit2/=lib/universal-router/lib/permit2/",
+    "lib/universal-router/:@openzeppelin/contracts/=node_modules/@openzeppelin/contracts-universal-router/",
+    "lib/universal-router/:@uniswap/v2-core/=node_modules/@uniswap/v2-core/",
+    "lib/universal-router/:@uniswap/v3-core/=node_modules/@uniswap/v3-core/",
+    "lib/universal-router/:@uniswap/v3-periphery/=lib/universal-router/lib/v3-periphery/",
+    "lib/universal-router/:@uniswap/v4-core/=lib/universal-router/lib/v4-periphery/lib/v4-core/",
+    "lib/universal-router/:@uniswap/v4-periphery/=lib/universal-router/lib/v4-periphery/",
     "tamago/=verification/tamago/",
     "@openzeppelin/=node_modules/@openzeppelin/",
     "@layerzerolabs/=node_modules/@layerzerolabs/",
@@ -41,6 +58,15 @@ remappings = [
     "base64-sol/=node_modules/base64-sol/",
     "@eth-optimism/=node_modules/@eth-optimism/",
     "@axelar-network/=node_modules/@axelar-network/"
+]
+
+additional_compiler_profiles = [
+    { name = "alfaclub-universal-router", via_ir = true, optimizer_runs = 1 }
+]
+
+compilation_restrictions = [
+    { paths = "contracts/other/alfaclub/universal-router/AlfaClubSudoswapAdapter.sol", version = "=0.8.26", optimizer_runs = 1 },
+    { paths = "contracts/other/alfaclub/universal-router/AlfaClubUniversalRouter.sol", version = "=0.8.26", optimizer_runs = 1 }
 ]
 
 [profile.default.fuzz]

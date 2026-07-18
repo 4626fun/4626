@@ -21,27 +21,41 @@ export const FRIEND_KEY_ABI = parseAbi([
   'function isApprovedForAll(address account, address operator) view returns (bool)',
 ])
 
-export const ALFA_CREATOR_KEY_LP_FACTORY_ABI = parseAbi([
-  'function allPools(uint256 index) view returns (address)',
-  'function allPoolsLength() view returns (uint256)',
-  'function poolCreatorAllowed(address account) view returns (bool)',
-  'function pairAllowed(address creatorCoin, uint256 tokenId) view returns (bool)',
-  'function getPool(address creatorCoin, uint256 tokenId) view returns (address)',
-  'function createPoolWithInitialLiquidity(address creatorCoin, uint256 tokenId, uint256 keyAmount, uint256 creatorCoinAmount, address recipient) returns (address)',
+export const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
+  'function factory() view returns (address)',
+  'function pairVariant() pure returns (uint8)',
+  'function poolType() view returns (uint8)',
+  'function token() view returns (address)',
+  'function nft() view returns (address)',
+  'function nftId() pure returns (uint256)',
+  'function bondingCurve() view returns (address)',
+  'function fee() view returns (uint96)',
+  'function spotPrice() view returns (uint128)',
+  'function delta() view returns (uint128)',
+  'function getBuyNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 inputAmount, uint256 protocolFee, uint256 royaltyAmount)',
+  'function getSellNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 outputAmount, uint256 protocolFee, uint256 royaltyAmount)',
 ])
 
-export const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
-  'function addLiquidity(uint256 keyAmount, uint256 maxCreatorCoinAmount, uint256 minLpShares, address recipient) returns (uint256 creatorCoinAmount, uint256 lpShares)',
-  'function removeLiquidity(uint256 lpShares, uint256 minCreatorCoinAmount, uint256 minKeyAmount, address recipient) returns (uint256 creatorCoinAmount, uint256 keyAmount)',
-  'function buyKeys(uint256 keyAmount, uint256 maxCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountIn)',
-  'function sellKeys(uint256 keyAmount, uint256 minCreatorCoinAmount, address recipient) returns (uint256 creatorCoinAmountOut)',
-  'function quoteAddLiquidity(uint256 keyAmount) view returns (uint256 creatorCoinAmount, uint256 lpShares)',
-  'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
-  'function quoteSellKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountOut)',
-  'function getReserves() view returns (uint256 creatorCoinReserve, uint256 keyReserve)',
-  'function creatorCoin() view returns (address)',
-  'function keyTokenId() view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)',
-  'function totalSupply() view returns (uint256)',
-  'function feeBps() view returns (uint16)',
+export const SUDOSWAP_PAIR_FACTORY_ABI = parseAbi([
+  'function isValidPair(address pair) view returns (bool)',
+  'function routerStatus(address router) view returns (bool allowed, bool wasEverTouched)',
+])
+
+export const ALFACLUB_SUDOSWAP_ADAPTER_ABI = parseAbi([
+  'function factory() view returns (address)',
+  'function permit2() view returns (address)',
+  'function friendKey() view returns (address)',
+  'function xykCurve() view returns (address)',
+  'function universalRouter() view returns (address)',
+  'function markets(address pair) view returns (address creatorCoin, uint256 tokenId, bool allowed)',
+])
+
+export const PERMIT2_ALLOWANCE_TRANSFER_ABI = parseAbi([
+  'function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',
+  'function approve(address token, address spender, uint160 amount, uint48 expiration)',
+])
+
+export const ALFACLUB_UNIVERSAL_ROUTER_ABI = parseAbi([
+  'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
+  'function SUDOSWAP_ADAPTER() view returns (address)',
 ])

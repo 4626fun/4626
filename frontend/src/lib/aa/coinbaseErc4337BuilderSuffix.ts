@@ -1,12 +1,14 @@
 import type { Address, Hex } from 'viem'
-import { decodeFunctionData, encodeFunctionData, getAddress } from 'viem'
+import { decodeFunctionData, encodeFunctionData, getAddress, isAddress } from 'viem'
 
+import { CONTRACTS } from '@/config/contracts'
 import { logger } from '@/lib/observability/logger'
 import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/base/baseBuilderCodes'
 
 const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
 const ZORA_UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x24856bc3' as const
 const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
+const ZERO_ADDRESS = getAddress('0x0000000000000000000000000000000000000000').toLowerCase()
 const UNISWAP_UNIVERSAL_ROUTER_ABI = [
   {
     type: 'function',
@@ -35,7 +37,16 @@ const ZORA_UNIVERSAL_ROUTER_ABI = [
 
 function isUniversalRouterTarget(to: Address): boolean {
   const target = String(to).toLowerCase()
-  return target === UNIVERSAL_ROUTER_BASE_CURRENT
+  const configuredAlfaClubRouter = CONTRACTS.alfaClubUniversalRouter
+  const alfaClubRouter =
+    configuredAlfaClubRouter && isAddress(configuredAlfaClubRouter)
+      ? getAddress(configuredAlfaClubRouter).toLowerCase()
+      : null
+
+  return (
+    target === UNIVERSAL_ROUTER_BASE_CURRENT ||
+    (alfaClubRouter !== null && alfaClubRouter !== ZERO_ADDRESS && target === alfaClubRouter)
+  )
 }
 
 function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {

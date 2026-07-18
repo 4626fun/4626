@@ -1,23 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, Circle, Link2, Loader2 } from 'lucide-react'
-import {
-  erc20Abi,
-  getAddress,
-  isAddress,
-  type Address,
-  type WalletClient,
-} from 'viem'
+import { formatUnits, getAddress, isAddress, type Address, type WalletClient } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 import { CONTRACTS } from '@/config/contracts'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
-  ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-  ALFACLUB,
-  FRIEND_KEY_ABI,
-} from '@/lib/alfaclub/contracts'
+  isAlfaClubSudoswapMarketConfigured,
+  readAlfaClubLiquidityPools,
+  type AlfaClubSudoswapMarketConfig,
+} from '@/hooks/useAlfaClubLiquidityPools'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { cn } from '@/lib/shared/utils'
@@ -64,11 +58,28 @@ type ChallengeResponse = {
 
 type Readiness = {
   inventoryAvailable: boolean
-  pairApproved: boolean
-  poolCreated: boolean
+  creatorCoinBalance: bigint
+  keyBalance: bigint
+  adapterMarketAllowed: boolean
+  marketReady: boolean
 }
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const MARKET_CONFIG: AlfaClubSudoswapMarketConfig = {
+  pair: CONTRACTS.room1659SudoswapPair as Address,
+  adapter: CONTRACTS.alfaClubSudoswapAdapter as Address,
+  router: CONTRACTS.alfaClubUniversalRouter as Address,
+  permit2: CONTRACTS.permit2 as Address,
+  factory: CONTRACTS.sudoswapPairFactory as Address,
+  curve: CONTRACTS.sudoswapXykCurve as Address,
+}
+
+const EMPTY_READINESS: Readiness = {
+  inventoryAvailable: false,
+  creatorCoinBalance: 0n,
+  keyBalance: 0n,
+  adapterMarketAllowed: false,
+  marketReady: false,
+}
 
 const STATUS_COPY: Record<
   CreatorCoinLinkStatus,
@@ -111,6 +122,12 @@ async function readJson<T>(response: Response): Promise<T> {
 
 function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
+}
+
+function formatBalance(value: bigint, decimals: number): string {
+  const numeric = Number(formatUnits(value, decimals))
+  if (!Number.isFinite(numeric)) return '—'
+  return numeric.toLocaleString('en-US', { maximumFractionDigits: 4 })
 }
 
 function normalizeAddressInput(value: string): Address | null {
@@ -186,7 +203,9 @@ export function CreatorCoinLinkPanel({
   const accountContext = useAccountContext()
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: walletClient } = useWalletClient({ chainId: base.id })
-  const executionAddress = (accountContext.activeAccount ?? accountContext.signerAddress ?? null) as Address | null
+  const executionAddress = (accountContext.activeAccount ??
+    accountContext.signerAddress ??
+    null) as Address | null
   const signerAddress = accountContext.signerAddress ?? null
   const [creatorCoinInput, setCreatorCoinInput] = useState('')
   const [status, setStatus] = useState<CreatorCoinLinkStatus | null>(null)
@@ -233,50 +252,31 @@ export function CreatorCoinLinkPanel({
   const effectiveCoin = linkedCoin?.creatorCoinAddress ?? inspection?.creatorCoinAddress ?? null
   const readinessQuery = useQuery({
     queryKey: ['alfaclub-creator-coin-readiness', roomId, effectiveCoin, executionAddress],
-    enabled: Boolean(publicClient && effectiveCoin && executionAddress),
+    enabled: Boolean(
+      publicClient &&
+        effectiveCoin &&
+        /^\d+$/.test(roomId) &&
+        isAlfaClubSudoswapMarketConfigured(MARKET_CONFIG),
+    ),
     staleTime: 12_000,
     queryFn: async (): Promise<Readiness> => {
-      if (!publicClient || !effectiveCoin || !executionAddress) {
-        return { inventoryAvailable: false, pairApproved: false, poolCreated: false }
+      if (!publicClient || !effectiveCoin || !/^\d+$/.test(roomId)) {
+        return EMPTY_READINESS
       }
-      const factory = CONTRACTS.alfaCreatorKeyLpFactory as Address
       const tokenId = BigInt(roomId)
-      const [coinBalance, keyBalance, pairAllowed, creatorAllowed, pool] = await Promise.all([
-        publicClient.readContract({
-          address: effectiveCoin,
-          abi: erc20Abi,
-          functionName: 'balanceOf',
-          args: [executionAddress],
-        }),
-        publicClient.readContract({
-          address: ALFACLUB.friendKey,
-          abi: FRIEND_KEY_ABI,
-          functionName: 'balanceOf',
-          args: [executionAddress, tokenId],
-        }),
-        publicClient.readContract({
-          address: factory,
-          abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-          functionName: 'pairAllowed',
-          args: [effectiveCoin, tokenId],
-        }),
-        publicClient.readContract({
-          address: factory,
-          abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-          functionName: 'poolCreatorAllowed',
-          args: [executionAddress],
-        }),
-        publicClient.readContract({
-          address: factory,
-          abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-          functionName: 'getPool',
-          args: [effectiveCoin, tokenId],
-        }),
-      ])
+      const directory = await readAlfaClubLiquidityPools(publicClient, MARKET_CONFIG)
+      const market = directory.pools.find(
+        (candidate) =>
+          candidate.tokenId === tokenId &&
+          candidate.creatorCoin.toLowerCase() === effectiveCoin.toLowerCase(),
+      )
+      if (!market) return EMPTY_READINESS
       return {
-        inventoryAvailable: coinBalance > 0n && keyBalance > 0n,
-        pairApproved: pairAllowed && creatorAllowed,
-        poolCreated: String(pool).toLowerCase() !== ZERO_ADDRESS,
+        inventoryAvailable: market.creatorCoinBalance > 0n && market.keyBalance > 0n,
+        creatorCoinBalance: market.creatorCoinBalance,
+        keyBalance: market.keyBalance,
+        adapterMarketAllowed: market.adapterMarketAllowed,
+        marketReady: market.configurationReady,
       }
     },
   })
@@ -348,14 +348,13 @@ export function CreatorCoinLinkPanel({
     inspection?.verificationMethod !== null &&
     (status === 'verified_owner' || status === 'managed_by_policy_controller') &&
     !linkedCoin
-  const readiness = readinessQuery.data ?? {
-    inventoryAvailable: false,
-    pairApproved: false,
-    poolCreated: false,
-  }
+  const readiness = readinessQuery.data ?? EMPTY_READINESS
 
   return (
-    <section className="border-t border-white/[0.07] pt-8" aria-labelledby="creator-coin-link-title">
+    <section
+      className="border-t border-white/[0.07] pt-8"
+      aria-labelledby="creator-coin-link-title"
+    >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-300">
@@ -404,7 +403,8 @@ export function CreatorCoinLinkPanel({
                   <div>
                     <dt className="text-zinc-500">Token</dt>
                     <dd className="mt-0.5 text-zinc-200">
-                      {displayCoin.coinName} ({displayCoin.coinSymbol}) · {displayCoin.coinDecimals} decimals
+                      {displayCoin.coinName} ({displayCoin.coinSymbol}) · {displayCoin.coinDecimals}{' '}
+                      decimals
                     </dd>
                   </div>
                   <div>
@@ -464,39 +464,45 @@ export function CreatorCoinLinkPanel({
         </div>
 
         <aside className="rounded-2xl bg-white/[0.025] p-4 ring-1 ring-white/[0.06]">
-          <h3 className="text-sm font-semibold text-zinc-100">LP readiness</h3>
+          <h3 className="text-sm font-semibold text-zinc-100">Market readiness</h3>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-            Linking is complete before liquidity setup. LP fees remain in pool reserves.
+            Linking is separate from the official Sudoswap pair and adapter checks.
           </p>
           <ul className="mt-4 space-y-3">
             <ReadinessItem
               ready={Boolean(executionAddress)}
               label="Execution-ready wallet"
-              detail={executionAddress ? shortAddress(executionAddress) : 'Connect a canonical CSW or EOA'}
+              detail={
+                executionAddress ? shortAddress(executionAddress) : 'Connect a canonical CSW or EOA'
+              }
             />
             <ReadinessItem
               ready={readiness.inventoryAvailable}
-              label="Inventory available"
-              detail="Creator Coin and FriendKey balances are both required"
+              label="Pair inventory"
+              detail={`${formatBalance(readiness.creatorCoinBalance, displayCoin?.coinDecimals ?? 18)} ${displayCoin?.coinSymbol ?? 'Creator Coin'} · ${readiness.keyBalance.toLocaleString()} keys`}
             />
             <ReadinessItem
-              ready={readiness.pairApproved}
-              label="Pair approved"
-              detail="Factory pair and pool-creator allowlists are open"
+              ready={readiness.adapterMarketAllowed}
+              label="Adapter market"
+              detail="Pair, Creator Coin, and FriendKey token ID are bound in the adapter"
             />
             <ReadinessItem
-              ready={readiness.poolCreated}
-              label="Pool creation"
-              detail={readiness.poolCreated ? 'Pool is live' : 'Create only after the earlier checks pass'}
+              ready={readiness.marketReady}
+              label="Official market"
+              detail={
+                readiness.marketReady
+                  ? 'Factory, TRADE pair, and XYK curve checks pass'
+                  : 'Trading remains disabled'
+              }
             />
           </ul>
           <button
             type="button"
             onClick={onOpenLiquidity}
-            disabled={!linkedCoin}
+            disabled={!linkedCoin || !readiness.marketReady}
             className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-white/[0.08] hover:bg-white/[0.1] disabled:text-zinc-600"
           >
-            Open liquidity setup
+            Open room market
           </button>
         </aside>
       </div>

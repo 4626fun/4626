@@ -659,11 +659,11 @@ export function AlfaClubVigilante() {
       <section className="rounded-lg border border-zinc-800 bg-zinc-900/40">
         <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
           <Users className="h-4 w-4 text-indigo-300" />
-          <div className="text-sm font-medium text-zinc-200">Room access policy (dynamic XYK threshold)</div>
+          <div className="text-sm font-medium text-zinc-200">Room access policy (official Sudoswap threshold)</div>
         </div>
         <form className="space-y-3 p-4" onSubmit={handlePolicySubmit}>
           <p className="text-xs text-zinc-400">
-            Configure dynamic room access using Sudoswap XYK `quoteBuyKeys(1)` thresholds with enter/exit hysteresis and grace windows.
+            Configure dynamic room access from the pinned official Sudoswap v2 ERC-1155/ERC-20 pair&apos;s buy quote, with enter/exit hysteresis and grace windows.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block text-xs text-zinc-400">
@@ -691,7 +691,7 @@ export function AlfaClubVigilante() {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              Pool Address (optional)
+              Official Sudoswap Pair (optional; must match the configured room pin)
               <input
                 className="mt-1 w-full rounded-md bg-zinc-950/60 px-2 py-1 font-mono text-xs text-zinc-200 outline-none focus:ring-1 focus:ring-indigo-300/40"
                 value={roomPolicyInput.poolAddress}

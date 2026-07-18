@@ -1796,7 +1796,7 @@ const ALLOWED_SWAP_COMMAND_OPCODES = new Set<number>([
   0x10, // V4_SWAP
 ])
 
-function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
+export function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void {
   let decoded: any
   try {
     decoded = decodeFunctionData({
@@ -1824,7 +1824,9 @@ function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void
 
   for (let i = 0; i < commandBytes; i++) {
     const opcode = parseInt(commands.slice(2 + i * 2, 2 + i * 2 + 2), 16)
-    if (!ALLOWED_SWAP_COMMAND_OPCODES.has(opcode & 0x3f)) {
+    // Bit 0x80 is Universal Router's allow-revert flag. Bit 0x40 is reserved and
+    // must fail closed instead of aliasing 0x40-0x5f onto allowed 0x00-0x1f commands.
+    if ((opcode & 0x40) !== 0 || !ALLOWED_SWAP_COMMAND_OPCODES.has(opcode & 0x3f)) {
       throw new Error('swap_router_command_not_allowed')
     }
   }

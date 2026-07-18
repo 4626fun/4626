@@ -16,6 +16,12 @@ import {
   type ContractAddress,
 } from '../../../src/config/contracts.defaults.js'
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function isZeroAddress(value?: string): boolean {
+  return (value ?? '').trim().toLowerCase() === ZERO_ADDRESS
+}
+
 export type ApiContracts = {
   registry: ContractAddress
   lotteryManager: ContractAddress
@@ -50,6 +56,11 @@ export type ApiContracts = {
   zora: ContractAddress
   usdc: ContractAddress
   permit2: ContractAddress
+  alfaClubUniversalRouter?: ContractAddress
+  alfaClubSudoswapAdapter?: ContractAddress
+  sudoswapPairFactory?: ContractAddress
+  sudoswapXykCurve?: ContractAddress
+  room1659SudoswapPair?: ContractAddress
   strategyDeploymentBatcher?: ContractAddress
   impairmentClaims?: ContractAddress
   impairmentRecoveryEscrow?: ContractAddress
@@ -68,12 +79,13 @@ function pickAddressProdSafe(envKey: string, fallback?: string): ContractAddress
   const allowOverrides = (process.env.ALLOW_API_CONTRACT_OVERRIDES ?? '').trim() === '1'
   // In production serverless, prefer repo defaults to avoid mismatched env overrides
   // between frontend + backend that can cause paymaster validation failures.
-  // When no repo default exists (V1 greenfield / not yet broadcast), allow env so canary
-  // and post-deploy wiring can set addresses without ALLOW_API_CONTRACT_OVERRIDES.
+  // When no usable repo default exists (missing or explicitly zero for greenfield
+  // infrastructure), allow env so post-deploy wiring can pin the live address
+  // without ALLOW_API_CONTRACT_OVERRIDES.
   if (isVercel && !allowOverrides) {
     const fb = (fallback ?? '').trim()
-    if (fb) return fb as ContractAddress
-    return pickAddress(envKey)
+    if (fb && !isZeroAddress(fb)) return fb as ContractAddress
+    return pickAddress(envKey, fallback)
   }
   return pickAddress(envKey, fallback)
 }
@@ -137,6 +149,26 @@ export function getApiContracts(): ApiContracts {
     zora: pickAddress('ZORA_TOKEN', BASE_DEFAULTS.zora)!,
     usdc: pickAddress('USDC_TOKEN', BASE_DEFAULTS.usdc)!,
     permit2: pickAddress('PERMIT2', BASE_DEFAULTS.permit2)!,
+    alfaClubUniversalRouter: pickAddressProdSafe(
+      'ALFACLUB_UNIVERSAL_ROUTER',
+      BASE_DEFAULTS.alfaClubUniversalRouter,
+    ),
+    alfaClubSudoswapAdapter: pickAddressProdSafe(
+      'ALFACLUB_SUDOSWAP_ADAPTER',
+      BASE_DEFAULTS.alfaClubSudoswapAdapter,
+    ),
+    sudoswapPairFactory: pickAddressProdSafe(
+      'SUDOSWAP_PAIR_FACTORY',
+      BASE_DEFAULTS.sudoswapPairFactory,
+    ),
+    sudoswapXykCurve: pickAddressProdSafe(
+      'SUDOSWAP_XYK_CURVE',
+      BASE_DEFAULTS.sudoswapXykCurve,
+    ),
+    room1659SudoswapPair: pickAddressProdSafe(
+      'ALFACLUB_ROOM_1659_SUDOSWAP_PAIR',
+      BASE_DEFAULTS.room1659SudoswapPair,
+    ),
     strategyDeploymentBatcher: pickAddress('STRATEGY_DEPLOYMENT_BATCHER'),
     impairmentClaims: pickAddressProdSafe('IMPAIRMENT_CLAIMS', BASE_DEFAULTS.impairmentClaims),
     impairmentRecoveryEscrow: pickAddressProdSafe(

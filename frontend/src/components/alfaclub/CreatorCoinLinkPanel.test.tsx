@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { apiFetchMock, signMessageMock } = vi.hoisted(() => ({
+const { apiFetchMock, readPoolsMock, signMessageMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
+  readPoolsMock: vi.fn(),
   signMessageMock: vi.fn(),
 }))
 
@@ -26,14 +27,24 @@ vi.mock('@/wallet/accountContext', () => ({
 }))
 
 vi.mock('wagmi', () => ({
-  usePublicClient: () => null,
+  usePublicClient: () => ({}),
   useWalletClient: () => ({ data: { signMessage: signMessageMock } }),
 }))
 
 vi.mock('@/config/contracts', () => ({
   CONTRACTS: {
-    alfaCreatorKeyLpFactory: '0x9000000000000000000000000000000000000000',
+    room1659SudoswapPair: '0x9000000000000000000000000000000000000000',
+    alfaClubSudoswapAdapter: '0x9100000000000000000000000000000000000000',
+    alfaClubUniversalRouter: '0x9400000000000000000000000000000000000000',
+    permit2: '0x9500000000000000000000000000000000000000',
+    sudoswapPairFactory: '0x9200000000000000000000000000000000000000',
+    sudoswapXykCurve: '0x9300000000000000000000000000000000000000',
   },
+}))
+
+vi.mock('@/hooks/useAlfaClubLiquidityPools', () => ({
+  isAlfaClubSudoswapMarketConfigured: () => true,
+  readAlfaClubLiquidityPools: readPoolsMock,
 }))
 
 import { CreatorCoinLinkPanel } from './CreatorCoinLinkPanel'
@@ -45,7 +56,11 @@ function response(data: unknown, ok = true): Response {
   return {
     ok,
     status: ok ? 200 : 403,
-    json: async () => ({ success: ok, data, error: ok ? undefined : 'request_failed' }),
+    json: async () => ({
+      success: ok,
+      data,
+      error: ok ? undefined : 'request_failed',
+    }),
   } as Response
 }
 
@@ -102,6 +117,20 @@ async function validateWithStatus(status: string) {
 describe('CreatorCoinLinkPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    readPoolsMock.mockResolvedValue({
+      pools: [
+        {
+          tokenId: 1659n,
+          creatorCoin: COIN,
+          creatorCoinBalance: 1_000n,
+          keyBalance: 10n,
+          adapterMarketAllowed: true,
+          configurationReady: true,
+        },
+      ],
+      totalPoolCount: 1,
+      isTruncated: false,
+    })
   })
 
   it.each([
@@ -119,12 +148,12 @@ describe('CreatorCoinLinkPanel', () => {
     expect(await screen.findByText('Verified owner')).toBeTruthy()
     expect(signMessageMock).not.toHaveBeenCalled()
     expect(apiFetchMock).toHaveBeenCalledTimes(2)
-    expect(
-      screen.getByRole('button', { name: 'Open liquidity setup' }).hasAttribute('disabled'),
-    ).toBe(true)
+    expect(screen.getByRole('button', { name: 'Open room market' }).hasAttribute('disabled')).toBe(
+      true,
+    )
   })
 
-  it('shows LP readiness as a separate checklist', async () => {
+  it('shows official Sudoswap readiness as a separate checklist', async () => {
     apiFetchMock.mockResolvedValueOnce(
       response({
         status: 'verified_owner',
@@ -135,10 +164,16 @@ describe('CreatorCoinLinkPanel', () => {
       }),
     )
     renderPanel()
-    expect(await screen.findByText('LP readiness')).toBeTruthy()
+    expect(await screen.findByText('Market readiness')).toBeTruthy()
     expect(screen.getByText('Execution-ready wallet')).toBeTruthy()
-    expect(screen.getByText('Inventory available')).toBeTruthy()
-    expect(screen.getByText('Pair approved')).toBeTruthy()
-    expect(screen.getByText('Pool creation')).toBeTruthy()
+    expect(await screen.findByText('Pair inventory')).toBeTruthy()
+    expect(screen.getByText('Adapter market')).toBeTruthy()
+    expect(screen.getByText('Official market')).toBeTruthy()
+    await waitFor(() => {
+      expect(readPoolsMock).toHaveBeenCalledTimes(1)
+      expect(
+        screen.getByRole('button', { name: 'Open room market' }).hasAttribute('disabled'),
+      ).toBe(false)
+    })
   })
 })

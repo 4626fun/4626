@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Address, Hex } from 'viem'
 import { encodeFunctionData } from 'viem'
 
+import { CONTRACTS } from '@/config/contracts'
 import { appendDataSuffixToHex, resolveDataSuffix, payloadEndsWithDataSuffix } from '@/lib/base/baseBuilderCodes'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 
@@ -60,6 +61,23 @@ describe('applyBuilderDataSuffixToCalls', () => {
     const result = applyBuilderDataSuffixToCalls(universalRouterCall, 8453, dataSuffix)
     expect(result[0]!.data).toBe(universalRouterCall[0]!.data)
     expect(payloadEndsWithDataSuffix(result[0]!.data as Hex, dataSuffix as Hex)).toBe(false)
+  })
+
+  it('preserves configured AlfaClub Universal Router calldata without suffix mutation', () => {
+    expect(dataSuffix).toBeDefined()
+    const alfaClubRouter = '0x0000000000000000000000000000000000000099' as Address
+    const mutableContracts = CONTRACTS as { alfaClubUniversalRouter: Address }
+    const originalRouter = mutableContracts.alfaClubUniversalRouter
+    mutableContracts.alfaClubUniversalRouter = alfaClubRouter
+
+    try {
+      const routerCall = [{ to: alfaClubRouter, value: 0n, data: '0x3593564c11223344' as Hex }]
+      const result = applyBuilderDataSuffixToCalls(routerCall, 8453, dataSuffix)
+      expect(result[0]!.data).toBe(routerCall[0]!.data)
+      expect(payloadEndsWithDataSuffix(result[0]!.data as Hex, dataSuffix as Hex)).toBe(false)
+    } finally {
+      mutableContracts.alfaClubUniversalRouter = originalRouter
+    }
   })
 
   it('strips existing suffix from canonical Universal Router execute calldata', () => {

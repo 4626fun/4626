@@ -1,11 +1,13 @@
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
 import { readOperationalAlfaClubRoomIds } from './creatorRoomLinks.js'
-import { upsertAlfaClubRoomAccessPolicy } from './roomAccessPolicy.js'
+import {
+  preloadAlfaClubRoomAccessPolicyPoolAddress,
+  upsertAlfaClubRoomAccessPolicy,
+} from './roomAccessPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-const ZERO_POOL = '0x0000000000000000000000000000000000000001'
 const DEFAULT_SYNC_LIMIT = 500
 const ROOM_1659_CREATOR_COIN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
@@ -56,6 +58,8 @@ export function readRoomCreatorCoinMap(): ReadonlyMap<string, `0x${string}`> {
  * Prefer room_id when it matches FriendKey token_id, else highest volume row.
  * Creator Coin addresses come from the explicit room mapping. A room creator
  * wallet is an identity, not an ERC-20, and must never be written as the coin.
+ * Pair addresses must pass the official Sudoswap live-pin validator; placeholder
+ * addresses and retired custom factory discovery are intentionally unsupported.
  */
 export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
   limit?: number
@@ -69,8 +73,6 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
   }
 
   const limit = Math.min(5000, Math.max(1, params?.limit ?? DEFAULT_SYNC_LIMIT))
-  const poolAddress = (params?.poolAddress ??
-    (process.env.ALFACLUB_DEFAULT_POOL_ADDRESS ?? ZERO_POOL).trim()) as `0x${string}`
   const operational = readOperationalAlfaClubRoomIds()
   const creatorCoins = readRoomCreatorCoinMap()
 
@@ -110,26 +112,43 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
     return true
   })
 
-  if (params?.dryRun) {
-    return { ok: true, candidateCount: candidates.length, upserted: 0 }
-  }
-
-  let upserted = 0
+  const validatedCandidates: Array<{
+    roomId: string
+    tokenId: string
+    creatorCoinAddress: `0x${string}`
+    poolAddress: `0x${string}`
+  }> = []
   for (const row of candidates) {
     const roomId = String(row.room_id).trim()
     const tokenId = String(row.token_id).trim()
     const creatorCoinAddress = creatorCoins.get(roomId)
     if (!creatorCoinAddress) continue
-    await upsertAlfaClubRoomAccessPolicy({
+    const poolAddress = await preloadAlfaClubRoomAccessPolicyPoolAddress({
       roomId,
       tokenId,
       creatorCoinAddress,
-      poolAddress,
+      pairAddress: params?.poolAddress ?? null,
+    })
+    if (!poolAddress) continue
+    validatedCandidates.push({ roomId, tokenId, creatorCoinAddress, poolAddress })
+  }
+
+  if (params?.dryRun) {
+    return { ok: true, candidateCount: validatedCandidates.length, upserted: 0 }
+  }
+
+  let upserted = 0
+  for (const candidate of validatedCandidates) {
+    await upsertAlfaClubRoomAccessPolicy({
+      roomId: candidate.roomId,
+      tokenId: candidate.tokenId,
+      creatorCoinAddress: candidate.creatorCoinAddress,
+      poolAddress: candidate.poolAddress,
       enabled: false,
       actorAddress: null,
     })
     upserted += 1
   }
 
-  return { ok: true, candidateCount: candidates.length, upserted }
+  return { ok: true, candidateCount: validatedCandidates.length, upserted }
 }

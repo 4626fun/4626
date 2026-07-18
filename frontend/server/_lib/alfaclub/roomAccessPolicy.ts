@@ -2,18 +2,34 @@ import { erc20Abi, parseAbi, type Address } from 'viem'
 
 import { getDb } from '../db/postgres.js'
 import { getKeeprBaseRpcUrls } from '../keepr/keeprGating.js'
-import { getAlfaClubPublicClient } from '../wallet/alfaclub.js'
+import { ALFACLUB, getAlfaClubPublicClient } from '../wallet/alfaclub.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
 import {
   backfillActiveRoomChannelBridgeMembers,
   syncRoomChannelBridgeMembership,
 } from './roomChannelBridge.js'
 
-const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
-  'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
+const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
+  'function factory() view returns (address)',
+  'function pairVariant() pure returns (uint8)',
+  'function poolType() view returns (uint8)',
+  'function token() view returns (address)',
+  'function nft() view returns (address)',
+  'function nftId() pure returns (uint256)',
+  'function bondingCurve() view returns (address)',
+  'function fee() view returns (uint96)',
+  'function getBuyNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 inputAmount, uint256 protocolFee, uint256 royaltyAmount)',
+])
+
+const SUDOSWAP_PAIR_FACTORY_ABI = parseAbi([
+  'function isValidPair(address pair) view returns (bool)',
 ])
 
 const BPS_BASE = 10_000n
+const ROOM_1659_ID = '1659'
+const SUDOSWAP_ERC1155_ERC20_PAIR_VARIANT = 3
+const SUDOSWAP_TRADE_POOL_TYPE = 2
+const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n
 
 type RoomAccessStatus = 'pending' | 'active' | 'grace' | 'removed' | 'unknown_stale'
 
@@ -124,6 +140,26 @@ function applyBps(value: bigint, bps: number): bigint {
   return (value * normalized) / BPS_BASE
 }
 
+function readConfiguredAddress(...names: string[]): `0x${string}` | null {
+  for (const name of names) {
+    const value = normalizeAddress(process.env[name])
+    if (value && value !== '0x0000000000000000000000000000000000000000') return value
+  }
+  return null
+}
+
+function readSudoswapBuyQuoteInputAmount(value: unknown): bigint | null {
+  if (!Array.isArray(value) || value.length < 4) return null
+  try {
+    const errorCode = BigInt(value[0] as bigint | number | string)
+    const inputAmount = BigInt(value[3] as bigint | number | string)
+    if (errorCode !== 0n || inputAmount <= 0n) return null
+    return inputAmount
+  } catch {
+    return null
+  }
+}
+
 async function checkRoomEligibility(params: {
   walletAddress: `0x${string}`
   policy: AlfaClubRoomAccessPolicy
@@ -151,13 +187,13 @@ async function checkRoomEligibility(params: {
         blockNumber = null
       }
 
-      const [quoteRaw, balanceRaw] = await Promise.all([
+      const [quote, balanceRaw] = await Promise.all([
         client.readContract({
           address: params.policy.poolAddress as Address,
-          abi: ALFA_CREATOR_KEY_POOL_ABI,
-          functionName: 'quoteBuyKeys',
-          args: [keyAmount],
-        }) as Promise<bigint>,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'getBuyNFTQuote',
+          args: [BigInt(params.policy.tokenId), keyAmount],
+        }),
         client.readContract({
           address: params.policy.creatorCoinAddress as Address,
           abi: erc20Abi,
@@ -165,6 +201,9 @@ async function checkRoomEligibility(params: {
           args: [params.walletAddress as Address],
         }) as Promise<bigint>,
       ])
+
+      const quoteRaw = readSudoswapBuyQuoteInputAmount(quote)
+      if (quoteRaw === null) continue
 
       const enterThreshold = applyBps(quoteRaw, params.policy.enterThresholdBps)
       const exitThreshold = applyBps(quoteRaw, params.policy.exitThresholdBps)
@@ -209,7 +248,7 @@ async function checkRoomEligibility(params: {
   }
 }
 
-/** Live creator-coin eligibility vs the room LP quote (enter/exit thresholds). */
+/** Live Creator Coin eligibility vs the official Sudoswap pair buy quote. */
 export async function evaluateAlfaClubRoomCoinEligibility(params: {
   walletAddress: `0x${string}`
   policy: AlfaClubRoomAccessPolicy
@@ -218,7 +257,9 @@ export async function evaluateAlfaClubRoomCoinEligibility(params: {
   return checkRoomEligibility(params)
 }
 
-export async function readAlfaClubRoomAccessPolicy(roomId: string): Promise<AlfaClubRoomAccessPolicy | null> {
+export async function readAlfaClubRoomAccessPolicy(
+  roomId: string,
+): Promise<AlfaClubRoomAccessPolicy | null> {
   const db = await getDb()
   if (!db) return null
   await ensureAlfaClubVigilanteSchema()
@@ -255,9 +296,16 @@ export async function upsertAlfaClubRoomAccessPolicy(params: {
   const poolAddress = normalizeAddress(params.poolAddress)
   if (!poolAddress) throw new Error('invalid_pool_address')
   const keyAmountRaw = String(params.keyAmountRaw ?? '1').trim()
-  if (!/^\d+$/.test(keyAmountRaw) || BigInt(keyAmountRaw) <= 0n) throw new Error('invalid_key_amount_raw')
-  const enterThresholdBps = Math.max(0, Math.min(20_000, Math.floor(params.enterThresholdBps ?? 10_000)))
-  const exitThresholdBps = Math.max(0, Math.min(20_000, Math.floor(params.exitThresholdBps ?? 9_000)))
+  if (!/^\d+$/.test(keyAmountRaw) || BigInt(keyAmountRaw) <= 0n)
+    throw new Error('invalid_key_amount_raw')
+  const enterThresholdBps = Math.max(
+    0,
+    Math.min(20_000, Math.floor(params.enterThresholdBps ?? 10_000)),
+  )
+  const exitThresholdBps = Math.max(
+    0,
+    Math.min(20_000, Math.floor(params.exitThresholdBps ?? 9_000)),
+  )
   if (exitThresholdBps > enterThresholdBps) throw new Error('invalid_threshold_bps')
   const graceHours = Math.max(0, Math.min(720, Math.floor(params.graceHours ?? 24)))
 
@@ -385,7 +433,10 @@ async function writeMembership(params: {
       updated_at = NOW();
   `
 
-  const membership = await readAlfaClubRoomAccessMembership({ roomId, walletAddress })
+  const membership = await readAlfaClubRoomAccessMembership({
+    roomId,
+    walletAddress,
+  })
   if (!membership) throw new Error('membership_write_failed')
   return membership
 }
@@ -409,7 +460,11 @@ export async function joinAlfaClubRoomAccess(params: {
   const membership = await writeMembership({
     roomId: policy.roomId,
     walletAddress: params.walletAddress,
-    status: eligibility.canEnter ? 'active' : eligibility.reason === 'onchain_read_failed' ? 'unknown_stale' : 'pending',
+    status: eligibility.canEnter
+      ? 'active'
+      : eligibility.reason === 'onchain_read_failed'
+        ? 'unknown_stale'
+        : 'pending',
     creatorCoinBalanceRaw: eligibility.evidence.creatorCoinBalanceRaw,
     quoteThresholdRaw: eligibility.evidence.quoteThresholdRaw,
     failureReason: eligibility.canEnter ? null : eligibility.reason,
@@ -423,13 +478,23 @@ export async function joinAlfaClubRoomAccess(params: {
     }).catch(() => {})
   }
 
-  return { policy, membership, eligible: eligibility.canEnter, reason: eligibility.reason }
+  return {
+    policy,
+    membership,
+    eligible: eligibility.canEnter,
+    reason: eligibility.reason,
+  }
 }
 
 export async function recheckAlfaClubRoomAccessMemberships(params: {
   roomId: string
   limit?: number
-}): Promise<{ checked: number; autoEntered: number; removed: number; stale: number }> {
+}): Promise<{
+  checked: number
+  autoEntered: number
+  removed: number
+  stale: number
+}> {
   const policy = await readAlfaClubRoomAccessPolicy(params.roomId)
   if (!policy || !policy.enabled) return { checked: 0, autoEntered: 0, removed: 0, stale: 0 }
   const db = await getDb()
@@ -505,7 +570,9 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       continue
     }
 
-    const graceStartedAt = membership.graceStartedAt ? new Date(membership.graceStartedAt).getTime() : Date.now()
+    const graceStartedAt = membership.graceStartedAt
+      ? new Date(membership.graceStartedAt).getTime()
+      : Date.now()
     const graceExpired = Date.now() - graceStartedAt > policy.graceHours * 60 * 60 * 1000
     if (!graceExpired) {
       await writeMembership({
@@ -549,31 +616,101 @@ export async function preloadAlfaClubRoomAccessPolicyPoolAddress(params: {
   roomId: string
   creatorCoinAddress: `0x${string}`
   tokenId: string
+  pairAddress?: `0x${string}` | null
 }): Promise<`0x${string}` | null> {
   const roomId = normalizeRoomId(params.roomId)
   const creatorCoinAddress = normalizeAddress(params.creatorCoinAddress)
-  if (!roomId || !creatorCoinAddress) return null
-  const tokenId = BigInt(params.tokenId)
+  if (!roomId || roomId !== ROOM_1659_ID || !creatorCoinAddress) return null
 
-  const client = await getAlfaClubPublicClient()
-  const factoryAddress = normalizeAddress(process.env.VITE_ALFA_CREATOR_KEY_LP_FACTORY)
-  if (!factoryAddress) return null
+  let tokenId: bigint
+  try {
+    tokenId = BigInt(params.tokenId)
+  } catch {
+    return null
+  }
 
-  const ALFA_CREATOR_KEY_LP_FACTORY_ABI = parseAbi([
-    'function getPool(address creatorCoin, uint256 tokenId) view returns (address)',
-  ])
+  const configuredPair = readConfiguredAddress(
+    'ALFACLUB_ROOM_1659_SUDOSWAP_PAIR',
+    'VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR',
+  )
+  const requestedPair = params.pairAddress ? normalizeAddress(params.pairAddress) : configuredPair
+  const factoryAddress = readConfiguredAddress(
+    'SUDOSWAP_PAIR_FACTORY',
+    'VITE_SUDOSWAP_PAIR_FACTORY',
+  )
+  const xykCurveAddress = readConfiguredAddress('SUDOSWAP_XYK_CURVE', 'VITE_SUDOSWAP_XYK_CURVE')
+  if (
+    !configuredPair ||
+    !requestedPair ||
+    requestedPair !== configuredPair ||
+    !factoryAddress ||
+    !xykCurveAddress
+  ) {
+    return null
+  }
 
   try {
-    const pool = (await client.readContract({
-      address: factoryAddress as Address,
-      abi: ALFA_CREATOR_KEY_LP_FACTORY_ABI,
-      functionName: 'getPool',
-      args: [creatorCoinAddress as Address, tokenId],
-    })) as Address
-    const normalizedPool = normalizeAddress(pool)
-    if (!normalizedPool) return null
-    if (normalizedPool === '0x0000000000000000000000000000000000000000') return null
-    return normalizedPool
+    const client = await getAlfaClubPublicClient()
+    const [pairFactory, pairVariant, poolType, token, nft, nftId, bondingCurve, fee, isValidPair] =
+      await Promise.all([
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'factory',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'pairVariant',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'poolType',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'token',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'nft',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'nftId',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'bondingCurve',
+        }),
+        client.readContract({
+          address: requestedPair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: 'fee',
+        }),
+        client.readContract({
+          address: factoryAddress,
+          abi: SUDOSWAP_PAIR_FACTORY_ABI,
+          functionName: 'isValidPair',
+          args: [requestedPair],
+        }),
+      ])
+
+    if (!isValidPair) return null
+    if (normalizeAddress(pairFactory) !== factoryAddress) return null
+    if (Number(pairVariant) !== SUDOSWAP_ERC1155_ERC20_PAIR_VARIANT) return null
+    if (Number(poolType) !== SUDOSWAP_TRADE_POOL_TYPE) return null
+    if (normalizeAddress(token) !== creatorCoinAddress) return null
+    if (normalizeAddress(nft) !== normalizeAddress(ALFACLUB.friendKey)) return null
+    if (BigInt(nftId as bigint | number | string) !== tokenId) return null
+    if (normalizeAddress(bondingCurve) !== xykCurveAddress) return null
+    if (BigInt(fee as bigint | number | string) !== ROOM_1659_TRADING_PAIR_FEE) return null
+    return requestedPair
   } catch {
     return null
   }

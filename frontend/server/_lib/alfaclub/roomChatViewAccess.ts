@@ -126,7 +126,7 @@ async function readStakedKeysFast(params: {
  * or meets the room's creator-coin / LP-equivalent access threshold.
  *
  * Sudoswap ERC-1155/ERC-20 LP equivalence can extend the coin path later; today that
- * lane uses `room_access_policies` + AlfaCreatorKeyPool `quoteBuyKeys`.
+ * lane uses `room_access_policies` + the pinned official Sudoswap pair buy quote.
  */
 export async function resolveRoomChatViewAccess(params: {
   roomId: string

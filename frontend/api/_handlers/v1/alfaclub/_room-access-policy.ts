@@ -28,7 +28,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const roomId = typeof body.roomId === 'string' ? body.roomId.trim() : ''
   const tokenId = typeof body.tokenId === 'string' ? body.tokenId.trim() : String(body.tokenId ?? '').trim()
   const creatorCoinAddress = normalizeChatAddress(body.creatorCoinAddress)
-  const explicitPoolAddress = normalizeChatAddress(body.poolAddress)
+  const explicitPoolAddressRaw = typeof body.poolAddress === 'string' ? body.poolAddress.trim() : ''
+  const explicitPoolAddress = normalizeChatAddress(explicitPoolAddressRaw)
   const keyAmountRaw = typeof body.keyAmountRaw === 'string' ? body.keyAmountRaw.trim() : String(body.keyAmountRaw ?? '1')
   const enterThresholdBps = Number(body.enterThresholdBps ?? 10_000)
   const exitThresholdBps = Number(body.exitThresholdBps ?? 9_000)
@@ -38,18 +39,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!roomId) return res.status(400).json({ success: false, error: 'roomId is required' })
   if (!/^\d+$/.test(tokenId)) return res.status(400).json({ success: false, error: 'tokenId must be a positive integer string' })
   if (!creatorCoinAddress) return res.status(400).json({ success: false, error: 'creatorCoinAddress is required' })
+  if (explicitPoolAddressRaw && !explicitPoolAddress) {
+    return res.status(400).json({ success: false, error: 'poolAddress must be a valid address' })
+  }
 
-  const resolvedPoolAddress =
-    explicitPoolAddress
-    ?? (await preloadAlfaClubRoomAccessPolicyPoolAddress({
-      roomId,
-      creatorCoinAddress,
-      tokenId,
-    }))
+  const resolvedPoolAddress = await preloadAlfaClubRoomAccessPolicyPoolAddress({
+    roomId,
+    creatorCoinAddress,
+    tokenId,
+    pairAddress: explicitPoolAddress,
+  })
   if (!resolvedPoolAddress) {
     return res.status(400).json({
       success: false,
-      error: 'poolAddress is required or discoverable via factory getPool',
+      error: 'configured official Sudoswap pair is missing or does not match the room market pins',
     })
   }
 

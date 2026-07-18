@@ -65,9 +65,18 @@ importers:
       '@openzeppelin/contracts':
         specifier: ^5.4.0
         version: 5.4.0
+      '@openzeppelin/contracts-universal-router':
+        specifier: npm:@openzeppelin/contracts@5.0.2
+        version: '@openzeppelin/contracts@5.0.2'
       '@privy-io/cross-app-connect':
         specifier: ^0.5.7
         version: 0.5.7(viem@2.47.12(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      '@uniswap/v2-core':
+        specifier: 1.0.1
+        version: 1.0.1
+      '@uniswap/v3-core':
+        specifier: 1.0.0
+        version: 1.0.0
       '@uniswap/v4-core':
         specifier: ^1.0.2
         version: 1.0.2
@@ -881,6 +890,14 @@ packages:
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
+  '@uniswap/v2-core@1.0.1':
+    resolution: {integrity: sha512-MtybtkUPSyysqLY2U210NBDeCHX+ltHt3oADGdjqoThZaFRDKwM6k1Nb3F0A3hk5hwuQvytFWhrWHOEq6nVJ8Q==}
+    engines: {node: '>=10'}
+
+  '@uniswap/v3-core@1.0.0':
+    resolution: {integrity: sha512-kSC4djMGKMHj7sLMYVnn61k9nu+lHjMIxgg9CDQT+s2QYLoA56GbSK9Oxr+qJXzzygbkrmuY6cwgP6cW2JXPFA==}
+    engines: {node: '>=10'}
 
   '@uniswap/v4-core@1.0.2':
     resolution: {integrity: sha512-X15Tm2wWd+USAzEExMbo+g9naA6QN6mPgWm0MzDwRNlOfaNlepfUpSyt9RSrUfEODspwbyWbcLg6t5nwc/e7lg==}
@@ -3436,6 +3453,10 @@ snapshots:
   '@types/ws@8.18.1':
     dependencies:
       '@types/node': 20.11.0
+
+  '@uniswap/v2-core@1.0.1': {}
+
+  '@uniswap/v3-core@1.0.0': {}
 
   '@uniswap/v4-core@1.0.2': {}
 

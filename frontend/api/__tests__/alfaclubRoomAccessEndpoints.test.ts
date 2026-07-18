@@ -166,6 +166,50 @@ describe('AlfaClub room-access endpoints', () => {
     await roomAccessPolicyHandler(req as any, res as any)
     expect(res.statusCode).toBe(200)
     expect(upsertAlfaClubRoomAccessPolicyMock).toHaveBeenCalledTimes(1)
+    expect(preloadAlfaClubRoomAccessPolicyPoolAddressMock).toHaveBeenCalledWith({
+      roomId: '1043',
+      tokenId: '77',
+      creatorCoinAddress: '0x1111111111111111111111111111111111111111',
+      pairAddress: null,
+    })
+  })
+
+  it('room-access/policy validates an explicit pair through the official-pair resolver', async () => {
+    readBoundedJsonObjectBodyMock.mockResolvedValueOnce({
+      roomId: '1659',
+      tokenId: '1659',
+      creatorCoinAddress: '0x1111111111111111111111111111111111111111',
+      poolAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      enabled: true,
+    })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+
+    await roomAccessPolicyHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(preloadAlfaClubRoomAccessPolicyPoolAddressMock).toHaveBeenCalledWith(expect.objectContaining({
+      pairAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    }))
+  })
+
+  it('room-access/policy fails closed when the pair does not match the configured market pins', async () => {
+    preloadAlfaClubRoomAccessPolicyPoolAddressMock.mockResolvedValueOnce(null)
+    readBoundedJsonObjectBodyMock.mockResolvedValueOnce({
+      roomId: '1659',
+      tokenId: '1659',
+      creatorCoinAddress: '0x1111111111111111111111111111111111111111',
+      poolAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      enabled: true,
+    })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+
+    await roomAccessPolicyHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toContain('configured official Sudoswap pair')
+    expect(upsertAlfaClubRoomAccessPolicyMock).not.toHaveBeenCalled()
   })
 
   it('room-access/join returns 403 when not eligible', async () => {

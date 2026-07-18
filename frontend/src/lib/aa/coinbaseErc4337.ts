@@ -317,7 +317,7 @@ const SWAP_ROUTER_BATCH_CALL_GAS_LIMIT = 5_500_000n
 const ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR = 150n
 const ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR = 100n
 
-function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
+export function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
   return String(to ?? '').toLowerCase() === ZORA_UNIVERSAL_ROUTER_ADDRESS
 }
 

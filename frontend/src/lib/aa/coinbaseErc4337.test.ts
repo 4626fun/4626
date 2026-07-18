@@ -4,6 +4,7 @@ import { encodeAbiParameters } from 'viem'
 import {
   assessUnsponsoredPrefundFeasibility,
   findCoinbaseSmartWalletOwnerIndex,
+  isZoraUniversalRouterTarget,
   pollUserOperationStatus,
   replayExecuteBatchPerLeg,
   resetOwnerIndexCacheForTests,
@@ -247,6 +248,16 @@ describe('coinbaseErc4337 latency helpers', () => {
     expect(result.success).toBe(true)
     expect(call).toHaveBeenCalledTimes(1)
     expect(simulateContract).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not classify the AlfaClub router as a Zora standalone-replay target', async () => {
+    const alfaClubRouter = '0x0000000000000000000000000000000000000099' as `0x${string}`
+    expect(isZoraUniversalRouterTarget(alfaClubRouter)).toBe(false)
+    expect(
+      isZoraUniversalRouterTarget(
+        '0x6fF5693b99212Da76ad316178A184AB56D299b43' as `0x${string}`,
+      ),
+    ).toBe(true)
   })
 
   it('treats bundler probe timeout as non-fatal', async () => {
