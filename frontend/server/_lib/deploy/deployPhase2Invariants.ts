@@ -124,6 +124,23 @@ const GAUGE_CREATOR_SPLIT_VIEW_ABI = [
   },
 ] as const
 
+const GAUGE_AGENT_SPLIT_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'treasuryShareBps',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'agentTreasury',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 export type DeployPhase2InvariantViolation = {
   code: string
   message: string
@@ -334,28 +351,68 @@ export async function verifyDeployPhase2Invariants(
     }
   }
 
+  // Creator gauges expose creatorShareBps/creatorTreasury; Agent gauges expose
+  // treasuryShareBps/agentTreasury. Missing selectors must not hard-fail the gate.
   const [creatorShareBpsRaw, creatorTreasuryRaw] = await Promise.all([
-    params.publicClient.readContract({
-      address: info.gaugeController,
-      abi: GAUGE_CREATOR_SPLIT_VIEW_ABI,
-      functionName: 'creatorShareBps',
-    }),
-    params.publicClient.readContract({
-      address: info.gaugeController,
-      abi: GAUGE_CREATOR_SPLIT_VIEW_ABI,
-      functionName: 'creatorTreasury',
-    }),
+    params.publicClient
+      .readContract({
+        address: info.gaugeController,
+        abi: GAUGE_CREATOR_SPLIT_VIEW_ABI,
+        functionName: 'creatorShareBps',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: info.gaugeController,
+        abi: GAUGE_CREATOR_SPLIT_VIEW_ABI,
+        functionName: 'creatorTreasury',
+      })
+      .catch(() => null),
   ])
-  checksRun += 2
-  const creatorShareBps = Number(creatorShareBpsRaw as bigint)
-  const creatorTreasury = normalizeAddress(creatorTreasuryRaw)
-  if (creatorShareBps > 0 && !creatorTreasury) {
-    recordViolation(
-      'creator_treasury_missing',
-      'Gauge creatorShareBps is non-zero but creatorTreasury is unset',
-      'non-zero treasury address',
-      creatorTreasury,
-    )
+  const creatorGaugeSplitSupported = creatorShareBpsRaw !== null || creatorTreasuryRaw !== null
+  if (creatorGaugeSplitSupported) {
+    checksRun += 2
+    const creatorShareBps = Number((creatorShareBpsRaw as bigint | null) ?? 0n)
+    const creatorTreasury = normalizeAddress(creatorTreasuryRaw)
+    if (creatorShareBps > 0 && !creatorTreasury) {
+      recordViolation(
+        'creator_treasury_missing',
+        'Gauge creatorShareBps is non-zero but creatorTreasury is unset',
+        'non-zero treasury address',
+        creatorTreasury,
+      )
+    }
+  } else {
+    const [treasuryShareBpsRaw, agentTreasuryRaw] = await Promise.all([
+      params.publicClient
+        .readContract({
+          address: info.gaugeController,
+          abi: GAUGE_AGENT_SPLIT_VIEW_ABI,
+          functionName: 'treasuryShareBps',
+        })
+        .catch(() => null),
+      params.publicClient
+        .readContract({
+          address: info.gaugeController,
+          abi: GAUGE_AGENT_SPLIT_VIEW_ABI,
+          functionName: 'agentTreasury',
+        })
+        .catch(() => null),
+    ])
+    const agentGaugeSplitSupported = treasuryShareBpsRaw !== null || agentTreasuryRaw !== null
+    if (agentGaugeSplitSupported) {
+      checksRun += 2
+      const treasuryShareBps = Number((treasuryShareBpsRaw as bigint | null) ?? 0n)
+      const agentTreasury = normalizeAddress(agentTreasuryRaw)
+      if (treasuryShareBps > 0 && !agentTreasury) {
+        recordViolation(
+          'agent_treasury_missing',
+          'Gauge treasuryShareBps is non-zero but agentTreasury is unset',
+          'non-zero treasury address',
+          agentTreasury,
+        )
+      }
+    }
   }
 
   if (mode === 'payout_router' && expectedPayoutRecipient) {

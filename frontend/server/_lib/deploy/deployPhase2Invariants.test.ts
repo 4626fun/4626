@@ -158,6 +158,56 @@ describe('verifyDeployPhase2Invariants', () => {
     expect(result.violations).toEqual([])
   })
 
+  it('uses Agent gauge treasury split when creatorShareBps/creatorTreasury selectors are absent', async () => {
+    const gaugeController = '0x0000000000000000000000000000000000000104'
+    const zero = '0x0000000000000000000000000000000000000000'
+    const agentTreasury = '0x0000000000000000000000000000000000000200'
+    const readContract = async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case 'feeRecipient':
+          return gaugeController
+        case 'gaugeController':
+          return gaugeController
+        case 'payoutRecipient':
+          throw new Error('execution reverted')
+        case 'creatorShareBps':
+        case 'creatorTreasury':
+          throw new Error('execution reverted')
+        case 'treasuryShareBps':
+          return 0n
+        case 'agentTreasury':
+          return agentTreasury
+        case 'boostManager':
+        case 'vaultGaugeVoting':
+          return zero
+        default:
+          throw new Error(`unexpected functionName=${functionName}`)
+      }
+    }
+
+    const result = await verifyDeployPhase2Invariants({
+      publicClient: {
+        readContract,
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+      },
+      phase2FinalizeCalls: [
+        {
+          to: '0x0000000000000000000000000000000000000010',
+          value: 0n,
+          data: makeFinalizePhase2Data(),
+        },
+      ],
+      payload: {},
+      enforceProductionReadiness: true,
+    })
+
+    expect(result.checked).toBe(true)
+    expect(result.violations.map((entry) => entry.code)).not.toContain('creator_treasury_missing')
+    expect(result.violations.map((entry) => entry.code)).not.toContain('agent_treasury_missing')
+    expect(result.violations).toEqual([])
+  })
+
   it('flags unresolved payout-router mode when no explicit CreatorCoin payout recipient is available', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
     const readContract = async ({ functionName }: { functionName: string }) => {
