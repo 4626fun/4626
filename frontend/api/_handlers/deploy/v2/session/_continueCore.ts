@@ -10,7 +10,7 @@ import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   createDeploySessionBundlerTransport,
   DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
-  DEPLOY_SESSION_USEROP_GAS,
+  deploySessionUserOpGasForStep,
   withDeploySessionUserOpGas,
 } from './deployUserOpGas.js'
 import {
@@ -1105,10 +1105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         }
-        const accountGas =
-          toStep === 'phase2_core_sent'
-            ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
-            : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
+        const accountGas = deploySessionUserOpGasForStep(toStep, phase2AccountGas)
         lastUserOpHash = await sendUserOperation(bundlerClient, {
           account: withDeploySessionUserOpGas(account, accountGas),
           calls: userOpCalls,

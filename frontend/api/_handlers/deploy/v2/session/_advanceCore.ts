@@ -21,7 +21,7 @@ import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   createDeploySessionBundlerTransport,
   DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
-  DEPLOY_SESSION_USEROP_GAS,
+  deploySessionUserOpGasForStep,
   peekSelfBundledTxHash,
   readUserOperationEventSuccess,
   withDeploySessionUserOpGas,
@@ -2064,12 +2064,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
             }
           }
         }
-        // Fat phase2_core (CREATE2 fan-out) self-bundles above CDP's 14.5M cap.
-        // All other stages use wiring-scale gas so CDP paymaster can sponsor.
-        const accountGas =
-          toStep === 'phase2_core_sent'
-            ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
-            : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
+        const accountGas = deploySessionUserOpGasForStep(toStep, phase2AccountGas)
         nextHash = await sendUserOperation(bundler, {
           account: withDeploySessionUserOpGas(account, accountGas),
           calls: userOpCalls,
@@ -2320,10 +2315,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
           }
         }
       }
-      const accountGas =
-        sentStep === 'phase2_core_sent'
-          ? (phase2AccountGas ?? DEPLOY_SESSION_USEROP_GAS)
-          : (phase2AccountGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS)
+      const accountGas = deploySessionUserOpGasForStep(sentStep, phase2AccountGas)
       const nextHash = await sendUserOperation(bundler, {
         account: withDeploySessionUserOpGas(account, accountGas),
         calls: userOpCalls,

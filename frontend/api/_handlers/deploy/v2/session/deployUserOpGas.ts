@@ -94,6 +94,23 @@ type AccountWithUserOpGas = {
   [key: string]: unknown
 }
 
+/**
+ * Fat CREATE2 stages (phase1 + unrecreated phase2_core) need ~14M call gas and
+ * self-bundle. Pre-finalize / finalize / cleanup fit wiring-scale CDP gas.
+ */
+export function deploySessionUserOpGasForStep(
+  step: string,
+  phase2WireGas?: typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS,
+): typeof DEPLOY_SESSION_USEROP_GAS | typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS {
+  if (step === 'phase2_core_sent') {
+    return phase2WireGas ?? DEPLOY_SESSION_USEROP_GAS
+  }
+  if (step === 'phase1_sent' || step === 'phase1_finalize_sent') {
+    return DEPLOY_SESSION_USEROP_GAS
+  }
+  return phase2WireGas ?? DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS
+}
+
 export function withDeploySessionUserOpGas<T>(
   account: T,
   gas: typeof DEPLOY_SESSION_USEROP_GAS | typeof DEPLOY_SESSION_PHASE2_WIRE_USEROP_GAS = DEPLOY_SESSION_USEROP_GAS,
