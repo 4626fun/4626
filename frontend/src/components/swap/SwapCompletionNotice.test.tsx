@@ -34,7 +34,7 @@ describe('SwapCompletionNotice', () => {
       />,
     )
 
-    expect(html).toContain('right-4 top-4')
+    expect(html).toContain('right-4 top-4 md:top-16')
     expect(html).not.toContain('bottom-4 left-4')
     expect(html).toContain('>Swapped<')
     expect(html).toContain('1.00 USDC for 786,456.00 AKITA')

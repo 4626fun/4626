@@ -46,7 +46,7 @@ export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-4 top-4 z-50 w-[min(100vw-2rem,22rem)] rounded-[20px] border border-white/10 bg-[rgb(var(--vault-card)/0.98)] px-4 py-3 shadow-[0_18px_48px_-20px_rgba(0,0,0,0.9)] backdrop-blur-md"
+      className="fixed right-4 top-4 md:top-16 z-50 w-[min(100vw-2rem,22rem)] rounded-[20px] border border-white/10 bg-[rgb(var(--vault-card)/0.98)] px-4 py-3 shadow-[0_18px_48px_-20px_rgba(0,0,0,0.9)] backdrop-blur-md"
     >
       <div className="flex items-center gap-3">
         <div className="relative h-8 w-11 shrink-0" aria-hidden>
