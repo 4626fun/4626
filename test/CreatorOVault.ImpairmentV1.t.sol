@@ -458,5 +458,60 @@ contract CreatorOVaultImpairmentV1Test is Test {
         vm.expectRevert(abi.encodeWithSelector(CreatorOVault.InvalidImpairmentEpoch.selector, epochId));
         vault.clearStaleImpairmentTrip(epochId);
     }
+
+    /// ODA-427-F1: per-epoch challenge cap stops indefinite challenge→clear→re-propose grief.
+    function test_challengeCap_blocksIndefiniteGrief() public {
+        vault.setMaxImpairmentChallengesPerEpoch(2);
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, vault.balanceOf(alice)));
+
+        for (uint256 i = 0; i < 2; i++) {
+            vault.proposeImpairmentRoot(epochId, leaf, vault.balanceOf(alice), address(creatorCoin));
+            vault.challengeImpairmentRoot(epochId, "grief");
+            vault.clearImpairmentRootAfterChallenge(epochId);
+        }
+
+        vault.proposeImpairmentRoot(epochId, leaf, vault.balanceOf(alice), address(creatorCoin));
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.ImpairmentChallengeCapExceeded.selector, epochId, uint8(2)));
+        vault.challengeImpairmentRoot(epochId, "too-many");
+
+        // Unchallenged root can still finalize after the window.
+        uint64 unlock = vault.impairmentRootUnlockTime(epochId);
+        vm.warp(unlock + 1);
+        vault.finalizeImpairment(epochId);
+        (CreatorOVault.ImpairmentEpochStatus status,,,,,,,,,,,,,) = vault.impairmentEpochs(epochId);
+        assertEq(uint8(status), 2);
+    }
+
+    /// ODA-427-F1: reject unfounded challenge slashes bond and keeps the root.
+    function test_rejectImpairmentChallenge_slashesBondAndKeepsRoot() public {
+        uint256 bond = 0.1 ether;
+        vault.setImpairmentChallengeBond(bond);
+
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, vault.balanceOf(alice)));
+        vault.proposeImpairmentRoot(epochId, leaf, vault.balanceOf(alice), address(creatorCoin));
+
+        address challenger = makeAddr("challenger");
+        vm.deal(challenger, 1 ether);
+        vm.prank(challenger);
+        vault.challengeImpairmentRoot{value: bond}(epochId, "bad");
+        assertTrue(vault.impairmentRootChallenged(epochId));
+        assertEq(vault.impairmentChallengeBondHeld(epochId), bond);
+
+        uint256 vaultEthBefore = address(vault).balance;
+        vault.rejectImpairmentChallenge(epochId);
+        assertFalse(vault.impairmentRootChallenged(epochId));
+        (,,,,,,,,,,, bytes32 root,,) = vault.impairmentEpochs(epochId);
+        assertTrue(root != bytes32(0), "root must remain after reject");
+        // Fee recipient is risk-timelocked; slash retains ETH in the vault by default.
+        assertEq(address(vault).balance, vaultEthBefore);
+        assertEq(vault.impairmentChallengeBondHeld(epochId), 0);
+        assertEq(challenger.balance, 1 ether - bond);
+
+        uint64 unlock = vault.impairmentRootUnlockTime(epochId);
+        vm.warp(unlock + 1);
+        vault.finalizeImpairment(epochId);
+    }
 }
 

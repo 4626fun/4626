@@ -36,9 +36,21 @@ contract Registry4626SolanaPeerIntegrityTest is Test {
     function test_setRemoteOFTPeerBytes32_allowsSameTokenUpdateWithoutCorruptingReverseMap() public {
         bytes32 replacementMint = keccak256("replacement-solana-share-mint");
         registry.setRemoteOFTPeerBytes32(TOKEN_A, SOLANA_EID, SOLANA_MINT);
+        registry.setLiveRebindEnabled(true);
         registry.setRemoteOFTPeerBytes32(TOKEN_A, SOLANA_EID, replacementMint);
 
         assertEq(registry.remoteOFTBytes32ToToken(SOLANA_MINT), address(0));
         assertEq(registry.remoteOFTBytes32ToToken(replacementMint), TOKEN_A);
+    }
+
+    function test_setRemoteOFTPeerBytes32_oneShotBlocksOverwriteWithoutLiveRebind() public {
+        bytes32 replacementMint = keccak256("replacement-solana-share-mint");
+        registry.setRemoteOFTPeerBytes32(TOKEN_A, SOLANA_EID, SOLANA_MINT);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Registry4626.BindingAlreadySet.selector, TOKEN_A, address(uint160(uint256(SOLANA_MINT)))
+            )
+        );
+        registry.setRemoteOFTPeerBytes32(TOKEN_A, SOLANA_EID, replacementMint);
     }
 }

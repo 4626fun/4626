@@ -59,7 +59,7 @@ interface ISimpleSellTaxHook {
 
 // FIX: M-08 — wrapper-side cooldown propagation hook
 interface IWrapperCooldownHook {
-    function propagateCooldownOnTransfer(address from, address to) external;
+    function propagateCooldownOnTransfer(address from, address to, uint256 amount) external;
 }
 
 /**
@@ -254,6 +254,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     event VaultSet(address indexed vault);
+    event RemoteProtocolWireAuthorityUpdated(address indexed authority);
     event RegistrySet(address indexed registry);
     /// @notice FIX: H-04 — allowlist change event
     event LotteryResolverSet(address indexed resolver, bool allowed);
@@ -328,12 +329,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error NotPendingLotteryEntryOwner();
     error InvalidLotteryEntryFee(uint256 provided, uint256 required);
     error NotRemoteProtocolWireAuthority();
+    error VaultAlreadySet(address existing);
+    error WrapperAlreadySet(address existing);
 
     /// @dev Base mainnet chain id — hub lane.
     uint256 internal constant BASE_CHAIN_ID = 8453;
 
     /// @dev Protocol treasury Safe; may wire remote ShareOFT lanes when hub batcher owner cannot exist off-Base.
-    address internal constant REMOTE_PROTOCOL_WIRE_AUTHORITY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
+    /// @notice Off-Base peer-wiring co-authority (ODA-428-F5: settable/revocable).
+    address public remoteProtocolWireAuthority = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     // ================================
     // MODIFIERS
@@ -342,7 +346,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     modifier onlyOwnerOrRemoteProtocolWire() {
         if (msg.sender == owner()) {
             _;
-        } else if (block.chainid != BASE_CHAIN_ID && msg.sender == REMOTE_PROTOCOL_WIRE_AUTHORITY) {
+        } else if (
+            block.chainid != BASE_CHAIN_ID && remoteProtocolWireAuthority != address(0)
+                && msg.sender == remoteProtocolWireAuthority
+        ) {
             _;
         } else {
             revert NotRemoteProtocolWireAuthority();
@@ -406,9 +413,17 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
+        // ODA-428-F4: one-shot vault bind (idempotent same-address OK).
+        if (vault != address(0) && vault != _vault) revert VaultAlreadySet(vault);
         vault = _vault;
         addressType[_vault] = OperationType.NoFees;
         emit VaultSet(_vault);
+    }
+
+    /// @notice ODA-428-F5 — set or revoke the off-Base wire authority (address(0) revokes).
+    function setRemoteProtocolWireAuthority(address authority) external onlyOwner {
+        remoteProtocolWireAuthority = authority;
+        emit RemoteProtocolWireAuthorityUpdated(authority);
     }
 
     /**
@@ -443,6 +458,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // that would disable the mint-backing invariant for later minter mints.
         if (wrapper != address(0) && _wrapper == address(0) && totalSupply() > 0) {
             revert WrapperRequiredWhileSupplyExists();
+        }
+        // ODA-428-F4: one-shot wrapper bind once non-zero (idempotent same-address OK).
+        if (wrapper != address(0) && _wrapper != address(0) && wrapper != _wrapper) {
+            revert WrapperAlreadySet(wrapper);
         }
         wrapper = _wrapper;
         if (_wrapper != address(0)) {
@@ -611,7 +630,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
 
-        try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to) {
+        try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to, value) {
             // ok
         } catch (bytes memory revertData) {
             emit WrapperCooldownHookFailed(_wrapper, from, to, revertData);
@@ -971,10 +990,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // LAYERZERO FEE PAYMENT
     // ================================
 
-    /// @dev Allow buyer-funded lottery submits to overpay; LZ endpoint refunds excess to `_refundAddress`.
+    /// @dev Allow buyer-funded lottery submits to overpay; return full `msg.value` so the
+    ///      LZ endpoint can refund excess to `_refundAddress` (ODA-428-F2).
     function _payNative(uint256 _nativeFee) internal virtual override returns (uint256 nativeFee) {
         if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
-        return _nativeFee;
+        return msg.value;
     }
 
     // ================================
@@ -1083,8 +1103,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      Emits LotteryWinnerNotification on the user's chain
      */
     function _handleWinnerCallback(Origin calldata _origin, bytes calldata _message) internal {
-        // Verify sender is the hub lottery peer
-        if (hubLotteryPeer == bytes32(0) || _origin.sender != hubLotteryPeer) {
+        // ODA-428-F1: admission and handler must agree — accept hub lottery peer
+        // OR the configured OFT hub peer (forwarded-callback wiring).
+        bytes32 managerPeer = hubLotteryPeer;
+        bytes32 oftPeer = peers[hubEid];
+        bool fromAllowedPeer = (managerPeer != bytes32(0) && _origin.sender == managerPeer)
+            || (oftPeer != bytes32(0) && _origin.sender == oftPeer);
+        if (!fromAllowedPeer) {
             revert InvalidCallback();
         }
 

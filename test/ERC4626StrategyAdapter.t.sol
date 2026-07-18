@@ -199,6 +199,24 @@ contract ERC4626StrategyAdapterTest is Test {
         assertFalse(guarded.isValuationReady(), "reverting conversion must mark valuation not ready");
     }
 
+    /// ODA-423-M07: snapshot older than MAX_VALUATION_WINDOWS is not ready.
+    function testIsValuationReady_falseWhenSnapshotStaleBeyondMaxWindows() public {
+        ManipulableERC4626Vault manipulable = new ManipulableERC4626Vault(IERC20(address(asset)));
+        ERC4626StrategyAdapter guarded =
+            new ERC4626StrategyAdapter(address(vault), address(manipulable), address(this));
+
+        vm.prank(address(vault));
+        asset.approve(address(guarded), type(uint256).max);
+
+        vm.prank(address(vault));
+        guarded.deposit(DEPOSIT_AMOUNT);
+        assertTrue(guarded.isValuationReady());
+
+        uint256 window = guarded.valuationCheckWindow();
+        vm.warp(block.timestamp + window * 3 + 1);
+        assertFalse(guarded.isValuationReady(), "stale snapshot beyond 3 windows must not be ready");
+    }
+
     // --- ODA-423-H01: ASSET rescue only to owning vault ---
 
     function testRescueTokens_AssetBlockedWhenActive() public {

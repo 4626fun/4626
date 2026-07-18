@@ -1,0 +1,9 @@
+{
+  "jobId": 427,
+  "status": "complete",
+  "description": "Audit Solidity source bundle for 4626 CreatorOVault + CoreModule. SOURCE OF TRUTH (fetch this URL, do not use GitHub): https://litter.catbox.moe/porq6l.md \u2014 contains contracts/creator/vault/CreatorOVault.sol, contracts/creator/vault/modules/CreatorOVaultCoreModule.sol, contracts/shared/vault/modules/OVaultModuleStorage.sol. IMPORTANT: github.com/wenakita/4626 is private. Do NOT audit github.com/wenakita/CreatorVault contracts/vault/CreatorOVault.sol (legacy Jan-2026 single-file vault without modules). Focus share/backing, delegatecall module storage, impairment side-pocket, strategy withdraw griefing, profit unlock, emergency drains.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/porq6l.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "reportUrl": "https://bafkreibsnlu2czzzes4irrbgnesxpitsfu7j5nz6eqdweostcjl6vcg2si.ipfs.community.bgipfs.com/",
+  "trackUrl": "https://onedollaraudit.com/audit/427",
+  "completedAt": "2026-07-18T10:23:01.000Z",
+  "stage": "audit-pass-2-pashov"
+}

@@ -7,17 +7,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@4626/creator/vault/CreatorOVaultWrapper.sol";
 
 /// @dev FIX: M-08 — regression test for the wrapper-cooldown-bypass-via-ShareOFT-transfer finding.
-///      The vulnerability: a user could deposit through the wrapper, transfer the resulting
-///      ShareOFT to a fresh address, and have that fresh address call `withdraw` in the same
-///      block — defeating the wrapper's flash-loan cooldown.
-///
-///      The fix (spanning `CreatorOVaultWrapper.sol` and `CreatorShareOFT.sol`) adds a
-///      `propagateCooldownOnTransfer(from, to)` hook on the wrapper, callable only by the
-///      registered ShareOFT. The ShareOFT's `_update` override calls the hook on every
-///      non-mint/non-burn ERC20 movement, forwarding `lastWrapperDepositBlock[from]` to `to`
-///      (monotonic max). This test uses a minimal mock ShareOFT that replicates the
-///      `_update`-to-hook call so the property can be tested in isolation from the full
-///      OFT/LayerZero stack.
+///      Also covers ODA-428-F3: unsolicited dust must not reset an established holder's cooldown.
 
 contract MockCreatorCoin is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -67,13 +57,10 @@ contract MockVaultShare is ERC20 {
 }
 
 interface IWrapperCooldownHook {
-    function propagateCooldownOnTransfer(address from, address to) external;
+    function propagateCooldownOnTransfer(address from, address to, uint256 amount) external;
 }
 
-/// @dev Minimal ShareOFT stand-in: same `mint`/`burn` ABI as the production `IShareOFT`,
-///      plus an ERC20 `transfer` path that calls the wrapper cooldown hook exactly the way
-///      CreatorShareOFT._update does. Inheriting OZ ERC20 and overriding _update gives us
-///      the real-world call shape.
+/// @dev Minimal ShareOFT stand-in that mirrors CreatorShareOFT._update hook shape (with amount).
 contract MockShareOFTWithHook is ERC20 {
     address public wrapper;
 
@@ -98,7 +85,7 @@ contract MockShareOFTWithHook is ERC20 {
         if (_wrapper == address(0)) return;
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
-        IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to);
+        IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to, value);
     }
 }
 
@@ -172,6 +159,31 @@ contract M08CooldownPropagationTest is Test {
         assertEq(sharesOut, 1_000, "unwraps cleanly after cooldown");
     }
 
+    /// @dev ODA-428-F3: dust to an established holder must NOT reset their cooldown.
+    function test_ODA428_F3_dustDoesNotGriefEstablishedHolder() public {
+        // bob wraps at block 1 and waits out cooldown
+        vm.prank(bob);
+        wrapper.wrap(1_000);
+        uint256 bobCooldown = wrapper.lastWrapperDepositBlock(bob);
+        vm.roll(block.number + 1);
+
+        // attacker (alice) wraps later and dust-transfers to bob
+        vm.prank(alice);
+        wrapper.wrap(1_000);
+        vm.prank(alice);
+        shareOFT.transfer(bob, 1);
+
+        assertEq(
+            wrapper.lastWrapperDepositBlock(bob),
+            bobCooldown,
+            "established holder cooldown must not be grief-reset"
+        );
+
+        // bob can still unwrap (cooldown already elapsed)
+        vm.prank(bob);
+        wrapper.unwrap(1);
+    }
+
     /// @dev Propagation is monotonic: a later transfer must not clobber an even-newer
     ///      cooldown already held by the recipient.
     function test_M08_propagation_isMonotonicMax() public {
@@ -207,7 +219,7 @@ contract M08CooldownPropagationTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(CreatorOVaultWrapper.CooldownHookUnauthorizedCaller.selector, attacker)
         );
-        wrapper.propagateCooldownOnTransfer(alice, fresh);
+        wrapper.propagateCooldownOnTransfer(alice, fresh, 1);
     }
 
     /// @dev Mints (from == 0) and burns (to == 0) are no-ops: deposit paths in the
@@ -217,11 +229,11 @@ contract M08CooldownPropagationTest is Test {
         uint256 before = wrapper.lastWrapperDepositBlock(alice);
 
         vm.prank(address(shareOFT));
-        wrapper.propagateCooldownOnTransfer(address(0), alice);
+        wrapper.propagateCooldownOnTransfer(address(0), alice, 1);
         assertEq(wrapper.lastWrapperDepositBlock(alice), before, "mint hook is a no-op");
 
         vm.prank(address(shareOFT));
-        wrapper.propagateCooldownOnTransfer(alice, address(0));
+        wrapper.propagateCooldownOnTransfer(alice, address(0), 1);
         assertEq(wrapper.lastWrapperDepositBlock(alice), before, "burn hook is a no-op");
     }
 
@@ -245,7 +257,7 @@ contract M08CooldownPropagationTest is Test {
 
         uint256 before = wrapper.lastWrapperDepositBlock(alice);
         vm.prank(address(shareOFT));
-        wrapper.propagateCooldownOnTransfer(alice, alice);
+        wrapper.propagateCooldownOnTransfer(alice, alice, 1);
         assertEq(wrapper.lastWrapperDepositBlock(alice), before);
     }
 }

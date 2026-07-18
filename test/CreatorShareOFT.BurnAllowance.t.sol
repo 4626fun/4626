@@ -88,6 +88,22 @@ contract CreatorShareOFTBurnAllowanceTest is Test {
         assertEq(shareOFT.balanceOf(holder), 750 ether);
     }
 
+    /// ODA-428-F4: vault bind is one-shot (same address re-set is idempotent).
+    function test_setVault_oneShot() public {
+        vm.startPrank(owner);
+        shareOFT.setVault(vaultAddr); // idempotent
+        vm.expectRevert(abi.encodeWithSelector(CreatorShareOFT.VaultAlreadySet.selector, vaultAddr));
+        shareOFT.setVault(address(0x99));
+        vm.stopPrank();
+    }
+
+    /// ODA-428-F5: remote wire authority is mutable / revocable.
+    function test_setRemoteProtocolWireAuthority_revocable() public {
+        vm.prank(owner);
+        shareOFT.setRemoteProtocolWireAuthority(address(0));
+        assertEq(shareOFT.remoteProtocolWireAuthority(), address(0));
+    }
+
     /// A registered minter (neither vault nor owner) must still require an allowance —
     /// unchanged H-3 behavior, kept here as a control case alongside the L-1 fix.
     function test_minterCannotBurnWithoutAllowance() public {

@@ -11,7 +11,7 @@
 | **L-1** | Low | Emergency withdraw unguarded for creatorCoin/vaultShares | Open / ops — balances usually transient |
 | **L-2** | Low | Un-swept bridged ShareOFT withdrawable when buckets empty | Open — anyone can `receiveBridgedFees` first |
 | **L-3** | Low | Dust ETH via `receive()` blocks WETH emergency withdraw | **Fixed** — withdraw allowed up to `balance - pendingWETHFees` |
-| **L-4** | Low | Shared `lastDistribution` couples WETH/OFT timers | Open — follow-up |
+| **L-4** | Low | Shared `lastDistribution` couples WETH/OFT timers | **Fixed** — `lastWethDistribution` independent of OFT `lastDistribution` (Creator + Agent) |
 | **L-5–L-7, L-9, L-11–L-12** | Low | Auto-dist deps, threshold units, Ownable2Step, timelock cluster, TWAP/sanity | Open / backlog |
 | **L-8** | Low | `renounceOwnership` bricks admin | **Fixed** — override reverts `OwnershipRenounceDisabled` |
 | **L-10** | Low | `setOracle(0)` allowed | **Fixed** — zero rejected; disable via `setOracleConfig(_, false)` |

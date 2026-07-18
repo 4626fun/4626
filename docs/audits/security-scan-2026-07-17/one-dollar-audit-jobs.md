@@ -24,13 +24,13 @@ this checkout. Descriptions instruct the auditor **not** to use CreatorVault.
 | System | Job ID | Source bundle | Track | Status (2026-07-18) |
 |--------|--------|---------------|-------|---------------------|
 | Lottery | 426 | https://litter.catbox.moe/i28508.md | https://onedollaraudit.com/audit/426 | **complete** — [426-TRIAGE.md](./oda-reports/426-TRIAGE.md) |
-| CreatorOVault + CoreModule | 427 | https://litter.catbox.moe/porq6l.md | https://onedollaraudit.com/audit/427 | in_progress |
-| CreatorShareOFT + wrapper | 428 | https://litter.catbox.moe/8guk8b.md | https://onedollaraudit.com/audit/428 | in_progress |
-| DeploymentBatcher | 429 | https://litter.catbox.moe/lrsfsn.md | https://onedollaraudit.com/audit/429 | pending |
-| Registry4626 | 430 | https://litter.catbox.moe/d8goxq.md | https://onedollaraudit.com/audit/430 | pending |
-| Charm + Ajna strategies | 431 | https://litter.catbox.moe/dk42ob.md | https://onedollaraudit.com/audit/431 | pending (note: v1 **423** already used this bundle) |
-| CreatorGaugeController | 432 | https://litter.catbox.moe/8q3r8g.md | https://onedollaraudit.com/audit/432 | pending |
-| ve4626 + bribes | 433 | https://litter.catbox.moe/leajpw.md | https://onedollaraudit.com/audit/433 | pending |
+| CreatorOVault + CoreModule | 427 | https://litter.catbox.moe/porq6l.md | https://onedollaraudit.com/audit/427 | **complete** — [427-TRIAGE.md](./oda-reports/427-TRIAGE.md) (partial patch) |
+| CreatorShareOFT + wrapper | 428 | https://litter.catbox.moe/8guk8b.md | https://onedollaraudit.com/audit/428 | **complete** — [428-TRIAGE.md](./oda-reports/428-TRIAGE.md) |
+| DeploymentBatcher | 429 | https://litter.catbox.moe/lrsfsn.md | https://onedollaraudit.com/audit/429 | **complete** — [429-TRIAGE.md](./oda-reports/429-TRIAGE.md) |
+| Registry4626 | 430 | https://litter.catbox.moe/d8goxq.md | https://onedollaraudit.com/audit/430 | **complete** — [430-TRIAGE.md](./oda-reports/430-TRIAGE.md) |
+| Charm + Ajna strategies | 431 | https://litter.catbox.moe/dk42ob.md | https://onedollaraudit.com/audit/431 | in_progress (note: v1 **423** already used this bundle; M-01…M-07 patched) |
+| CreatorGaugeController | 432 | https://litter.catbox.moe/8q3r8g.md | https://onedollaraudit.com/audit/432 | **complete** — [432-TRIAGE.md](./oda-reports/432-TRIAGE.md) (overlaps 424) |
+| ve4626 + bribes | 433 | https://litter.catbox.moe/leajpw.md | https://onedollaraudit.com/audit/433 | **complete** — [433-TRIAGE.md](./oda-reports/433-TRIAGE.md) (F2/F3 patched; F1 open) |
 
 Next-review menu: [NEXT_REVIEWS.md](./NEXT_REVIEWS.md).
 
@@ -44,7 +44,9 @@ Despite private-repo 404, several v1 jobs produced **usable** reviews:
 
 | Job | System | Why usable | Triage |
 |-----|--------|------------|--------|
-| **422** | Registry4626 | Audited `contracts/shared/core/Registry4626.sol` path | [422-TRIAGE.md](./oda-reports/422-TRIAGE.md) — F2 = SCAN-M3 (fixed); F1/F3/F4 open follow-up |
+| **422** | Registry4626 | Audited `contracts/shared/core/Registry4626.sol` path | [422-TRIAGE.md](./oda-reports/422-TRIAGE.md) — F2 = SCAN-M3; F1/F3/F4 closed via 430 |
+| **430** | Registry4626 (v2) | Same path, higher-confidence reverse-map / creator / remote-OFT | [430-TRIAGE.md](./oda-reports/430-TRIAGE.md) — High F1/F3 + Medium F2/F5/F8–F10 patched |
+| **432** | CreatorGaugeController (v2) | Overlaps 424 | [432-TRIAGE.md](./oda-reports/432-TRIAGE.md) — no new code beyond 424 |
 | **423** | Charm + Ajna | Fell back to litterbox bundle `dk42ob.md` (same as v2 #431) | [423-TRIAGE.md](./oda-reports/423-TRIAGE.md) — H-01 fixed on oda-v2-followup; M-01…M-10 open |
 | **424** | CreatorGaugeController | Correct-scope single-file review | [424-TRIAGE.md](./oda-reports/424-TRIAGE.md) — M-1…M-3 + L-3/L-8/L-10 fixed |
 | **425** | ve4626 | Source unavailable (private repo, no bundle) | No findings — wait for v2 **433** |

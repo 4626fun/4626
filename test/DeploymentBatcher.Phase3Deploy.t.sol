@@ -377,4 +377,37 @@ contract DeploymentBatcherPhase3DeployTest is Test {
         );
         batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }
+
+    /// @notice ODA-429-F2: sequential Phase 3 calls cannot push cumulative weight past 100%.
+    function test_deployPhase3Strategies_revertsWhenCumulativeWeightExceeds10000() public {
+        DeploymentBatcher.Phase3Params memory first = _phase3Params();
+        first.ajnaWeightBps = 0;
+        first.solanaWeightBps = 0;
+        batcher.deployPhase3Strategies(first, _strategyCodeIds());
+        assertEq(batcher.phase3AllocatedWeightBps(address(vault)), 4_500);
+
+        DeploymentBatcher.Phase3Params memory second = _phase3Params();
+        second.charmWeightBps = 0;
+        second.ajnaWeightBps = 6_000; // 4500 + 6000 > 10000
+        second.solanaWeightBps = 0;
+
+        vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
+        batcher.deployPhase3Strategies(second, _strategyCodeIds());
+        assertEq(batcher.phase3AllocatedWeightBps(address(vault)), 4_500, "failed call must not bump allocation");
+    }
+
+    function test_deployPhase3Strategies_allowsSplitCallsWithin10000() public {
+        DeploymentBatcher.Phase3Params memory first = _phase3Params();
+        first.ajnaWeightBps = 0;
+        first.solanaWeightBps = 0;
+        batcher.deployPhase3Strategies(first, _strategyCodeIds());
+
+        DeploymentBatcher.Phase3Params memory second = _phase3Params();
+        second.charmWeightBps = 0;
+        second.ajnaWeightBps = 4_500;
+        second.solanaWeightBps = 0;
+        batcher.deployPhase3Strategies(second, _strategyCodeIds());
+
+        assertEq(batcher.phase3AllocatedWeightBps(address(vault)), 9_000);
+    }
 }

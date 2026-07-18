@@ -90,6 +90,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     event WithdrawalCancelled(address indexed user, uint256 shares);
     event ImpairmentChallengeWindowUpdated(uint64 newWindow);
     event MaxImpairmentTripDurationUpdated(uint64 newDuration);
+    event ImpairmentChallengeBondUpdated(uint256 newBond);
+    event MaxImpairmentChallengesPerEpochUpdated(uint8 newMax);
+    event ImpairmentChallengeBondSlashed(
+        uint256 indexed epochId, address indexed challenger, uint256 amount, address indexed to
+    );
+    event ImpairmentChallengeBondRefunded(uint256 indexed epochId, address indexed challenger, uint256 amount);
     event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
@@ -128,6 +134,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
     error TransferTooSoon(uint256 currentBlock, uint256 requiredBlock);
     error LargeWithdrawalMustBeQueued(uint256 amount, uint256 threshold);
+    /// @notice Sync withdraw exceeds liquidity not reserved for queued withdrawals (ODA-427-F4).
+    error InsufficientIdleForWithdrawal(uint256 requested, uint256 available);
     error WithdrawalNotUnlocked(uint256 currentBlock, uint256 unlockBlock);
     error NoQueuedWithdrawal();
     error QueuedWithdrawalReceiverMismatch(address existing, address provided);
@@ -159,6 +167,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
     error InvalidImpairmentChallengeWindow(uint64 provided, uint64 min, uint64 max);
     error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
+    error ImpairmentChallengeCapExceeded(uint256 epochId, uint8 maxChallenges);
+    error ImpairmentRootAlreadyChallenged(uint256 epochId);
+    error InsufficientChallengeBond(uint256 provided, uint256 required);
+    error ImpairmentChallengeBondTransferFailed();
+    error NoActiveImpairmentChallenge(uint256 epochId);
+    error InvalidMaxImpairmentChallenges(uint8 provided);
 
     // =================================
     // PROFIT UNLOCKING
@@ -467,6 +481,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
         if (block.number < requiredBlock) revert WithdrawTooSoon(block.number, requiredBlock);
 
+        // ODA-427-F4: protect queued-withdrawal reservation on the assets→shares path.
+        // Do NOT silently shrink `assets` inside previewWithdraw — that would burn
+        // fewer shares while still pushing the original requested amount.
+        uint256 available = _availableAssetsAfterQueueReservation();
+        if (assets > available) revert InsufficientIdleForWithdrawal(assets, available);
+
         shares = IERC4626(address(this)).previewWithdraw(assets);
         if (shares == 0) revert ZeroShares();
 
@@ -485,6 +505,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         _decreaseReportBaselineForPrincipalOutflow(assets);
 
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
+    }
+
+    /// @dev Uncapped conversion of queued shares reserved against totalAssets (parity with previewRedeem).
+    function _availableAssetsAfterQueueReservation() internal view returns (uint256 available) {
+        uint256 liquid = totalAssets();
+        uint256 reserved = IERC4626(address(this)).convertToAssets(totalQueuedWithdrawalShares);
+        available = liquid > reserved ? liquid - reserved : 0;
     }
 
     // =================================
@@ -510,9 +537,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 unlockBlock = block.number + largeWithdrawalDelayBlocks;
 
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-        // FIX: H-03 — only set unlock time on first queue, not subsequent calls
-        if (queued.shares == 0) {
+        // ODA-427-F2: extend unlock on every addition so a warm slot cannot
+        // absorb a huge second batch with zero incremental delay (H-03 still
+        // prevents unlock *regression* via max).
+        if (queued.shares == 0 || unlockBlock > queued.unlockBlock) {
             queued.unlockBlock = unlockBlock;
+        } else {
+            unlockBlock = queued.unlockBlock;
         }
         // FIX: L-07 — prevent silent receiver overwrite on subsequent queue calls
         if (queued.shares > 0 && queued.receiver != receiver) {
@@ -609,6 +640,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         OVaultLiquidityLib.LiquiditySnapshot memory snap = OVaultLiquidityLib.snapshot(address(this));
         uint256 liquidityCap = OVaultLiquidityLib.maxInstantWithdrawAssets(snap);
         if (assetsFromShares > liquidityCap) assetsFromShares = liquidityCap;
+        // ODA-427-F4: also bound by queue-reserved NAV.
+        uint256 available = _availableAssetsAfterQueueReservation();
+        if (assetsFromShares > available) assetsFromShares = available;
         if (largeWithdrawalThreshold == 0) return assetsFromShares;
         uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
         return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;
@@ -978,6 +1012,19 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         emit MaxImpairmentTripDurationUpdated(duration);
     }
 
+    /// @notice ODA-427-F1 — set ETH bond for permissionless root challenges (0 disables).
+    function setImpairmentChallengeBond(uint256 bond) external onlyDelegateCall {
+        impairmentChallengeBond = bond;
+        emit ImpairmentChallengeBondUpdated(bond);
+    }
+
+    /// @notice ODA-427-F1 — cap challenge→clear→re-propose cycles per epoch (1..32).
+    function setMaxImpairmentChallengesPerEpoch(uint8 maxChallenges) external onlyDelegateCall {
+        if (maxChallenges == 0 || maxChallenges > 32) revert InvalidMaxImpairmentChallenges(maxChallenges);
+        maxImpairmentChallengesPerEpoch = maxChallenges;
+        emit MaxImpairmentChallengesPerEpochUpdated(maxChallenges);
+    }
+
     function tripImpairment(address strategy, uint256 reasonCode) external onlyDelegateCall returns (uint256 epochId) {
         if (strategy == address(0)) revert ZeroAddress();
         if (reasonCode == 0 || reasonCode > IMPAIR_REASON_MAX) revert InvalidImpairmentReason(reasonCode);
@@ -1046,9 +1093,40 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         epoch.recoveryAsset = address(0);
         impairmentRootUnlockTime[epochId] = 0;
         impairmentRootChallenged[epochId] = false;
+        // Stale/false-alarm reset: refund any held challenge bond (no slash on liveness valve).
+        if (impairmentChallengeBondHeld[epochId] > 0) {
+            _settleImpairmentChallengeBond(epochId, true);
+        } else {
+            delete impairmentRootChallenger[epochId];
+        }
         strategyImpaired[epoch.strategy] = false;
         activeImpairmentEpoch = 0;
         vaultMode = VaultMode.Normal;
+    }
+
+    /// @dev `refundChallenger=true` returns bond to challenger; false slashes to fee recipient/owner.
+    function _settleImpairmentChallengeBond(uint256 epochId, bool refundChallenger) internal {
+        uint256 held = impairmentChallengeBondHeld[epochId];
+        address challenger = impairmentRootChallenger[epochId];
+        impairmentChallengeBondHeld[epochId] = 0;
+        delete impairmentRootChallenger[epochId];
+        if (held == 0 || challenger == address(0)) return;
+
+        if (refundChallenger) {
+            (bool ok,) = payable(challenger).call{value: held}("");
+            if (!ok) revert ImpairmentChallengeBondTransferFailed();
+            emit ImpairmentChallengeBondRefunded(epochId, challenger, held);
+            return;
+        }
+
+        // Prefer management fee recipient; if unset or unable to receive, retain ETH in vault.
+        address to = managementFeeRecipient;
+        if (to == address(0)) to = address(this);
+        if (to != address(this)) {
+            (bool sent,) = payable(to).call{value: held}("");
+            if (!sent) to = address(this);
+        }
+        emit ImpairmentChallengeBondSlashed(epochId, challenger, held, to);
     }
 
     function proposeImpairmentRoot(
@@ -1070,20 +1148,45 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         epoch.snapshotRoot = snapshotRoot;
         epoch.totalClaimSupply = totalClaimSupply;
         epoch.recoveryAsset = recoveryAsset;
+        // Keep `trippedAt` as the original tripImpairment timestamp so
+        // `clearStaleImpairmentTrip` remains a bounded liveness valve against
+        // indefinite challenge→clear→re-propose freeze (ODA-427-F1 review).
+        // Griefing of finalize still needs a bond/cap follow-up — do not extend
+        // the stale deadline by refreshing trippedAt here.
         uint64 unlock = uint64(block.timestamp) + impairmentChallengeWindow;
         impairmentRootUnlockTime[epochId] = unlock;
         emit ImpairmentRootProposed(epochId, snapshotRoot, unlock);
     }
 
-    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external onlyDelegateCall {
+    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external payable onlyDelegateCall {
         if (epochId == 0) revert InvalidImpairmentEpoch(epochId);
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
         if (epoch.snapshotRoot == bytes32(0)) revert ImpairmentRootRequired(epochId);
         uint64 unlock = impairmentRootUnlockTime[epochId];
         if (block.timestamp >= unlock) revert ImpairmentChallengeWindowClosed(unlock);
+        if (impairmentRootChallenged[epochId]) revert ImpairmentRootAlreadyChallenged(epochId);
+
+        uint8 maxChallenges = maxImpairmentChallengesPerEpoch;
+        if (maxChallenges != 0 && impairmentChallengeCount[epochId] >= maxChallenges) {
+            revert ImpairmentChallengeCapExceeded(epochId, maxChallenges);
+        }
+
+        uint256 requiredBond = impairmentChallengeBond;
+        if (msg.value < requiredBond) revert InsufficientChallengeBond(msg.value, requiredBond);
+
         impairmentRootChallenged[epochId] = true;
+        impairmentChallengeCount[epochId] += 1;
+        impairmentRootChallenger[epochId] = msg.sender;
+        impairmentChallengeBondHeld[epochId] = requiredBond;
         emit ImpairmentRootChallenged(epochId, msg.sender, reason);
+
+        // Refund excess ETH above the required bond.
+        uint256 excess = msg.value - requiredBond;
+        if (excess > 0) {
+            (bool ok,) = payable(msg.sender).call{value: excess}("");
+            if (!ok) revert ImpairmentChallengeBondTransferFailed();
+        }
     }
 
     function clearImpairmentRootAfterChallenge(uint256 epochId) external onlyDelegateCall {
@@ -1091,12 +1194,27 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
         if (!impairmentRootChallenged[epochId]) revert ImpairmentRootChallengedErr(epochId);
+
+        // Management accepted the challenge (root was bad) — refund bond to challenger.
+        _settleImpairmentChallengeBond(epochId, true);
+
         epoch.snapshotRoot = bytes32(0);
         epoch.totalClaimSupply = 0;
         epoch.recoveryAsset = address(0);
         impairmentRootUnlockTime[epochId] = 0;
         impairmentRootChallenged[epochId] = false;
         emit ImpairmentRootCleared(epochId);
+    }
+
+    /// @notice ODA-427-F1 — dismiss an unfounded challenge; slash bond; keep the proposed root.
+    function rejectImpairmentChallenge(uint256 epochId) external onlyDelegateCall {
+        if (epochId == 0) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        if (!impairmentRootChallenged[epochId]) revert NoActiveImpairmentChallenge(epochId);
+
+        _settleImpairmentChallengeBond(epochId, false);
+        impairmentRootChallenged[epochId] = false;
     }
 
     function finalizeImpairment(uint256 epochId) external onlyDelegateCall {

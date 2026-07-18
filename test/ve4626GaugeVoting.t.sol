@@ -71,6 +71,7 @@ contract ve4626GaugeVotingTest is Test {
         utility = new ve4626Utility(address(ve), owner);
         voting = new ve4626GaugeVoting(address(ve), owner);
         voting.setUtility(address(utility));
+        utility.setGaugeVoting(address(voting));
 
         // Whitelist vaults
         voting.setVaultWhitelist(vault1, true);
@@ -741,6 +742,72 @@ contract ve4626GaugeVotingTest is Test {
         uint256 weightAfter = voting.getVaultWeightAtEpoch(epoch, surfaceOnly);
         assertEq(weightAfter, voting.getTotalWeight());
         assertLe(weightAfter, weightBefore + 1); // same power budget; allow 1 wei dust variance
+    }
+
+    /// ODA-433-F3: emergency reset cannot run inside the end-of-epoch freeze window.
+    function testEmergencyReset_RevertsInFreezeWindow() public {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 100 ether, FOUR_YEARS);
+        vm.warp(genesis + 1);
+        _vote(alice, vault1, 100);
+
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        vm.warp(epochEnd - 30 minutes); // inside VOTE_FREEZE_WINDOW (1 hour)
+
+        vm.expectRevert(ve4626GaugeVoting.EmergencyResetInFreezeWindow.selector);
+        voting.emergencyResetAllVotes();
+    }
+
+    /// ODA-433-F2: increaseLock re-seasons so fresh capital cannot vote immediately.
+    function testIncreaseLock_ReseasonsAndBlocksImmediateVote() public {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 1 ether, FOUR_YEARS); // dust lock seasons over the next epoch
+        vm.warp(genesis + 1);
+
+        // Inject capital — should reset Lock.start to now.
+        vm.startPrank(alice);
+        wsToken.approve(address(ve), 100 ether);
+        ve.increaseLock(100 ether);
+        utility.claimVe33(utility.freeCapacityOf(alice));
+        vm.stopPrank();
+
+        address[] memory vaults = new address[](1);
+        uint256[] memory weights = new uint256[](1);
+        vaults[0] = vault1;
+        weights[0] = 100;
+
+        vm.prank(alice);
+        vm.expectRevert(ve4626GaugeVoting.LockTooRecent.selector);
+        voting.vote(vaults, weights);
+    }
+
+    /// ODA-433-F1: cannot forfeit ve33 while an epoch vote still references that power.
+    function testForfeitVe33_RevertsWhileVotedThisEpoch() public {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 100 ether, FOUR_YEARS);
+        vm.warp(genesis + 1);
+
+        _vote(alice, vault1, 100);
+        assertTrue(voting.hasVotedThisEpoch(alice));
+
+        uint256 claimed = utility.ve33Of(alice);
+        vm.prank(alice);
+        vm.expectRevert(ve4626Utility.ActiveVoteEscrow.selector);
+        utility.forfeitVe33(claimed);
+
+        vm.prank(alice);
+        vm.expectRevert(ve4626Utility.ActiveVoteEscrow.selector);
+        utility.forfeitAll();
+
+        // After the epoch rolls, escrow clears and forfeit succeeds.
+        vm.warp(genesis + WEEK + 1);
+        assertFalse(voting.hasVotedThisEpoch(alice));
+        vm.prank(alice);
+        utility.forfeitAll();
+        assertEq(utility.ve33Of(alice), 0);
     }
 
     // ================================

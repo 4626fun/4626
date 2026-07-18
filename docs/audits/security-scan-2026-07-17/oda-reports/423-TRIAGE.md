@@ -6,7 +6,14 @@
 | ID | Sev | One-liner | Merge gate? |
 |----|-----|-----------|-------------|
 | H-01 | High | `ERC4626StrategyAdapter.rescueTokens` can divert idle principal | **Fixed** on `cursor/oda-v2-followup-26cd` — ASSET rescue requires `to == vault` (+ zero-address guard); mirrors Charm `ownerEmergencyWithdraw` |
-| M-01…M-10 | Medium | Charm valuation/emergency/Ajna redeem/drift/fees/TWAP | Follow-up after H-01 |
+| M-01 | Medium | Stale oracle latches understated `lastTotalAssets` / phantom harvest profit | **Fixed** — harvest/deposit skip `lastTotalAssets` update when `!isValuationReady()` |
+| M-02 | Medium | `emergencyWithdraw` required swap can brick exit | **Fixed** — best-effort `_swapUsdcToAssetSafe` |
+| M-03 | Medium | Emergency exit never repays Ajna debt | **Partial** — best-effort `_repayAjnaDebtWithAsset` in emergencyWithdraw |
+| M-04 | Medium | Idle USDC stranded when Charm shares are zero | **Fixed** — residual USDC forwarded to vault |
+| M-05 | Medium | `setCharmVault` leaves stale unlimited approvals | **Fixed** — revoke old + approve new (mirror `setAjnaPool`) |
+| M-06 | Medium | `AjnaERC4626Vault.maxRedeem` can exceed idle buffer | **Fixed** — shrink shares until `previewRedeem <= buffer` |
+| M-07 | Medium | Valuation windows unbounded / stale snapshot still ready | **Fixed** — `MAX_VALUATION_WINDOWS = 3`; stale ⇒ not ready |
+| M-08…M-10 | Medium | Remaining Charm/Ajna mediums | Follow-up |
 | L-A | Lead→maybe High | Ajna `removeQuoteToken` LP vs quote-amount unit mismatch | Verify against live `IAjnaPool` ABI |
 
 H-01 shipped with ODA 426 F1/F2 on the oda-v2-followup branch.

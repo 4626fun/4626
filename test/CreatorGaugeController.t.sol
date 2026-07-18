@@ -411,6 +411,38 @@ contract MockToken is IERC20 {
             gauge.executeEmergencyWithdraw();
         }
 
+        /// ODA-424-L4 / 432-F3: WETH lane must not advance the ShareOFT distribution clock.
+        function test_wethProcess_doesNotBlockOftDistribute() public {
+            // lastDistribution=0 still enforces `timestamp >= distributionInterval`.
+            vm.warp(block.timestamp + gauge.distributionInterval());
+
+            uint256 wethAmount = 5 ether;
+            uint256 creatorPerEth = 2e18;
+            uint256 creatorOut = 10 ether;
+
+            _depositPendingWeth(wethAmount);
+            gauge.setOracle(address(oracle));
+            oracle.setCreatorPerEth(creatorPerEth);
+            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
+            router.setAmountOut(creatorOut);
+
+            uint256 beforeOftClock = gauge.lastDistribution();
+            gauge.processWETHFees();
+
+            assertEq(gauge.lastWethDistribution(), block.timestamp);
+            assertEq(gauge.lastDistribution(), beforeOftClock);
+
+            uint256 oftAmount = 100e18;
+            shareOFT.mint(address(this), oftAmount);
+            shareOFT.approve(address(gauge), oftAmount);
+            gauge.deposit(oftAmount);
+
+            // Same block as WETH process — previously TooSoon via shared lastDistribution.
+            gauge.distribute();
+            assertEq(gauge.pendingFees(), 0);
+            assertEq(gauge.lastDistribution(), block.timestamp);
+        }
+
         function _depositPendingWeth(uint256 amount) internal {
             weth.mint(alice, amount);
             vm.startPrank(alice);

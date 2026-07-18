@@ -17,6 +17,8 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     uint256 public constant MAX_SUPPORTED_CHAINS = 99;
     uint256 public constant MAX_REGISTERED_TOKENS = 999999; // per-lane limit; agent and future ecosystems have their own caps if needed
+    /// @notice Cap distinct remote-OFT EIDs per token so owner removal cannot be gas-bricked (ODA-430-F10).
+    uint256 public constant MAX_REMOTE_OFT_CHAINS_PER_TOKEN = 64;
 
     // =================================
     // CREATOR COIN STORAGE
@@ -152,6 +154,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     event HubChainSet(uint256 chainId, uint32 eid);
     event LiveRebindEnabledUpdated(bool enabled);
     event TokenBindingUpdated(address indexed token, bytes32 indexed field, address oldValue, address newValue);
+    event CreatorUpdated(address indexed token, address indexed previous, address indexed next);
 
     // =================================
     // ERRORS
@@ -175,6 +178,10 @@ contract Registry4626 is IRegistry4626, Ownable {
     error ReverseMappingConflict(address entity, address existingToken, address attemptedToken);
     /// @notice Non-EVM reverse map already points at another token.
     error ReverseMappingBytes32Conflict(bytes32 entity, address existingToken, address attemptedToken);
+    error InvalidChainEid();
+    error EidAlreadyMapped(uint32 eid, uint256 existingChainId, uint256 attemptedChainId);
+    error TooManyRemoteOftChains();
+    error OwnershipRenounceDisabled();
 
     // =================================
     // MODIFIERS
@@ -249,6 +256,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         uint24 _poolFee
     ) external override onlyAuthorizedOrOwner {
         if (_token == address(0)) revert ZeroAddress();
+        if (_creator == address(0)) revert ZeroAddress();
         if (tokenInfos[_token].token != address(0)) revert TokenAlreadyRegistered(_token);
         if (registeredTokens.length >= MAX_REGISTERED_TOKENS) revert TooManyTokens();
 
@@ -273,6 +281,28 @@ contract Registry4626 is IRegistry4626, Ownable {
         registeredTokens.push(_token);
 
         emit TokenRegistered(_token, _name, _symbol, _creator, address(0), address(0), address(0));
+    }
+
+    /**
+     * @notice Owner correction for a token's immutable-by-default `creator` authority (ODA-430-F3).
+     * @dev Factories supply `creator` at registration with no signature check; this recovers from
+     *      front-run / mis-registration without requiring a global live rebind.
+     */
+    function setCreator(address _token, address _creator) external override onlyOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
+        if (_creator == address(0)) revert ZeroAddress();
+
+        address previous = tokenInfos[_token].creator;
+        if (previous == _creator) return;
+
+        tokenInfos[_token].creator = _creator;
+        emit CreatorUpdated(_token, previous, _creator);
+        emit TokenUpdated(_token);
+    }
+
+    /// @notice Disabled — renouncing would brick all factory/auth administration (ODA-430-F14).
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     /**
@@ -301,6 +331,12 @@ contract Registry4626 is IRegistry4626, Ownable {
         address previous = tokenInfos[_token].vault;
         _requireBindingWritable(_token, previous, _vault);
         if (previous == _vault) return;
+
+        // ODA-430-F1 / 422-F1: refuse to steal another token's reverse vault mapping.
+        address reverseOwner = vaultToToken[_vault];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_vault, reverseOwner, _token);
+        }
 
         // Clear old reverse mapping if exists
         if (previous != address(0)) {
@@ -353,6 +389,11 @@ contract Registry4626 is IRegistry4626, Ownable {
         _requireBindingWritable(_token, previous, _wrapper);
         if (previous == _wrapper) return;
 
+        address reverseOwner = wrapperToToken[_wrapper];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_wrapper, reverseOwner, _token);
+        }
+
         if (previous != address(0)) {
             delete wrapperToToken[previous];
         }
@@ -374,6 +415,11 @@ contract Registry4626 is IRegistry4626, Ownable {
         address previous = tokenInfos[_token].oracle;
         _requireBindingWritable(_token, previous, _oracle);
         if (previous == _oracle) return;
+
+        address reverseOwner = oracleToToken[_oracle];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_oracle, reverseOwner, _token);
+        }
 
         if (previous != address(0)) {
             delete oracleToToken[previous];
@@ -400,6 +446,11 @@ contract Registry4626 is IRegistry4626, Ownable {
         address previous = tokenInfos[_token].gaugeController;
         _requireBindingWritable(_token, previous, _gaugeController);
         if (previous == _gaugeController) return;
+
+        address reverseOwner = gaugeControllerToToken[_gaugeController];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_gaugeController, reverseOwner, _token);
+        }
 
         if (previous != address(0)) {
             delete gaugeControllerToToken[previous];
@@ -527,18 +578,25 @@ contract Registry4626 is IRegistry4626, Ownable {
         onlyAuthorizedOrOwner
     {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
+        if (_chainEid == 0) revert InvalidChainEid();
         if (_remoteOFT == address(0)) revert ZeroAddress();
 
-        // Clear old reverse mapping if exists
         address oldRemoteOFT = remoteOFTPeers[_token][_chainEid];
+        // ODA-430-F8 / 422-F3: one-shot peer per (token, eid); owner+liveRebind to replace.
+        _requireBindingWritable(_token, oldRemoteOFT, _remoteOFT);
+        if (oldRemoteOFT == _remoteOFT) return;
+
+        // Clear old reverse mapping if exists
         if (oldRemoteOFT != address(0)) {
             // FIX: F-11 — only delete reverse mapping if it points to the expected token,
-            // preventing corruption of another token's mapping on address reuse
-            if (remoteOFTToToken[oldRemoteOFT] == _token) {
+            // and no other EID for this token still references it (ODA-430-F2 / 422-F4).
+            if (remoteOFTToToken[oldRemoteOFT] == _token && !_remoteOFTStillReferenced(_token, oldRemoteOFT, _chainEid))
+            {
                 delete remoteOFTToToken[oldRemoteOFT];
             }
         } else {
             // New chain — track it
+            if (remoteOFTChains[_token].length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) revert TooManyRemoteOftChains();
             remoteOFTChains[_token].push(_chainEid);
         }
 
@@ -564,7 +622,6 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (remoteOFT == address(0)) return;
 
         delete remoteOFTPeers[_token][_chainEid];
-        delete remoteOFTToToken[remoteOFT];
 
         // Remove from chain list (swap-and-pop)
         uint32[] storage chains = remoteOFTChains[_token];
@@ -577,6 +634,11 @@ contract Registry4626 is IRegistry4626, Ownable {
             unchecked {
                 ++i;
             }
+        }
+
+        // ODA-430-F2 / 422-F4: keep reverse map when another EID still points at this OFT.
+        if (!_remoteOFTStillReferenced(_token, remoteOFT, 0)) {
+            delete remoteOFTToToken[remoteOFT];
         }
 
         emit RemoteOFTPeerRemoved(_token, _chainEid);
@@ -634,17 +696,30 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        require(tokenInfos[_token].token != address(0), "Token not registered");
-        require(_chainEid != 0, "Invalid chain EID");
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
+        if (_chainEid == 0) revert InvalidChainEid();
         if (_remoteOFT == bytes32(0)) revert ZeroBytes32();
 
         bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
-        if (oldPeer == bytes32(0)) {
-            remoteOFTChainsBytes32[_token].push(_chainEid);
-        } else {
-            if (remoteOFTBytes32ToToken[oldPeer] == _token) {
-                delete remoteOFTBytes32ToToken[oldPeer];
+        // ODA-430-F8 / 422-F3: one-shot peer per (token, eid); owner+liveRebind to replace.
+        if (oldPeer != bytes32(0) && oldPeer != _remoteOFT) {
+            if (!liveRebindEnabled) {
+                revert BindingAlreadySet(_token, address(uint160(uint256(oldPeer))));
             }
+            if (msg.sender != owner()) revert LiveRebindOwnerOnly();
+        }
+        if (oldPeer == _remoteOFT) return;
+
+        if (oldPeer == bytes32(0)) {
+            if (remoteOFTChainsBytes32[_token].length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) {
+                revert TooManyRemoteOftChains();
+            }
+            remoteOFTChainsBytes32[_token].push(_chainEid);
+        } else if (
+            remoteOFTBytes32ToToken[oldPeer] == _token
+                && !_remoteOFTBytes32StillReferenced(_token, oldPeer, _chainEid)
+        ) {
+            delete remoteOFTBytes32ToToken[oldPeer];
         }
 
         address reverseOwner = remoteOFTBytes32ToToken[_remoteOFT];
@@ -661,21 +736,28 @@ contract Registry4626 is IRegistry4626, Ownable {
      * @notice Removes non-EVM remote OFT peer mapping.
      */
     function removeRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external override onlyOwner {
-        require(_chainEid != 0, "Invalid chain EID");
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
+        if (_chainEid == 0) revert InvalidChainEid();
 
         bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
-        require(oldPeer != bytes32(0), "Peer not set");
+        if (oldPeer == bytes32(0)) return;
 
         delete remoteOFTPeersBytes32[_token][_chainEid];
-        delete remoteOFTBytes32ToToken[oldPeer];
 
         uint32[] storage chains = remoteOFTChainsBytes32[_token];
-        for (uint256 i = 0; i < chains.length; i++) {
+        for (uint256 i = 0; i < chains.length;) {
             if (chains[i] == _chainEid) {
                 chains[i] = chains[chains.length - 1];
                 chains.pop();
                 break;
             }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (!_remoteOFTBytes32StillReferenced(_token, oldPeer, 0)) {
+            delete remoteOFTBytes32ToToken[oldPeer];
         }
 
         emit RemoteOFTPeerBytes32Removed(_token, _chainEid);
@@ -933,6 +1015,19 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     function setChainIdToEid(uint256 _chainId, uint32 _eid) external override onlyOwner {
+        if (_eid == 0) revert InvalidChainEid();
+
+        uint256 existingChain = eidToChainId[_eid];
+        if (existingChain != 0 && existingChain != _chainId) {
+            revert EidAlreadyMapped(_eid, existingChain, _chainId);
+        }
+
+        // ODA-430-F9: clear stale reverse when repointing a chain's EID.
+        uint32 previousEid = chainIdToEid[_chainId];
+        if (previousEid != 0 && previousEid != _eid && eidToChainId[previousEid] == _chainId) {
+            delete eidToChainId[previousEid];
+        }
+
         chainIdToEid[_chainId] = _eid;
         eidToChainId[_eid] = _chainId;
 
@@ -963,6 +1058,10 @@ contract Registry4626 is IRegistry4626, Ownable {
         effective.eid = chainIdToEid[_chainId];
         effective.endpoint =
             layerZeroEndpoints[_chainId] != address(0) ? layerZeroEndpoints[_chainId] : layerZeroCommonEndpoint;
+        // ODA-430-F13: unmapped chains must not report configured with eid=0.
+        if (effective.eid == 0) {
+            effective.isConfigured = false;
+        }
         return effective;
     }
 
@@ -984,6 +1083,19 @@ contract Registry4626 is IRegistry4626, Ownable {
         uint64 _confirmations,
         bool _useCustomOApp
     ) external onlyOwner {
+        if (_endpoint == address(0)) revert ZeroAddress();
+        if (_eid == 0) revert InvalidChainEid();
+
+        uint256 existingChain = eidToChainId[_eid];
+        if (existingChain != 0 && existingChain != _chainId) {
+            revert EidAlreadyMapped(_eid, existingChain, _chainId);
+        }
+
+        uint32 previousEid = chainIdToEid[_chainId];
+        if (previousEid != 0 && previousEid != _eid && eidToChainId[previousEid] == _chainId) {
+            delete eidToChainId[previousEid];
+        }
+
         lzConfigs[_chainId] = LzConfig({
             endpoint: _endpoint,
             eid: _eid,
@@ -1118,6 +1230,8 @@ contract Registry4626 is IRegistry4626, Ownable {
         onlyAuthorizedOrOwner
     {
         if (token == address(0)) revert ZeroAddress();
+        // ODA-430-F5: require prior registerToken (deploy paths register before meta).
+        if (tokenInfos[token].token == address(0)) revert TokenNotRegistered(token);
         // SCAN-M3: one-shot like vault/shareOFT bindings — Phase2 must not overwrite
         // vaultKind / nativeAgentVault for a live token while core bindings stay put.
         // First write always allowed; replace requires owner + liveRebindEnabled.
@@ -1147,6 +1261,44 @@ contract Registry4626 is IRegistry4626, Ownable {
     // =================================
     // INTERNAL HELPERS
     // =================================
+
+    /// @dev True if any EID for `_token` (other than `skipEid`) still maps to `_remoteOFT`.
+    ///      Pass `skipEid = 0` to consider every remaining entry (0 is never a valid EID).
+    function _remoteOFTStillReferenced(address _token, address _remoteOFT, uint32 skipEid)
+        internal
+        view
+        returns (bool)
+    {
+        uint32[] storage chains = remoteOFTChains[_token];
+        for (uint256 i; i < chains.length;) {
+            uint32 eid = chains[i];
+            if (eid != skipEid && remoteOFTPeers[_token][eid] == _remoteOFT) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
+
+    function _remoteOFTBytes32StillReferenced(address _token, bytes32 _remoteOFT, uint32 skipEid)
+        internal
+        view
+        returns (bool)
+    {
+        uint32[] storage chains = remoteOFTChainsBytes32[_token];
+        for (uint256 i; i < chains.length;) {
+            uint32 eid = chains[i];
+            if (eid != skipEid && remoteOFTPeersBytes32[_token][eid] == _remoteOFT) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
 
     function _getDefaultWrappedNativeSymbol(uint256 _chainId) internal pure returns (string memory) {
         if (_chainId == 146) return "WS"; // Sonic

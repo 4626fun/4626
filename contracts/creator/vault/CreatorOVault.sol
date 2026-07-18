@@ -442,6 +442,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     ///         forever. See MIN/MAX_IMPAIRMENT_TRIP_DURATION for configurable bounds.
     uint64 public maxImpairmentTripDuration;
 
+    // ODA-427-F1: challenge bond + per-epoch cap (appended; storage v5)
+    /// @notice ETH bond required for `challengeImpairmentRoot` (0 disables bond; governance should set).
+    uint256 public impairmentChallengeBond;
+    /// @notice Max challenges per impairment epoch (default 3).
+    uint8 public maxImpairmentChallengesPerEpoch;
+    mapping(uint256 => uint8) public impairmentChallengeCount;
+    mapping(uint256 => address) public impairmentRootChallenger;
+    mapping(uint256 => uint256) public impairmentChallengeBondHeld;
+
     // =================================
     // EVENTS
     // =================================
@@ -451,6 +460,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
     event ImpairmentChallengeWindowUpdated(uint64 newWindow);
     event MaxImpairmentTripDurationUpdated(uint64 newDuration);
+    event ImpairmentChallengeBondUpdated(uint256 newBond);
+    event MaxImpairmentChallengesPerEpochUpdated(uint8 newMax);
+    event ImpairmentChallengeBondSlashed(uint256 indexed epochId, address indexed challenger, uint256 amount, address indexed to);
+    event ImpairmentChallengeBondRefunded(uint256 indexed epochId, address indexed challenger, uint256 amount);
     event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
@@ -627,6 +640,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
     error InvalidImpairmentChallengeWindow(uint64 provided, uint64 min, uint64 max);
     error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
+    error ImpairmentChallengeCapExceeded(uint256 epochId, uint8 maxChallenges);
+    error ImpairmentRootAlreadyChallenged(uint256 epochId);
+    error InsufficientChallengeBond(uint256 provided, uint256 required);
+    error ImpairmentChallengeBondTransferFailed();
+    error NoActiveImpairmentChallenge(uint256 epochId);
+    error InvalidMaxImpairmentChallenges(uint8 provided);
 
     // Protocol rescue errors
     error RescueNotConfigured();
@@ -753,6 +772,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         vaultMode = VaultMode.Normal;
         impairmentChallengeWindow = uint64(1 days);
         maxImpairmentTripDuration = uint64(14 days);
+        // ODA-427-F1: bound permissionless challenge→clear→re-propose griefing.
+        maxImpairmentChallengesPerEpoch = 3;
     }
 
     // =================================
@@ -1252,14 +1273,28 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     /// @notice Challenge a proposed impairment merkle root while its challenge window is open.
-    /// @dev Public in-window so any party can challenge a bad root. At the unlock timestamp
-    ///      management may finalize and late callers cannot grief finalization.
-    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external nonReentrant {
+    /// @dev Public in-window so any party can challenge a bad root. Requires the configured
+    ///      ETH bond (ODA-427-F1) and counts against the per-epoch challenge cap. At the unlock
+    ///      timestamp management may finalize and late callers cannot grief finalization.
+    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external payable nonReentrant {
         _delegateAndReturn(_coreModule);
     }
 
     function clearImpairmentRootAfterChallenge(uint256 epochId) external nonReentrant onlyManagement {
         _delegateAndReturn(_coreModule);
+    }
+
+    /// @notice Dismiss an unfounded challenge without clearing the proposed root (slash bond).
+    function rejectImpairmentChallenge(uint256 epochId) external nonReentrant onlyManagement {
+        _delegateAndReturn(_coreModule);
+    }
+
+    function setImpairmentChallengeBond(uint256 bond) external onlyManagement {
+        _delegate(_coreModule);
+    }
+
+    function setMaxImpairmentChallengesPerEpoch(uint8 maxChallenges) external onlyManagement {
+        _delegate(_coreModule);
     }
 
     function finalizeImpairment(uint256 epochId) external nonReentrant onlyManagement {
@@ -1345,6 +1380,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         uint256 userShares = balanceOf(owner_);
         if (userShares == 0) return 0;
         uint256 assetsFromShares = previewRedeem(userShares);
+        // ODA-427-F4: do not advertise sync withdraw above queue-reserved liquidity.
+        // Enforcement lives in CoreModule.withdraw (revert); previewWithdraw stays
+        // exact so shares burned always match the requested asset amount.
+        uint256 liquid = totalAssets();
+        uint256 reserved = super.previewRedeem(totalQueuedWithdrawalShares);
+        uint256 available = liquid > reserved ? liquid - reserved : 0;
+        if (assetsFromShares > available) assetsFromShares = available;
         if (largeWithdrawalThreshold == 0) return assetsFromShares;
         uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
         return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;

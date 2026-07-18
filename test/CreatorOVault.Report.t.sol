@@ -344,6 +344,43 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.balanceOf(address(vault)), 0);
     }
 
+    /// @notice ODA-427-F4: sync withdraw must revert when it would consume queue-reserved NAV,
+    ///         not silently under-burn shares while pushing the full requested assets.
+    function test_withdraw_revertsWhenExceedingQueueReservation() public {
+        // Sync threshold above bob's deposit so reservation (not queue-size) is the gate.
+        vault.setFlashLoanProtection(0, 10e18, 2);
+
+        vm.prank(bob);
+        vault.deposit(1e18, bob);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        // convertToAssets(aliceShares) must be >= largeWithdrawalThreshold to queue.
+        assertGe(vault.convertToAssets(aliceShares), vault.largeWithdrawalThreshold());
+
+        vm.roll(block.number + 3);
+        vm.prank(alice);
+        vault.queueWithdrawal(aliceShares, alice);
+
+        uint256 reserved = vault.convertToAssets(vault.totalQueuedWithdrawalShares());
+        uint256 available = vault.totalAssets() > reserved ? vault.totalAssets() - reserved : 0;
+        assertGt(available, 0, "bob's capital should remain available");
+        assertLt(available + 1, vault.largeWithdrawalThreshold(), "stay on sync path");
+        assertLe(vault.maxWithdraw(bob), available, "maxWithdraw must not exceed reservation");
+
+        uint256 tryAmount = available + 1;
+        // previewWithdraw must stay exact for the requested amount (no silent shrink).
+        uint256 sharesForTry = vault.previewWithdraw(tryAmount);
+        assertGt(sharesForTry, vault.previewWithdraw(available), "preview must quote full request");
+
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVaultCoreModule.InsufficientIdleForWithdrawal.selector, tryAmount, available
+            )
+        );
+        vault.withdraw(tryAmount, bob, bob);
+    }
+
     function _lockProfit(uint256 profitAssets) internal returns (uint256 locked) {
         vm.prank(donor);
         creatorCoin.transfer(address(this), profitAssets);

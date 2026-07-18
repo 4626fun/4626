@@ -85,6 +85,7 @@ contract ve4626VoterRewardsDistributorTest is Test {
         utility = new ve4626Utility(address(ve), owner);
         voting = new ve4626GaugeVoting(address(ve), owner);
         voting.setUtility(address(utility));
+        utility.setGaugeVoting(address(voting));
         distributor = new ve4626VoterRewardsDistributor(address(voting), address(registry), owner);
 
         registry.setVaultToken(vault1, creatorToken);

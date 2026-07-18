@@ -227,7 +227,18 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // =================================
 
     function setCharmVault(address _charmVault) external onlyOwner {
+        // ODA-423-M05: revoke stale unlimited approvals on the previous Charm vault
+        // and grant fresh approvals to the new one (mirror setAjnaPool).
+        address oldVault = address(charmVault);
+        if (oldVault != address(0) && oldVault != _charmVault) {
+            ASSET.forceApprove(oldVault, 0);
+            USDC.forceApprove(oldVault, 0);
+        }
         charmVault = ICharmVault(_charmVault);
+        if (_charmVault != address(0)) {
+            ASSET.forceApprove(_charmVault, type(uint256).max);
+            USDC.forceApprove(_charmVault, type(uint256).max);
+        }
     }
 
     function setSwapPool(address _swapPool) external onlyOwner {
@@ -760,8 +771,10 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         // the requested vault allocation amount. The vault enforces this strictly.
         deposited = amount;
 
-        // Update for harvest tracking
-        lastTotalAssets = getTotalAssets();
+        // Update for harvest tracking only when valuation is ready (ODA-423-M01).
+        if (this.isValuationReady()) {
+            lastTotalAssets = getTotalAssets();
+        }
 
         emit StrategyDeposit(msg.sender, amount, deposited);
     }
@@ -1206,6 +1219,12 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // =================================
 
     function harvest() external override onlyVault returns (uint256 profit) {
+        // ODA-423-M01: do not latch understated/zero totals while valuation is not ready
+        // (stale oracle drops USDC leg but still subtracts full Ajna debt).
+        if (!this.isValuationReady()) {
+            return 0;
+        }
+
         uint256 currentTotal = getTotalAssets();
 
         if (currentTotal > lastTotalAssets) {
@@ -1243,6 +1262,11 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             if (withdrawn > 0) {
                 ASSET.safeTransfer(vault, withdrawn);
             }
+            // ODA-423-M04: still forward any idle USDC when Charm is unset.
+            uint256 idleUsdc = USDC.balanceOf(address(this));
+            if (idleUsdc > 0) {
+                USDC.safeTransfer(vault, idleUsdc);
+            }
             emit EmergencyWithdraw(vault, withdrawn);
             return withdrawn;
         }
@@ -1256,13 +1280,20 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             uint256 assetReceived = assetIsToken0 ? amount0 : amount1;
             uint256 usdcReceived = assetIsToken0 ? amount1 : amount0;
 
-            // Swap USDC to ASSET; emergency path is still strict to avoid stranding.
+            // ODA-423-M02: best-effort swap — do not brick the whole emergency exit
+            // when TWAP/router is unavailable; forward residual USDC below.
             uint256 totalUsdc = USDC.balanceOf(address(this));
             if (usdcReceived > 0 || totalUsdc > 0) {
-                assetReceived += _swapUsdcToAssetRequired(totalUsdc);
+                assetReceived += _swapUsdcToAssetSafe(totalUsdc);
             }
 
             withdrawn = assetReceived;
+        }
+
+        // ODA-423-M03 (partial): best-effort Ajna repay before sweeping to vault.
+        uint256 assetBeforeRepay = ASSET.balanceOf(address(this));
+        if (assetBeforeRepay > 0 && address(ajnaPool) != address(0)) {
+            _repayAjnaDebtWithAsset(assetBeforeRepay);
         }
 
         // Send all ASSET to vault
@@ -1270,6 +1301,12 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         if (totalAsset > 0) {
             ASSET.safeTransfer(vault, totalAsset);
             withdrawn = totalAsset;
+        }
+
+        // ODA-423-M04: forward residual USDC (including when ourShares == 0).
+        uint256 residualUsdc = USDC.balanceOf(address(this));
+        if (residualUsdc > 0) {
+            USDC.safeTransfer(vault, residualUsdc);
         }
 
         emit EmergencyWithdraw(vault, withdrawn);

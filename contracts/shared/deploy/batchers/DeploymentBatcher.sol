@@ -791,11 +791,19 @@ contract DeploymentBatcherPhase1Module {
         }
 
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
-        out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);
-        IOVault4626(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule);
+        // ODA-429-F3: adopt CREATE2 occupant after integrity check (ShareOFT parity).
+        bool vaultAdopted;
+        (out.vault, vaultAdopted) = _deployOrAdopt(vaultSalt, codeIds.vault, vaultArgs);
+        if (vaultAdopted) {
+            // Already deployed from a prior attempt — modules may already be wired.
+            try IOVault4626(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule) {}
+            catch {}
+        } else {
+            IOVault4626(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule);
+        }
 
         bytes memory wrapperArgs = abi.encode(params.creatorToken, out.vault, tempOwner);
-        out.wrapper = create2Deployer.deploy(wrapperSalt, codeIds.wrapper, wrapperArgs);
+        (out.wrapper,) = _deployOrAdopt(wrapperSalt, codeIds.wrapper, wrapperArgs);
 
         out.shareOFT = address(0);
 
@@ -927,6 +935,22 @@ contract DeploymentBatcherPhase1Module {
         bytes memory creationCode = bytecodeStore.get(codeId);
         return keccak256(bytes.concat(creationCode, constructorArgs));
     }
+
+    /// @dev ODA-429-F3 — deploy or adopt an existing CREATE2 address after verifying
+    ///      the store-derived init-code hash matches the predicted deployment.
+    function _deployOrAdopt(bytes32 salt, bytes32 codeId, bytes memory constructorArgs)
+        internal
+        returns (address addr, bool adopted)
+    {
+        bytes32 initCodeHash = _deriveInitCodeHash(codeId, constructorArgs);
+        addr = create2Deployer.computeAddress(salt, initCodeHash);
+        if (addr.code.length > 0) {
+            bytes32 verifyHash = keccak256(bytes.concat(bytecodeStore.get(codeId), constructorArgs));
+            if (verifyHash != initCodeHash) revert Phase1StateMismatch();
+            return (addr, true);
+        }
+        return (create2Deployer.deploy(salt, codeId, constructorArgs), false);
+    }
 }
 
 contract DeploymentBatcherPhase2Module {
@@ -1023,7 +1047,10 @@ contract DeploymentBatcherPhase2Module {
      *      shell's `deployPhase2Core` ABI unchanged while enabling AA95-friendly reuse.
      */
     function setPendingInitCodeHashes(bytes32[3] calldata salts, bytes32[3] calldata hashes) external {
-        if (msg.sender != protocolTreasury && !create2Deployer.authorizedDeployers(msg.sender)) {
+        // ODA-429-F1: hash writes steer CREATE2 wiring for gauge/cca/oracle.
+        // Restrict to protocolTreasury only — do not delegate this to the
+        // external CREATE2 factory's unmanaged `authorizedDeployers` allowlist.
+        if (msg.sender != protocolTreasury) {
             revert NotAuthorizedInitCodeHashWriter();
         }
         for (uint256 i = 0; i < 3; i++) {
@@ -1147,7 +1174,15 @@ contract DeploymentBatcherPhase2Module {
         ICCALaunchArm(out.ccaLaunchArm).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
 
         // Persist product-lane kind so Registry4626.getVaultKind is correct after deploy.
+        // ODA-430-F5: registry now requires registerToken before setAgentIntegrationMeta.
         // Agent-specific fields (tax adapter / pair) are left zero unless a later epoch adds params.
+        {
+            IRegistry4626 reg = IRegistry4626(registry);
+            if (reg.getTokenInfo(params.creatorToken).token == address(0)) {
+                (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
+                reg.registerToken(params.creatorToken, name, symbol, params.owner, address(0), 0);
+            }
+        }
         _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
     }
 
@@ -1175,15 +1210,17 @@ contract DeploymentBatcherPhase2Module {
                 resolvedHash = keccak256(bytes.concat(creationCode, constructorArgs));
             }
             addr = create2Deployer.computeAddress(salt, resolvedHash);
-            if (addr.code.length > 0) {
-                return addr;
+            // ODA-429-F1: always verify reused code matches the approved codeId's
+            // real bytecode — the "already deployed" branch previously skipped
+            // integrity and could adopt attacker-steered CREATE2 occupants.
+            bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
+            bytes32 realHash = keccak256(bytes.concat(creationCode, constructorArgs));
+            if (publishedHash != bytes32(0) && realHash != publishedHash) {
+                revert InitCodeHashMismatch();
             }
-            // Optional integrity: if a hash was published, redeploy must match it.
-            if (publishedHash != bytes32(0)) {
-                bytes memory creationCode = IUniversalBytecodeStoreView(storeAddr).get(codeId);
-                if (keccak256(bytes.concat(creationCode, constructorArgs)) != publishedHash) {
-                    revert InitCodeHashMismatch();
-                }
+            if (addr.code.length > 0) {
+                if (realHash != resolvedHash) revert InitCodeHashMismatch();
+                return addr;
             }
         }
         addr = create2Deployer.deploy(salt, codeId, constructorArgs);
@@ -2301,6 +2338,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         returns (Phase3Result memory out)
     {
         _requireOwner(params.owner);
+        // ODA-429-F2: per-call weight caps are insufficient — repeated Phase 3
+        // calls could previously push vault allocation past 100%.
+        uint256 addedWeight = params.charmWeightBps + params.ajnaWeightBps;
+        uint256 newTotal = phase3AllocatedWeightBps[params.vault] + addedWeight;
+        if (addedWeight == 0 || newTotal > 10_000) revert InvalidWeight();
+
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         out = phase3Helper.deployPhase3Strategies(params, codeIds, baseSalt);
 
@@ -2312,6 +2355,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (params.ajnaWeightBps != 0) {
             ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
         }
+        phase3AllocatedWeightBps[params.vault] = newTotal;
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
         }
@@ -2527,6 +2571,9 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /// @notice Callers allowed to run phase deploys on behalf of `params.owner` (e.g. OVaultFactory4626).
     mapping(address => bool) public authorizedPhaseCallers;
+
+    /// @notice Cumulative Charm+Ajna strategy weight registered via Phase 3 (ODA-429-F2).
+    mapping(address => uint256) public phase3AllocatedWeightBps;
 
     event AuthorizedPhaseCallerUpdated(address indexed caller, bool authorized);
 

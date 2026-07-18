@@ -58,6 +58,7 @@ contract Registry4626RemoteOFTBytes32Test is Test {
 
         vm.startPrank(owner);
         registry.setRemoteOFTPeerBytes32(token, SOLANA_EID, oldPeer);
+        registry.setLiveRebindEnabled(true);
         registry.setRemoteOFTPeerBytes32(token, SOLANA_EID, newPeer);
         vm.stopPrank();
 
@@ -67,6 +68,20 @@ contract Registry4626RemoteOFTBytes32Test is Test {
 
         uint32[] memory chains = registry.getRemoteOFTChainsBytes32(token);
         assertEq(chains.length, 1, "overwriting must not duplicate chain entries");
+    }
+
+    function test_RemoveRemoteOFTPeerBytes32_KeepsReverseWhenSharedAcrossEids() public {
+        bytes32 sharedPeer = bytes32(uint256(0xABCD));
+
+        vm.startPrank(owner);
+        registry.setRemoteOFTPeerBytes32(token, SOLANA_EID, sharedPeer);
+        registry.setRemoteOFTPeerBytes32(token, ARB_EID, sharedPeer);
+        registry.removeRemoteOFTPeerBytes32(token, SOLANA_EID);
+        vm.stopPrank();
+
+        assertEq(registry.getRemoteOFTPeerBytes32(token, SOLANA_EID), bytes32(0));
+        assertEq(registry.getRemoteOFTPeerBytes32(token, ARB_EID), sharedPeer);
+        assertEq(registry.getTokenForRemoteOFTBytes32(sharedPeer), token, "shared reverse must survive");
     }
 
     function test_RemoveRemoteOFTPeerBytes32_RemovesChainAndReverseLookup() public {

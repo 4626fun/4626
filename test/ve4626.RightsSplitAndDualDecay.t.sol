@@ -40,6 +40,7 @@ contract ve4626RightsSplitAndDualDecayTest is Test {
         // P1: wire utility so consumers use sync + effective balances (decay-safe).
         boostMgr.setUtility(address(utility));
         gauges.setUtility(address(utility));
+        utility.setGaugeVoting(address(gauges));
         veToken.setBoostManager(address(boostMgr));
 
         wrapped.mint(user, 1_000e18);

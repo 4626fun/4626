@@ -1,0 +1,18 @@
+{
+  "jobId": 428,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit Solidity source bundle for 4626 CreatorShareOFT + Wrapper. SOURCE OF TRUTH: https://litter.catbox.moe/8guk8b.md \u2014 CreatorShareOFT.sol + CreatorOVaultWrapper.sol under contracts/creator/vault/. github.com/wenakita/4626 is private; do NOT use CreatorVault legacy repo. Focus mint authority, vault-backing, LZ credit, fee flush, lottery coverage snapshots.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/8guk8b.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:36:11.000Z",
+  "startedAt": "2026-07-18T09:35:27.000Z",
+  "completedAt": "2026-07-18T10:13:51.000Z",
+  "report": "https://bafkreifpbx42io2p6nzrippomfdhtqprfzsd7dn3mttaxu4qtdrdrc72rq.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreifpbx42io2p6nzrippomfdhtqprfzsd7dn3mttaxu4qtdrdrc72rq.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/428.html",
+  "trackUrl": "https://onedollaraudit.com/audit/428",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

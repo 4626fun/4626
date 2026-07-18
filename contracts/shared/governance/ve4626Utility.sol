@@ -10,6 +10,10 @@ interface Ive4626 {
     function getTotalVotingPower() external view returns (uint256);
 }
 
+interface Ive4626GaugeVotingHasVoted {
+    function hasVotedThisEpoch(address user) external view returns (bool);
+}
+
 /**
  * @title ve4626Utility
  * @notice Claim ve33 / veLottery utilities from live ve■4626 power.
@@ -39,17 +43,23 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
     /// @notice When true, `claimAllOutstanding` also claims veLottery (default false).
     bool public autoClaimVeLottery;
 
+    /// @notice Optional gauge voting wire for ODA-433-F1 escrow (block forfeit while voted).
+    Ive4626GaugeVotingHasVoted public gaugeVoting;
+
     event ClaimedVe33(address indexed user, uint256 amount);
     event ClaimedVeLottery(address indexed user, uint256 amount);
     event ForfeitedVe33(address indexed user, uint256 amount);
     event ForfeitedVeLottery(address indexed user, uint256 amount);
     event Synced(address indexed user, uint256 burnedVe33, uint256 burnedVeLottery, uint256 capacity);
     event AutoClaimVeLotteryUpdated(bool enabled);
+    event GaugeVotingUpdated(address indexed gaugeVoting);
 
     error ZeroAddress();
     error InsufficientCapacity();
     error InsufficientClaimed();
     error ZeroAmount();
+    /// @notice Cannot forfeit ve33 while an epoch vote still references that power.
+    error ActiveVoteEscrow();
 
     constructor(address ve4626_, address owner_) Ownable(owner_) {
         if (ve4626_ == address(0) || owner_ == address(0)) revert ZeroAddress();
@@ -67,6 +77,17 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
     function setAutoClaimVeLottery(bool enabled) external onlyOwner {
         autoClaimVeLottery = enabled;
         emit AutoClaimVeLotteryUpdated(enabled);
+    }
+
+    /// @notice Wire gauge voting so ve33 cannot be forfeited while backing a live epoch vote.
+    function setGaugeVoting(address gaugeVoting_) external onlyOwner {
+        gaugeVoting = Ive4626GaugeVotingHasVoted(gaugeVoting_);
+        emit GaugeVotingUpdated(gaugeVoting_);
+    }
+
+    function _requireNoActiveVoteEscrow(address user) internal view {
+        Ive4626GaugeVotingHasVoted g = gaugeVoting;
+        if (address(g) != address(0) && g.hasVotedThisEpoch(user)) revert ActiveVoteEscrow();
     }
 
     // -------------------------------------------------------------------------
@@ -213,6 +234,8 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
 
     function forfeitVe33(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        // ODA-433-F1: escrow ve33 while a gauge vote for this epoch is live.
+        _requireNoActiveVoteEscrow(msg.sender);
         _sync(msg.sender);
         if (userClaimedVe33[msg.sender] < amount) revert InsufficientClaimed();
         userClaimedVe33[msg.sender] -= amount;
@@ -234,6 +257,7 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
         uint256 v = userClaimedVe33[msg.sender];
         uint256 c = userClaimedVeLottery[msg.sender];
         if (v > 0) {
+            _requireNoActiveVoteEscrow(msg.sender);
             userClaimedVe33[msg.sender] = 0;
             ve33.burn(msg.sender, v);
             emit ForfeitedVe33(msg.sender, v);

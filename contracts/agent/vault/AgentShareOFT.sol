@@ -233,6 +233,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     event VaultSet(address indexed vault);
+    event RemoteProtocolWireAuthorityUpdated(address indexed authority);
     event RegistrySet(address indexed registry);
     /// @notice FIX: H-04 — allowlist change event
     event LotteryResolverSet(address indexed resolver, bool allowed);
@@ -306,12 +307,14 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     error NotPendingLotteryEntryOwner();
     error InvalidLotteryEntryFee(uint256 provided, uint256 required);
     error NotRemoteProtocolWireAuthority();
+    error VaultAlreadySet(address existing);
+    error WrapperAlreadySet(address existing);
 
     /// @dev Base mainnet chain id — hub lane.
     uint256 internal constant BASE_CHAIN_ID = 8453;
 
-    /// @dev Protocol treasury Safe; may wire remote ShareOFT lanes when hub batcher owner cannot exist off-Base.
-    address internal constant REMOTE_PROTOCOL_WIRE_AUTHORITY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
+    /// @notice Off-Base peer-wiring co-authority (ODA-428-F5: settable/revocable).
+    address public remoteProtocolWireAuthority = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     // ================================
     // MODIFIERS
@@ -320,7 +323,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     modifier onlyOwnerOrRemoteProtocolWire() {
         if (msg.sender == owner()) {
             _;
-        } else if (block.chainid != BASE_CHAIN_ID && msg.sender == REMOTE_PROTOCOL_WIRE_AUTHORITY) {
+        } else if (
+            block.chainid != BASE_CHAIN_ID && remoteProtocolWireAuthority != address(0)
+                && msg.sender == remoteProtocolWireAuthority
+        ) {
             _;
         } else {
             revert NotRemoteProtocolWireAuthority();
@@ -384,9 +390,17 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
      */
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
+        // ODA-428-F4: one-shot vault bind (idempotent same-address OK).
+        if (vault != address(0) && vault != _vault) revert VaultAlreadySet(vault);
         vault = _vault;
         addressType[_vault] = OperationType.NoFees;
         emit VaultSet(_vault);
+    }
+
+    /// @notice ODA-428-F5 — set or revoke the off-Base wire authority (address(0) revokes).
+    function setRemoteProtocolWireAuthority(address authority) external onlyOwner {
+        remoteProtocolWireAuthority = authority;
+        emit RemoteProtocolWireAuthorityUpdated(authority);
     }
 
     /**
@@ -420,6 +434,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         // H-06: do not allow clearing the wrapper while ShareOFT still circulates locally.
         if (wrapper != address(0) && _wrapper == address(0) && totalSupply() > 0) {
             revert WrapperRequiredWhileSupplyExists();
+        }
+        // ODA-428-F4: one-shot wrapper bind once non-zero (idempotent same-address OK).
+        if (wrapper != address(0) && _wrapper != address(0) && wrapper != _wrapper) {
+            revert WrapperAlreadySet(wrapper);
         }
         wrapper = _wrapper;
         if (_wrapper != address(0)) {
@@ -941,9 +959,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /// @dev Allow buyer-funded lottery submits to overpay; LZ endpoint refunds excess to `_refundAddress`.
+    /// @dev Return full `msg.value` so LZ can refund excess (ODA-428-F2 parity).
     function _payNative(uint256 _nativeFee) internal virtual override returns (uint256 nativeFee) {
         if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
-        return _nativeFee;
+        return msg.value;
     }
 
     // ================================

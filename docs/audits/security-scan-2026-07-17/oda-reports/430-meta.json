@@ -1,0 +1,9 @@
+{
+  "jobId": 430,
+  "status": "complete",
+  "description": "Audit Solidity source bundle for 4626 Registry4626. SOURCE OF TRUTH: https://litter.catbox.moe/d8goxq.md \u2014 contracts/shared/core/Registry4626.sol. Live 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2. github.com/wenakita/4626 private; do NOT use CreatorVault. Focus one-shot bindings, setAgentIntegrationMeta overwrite, live rebind, factory auth, remote OFT peers.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/d8goxq.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "reportUrl": "https://bafkreiepgp7o6hcjgigovfud5f6po34ykjlcc7tguwx6pmkvni62pbtzha.ipfs.community.bgipfs.com/",
+  "trackUrl": "https://onedollaraudit.com/audit/430",
+  "completedAt": "2026-07-18T10:34:11.000Z",
+  "stage": "audit-pass-2-pashov"
+}

@@ -2,10 +2,8 @@
   "jobId": 423,
   "status": "complete",
   "description": "Base Charm + Ajna strategy adapter security review for 4626 vaults. Source: contracts/shared/strategies/ (AjnaERC4626Vault.sol, ERC4626StrategyAdapter.sol, univ3/CharmStrategy4626.sol) in github.com/wenakita/4626. Focus: emergency drain recipients, slippage mins, buffer-only withdraw griefing, valuation oracle bounds, keeper privileges.",
-  "createdAt": "2026-07-18T06:50:03.000Z",
-  "startedAt": "2026-07-18T08:09:09.000Z",
-  "completedAt": "2026-07-18T08:41:25.000Z",
   "reportUrl": "https://bafkreifot3pfhfw2lgxuzp3xgcbqwm36phslqricpjvpkk4scsznhy6otq.ipfs.community.bgipfs.com/",
-  "reportHtmlUrl": "https://leftclaw.services/result/423.html",
-  "trackUrl": "https://onedollaraudit.com/audit/423"
+  "trackUrl": "https://onedollaraudit.com/audit/423",
+  "completedAt": "2026-07-18T08:41:25.000Z",
+  "stage": "audit-pass-2-pashov"
 }

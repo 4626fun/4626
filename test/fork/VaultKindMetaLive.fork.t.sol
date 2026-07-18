@@ -47,6 +47,10 @@ contract VaultKindMetaLiveForkTest is Test {
         meta.vaultKind = IRegistry4626.VaultKind.Agent;
         meta.nativeAgentVault = vault;
 
+        // Forward-compatible with ODA-430-F5 (register before meta). Live registry still
+        // accepts meta without registration; registerToken is authorized for the batcher.
+        vm.prank(LIVE_BATCHER);
+        registry.registerToken(token, "Smoke", "SMK", LIVE_BATCHER, address(0), 0);
         vm.prank(LIVE_BATCHER);
         registry.setAgentIntegrationMeta(token, meta);
 
@@ -65,6 +69,8 @@ contract VaultKindMetaLiveForkTest is Test {
         IRegistry4626.AgentIntegrationMeta memory meta;
         meta.vaultKind = IRegistry4626.VaultKind.Creator;
 
+        vm.prank(LIVE_BATCHER);
+        registry.registerToken(token, "Smoke", "SMK", LIVE_BATCHER, address(0), 0);
         vm.prank(LIVE_BATCHER);
         registry.setAgentIntegrationMeta(token, meta);
 

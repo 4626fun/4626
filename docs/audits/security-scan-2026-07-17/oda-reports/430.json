@@ -1,0 +1,18 @@
+{
+  "jobId": 430,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit Solidity source bundle for 4626 Registry4626. SOURCE OF TRUTH: https://litter.catbox.moe/d8goxq.md \u2014 contracts/shared/core/Registry4626.sol. Live 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2. github.com/wenakita/4626 private; do NOT use CreatorVault. Focus one-shot bindings, setAgentIntegrationMeta overwrite, live rebind, factory auth, remote OFT peers.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/d8goxq.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:36:25.000Z",
+  "startedAt": "2026-07-18T10:14:23.000Z",
+  "completedAt": "2026-07-18T10:34:11.000Z",
+  "report": "https://bafkreiepgp7o6hcjgigovfud5f6po34ykjlcc7tguwx6pmkvni62pbtzha.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreiepgp7o6hcjgigovfud5f6po34ykjlcc7tguwx6pmkvni62pbtzha.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/430.html",
+  "trackUrl": "https://onedollaraudit.com/audit/430",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

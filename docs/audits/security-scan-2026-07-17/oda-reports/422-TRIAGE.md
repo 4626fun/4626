@@ -6,9 +6,9 @@
 | ID | Sev | One-liner | Status vs this branch |
 |----|-----|-----------|------------------------|
 | F2 | Medium | `setAgentIntegrationMeta` no one-shot | **Fixed** by SCAN-M3 on #718 |
-| F1 | Medium | Missing reverse-map conflict on setVault/wrapper/oracle/gauge | **Open** — follow-up PR |
-| F3 | Medium | Remote OFT peer setters lack one-shot/rebind | **Open** — follow-up |
-| F4 | Medium | Remote reverse-map wipe when one OFT serves multiple EIDs | **Open** — follow-up |
-| F5–F10 | Low | eid==0, stale eid map, Ownable renounce, factory deauth, wallet squat, unbounded getters | **Open** — backlog |
+| F1 | Medium | Missing reverse-map conflict on setVault/wrapper/oracle/gauge | **Fixed** — see [430-TRIAGE.md](./430-TRIAGE.md) F1 |
+| F3 | Medium | Remote OFT peer setters lack one-shot/rebind | **Fixed** — 430-F8 |
+| F4 | Medium | Remote reverse-map wipe when one OFT serves multiple EIDs | **Fixed** — 430-F2 |
+| F5–F10 | Low | eid==0, stale eid map, Ownable renounce, factory deauth, wallet squat, unbounded getters | **Partial** — eid==0 / stale eid / renounce closed in 430; remainder backlog |
 
-Do not block merge of SCAN patches on F1/F3/F4 — ship #718, then open a registry hardening PR.
+Closed by Registry4626 hardening on the ODA-430 follow-up branch.

@@ -188,10 +188,20 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         if (AUTH.paused()) return 0;
 
         uint256 grossAssetsByShares = super.maxWithdraw(owner);
-        uint256 grossAssetsFromBuffer = Math.min(grossAssetsByShares, bufferAssets());
+        uint256 buffer = bufferAssets();
+        uint256 grossAssetsFromBuffer = Math.min(grossAssetsByShares, buffer);
         uint256 sharesFromBuffer = super.previewWithdraw(grossAssetsFromBuffer);
         uint256 ownerBalance = balanceOf(owner);
-        return sharesFromBuffer < ownerBalance ? sharesFromBuffer : ownerBalance;
+        if (sharesFromBuffer > ownerBalance) sharesFromBuffer = ownerBalance;
+
+        // ODA-423-M06: previewWithdraw rounds shares up while redeem uses previewRedeem
+        // (assets down). Shrink until redeem(maxRedeem) cannot exceed the buffer.
+        while (sharesFromBuffer > 0 && super.previewRedeem(sharesFromBuffer) > buffer) {
+            unchecked {
+                --sharesFromBuffer;
+            }
+        }
+        return sharesFromBuffer;
     }
 
     function previewDeposit(uint256 assets) public view override returns (uint256) {

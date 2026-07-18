@@ -789,6 +789,11 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 fromBlock = lastWrapperDepositBlock[from];
         if (fromBlock == 0) return;
 
+        // ODA-428-F3: only propagate onto fresh recipients (no prior ShareOFT).
+        // Hook runs after balance mutation → prior balance is `balanceOf(to) - amount`.
+        uint256 toBalance = IERC20(address(shareOFT)).balanceOf(to);
+        if (toBalance > amount) return;
+
         uint256 toBlock = lastWrapperDepositBlock[to];
         if (fromBlock > toBlock) {
             lastWrapperDepositBlock[to] = fromBlock;

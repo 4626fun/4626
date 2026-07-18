@@ -178,8 +178,12 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @notice Minimum amount before auto-distribution
     uint256 public distributionThreshold = 100e18; // 100 OFT tokens
 
-    /// @notice Last distribution timestamp
+    /// @notice Last ShareOFT distribution timestamp
     uint256 public lastDistribution;
+
+    /// @notice Last WETH-lane distribution timestamp (ODA-424-L4 / 432-F3)
+    /// @dev Independent of `lastDistribution` so WETH processing cannot suppress OFT cadence.
+    uint256 public lastWethDistribution;
 
     /// @notice Minimum time between distributions
     uint256 public distributionInterval = 1 hours;
@@ -453,7 +457,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         // Auto-process if we have enough and enough time has passed
         if (
             pendingWETHFees >= distributionThreshold / 10 // Lower threshold for WETH
-                && block.timestamp >= lastDistribution + distributionInterval
+                && block.timestamp >= lastWethDistribution + distributionInterval
         ) {
             uint256 amountToProcess = pendingWETHFees > cap ? cap : pendingWETHFees;
 
@@ -701,7 +705,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         if (vaultSharesReceived == 0) return;
         if (address(vault) == address(0)) revert VaultNotSet();
 
-        lastDistribution = block.timestamp;
+        lastWethDistribution = block.timestamp;
 
         uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
         uint256 toLotteryVs = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;

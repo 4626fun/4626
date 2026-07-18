@@ -143,6 +143,11 @@ interface IRegistry4626 {
     ) external;
 
     /**
+     * @notice Owner correction for a token's creator authority
+     */
+    function setCreator(address _token, address _creator) external;
+
+    /**
      * @notice Set vault address for a token
      */
     function setVault(address _token, address _vault) external;

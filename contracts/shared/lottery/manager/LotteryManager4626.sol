@@ -665,12 +665,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         address token = registry.getTokenForShareOFT(tokenIn);
         if (token == address(0)) {
             // Silently skip unregistered tokens (no lottery entry)
+            // ODA-426-F4: refund any attached native fee on early-return paths.
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
             return 0;
         }
 
         // Verify lane token is registered AND active
         if (!registry.isTokenActive(token)) {
             // Silently skip inactive/unregistered tokens (no lottery entry)
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
             return 0;
         }
 
@@ -678,10 +681,12 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         (uint256 swapValueUSD, uint256 oraclePriceUSD1e18,) = _calculateTokenUSD(token, tokenIn, amountIn);
 
         if (swapValueUSD < lotteryConfig.minSwapAmount) {
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
             return 0;
         }
 
         if (!lotteryConfig.isActive) {
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
             return 0;
         }
 
@@ -1609,14 +1614,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     }
 
     /// @dev Override LayerZero default behavior to support contract-sponsored messaging fees.
+    ///      ODA-426-F5: accept `msg.value >= fee` and return `msg.value` so LZ refunds excess.
     function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
         if (msg.value == 0) {
             // Sponsorship path: spend from contract balance.
             if (address(this).balance < _nativeFee) revert NotEnoughNative(msg.value);
             return _nativeFee;
         }
-        if (msg.value != _nativeFee) revert NotEnoughNative(msg.value);
-        return _nativeFee;
+        if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
+        return msg.value;
     }
 
     function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {

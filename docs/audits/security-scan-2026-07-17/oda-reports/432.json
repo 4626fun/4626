@@ -1,0 +1,18 @@
+{
+  "jobId": 432,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit Solidity source bundle for 4626 CreatorGaugeController. SOURCE OF TRUTH: https://litter.catbox.moe/8q3r8g.md \u2014 contracts/creator/revenue/CreatorGaugeController.sol. github.com/wenakita/4626 private; do NOT use CreatorVault. Focus payJackpot custody/auth, fee-split conservation, WETH swap slippage, reentrancy.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/8q3r8g.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:36:37.000Z",
+  "startedAt": "2026-07-18T10:23:21.000Z",
+  "completedAt": "2026-07-18T10:45:17.000Z",
+  "report": "https://bafkreicqusotbiag5pppbcavgiuaauphqc3dyt6w6gdentrzi44tlny3ti.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreicqusotbiag5pppbcavgiuaauphqc3dyt6w6gdentrzi44tlny3ti.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/432.html",
+  "trackUrl": "https://onedollaraudit.com/audit/432",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

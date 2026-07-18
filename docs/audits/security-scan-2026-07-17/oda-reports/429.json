@@ -1,0 +1,18 @@
+{
+  "jobId": 429,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit Solidity source bundle for 4626 DeploymentBatcher (includes Phase1/2/3 modules in-file). SOURCE OF TRUTH: https://litter.catbox.moe/lrsfsn.md. Live Base DeploymentBatcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145, Phase2Module 0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad. github.com/wenakita/4626 private; do NOT use CreatorVault. Focus privilege, CREATE2 reuse, init-code hashes, Phase trust boundaries.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/lrsfsn.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:36:17.000Z",
+  "startedAt": "2026-07-18T09:43:47.000Z",
+  "completedAt": "2026-07-18T10:14:09.000Z",
+  "report": "https://bafkreihtjwy4l2cef7ha26i3zrwpcdx62vkxeptzxujobwuyvnhddblbje.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreihtjwy4l2cef7ha26i3zrwpcdx62vkxeptzxujobwuyvnhddblbje.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/429.html",
+  "trackUrl": "https://onedollaraudit.com/audit/429",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

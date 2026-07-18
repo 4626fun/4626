@@ -148,6 +148,9 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
      * @dev MUST NOT revert. Returns false when the underlying ERC-4626 conversion
      *      reverts for any held shares.
      */
+    /// @notice Cap drift windows so the valuation guard cannot self-disable (ODA-423-M07).
+    uint256 internal constant MAX_VALUATION_WINDOWS = 3;
+
     function isValuationReady() external view override returns (bool) {
         (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
         if (!ok) {
@@ -167,6 +170,14 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             // strategy op refreshes it. If we still see snapshot == 0 with
             // non-zero current PPS, something is off and we should fail safe.
             return false;
+        }
+
+        // ODA-423-M07: snapshot older than MAX_VALUATION_WINDOWS is not ready
+        // (do not linearly widen the band to 100%).
+        if (valuationCheckWindow > 0 && lastValuationTimestamp > 0) {
+            uint256 elapsed =
+                block.timestamp > lastValuationTimestamp ? block.timestamp - lastValuationTimestamp : 0;
+            if (elapsed > valuationCheckWindow * MAX_VALUATION_WINDOWS) return false;
         }
 
         return _isWithinValuationBounds(snapshot, currentAssetsPerShare);
@@ -430,6 +441,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
         uint256 elapsed = block.timestamp > lastValuationTimestamp ? block.timestamp - lastValuationTimestamp : 0;
         uint256 windowsElapsed = (elapsed / valuationCheckWindow) + 1; // always allow at least one window
+        // ODA-423-M07: cap window count so allowed drift cannot saturate at 100%.
+        if (windowsElapsed > MAX_VALUATION_WINDOWS) windowsElapsed = MAX_VALUATION_WINDOWS;
         allowedBps = perWindowBps * windowsElapsed;
         if (allowedBps > 10_000) allowedBps = 10_000;
     }

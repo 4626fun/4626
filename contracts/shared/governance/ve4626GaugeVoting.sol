@@ -199,6 +199,8 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     // Power-split / epoch freeze
     error VoteFreezeWindow();
     error UtilityNotConfigured();
+    /// @notice ODA-433-F3 — emergency reset must leave time for voters to re-cast.
+    error EmergencyResetInFreezeWindow();
 
     event Ve33TokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
@@ -235,6 +237,8 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     }
 
     /// @notice Wire ve4626Utility so votes use decay-safe power (sync + effective ve33).
+    /// @dev After this, also call `ve4626Utility.setGaugeVoting(this)` (owner) so forfeits
+    ///      are escrowed while an epoch vote is live (ODA-433-F1).
     function setUtility(address utility_) external onlyOwner {
         utility = Ive4626Utility(utility_);
         emit UtilityUpdated(utility_);
@@ -646,8 +650,17 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     // EMERGENCY
     // ================================
 
+    /// @notice Emergency wipe of the current epoch's votes.
+    /// @dev ODA-433-F3: cannot run inside the end-of-epoch vote freeze — that would strand
+    ///      bribes with zero user recourse. Owner must reset before the freeze so voters can
+    ///      re-cast before the epoch closes.
     function emergencyResetAllVotes() external onlyOwner {
         uint256 epoch = currentEpoch();
+        uint256 epochEnd = epochEndTime(epoch);
+        if (epochEnd > block.timestamp && epochEnd - block.timestamp <= VOTE_FREEZE_WINDOW) {
+            revert EmergencyResetInFreezeWindow();
+        }
+
         // Zero every vault that actually received votes this epoch (whitelist *or* surface-only).
         EnumerableSet.AddressSet storage votedVaults = _epochVotedVaults[epoch];
         uint256 vaultCount = votedVaults.length();

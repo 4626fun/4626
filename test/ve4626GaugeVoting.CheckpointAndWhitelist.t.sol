@@ -107,6 +107,7 @@ contract ve4626GaugeVotingCheckpointAndWhitelistTest is Test {
         utility = new MockUtility(ve);
         voting = new ve4626GaugeVoting(address(ve), owner);
         voting.setUtility(address(utility));
+        // MockUtility has no setGaugeVoting; F1 escrow covered in ve4626GaugeVoting.t.sol.
 
         ve.setVotingPower(voter, 100 ether);
         ve.setRemainingLockTime(voter, type(uint256).max);

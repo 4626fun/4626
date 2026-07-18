@@ -14,6 +14,7 @@ contract AgentRegistryVaultKindTest is Test {
     function setUp() public {
         registry = new Registry4626(address(this));
         token = new MockAgentTokenV4("ATIKA", "ATIKA", 500, 500);
+        registry.registerToken(address(token), "ATIKA", "ATIKA", address(this), address(0), 0);
     }
 
     function test_setAgentIntegrationMeta() public {

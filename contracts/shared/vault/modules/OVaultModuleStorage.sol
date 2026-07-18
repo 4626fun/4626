@@ -212,6 +212,17 @@ abstract contract OVaultModuleStorage {
     // ---------------------------------------------------------------------
     /// @notice Liveness cap on Suspect mode; see CreatorOVault.sol for full doc.
     uint64 internal maxImpairmentTripDuration;
+
+    // ---------------------------------------------------------------------
+    // ODA-427-F1: impairment challenge bond + per-epoch challenge cap (appended)
+    // ---------------------------------------------------------------------
+    /// @notice ETH bond required to call `challengeImpairmentRoot` (0 = bond disabled).
+    uint256 internal impairmentChallengeBond;
+    /// @notice Max successful challenges allowed per impairment epoch (0 = uncapped — avoid in prod).
+    uint8 internal maxImpairmentChallengesPerEpoch;
+    mapping(uint256 => uint8) internal impairmentChallengeCount;
+    mapping(uint256 => address) internal impairmentRootChallenger;
+    mapping(uint256 => uint256) internal impairmentChallengeBondHeld;
 }
 
 // slither-disable-end uninitialized-state

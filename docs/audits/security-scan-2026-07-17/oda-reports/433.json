@@ -1,0 +1,18 @@
+{
+  "jobId": 433,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-1-ethskills",
+  "description": "Audit Solidity source bundle for 4626 ve4626 governance. SOURCE OF TRUTH: https://litter.catbox.moe/leajpw.md \u2014 ve4626.sol, ve4626GaugeVoting.sol, ve4626BoostManager.sol, ve4626Utility.sol, BribeDepot4626.sol. github.com/wenakita/4626 private; do NOT use CreatorVault. Focus locks, voting power, bribes, boost math, EnumerableSet remove order.\n\nContext: Fetch the SOURCE OF TRUTH markdown bundle at https://litter.catbox.moe/leajpw.md and audit ONLY those Solidity files. Reject github.com/wenakita/CreatorVault.",
+  "createdAt": "2026-07-18T07:36:41.000Z",
+  "startedAt": "2026-07-18T10:34:35.000Z",
+  "completedAt": "2026-07-18T11:11:07.000Z",
+  "report": "https://bafkreig4vzk77tbi6sloquustvt4ewilgkyw3uvluonfcl37k7jbxwkfem.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreig4vzk77tbi6sloquustvt4ewilgkyw3uvluonfcl37k7jbxwkfem.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/433.html",
+  "trackUrl": "https://onedollaraudit.com/audit/433",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

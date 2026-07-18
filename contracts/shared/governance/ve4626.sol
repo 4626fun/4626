@@ -242,6 +242,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         // Update lock end
         userLock.end = newEnd;
+        // ODA-433-F2: re-season so revive/extend cannot bypass gauge vote age guard.
+        userLock.start = block.timestamp;
 
         // Recalculate voting power
         newVotingPower = _calculateVotingPower(userLock.amount, newEnd);
@@ -280,6 +282,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         // Update lock
         userLock.amount += amount;
+        // ODA-433-F2: re-season on power injection (gauge vote checks Lock.start).
+        userLock.start = block.timestamp;
         userLock.underlyingValue = _getUnderlyingValue(userLock.lockedToken, userLock.amount);
 
         // Recalculate voting power
