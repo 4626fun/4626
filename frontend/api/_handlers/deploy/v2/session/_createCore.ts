@@ -2439,6 +2439,12 @@ async function assertCreatorTokenAuthority(params: {
   ownerAddress: Address
   sessionAddress: Address
 }): Promise<void> {
+  // Ops / canary wallets on CREATOR_ACCESS_ADMIN_ADDRESSES may deploy with
+  // plain ERC-20 throwaways that expose no Zora creator/owner views.
+  if (isServerAdminAddress(params.ownerAddress) || isServerAdminAddress(params.sessionAddress)) {
+    return
+  }
+
   const parties = await resolveCoinPartiesAndOwner(params.creatorToken as `0x${string}`)
   const authorized = new Set<string>()
   if (typeof parties.creator === 'string' && isAddress(parties.creator)) {

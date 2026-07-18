@@ -516,7 +516,9 @@ export async function ensurePhase2CoreCreatesPrecreated(calls: Call[]): Promise<
       to: create2Deployer,
       data,
       // Each CREATE2 is ~3.4M–7.5M; stay under Base 2^24.
-      gas: 12_000_000n,
+      // CCA CREATE2 observed ~7.4M gasUsed; keep headroom without locking
+      // 12M*baseFee upfront (underfunded ops keys fail the wallet gas check).
+      gas: 8_500_000n,
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
     const deployedCode = await publicClient.getBytecode({ address: predicted })
