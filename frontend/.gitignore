@@ -53,3 +53,6 @@ server/**/*.js.map
 server/auth/**/*.js
 server/auth/**/*.js.map
 
+
+# Local BEF pitch PDF (upload to Drive; keep HTML in public/pitch-deck/)
+public/pitch-deck/4626-pitch-deck.pdf
