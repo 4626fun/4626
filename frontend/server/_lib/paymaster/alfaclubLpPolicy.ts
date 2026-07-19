@@ -11,6 +11,8 @@ import {
   type Hex,
 } from "viem";
 
+import { assertZoraFundingExecute } from "../../../src/lib/alfaclub/zoraFundingExecute.js";
+
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const MSG_SENDER_RECIPIENT =
   "0x0000000000000000000000000000000000000001" as Address;
@@ -143,6 +145,8 @@ export type AlfaClubLpPolicyResult = {
 function splitCanonicalEthFundingCalls(
   calls: AlfaClubLpInnerCall[],
   permit2: Address,
+  sender: Address,
+  creatorCoin: Address,
 ): AlfaClubLpInnerCall[] | null {
   const firstWethDeposit = calls.findIndex(
     (call) =>
@@ -183,6 +187,18 @@ function splitCanonicalEthFundingCalls(
     zoraCall.value !== 0n
   ) {
     throw new Error("alfaclub_sudoswap_eth_funding_route_invalid");
+  }
+  try {
+    assertZoraFundingExecute({
+      data: zoraCall.data,
+      sender,
+      creatorCoin,
+      inputAmount: deposit.value,
+      mode: "wethPermit2",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    throw new Error(`alfaclub_sudoswap_eth_funding_commands_invalid:${message}`);
   }
 
   return calls.slice(3);
@@ -637,7 +653,12 @@ export async function validateAlfaClubLpCalls(params: {
 
   const config = resolveAlfaClubLpPolicyConfig(params.env);
   const sudoswapCalls =
-    splitCanonicalEthFundingCalls(params.calls, config.permit2) ?? params.calls;
+    splitCanonicalEthFundingCalls(
+      params.calls,
+      config.permit2,
+      params.sender,
+      config.creatorCoin,
+    ) ?? params.calls;
   if (sudoswapCalls.length > 3 || sudoswapCalls.length === 0) {
     throw new Error("alfaclub_sudoswap_call_count_not_allowed");
   }

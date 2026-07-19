@@ -13,6 +13,7 @@ import {
   buildAlfaClubSudoswapCalls,
   type Permit2AllowanceSnapshot,
 } from './sudoswapRouter'
+import { assertZoraFundingExecute } from './zoraFundingExecute'
 
 /** Base ZORA token used by the Room 1659 creator-coin pool. */
 export const ROOM_1659_ZORA_TOKEN = getAddress(
@@ -84,10 +85,23 @@ export function buildAlfaClubEthFundingCalls(
       throw new Error('WETH.approve amount must match the ETH funding amount')
     }
   }
-  const funding = normalizeFundingSwap(params.fundingSwap, sender, preparatoryCalls.length > 0)
+  const fundingMode = preparatoryCalls.length > 0 ? 'wethPermit2' : 'nativeEth'
+  const funding = normalizeFundingSwap(params.fundingSwap, sender, fundingMode === 'wethPermit2')
+  const fundingInputAmount =
+    fundingMode === 'wethPermit2'
+      ? BigInt(String(preparatoryCalls[0]?.value ?? '0'))
+      : BigInt(String(funding.value ?? '0'))
   if (params.fundingOutputAmount < params.buyLimit) {
     throw new Error('ETH funding quote does not cover the Sudoswap buy limit')
   }
+  assertZoraFundingExecute({
+    data: funding.data as Hex,
+    sender,
+    creatorCoin: getAddress(params.creatorCoin),
+    inputAmount: fundingInputAmount,
+    mode: fundingMode,
+    minOutputAmount: params.buyLimit,
+  })
 
   const sudoswapCalls = buildAlfaClubSudoswapCalls({
     direction: 'buy',

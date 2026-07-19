@@ -15,6 +15,7 @@ import {
   validateAlfaClubLpCalls,
   type AlfaClubLpInnerCall,
 } from './alfaclubLpPolicy'
+import { encodeMinimalWethFundingExecute } from '../../../src/lib/alfaclub/zoraFundingExecuteFixtures.js'
 
 const ERC20_ABI = parseAbi(['function approve(address spender, uint256 amount) returns (bool)'])
 const ERC1155_ABI = parseAbi(['function setApprovalForAll(address operator, bool approved)'])
@@ -240,7 +241,12 @@ describe('AlfaClub Sudoswap paymaster policy', () => {
       {
         target: getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43'),
         value: 0n,
-        data: '0x24856bc3',
+        data: encodeMinimalWethFundingExecute({
+          sender: SENDER,
+          creatorCoin: ROOM_1659_CREATOR_COIN,
+          inputAmount: amount,
+          amountOutMinimum: 1n,
+        }),
       },
       ...calls('buy'),
     ]
@@ -250,6 +256,36 @@ describe('AlfaClub Sudoswap paymaster policy', () => {
       tokenId: 1659n,
       pool: PAIR,
     })
+  })
+
+  it('rejects a canonical ETH funding batch with unbound Zora router commands', async () => {
+    const amount = 1_000_000_000_000_000n
+    const batch: AlfaClubLpInnerCall[] = [
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: amount,
+        data: '0xd0e30db0',
+      },
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: 0n,
+        data: encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [PERMIT2, amount],
+        }),
+      },
+      {
+        target: getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43'),
+        value: 0n,
+        data: '0x24856bc3',
+      },
+      ...calls('buy'),
+    ]
+
+    await expect(validate(batch)).rejects.toThrow(
+      /alfaclub_sudoswap_eth_funding_commands_invalid/i,
+    )
   })
 
   it('rejects a canonical ETH funding batch with a mismatched WETH approval', async () => {

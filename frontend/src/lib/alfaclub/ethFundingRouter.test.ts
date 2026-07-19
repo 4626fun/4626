@@ -6,6 +6,10 @@ import {
   buildAlfaClubEthFundingCalls,
   ZORA_BASE_UNIVERSAL_ROUTER,
 } from './ethFundingRouter'
+import {
+  encodeMinimalNativeEthFundingExecute,
+  encodeMinimalWethFundingExecute,
+} from './zoraFundingExecuteFixtures'
 
 const SENDER = getAddress('0x1000000000000000000000000000000000000001')
 const ROUTER = getAddress('0x2000000000000000000000000000000000000002')
@@ -21,7 +25,12 @@ describe('buildAlfaClubEthFundingCalls', () => {
       fundingSwap: {
         to: ZORA_BASE_UNIVERSAL_ROUTER,
         from: SENDER,
-        data: '0x1234',
+        data: encodeMinimalNativeEthFundingExecute({
+          sender: SENDER,
+          creatorCoin: AKITA,
+          inputAmount: 1000000000000000n,
+          amountOutMinimum: 250n,
+        }),
         value: '1000000000000000',
         chainId: 8453,
       },
@@ -61,7 +70,12 @@ describe('buildAlfaClubEthFundingCalls', () => {
         fundingSwap: {
           to: ZORA_BASE_UNIVERSAL_ROUTER,
           from: SENDER,
-          data: '0x1234',
+          data: encodeMinimalNativeEthFundingExecute({
+            sender: SENDER,
+            creatorCoin: AKITA,
+            inputAmount: 1n,
+            amountOutMinimum: 250n,
+          }),
           value: '1',
           chainId: 8453,
         },
@@ -105,7 +119,12 @@ describe('buildAlfaClubEthFundingCalls', () => {
       fundingSwap: {
         to: ZORA_BASE_UNIVERSAL_ROUTER,
         from: SENDER,
-        data: '0x1234',
+        data: encodeMinimalWethFundingExecute({
+          sender: SENDER,
+          creatorCoin: AKITA,
+          inputAmount: 1000000000000000n,
+          amountOutMinimum: 250n,
+        }),
         value: '0',
         chainId: 8453,
       },
@@ -155,3 +174,33 @@ describe('buildAlfaClubEthFundingCalls', () => {
     ).toThrow(/approved Zora router/i)
   })
 })
+
+  it('rejects when calldata min output is below the buy limit even if the quote amountOut covers it', () => {
+    expect(() =>
+      buildAlfaClubEthFundingCalls({
+        fundingSwap: {
+          to: ZORA_BASE_UNIVERSAL_ROUTER,
+          from: SENDER,
+          data: encodeMinimalNativeEthFundingExecute({
+            sender: SENDER,
+            creatorCoin: AKITA,
+            inputAmount: 1n,
+            amountOutMinimum: 150n,
+          }),
+          value: '1',
+          chainId: 8453,
+        },
+        fundingOutputAmount: 250n,
+        sender: SENDER,
+        router: ROUTER,
+        adapter: ADAPTER,
+        permit2: PERMIT2,
+        friendKey: FRIEND_KEY,
+        creatorCoin: AKITA,
+        pair: PAIR,
+        keyAmount: 1n,
+        buyLimit: 200n,
+        deadline: 1_900_000_000n,
+      }),
+    ).toThrow(/guaranteed output does not cover/i)
+  })
