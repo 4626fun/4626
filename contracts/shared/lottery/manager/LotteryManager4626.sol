@@ -2204,6 +2204,9 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     mapping(uint256 => uint256) public pendingRandomWord;
     mapping(uint256 => bool) public hasPendingRandomWord;
     uint256[] internal _deferredVrfRequestIds;
+    /// @dev Storage-layout mirror of main `LotteryManager4626._settlingDeferredVrf` (ODA-426-F6).
+    ///      Unused by admin paths; must stay here so delegatecall slots stay aligned.
+    bool private _settlingDeferredVrf;
     mapping(address => bool) public authorizedHubShareOftForwarders;
 
     SponsorshipPolicy public vrfSponsorshipPolicy;

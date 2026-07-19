@@ -131,13 +131,13 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
         amount = (totalAmount * userWeight) / totalWeight;
         if (amount == 0 && userWeight > 0) revert NoUserVotes();
 
-        // ODA-433-F6: effects after checks — transfer against live balance first, then
-        // mark claimed. Cap to available so a deflationary/rebasing bribe cannot leave
-        // later claimants permanently stuck on `AlreadyClaimed` after a failed transfer.
+        // ODA-433-F6: transfer against live balance first, then mark claimed.
+        // Reject (do not silently cap) when inventory is short so a first claimant
+        // cannot drain a deflated pool while later voters are marked unclaimable /
+        // over-accounted in `claimedAmount` / rollover.
         if (amount > 0) {
             uint256 available = IERC20(token).balanceOf(address(this));
-            if (available == 0) revert InsufficientBribeBalance(amount, 0);
-            if (amount > available) amount = available;
+            if (amount > available) revert InsufficientBribeBalance(amount, available);
             IERC20(token).safeTransfer(msg.sender, amount);
         }
 
