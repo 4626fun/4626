@@ -44,6 +44,11 @@ import {
 } from './authHealthStore.js'
 import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import {
+  readHermitAutoKeepEnabled,
+  scheduleHermitAutoKeepFromIngest,
+} from '../hermit/autoKeepMedia.js'
+import { pickKeepableMediaUrl } from '../hermit/keepMeme.js'
+import {
   filterUnrepliedCommandMessageIds,
   tryClaimCommandReply,
 } from './commandReplyLedger.js'
@@ -762,6 +767,18 @@ export function isHistoryMessageChipIngestCandidate(message: AlfaClubRoomHistory
   const username = typeof message.username === 'string' ? message.username : null
   if (!isAlfaClubHistoryIngestSender({ sender, username })) return false
   return isAlfaClubChipSystemMessage({ sender, username })
+}
+
+/** GIF/photo drops should land in chat_ingest when auto-keep is on (cron command-only mode). */
+export function isHistoryMessageMediaKeepCandidate(message: AlfaClubRoomHistoryMessage): boolean {
+  if (!readHermitAutoKeepEnabled()) return false
+  const id = String(message.id ?? '').trim()
+  if (!id) return false
+  const sender = String(message.sender ?? '').trim().toLowerCase()
+  if (!isHexAddress(sender)) return false
+  if (message.isBot === true) return false
+  const media = pickKeepableMediaUrl(normalizeAlfaClubAttachments(message.attachments))
+  return media != null
 }
 
 /**
@@ -3017,6 +3034,12 @@ async function ingestLiveMessages(
       roomIds,
     })
   }
+  if (inserted.length > 0) {
+    scheduleHermitAutoKeepFromIngest({
+      messages: inserted,
+      fallbackRoomIds: flags.hermitCommandRoomIds,
+    })
+  }
   await fanOutInsertedRoomMessages(inserted, flags)
 }
 
@@ -4021,7 +4044,8 @@ async function runBridgeTick(
       ? fetchedMessages.filter(
           (message) =>
             isHistoryMessageCommandCandidate(message) ||
-            isHistoryMessageChipIngestCandidate(message),
+            isHistoryMessageChipIngestCandidate(message) ||
+            isHistoryMessageMediaKeepCandidate(message),
         )
       : fetchedMessages
     const historyIngestRows: AlfaClubIngestMessage[] = ingestSourceMessages.flatMap((message) => {
@@ -4091,6 +4115,12 @@ async function runBridgeTick(
       historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
+    if (inserted.length > 0) {
+      scheduleHermitAutoKeepFromIngest({
+        messages: inserted,
+        fallbackRoomIds: flags.hermitCommandRoomIds,
+      })
+    }
     await fanOutInsertedRoomMessages(inserted, flags)
   } catch {
     newlyIngestedHistoryIds = null

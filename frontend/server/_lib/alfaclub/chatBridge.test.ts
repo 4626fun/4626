@@ -177,6 +177,7 @@ import {
   canBridgeReplyInRoom,
   isAlfaClubHistoryIngestSender,
   isHistoryMessageChipIngestCandidate,
+  isHistoryMessageMediaKeepCandidate,
   isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
   readAlfaClubChatBridgeFlagsForCronTick,
@@ -1169,6 +1170,59 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     ])
   })
 
+  it('cron command-only mode upserts GIF/photo drops when auto-keep is enabled', async () => {
+    vi.stubEnv('HERMIT_AUTO_KEEP_ENABLED', '1')
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-chat',
+        date: nowMs - 5_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: 'gm everyone',
+      },
+      {
+        id: 'm-gif',
+        date: nowMs - 4_200,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '',
+        attachments: [{ url: 'https://cdn.example/chef.gif', type: 'gif' }],
+      },
+      {
+        id: 'm-gmeow',
+        date: nowMs - 4_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([
+      {
+        roomId: '1043',
+        messageId: 'm-gif',
+        senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '',
+        dateMs: nowMs - 4_200,
+        attachmentsJson: [{ url: 'https://cdn.example/chef.gif', type: 'gif' }],
+      },
+      {
+        roomId: '1043',
+        messageId: 'm-gmeow',
+        senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+        dateMs: nowMs - 4_000,
+      },
+    ])
+
+    await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+      ingestCommandCandidatesOnly: true,
+      skipLiveWebSocket: true,
+    })
+
+    const firstCall = upsertAlfaClubIngestMessagesMock.mock.calls[0] as any
+    const rows = (firstCall?.[0] ?? []) as Array<{ messageId?: string }>
+    expect(rows.map((row) => row.messageId).sort()).toEqual(['m-gif', 'm-gmeow'])
+  })
+
   it('polls Hermit room 1659 when pollRoomId is set on the tick', async () => {
     let historyRoomId = ''
     globalThis.fetch = vi.fn(async (input) => {
@@ -1358,6 +1412,13 @@ describe('AlfaClub chat bridge cron helpers', () => {
       }),
     ).toBe(true)
     expect(isAlfaClubHistoryIngestSender({ sender: 'some-bot' })).toBe(false)
+    expect(
+      isHistoryMessageMediaKeepCandidate({
+        id: 'm-gif',
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        attachments: [{ url: 'https://cdn.example/a.gif', type: 'gif' }],
+      }),
+    ).toBe(true)
     expect(
       isHistoryMessageChipIngestCandidate({
         id: 'chip-1',

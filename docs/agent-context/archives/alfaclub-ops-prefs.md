@@ -42,3 +42,5 @@ Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only*
 - **Public Arena CTAs are `/h arena …` only (H-06/H-07).** Help + bare `arena …` intake advertise `/h arena`; website `vercel.json` `/arena` redirects stay unchanged. `ALFACLUB_API_KEY` is the only bot credential — shadow `ALFACLUB_BOT_TOKEN` / `alfaclub_api_key` aliases are retired in code.
 
 - **Hermit `/keep`** — reply to a room GIF/photo to pin via Pinata (`PINATA_JWT`) into `hermit_memes`; `/gmeow` merges DB keeps with the static library. Public URLs use `https://4626.fun/ipfs/<cid>`.
+
+- **Hermit auto-keep** — newly ingested GIF/photo attachments in Hermit command rooms are pinned to Pinata automatically (`HERMIT_AUTO_KEEP_ENABLED`, default on; optional `HERMIT_AUTO_KEEP_ROOM_IDS`, `HERMIT_AUTO_KEEP_MAX_PER_TICK`). `/keep` remains as a manual pin. `/gmeow` reads `hermit_memes`.
