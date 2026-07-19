@@ -3,7 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {
+    LotteryManager4626,
+    LotteryManager4626AdminModule
+} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 import {MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
@@ -240,9 +243,23 @@ contract LotteryManager4626VrfSponsorshipHardeningTest is Test {
     }
 
     function test_adminWrapper_ownerCanSetAuthorizedSwapContract() public {
+        // setUp already consumed the bootstrap authorize; further auths are timelocked.
         address newSwap = makeAddr("newSwap");
         vm.prank(owner);
+        vm.expectRevert(LotteryManager4626AdminModule.SwapAuthMustBeQueued.selector);
         lotteryManager.setAuthorizedSwapContract(newSwap, true);
+
+        vm.prank(owner);
+        lotteryManager.adminModuleCall(
+            abi.encodeWithSelector(
+                LotteryManager4626AdminModule.queueSwapContractAuth.selector, newSwap, true
+            )
+        );
+        vm.warp(block.timestamp + lotteryManager.LOCAL_VRF_CONSUMER_TIMELOCK());
+        vm.prank(owner);
+        lotteryManager.adminModuleCall(
+            abi.encodeWithSelector(LotteryManager4626AdminModule.executeSwapContractAuth.selector)
+        );
 
         assertTrue(lotteryManager.authorizedSwapContracts(newSwap), "swap authorization not updated");
     }

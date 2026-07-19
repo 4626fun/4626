@@ -566,6 +566,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
     /// @dev Logic lives in the admin module; constant is exposed on the main ABI for ops/tests.
+    ///      ODA-426-F3 reuses this 2-day window for VRF integrator, swap-auth, and reward%.
     uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
     /// @notice Delay for AMOE relayer rewires (same window as local VRF consumer).
     uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
@@ -1812,6 +1813,23 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @dev Appended storage; mirrored in LotteryManager4626AdminModule.
     mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
 
+    // ================================
+    // STATE — ODA-426-F3 TRUST-ROOT TIMELOCKS
+    // ================================
+    //
+    // Appended after `_processedRemoteLotterySourceEvents`; mirrored in
+    // LotteryManager4626AdminModule in the same order (delegatecall layout).
+    // Fields are internal + packed getter to keep main runtime under EIP-170.
+
+    address internal _pendingVRFIntegrator;
+    uint256 internal _pendingVRFIntegratorEffectiveAt;
+    address internal _pendingSwapContract;
+    bool internal _pendingSwapAuthorized;
+    uint256 internal _pendingSwapContractEffectiveAt;
+    bool internal _swapAuthBootstrapComplete;
+    uint256 internal _pendingRewardPercentage;
+    uint256 internal _pendingRewardPercentageEffectiveAt;
+
     /// @notice Emitted when the per-call iteration cap truncated the payout.
     /// Off-chain monitors can use this to reconcile that the remaining coins
     /// will be reached on subsequent jackpots via the advancing cursor.
@@ -1842,9 +1860,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         }
     }
 
-    function setAuthorizedSwapContract(address swapContract, bool authorized) external {
-        swapContract;
-        authorized;
+    function setAuthorizedSwapContract(address, bool) external {
         _delegateAdmin();
     }
 
@@ -1884,8 +1900,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setVRFIntegrator(address _integrator) external {
-        _integrator;
+    function setVRFIntegrator(address) external {
         _delegateAdmin();
     }
 
@@ -2021,6 +2036,18 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _maxWinChance;
         _usdMultiplierBps;
         _delegateAdmin();
+    }
+
+    /// @notice Delegate arbitrary admin-module calldata (ODA-426-F3 queue/execute/cancel).
+    /// @dev Keeps named queue/execute/cancel off the main runtime to stay under EIP-170.
+    ///      Admin module enforces `onlyOwner` / `onlyDelegateCall`.
+    function adminModuleCall(bytes calldata data) external {
+        (bool ok, bytes memory ret) = _adminModule.delegatecall(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
     }
 
     function setOracleMaxStaleness(uint256 _maxStaleness) external {
@@ -2290,6 +2317,16 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     /// @dev Mirrors main processedRemoteLotterySourceEvents (next appended storage slot).
     mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
 
+    // ODA-426-F3 — mirror of main trust-root timelock storage (append-only; keep order).
+    address internal _pendingVRFIntegrator;
+    uint256 internal _pendingVRFIntegratorEffectiveAt;
+    address internal _pendingSwapContract;
+    bool internal _pendingSwapAuthorized;
+    uint256 internal _pendingSwapContractEffectiveAt;
+    bool internal _swapAuthBootstrapComplete;
+    uint256 internal _pendingRewardPercentage;
+    uint256 internal _pendingRewardPercentageEffectiveAt;
+
     address private immutable _self;
 
     event LotteryWon(
@@ -2320,6 +2357,15 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     event AmoeRelayerChangeQueued(address indexed newRelayer, uint256 effectiveAt);
     event AmoeRelayerChangeExecuted(address indexed newRelayer);
     event AmoeRelayerChangeCancelled(address indexed cancelled);
+    event VRFIntegratorChangeQueued(address indexed newIntegrator, uint256 effectiveAt);
+    event VRFIntegratorChangeExecuted(address indexed newIntegrator);
+    event VRFIntegratorChangeCancelled(address indexed cancelled);
+    event SwapContractAuthQueued(address indexed swapContract, bool authorized, uint256 effectiveAt);
+    event SwapContractAuthExecuted(address indexed swapContract, bool authorized);
+    event SwapContractAuthCancelled(address indexed swapContract, bool authorized);
+    event RewardPercentageChangeQueued(uint256 rewardPercentage, uint256 effectiveAt);
+    event RewardPercentageChangeExecuted(uint256 rewardPercentage);
+    event RewardPercentageChangeCancelled(uint256 rewardPercentage);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
     event SponsorshipPolicyUpdated(
@@ -2364,8 +2410,14 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     error NoPendingLocalVRFConsumer();
     error AmoeRelayerAlreadySet();
     error NoPendingAmoeRelayer();
+    error VRFIntegratorAlreadySet();
+    error NoPendingVRFIntegrator();
+    error SwapAuthMustBeQueued();
+    error NoPendingSwapAuth();
+    error NoPendingRewardPercentage();
 
     /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
+    /// @dev ODA-426-F3 reuses this 2-day window for VRF integrator, swap-auth, and reward%.
     uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
     uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
 
@@ -2382,10 +2434,54 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         _;
     }
 
+    /// @notice Authorize/deauthorize a swap contract.
+    /// @dev Deauthorize is always instant (emergency). First authorize is bootstrap-instant;
+    ///      further authorizations require `queueSwapContractAuth` → wait → `executeSwapContractAuth`
+    ///      (ODA-426-F3).
     function setAuthorizedSwapContract(address swapContract, bool authorized) external onlyDelegateCall onlyOwner {
         if (swapContract == address(0)) revert ZeroAddress();
+        if (!authorized) {
+            authorizedSwapContracts[swapContract] = false;
+            emit SwapContractAuthorized(swapContract, false);
+            return;
+        }
+        if (_swapAuthBootstrapComplete) revert SwapAuthMustBeQueued();
+        authorizedSwapContracts[swapContract] = true;
+        _swapAuthBootstrapComplete = true;
+        emit SwapContractAuthorized(swapContract, true);
+    }
+
+    function queueSwapContractAuth(address swapContract, bool authorized) external onlyDelegateCall onlyOwner {
+        if (swapContract == address(0)) revert ZeroAddress();
+        _pendingSwapContract = swapContract;
+        _pendingSwapAuthorized = authorized;
+        _pendingSwapContractEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit SwapContractAuthQueued(swapContract, authorized, _pendingSwapContractEffectiveAt);
+    }
+
+    function executeSwapContractAuth() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingSwapContractEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingSwapAuth();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address swapContract = _pendingSwapContract;
+        bool authorized = _pendingSwapAuthorized;
         authorizedSwapContracts[swapContract] = authorized;
+        if (authorized) _swapAuthBootstrapComplete = true;
+        _pendingSwapContract = address(0);
+        _pendingSwapAuthorized = false;
+        _pendingSwapContractEffectiveAt = 0;
+        emit SwapContractAuthExecuted(swapContract, authorized);
         emit SwapContractAuthorized(swapContract, authorized);
+    }
+
+    function cancelSwapContractAuth() external onlyDelegateCall onlyOwner {
+        if (_pendingSwapContractEffectiveAt == 0) revert NoPendingSwapAuth();
+        address swapContract = _pendingSwapContract;
+        bool authorized = _pendingSwapAuthorized;
+        _pendingSwapContract = address(0);
+        _pendingSwapAuthorized = false;
+        _pendingSwapContractEffectiveAt = 0;
+        emit SwapContractAuthCancelled(swapContract, authorized);
     }
 
     /// @notice Bootstrap-only setter while `localVRFConsumer` is unset.
@@ -2650,16 +2746,50 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         emit SingleVaultJackpotOnlyUpdated(onlyTrigger);
     }
 
+    /// @notice Bootstrap-only VRF integrator set while unset (ODA-426-F3).
+    /// @dev After the first non-zero integrator is set, use
+    ///      `queueVRFIntegratorChange` → wait `LOCAL_VRF_CONSUMER_TIMELOCK` →
+    ///      `executeVRFIntegratorChange`.
     function setVRFIntegrator(address _integrator) external onlyDelegateCall onlyOwner {
-        address oldIntegrator = address(vrfIntegrator);
-        if (oldIntegrator != address(0)) {
-            trustedVrfIntegrators[oldIntegrator] = false;
-        }
+        if (address(vrfIntegrator) != address(0)) revert VRFIntegratorAlreadySet();
         vrfIntegrator = IChainlinkVRFIntegrator(_integrator);
         if (_integrator != address(0)) {
             trustedVrfIntegrators[_integrator] = true;
         }
         emit VRFIntegratorUpdated(_integrator, _integrator != address(0));
+    }
+
+    function queueVRFIntegratorChange(address _integrator) external onlyDelegateCall onlyOwner {
+        _pendingVRFIntegrator = _integrator;
+        _pendingVRFIntegratorEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit VRFIntegratorChangeQueued(_integrator, _pendingVRFIntegratorEffectiveAt);
+    }
+
+    function executeVRFIntegratorChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingVRFIntegratorEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingVRFIntegrator();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address oldIntegrator = address(vrfIntegrator);
+        address next = _pendingVRFIntegrator;
+        if (oldIntegrator != address(0)) {
+            trustedVrfIntegrators[oldIntegrator] = false;
+        }
+        vrfIntegrator = IChainlinkVRFIntegrator(next);
+        if (next != address(0)) {
+            trustedVrfIntegrators[next] = true;
+        }
+        _pendingVRFIntegrator = address(0);
+        _pendingVRFIntegratorEffectiveAt = 0;
+        emit VRFIntegratorChangeExecuted(next);
+        emit VRFIntegratorUpdated(next, next != address(0));
+    }
+
+    function cancelVRFIntegratorChange() external onlyDelegateCall onlyOwner {
+        if (_pendingVRFIntegratorEffectiveAt == 0) revert NoPendingVRFIntegrator();
+        address cancelled = _pendingVRFIntegrator;
+        _pendingVRFIntegrator = address(0);
+        _pendingVRFIntegratorEffectiveAt = 0;
+        emit VRFIntegratorChangeCancelled(cancelled);
     }
 
     function setTargetEid(uint32 _eid) external onlyDelegateCall onlyOwner {
@@ -2950,6 +3080,9 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         emit BaseCeilingPPMUpdated(previous, _ceilingPPM);
     }
 
+    /// @notice Update lottery config. Non-reward fields apply immediately.
+    /// @dev If `_rewardPercentage` differs from the live value it is queued under
+    ///      `LOCAL_VRF_CONSUMER_TIMELOCK` instead of applying instantly (ODA-426-F3).
     function setLotteryConfig(
         uint256 _minSwap,
         uint256 _rewardPercentage,
@@ -2969,13 +3102,38 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         if (baseCeilingPPM > 0 && _maxWinChance < baseCeilingPPM) revert InvalidAmount();
 
         lotteryConfig.minSwapAmount = _minSwap;
-        lotteryConfig.rewardPercentage = _rewardPercentage;
         lotteryConfig.isActive = _isActive;
         lotteryConfig.baseWinChance = _baseWinChance;
         lotteryConfig.maxWinChance = _maxWinChance;
         lotteryConfig.usdMultiplierBps = _usdMultiplierBps;
 
-        emit LotteryConfigUpdated(_minSwap, _rewardPercentage, _isActive);
+        if (_rewardPercentage != lotteryConfig.rewardPercentage) {
+            _pendingRewardPercentage = _rewardPercentage;
+            _pendingRewardPercentageEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+            emit RewardPercentageChangeQueued(_rewardPercentage, _pendingRewardPercentageEffectiveAt);
+        }
+
+        emit LotteryConfigUpdated(_minSwap, lotteryConfig.rewardPercentage, _isActive);
+    }
+
+    function executeRewardPercentageChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingRewardPercentageEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingRewardPercentage();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        uint256 next = _pendingRewardPercentage;
+        lotteryConfig.rewardPercentage = next;
+        _pendingRewardPercentage = 0;
+        _pendingRewardPercentageEffectiveAt = 0;
+        emit RewardPercentageChangeExecuted(next);
+        emit LotteryConfigUpdated(lotteryConfig.minSwapAmount, next, lotteryConfig.isActive);
+    }
+
+    function cancelRewardPercentageChange() external onlyDelegateCall onlyOwner {
+        if (_pendingRewardPercentageEffectiveAt == 0) revert NoPendingRewardPercentage();
+        uint256 cancelled = _pendingRewardPercentage;
+        _pendingRewardPercentage = 0;
+        _pendingRewardPercentageEffectiveAt = 0;
+        emit RewardPercentageChangeCancelled(cancelled);
     }
 
     function setOracleMaxStaleness(uint256 _maxStaleness) external onlyDelegateCall onlyOwner {

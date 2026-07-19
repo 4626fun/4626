@@ -86,6 +86,8 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         router.setAllowlistRoot(EPOCH, ALLOW_ROOT);
         vm.prank(pointsPublisher);
         router.setPointsLedgerRoot(EPOCH, LEDGER_ROOT);
+        // ODA-426-F3: roots mature after ROOT_PUBLICATION_TIMELOCK before ZK use.
+        vm.warp(block.timestamp + router.ROOT_PUBLICATION_TIMELOCK());
     }
 
     // ---------------------------------------------------------------------
@@ -183,6 +185,27 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         router.submitAmoeEntryZK(buyer, coin, freshEpoch, proof, inp);
     }
 
+    function test_submitAmoeEntryZK_rejectsImmatureRoots() public {
+        // ODA-426-F3: freshly published roots are not usable until maturity.
+        uint64 freshEpoch = EPOCH + 200;
+        vm.prank(publisher);
+        router.setAllowlistRoot(freshEpoch, ALLOW_ROOT);
+        vm.prank(pointsPublisher);
+        router.setPointsLedgerRoot(freshEpoch, LEDGER_ROOT);
+
+        uint256[9] memory inp = _defaults(111, 222);
+        inp[3] = uint256(freshEpoch);
+        uint256[24] memory proof = _proof();
+        uint256 effectiveAt = router.allowlistRootEffectiveAt(freshEpoch);
+        vm.expectRevert(
+            abi.encodeWithSelector(LotteryAmoeRouter.RootTimelockActive.selector, effectiveAt)
+        );
+        router.submitAmoeEntryZK(buyer, coin, freshEpoch, proof, inp);
+
+        vm.warp(effectiveAt);
+        assertEq(router.submitAmoeEntryZK(buyer, coin, freshEpoch, proof, inp), 1);
+    }
+
     // =====================================================================
     // 3. submitAmoeEntryZK — pointsBurnedAsUSD ceiling (defense-in-depth)
     // =====================================================================
@@ -235,6 +258,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         router.setAllowlistRoot(nextEpoch, ALLOW_ROOT);
         vm.prank(pointsPublisher);
         router.setPointsLedgerRoot(nextEpoch, LEDGER_ROOT);
+        vm.warp(block.timestamp + router.ROOT_PUBLICATION_TIMELOCK());
 
         uint256[9] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
         inp[3] = uint256(nextEpoch);

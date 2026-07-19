@@ -101,8 +101,16 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     /// @notice Daily allowlist roots, keyed by epoch.
     mapping(uint64 => bytes32) public allowlistRootOf;
 
+    /// @notice Earliest timestamp at which `allowlistRootOf[epoch]` may be used
+    ///         for ZK settlement (ODA-426-F3 publication maturity).
+    mapping(uint64 => uint256) public allowlistRootEffectiveAt;
+
     /// @notice Daily points-burn ledger roots, keyed by epoch (one-shot).
     mapping(uint64 => bytes32) public pointsLedgerRootOf;
+
+    /// @notice Earliest timestamp at which `pointsLedgerRootOf[epoch]` may be used
+    ///         for ZK settlement (ODA-426-F3 publication maturity).
+    mapping(uint64 => uint256) public pointsLedgerRootEffectiveAt;
 
     /// @notice Replay guard: nonce commitments already consumed.
     mapping(bytes32 => bool) public usedNonceCommit;
@@ -189,6 +197,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     error DeadlineTooSoon();
     error UpdateTimelockActive(uint256 executeAfter);
     error NoPendingUpdate();
+    /// @notice Root was published but has not matured yet (ODA-426-F3).
+    error RootTimelockActive(uint256 effectiveAt);
 
     // -------------------------------------------------------------------------
     // Constants
@@ -210,6 +220,10 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     ///         observed L1 / L2 timestamp slack.
     uint256 public constant MIN_DEADLINE_BUFFER = 60;
     uint256 public constant CONFIG_UPDATE_TIMELOCK = 1 days;
+    /// @notice Delay between root publication and ZK usability (ODA-426-F3).
+    /// @dev Matches `CONFIG_UPDATE_TIMELOCK` so a compromised publisher key cannot
+    ///      mint attacker-authored entries in the same block as the publish.
+    uint256 public constant ROOT_PUBLICATION_TIMELOCK = 1 days;
 
     /// @notice Defense-in-depth ceiling on `pointsBurnedAsUSD`. AMOE max is
     ///         1_000_000 points × 10_000 = 10^10 1e6 units = $10,000. A
@@ -321,6 +335,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     ///         epoch — re-publishing reverts. The publisher is expected to be
     ///         the same off-chain key that today signs AMOE messages in
     ///         `lotteryAmoe.ts`.
+    /// @dev Root is stored immediately (one-shot) but only becomes usable for
+    ///      ZK settlement after `ROOT_PUBLICATION_TIMELOCK` (ODA-426-F3).
     function setAllowlistRoot(uint64 epoch, bytes32 root) external {
         if (msg.sender != allowlistPublisher) revert NotPublisher();
         if (allowlistRootOf[epoch] != bytes32(0)) revert EpochAlreadyPublished();
@@ -330,12 +346,15 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         // / `EpochAlreadyPublished` blocks any correction).
         if (root == bytes32(0)) revert ZeroRoot();
         allowlistRootOf[epoch] = root;
+        allowlistRootEffectiveAt[epoch] = block.timestamp + ROOT_PUBLICATION_TIMELOCK;
         emit AllowlistRootSet(epoch, root);
     }
 
     /// @notice Publish the points-burn ledger Merkle root for an epoch.
     ///         One-shot per epoch — re-publishing reverts. Mirrors the
     ///         allowlist publisher pattern.
+    /// @dev Root is stored immediately (one-shot) but only becomes usable for
+    ///      ZK settlement after `ROOT_PUBLICATION_TIMELOCK` (ODA-426-F3).
     function setPointsLedgerRoot(uint64 epoch, bytes32 root) external {
         if (msg.sender != pointsLedgerPublisher) revert NotPointsLedgerPublisher();
         if (pointsLedgerRootOf[epoch] != bytes32(0)) revert PointsLedgerEpochAlreadyPublished();
@@ -347,6 +366,7 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         // the cheapest fix.
         if (root == bytes32(0)) revert ZeroRoot();
         pointsLedgerRootOf[epoch] = root;
+        pointsLedgerRootEffectiveAt[epoch] = block.timestamp + ROOT_PUBLICATION_TIMELOCK;
         emit PointsLedgerRootSet(epoch, root);
     }
 
@@ -387,15 +407,20 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         if (uint160(buyer) != uint160(pubInputs[8])) revert InvalidProof();
 
         // 2. Allowlist root pinning. The root must match the value the
-        //    publisher posted for this epoch.
+        //    publisher posted for this epoch, and must have matured past
+        //    `ROOT_PUBLICATION_TIMELOCK` (ODA-426-F3).
         bytes32 allowRoot = allowlistRootOf[epoch];
         if (allowRoot == bytes32(0)) revert UnknownEpoch();
+        uint256 allowEffectiveAt = allowlistRootEffectiveAt[epoch];
+        if (block.timestamp < allowEffectiveAt) revert RootTimelockActive(allowEffectiveAt);
         if (uint256(allowRoot) != pubInputs[4]) revert RootMismatch();
 
-        // 3. Points-burn ledger root pinning (v2). Same one-shot pattern as
-        //    allowlist root, separate publisher key.
+        // 3. Points-burn ledger root pinning (v2). Same one-shot + maturity
+        //    pattern as allowlist root, separate publisher key.
         bytes32 ledgerRoot = pointsLedgerRootOf[epoch];
         if (ledgerRoot == bytes32(0)) revert PointsLedgerEpochNotPublished();
+        uint256 ledgerEffectiveAt = pointsLedgerRootEffectiveAt[epoch];
+        if (block.timestamp < ledgerEffectiveAt) revert RootTimelockActive(ledgerEffectiveAt);
         if (uint256(ledgerRoot) != pubInputs[6]) revert PointsLedgerRootMismatch();
 
         // 4. Defense-in-depth: bound the proven `pointsBurnedAsUSD` by the

@@ -70,3 +70,27 @@ Follow-up: re-`forge build` then `myth analyze -c <deployedBytecode>` on `Lotter
 ## Human audit
 
 Still the bar before meaningful TVL: Spearbit/C4-class after ODA + these static/symbolic passes (`docs/_internal/security/index.md`).
+
+---
+
+## Follow-up pass (2026-07-19) — ODA-426-F3
+
+Branch: `cursor/oda-426-f3-timelock-9461`. ODA **431** still `in_progress` / `audit-pass-0-context` — skipped implement; shipped F3 instead.
+
+| ID | Status | Change |
+|----|--------|--------|
+| ODA-426-F3 | **Fixed** | VRF integrator bootstrap+2d; swap-auth first bootstrap then 2d queue (deauth instant); reward% change queued 2d; AMOE root maturity 1d before ZK use; queue/execute via `adminModuleCall` |
+| ODA-431 | In progress | Unchanged — poll again next turn |
+| BribeDepot test | Hygiene | Removed orphaned duplicate F6 tests after contract close (compile break on `main`) |
+
+Forge validation:
+
+- `forge test --match-contract LotteryManager4626TrustRootTimelockTest` → **exit 0** (6 passed)
+- `forge test --match-contract LotteryAmoeRouterRootTimelockTest` → **exit 0** (2 passed)
+- `forge test --match-contract LotteryManager4626VrfSponsorshipHardeningTest` → **exit 0** (8 passed)
+- `forge test --match-contract LotteryAmoeRouterScanM2Test` → **exit 0** (2 passed)
+- `forge test --match-contract LotteryManager4626AmoeLinearParityTest` → **exit 0** (29 passed)
+- `forge test --match-contract BribeDepot4626Test` → **exit 0** (14 passed)
+- `forge test --match-contract LotteryManager4626SizeLimitTest` → **exit 1** (pre-existing on `main`: 25001 > 24576; F3 delta ≈ +153 bytes → 25154)
+
+Note: payout-% snapshot-at-entry and sub-100% hard cap left as residual product tradeoffs.

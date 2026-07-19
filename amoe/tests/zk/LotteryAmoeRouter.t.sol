@@ -96,6 +96,8 @@ contract LotteryAmoeRouterTest is Test {
         router.setAllowlistRoot(EPOCH, ALLOW_ROOT);
         vm.prank(pointsPublisher);
         router.setPointsLedgerRoot(EPOCH, LEDGER_ROOT);
+        // ODA-426-F3: roots mature after ROOT_PUBLICATION_TIMELOCK before ZK use.
+        vm.warp(block.timestamp + router.ROOT_PUBLICATION_TIMELOCK());
     }
 
     // ---------------------------------------------------------------------
