@@ -59,9 +59,69 @@ type DgclawCommandResolution = {
   workingDirectory: string
   source: 'configured' | 'fallback'
   candidatePaths: string[]
+  /**
+   * True when ARENA_DGCLAW_BIN includes inline args (e.g. `pnpm exec`).
+   * In that mode the command token is an exec target (PATH or absolute) and must
+   * not fall back to dgclaw.sh — otherwise override args get prepended to the wrong binary.
+   */
+  explicitCommandOverride: boolean
+}
+
+type ParsedCommandOverride = {
+  command: string
+  args: string[]
 }
 
 const DGCLAW_FALLBACK_DIRS = ['/app/dgclaw-skill']
+
+/** Split env bin overrides like `pnpm exec` or `/bin/echo hello` into command + args. */
+function parseCommandOverride(rawValue: string): ParsedCommandOverride {
+  const raw = String(rawValue ?? '').trim()
+  if (!raw) return { command: '', args: [] }
+  const tokens: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaped = false
+
+  for (const char of raw) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+    current += char
+  }
+
+  if (current.length > 0) tokens.push(current)
+  if (tokens.length === 0) return { command: '', args: [] }
+  return {
+    command: tokens[0] ?? '',
+    args: tokens.slice(1),
+  }
+}
 
 function toArenaRunResult(params: {
   command: string
@@ -160,6 +220,8 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
 }
 
 function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
+  const override = parseCommandOverride(config.dgclawBin)
+  const dgclawBin = override.command || config.dgclawBin
   const candidatePaths: string[] = []
   const configuredWorkingDirectory = config.dgclawDir ?? process.cwd()
   const fallbackWorkingDirectories: string[] = []
@@ -169,12 +231,26 @@ function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
     }
   }
 
-  if (isAbsolute(config.dgclawBin)) {
+  // Inline-arg overrides (e.g. `pnpm exec`, `/bin/echo hello`) are explicit exec targets.
+  // Never fall back to dgclaw.sh here — that would attach override args to the wrong binary.
+  if (override.args.length > 0) {
+    return {
+      commandPath: dgclawBin,
+      workingDirectory:
+        config.dgclawDir ?? (isAbsolute(dgclawBin) ? dirname(dgclawBin) : configuredWorkingDirectory),
+      source: 'configured',
+      candidatePaths: [dgclawBin],
+      explicitCommandOverride: true,
+    }
+  }
+
+  if (isAbsolute(dgclawBin)) {
     const directResolution = {
-      commandPath: config.dgclawBin,
-      workingDirectory: config.dgclawDir ?? dirname(config.dgclawBin),
+      commandPath: dgclawBin,
+      workingDirectory: config.dgclawDir ?? dirname(dgclawBin),
       source: 'configured' as const,
-      candidatePaths: [config.dgclawBin],
+      candidatePaths: [dgclawBin],
+      explicitCommandOverride: false,
     }
     if (existsSync(directResolution.commandPath)) return directResolution
     return directResolution
@@ -186,7 +262,7 @@ function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
     const workingDirectory = candidateWorkingDirectories[index]
     const source = index === 0 ? 'configured' : 'fallback'
     const candidatePathSet = new Set<string>([
-      resolve(workingDirectory, config.dgclawBin),
+      resolve(workingDirectory, dgclawBin),
       resolve(workingDirectory, 'dgclaw.sh'),
       resolve(workingDirectory, 'scripts/dgclaw.sh'),
     ])
@@ -203,29 +279,35 @@ function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
       return {
         ...candidate,
         candidatePaths,
+        explicitCommandOverride: false,
       }
     }
   }
 
   const primaryCandidate = candidates[0] ?? {
-    commandPath: resolve(configuredWorkingDirectory, config.dgclawBin),
+    commandPath: resolve(configuredWorkingDirectory, dgclawBin),
     workingDirectory: configuredWorkingDirectory,
     source: 'configured' as const,
   }
   return {
     ...primaryCandidate,
     candidatePaths: candidatePaths.length > 0 ? candidatePaths : [primaryCandidate.commandPath],
+    explicitCommandOverride: false,
   }
 }
 
 function ensureDgclawReady(config: ArenaConfig): ArenaOpResult | null {
   if (config.dryRun) return null
 
-  const { commandPath, workingDirectory, candidatePaths } = resolveDgclawCommand(config)
+  const { commandPath, workingDirectory, candidatePaths, explicitCommandOverride } = resolveDgclawCommand(config)
   if (!existsSync(workingDirectory)) {
     return fail(
       `Arena command path misconfigured: ARENA_DGCLAW_DIR does not exist (${workingDirectory}).`,
     )
+  }
+  // PATH-style explicit overrides (e.g. `pnpm`) are resolved by the OS at exec time.
+  if (explicitCommandOverride && !isAbsolute(commandPath) && !commandPath.includes('/')) {
+    return null
   }
   if (!existsSync(commandPath)) {
     const attempts = candidatePaths.slice(0, 3).join(', ')
@@ -237,10 +319,11 @@ function ensureDgclawReady(config: ArenaConfig): ArenaOpResult | null {
 }
 
 function buildDgclawCommand(config: ArenaConfig, args: string[]): BuiltCommand {
+  const override = parseCommandOverride(config.dgclawBin)
   const { commandPath, workingDirectory } = resolveDgclawCommand(config)
   return {
     command: commandPath,
-    args,
+    args: [...override.args, ...args],
     cwd: workingDirectory,
     env: buildArenaCommandEnv(config),
   }
@@ -248,18 +331,20 @@ function buildDgclawCommand(config: ArenaConfig, args: string[]): BuiltCommand {
 
 function buildNodeScriptCommand(config: ArenaConfig, scriptRelPath: string, args: string[]): BuiltCommand {
   // dgclaw-skill is ESM ("type": "module") and ships tsx, not ts-node.
+  const override = parseCommandOverride(config.nodeRunnerBin)
   return {
-    command: config.nodeRunnerBin,
-    args: ['tsx', scriptRelPath, ...args],
+    command: override.command || config.nodeRunnerBin,
+    args: [...override.args, 'tsx', scriptRelPath, ...args],
     cwd: config.dgclawDir ?? process.cwd(),
     env: buildArenaCommandEnv(config),
   }
 }
 
 function buildAcpCommand(config: ArenaConfig, args: string[]): BuiltCommand {
+  const override = parseCommandOverride(config.acpBin)
   return {
-    command: config.acpBin,
-    args,
+    command: override.command || config.acpBin,
+    args: [...override.args, ...args],
     cwd: config.dgclawDir ?? process.cwd(),
     env: buildArenaCommandEnv(config),
   }

@@ -46,6 +46,57 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
   }
 }
 
+describe('arenaClient command override parsing', () => {
+  it('supports inline dgclaw binary arguments in ARENA_DGCLAW_BIN', async () => {
+    const result = await runArenaJoin(
+      mockConfig({
+        dryRun: false,
+        dgclawDir: '/tmp',
+        dgclawBin: '/bin/echo hello',
+        agentId: '019e90fa-3c8c-7ba0-8547-bf6f81698c3d',
+        agentWalletAddress: '0x74ab91cd845ff0d2006404440af49c3bc8c1df96',
+      }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe('/bin/echo')
+    expect(result.run?.args[0]).toBe('hello')
+    expect(result.run?.args[1]).toBe('join')
+    expect(result.run?.args).toContain('0x74ab91cd845ff0d2006404440af49c3bc8c1df96')
+    expect(result.run?.stdout).toContain('hello join')
+  })
+
+  it('supports inline node runner arguments in ARENA_NODE_RUNNER_BIN', async () => {
+    const result = await runArenaTrade(
+      { action: 'open', pair: 'xyz:GOLD', side: 'long', sizeUsd: 1000, leverage: 2 },
+      mockConfig({ dryRun: true, nodeRunnerBin: 'pnpm exec' }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe('pnpm')
+    expect(result.run?.args.slice(0, 3)).toEqual(['exec', 'tsx', 'scripts/trade.ts'])
+  })
+
+  it('does not fall back to dgclaw.sh when ARENA_DGCLAW_BIN has inline args', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'arena-dgclaw-override-'))
+    writeFileSync(resolve(dir, 'dgclaw.sh'), '#!/bin/sh\necho should-not-run\n', { mode: 0o755 })
+
+    const result = await runArenaJoin(
+      mockConfig({
+        dryRun: true,
+        dgclawDir: dir,
+        dgclawBin: 'pnpm exec',
+        agentId: '019e90fa-3c8c-7ba0-8547-bf6f81698c3d',
+        agentWalletAddress: '0x74ab91cd845ff0d2006404440af49c3bc8c1df96',
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.run?.command).toBe('pnpm')
+    expect(result.run?.args[0]).toBe('exec')
+    expect(result.run?.args[1]).toBe('join')
+    expect(result.run?.command).not.toContain('dgclaw.sh')
+  })
+})
+
 describe('arenaClient trade guardrails', () => {
   it('fails closed when trading lane is disabled', async () => {
     const result = await runArenaTrade(
