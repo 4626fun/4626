@@ -256,21 +256,135 @@ interface AssetMeta {
   maxLeverage: number;
 }
 
+type ResolvedAsset = {
+  /** Wire asset id (main index, or HIP-3 100000 + dexIndex*10000 + localIndex). */
+  index: number
+  meta: AssetMeta
+  /** Canonical HL coin name (e.g. BTC or xyz:SP500). */
+  coin: string
+  /** Builder dex name for HIP-3 pairs; null for main perps. */
+  dex: string | null
+}
+
+/** Normalize to HL coin form: BTC or xyz:SP500 (dex lower, symbol upper). */
+function normalizePair(pair: string): string {
+  const raw = String(pair ?? '').trim()
+  if (!raw) return ''
+  const colon = raw.indexOf(':')
+  if (colon === -1) return raw.toUpperCase()
+  const dex = raw.slice(0, colon).toLowerCase()
+  const symbol = raw.slice(colon + 1).toUpperCase()
+  return `${dex}:${symbol}`
+}
+
+function pairDex(pair: string): string | null {
+  const normalized = normalizePair(pair)
+  const colon = normalized.indexOf(':')
+  return colon === -1 ? null : normalized.slice(0, colon)
+}
+
+function coinsEqual(a: string, b: string): boolean {
+  return normalizePair(a) === normalizePair(b)
+}
+
+/**
+ * Resolve a trading pair to its Hyperliquid asset id.
+ *
+ * Main perps use universe index. HIP-3 builder-dex assets (e.g. xyz:SP500)
+ * live on a named dex and use asset id = 100000 + dexIndex*10000 + localIndex.
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids
+ */
 async function getAssetIndex(
   info: InfoClient,
   pair: string,
-): Promise<{ index: number; meta: AssetMeta }> {
-  const metaResponse = await info.meta();
-  const universe = metaResponse.universe;
-  const idx = universe.findIndex(
-    (a: any) => a.name.toUpperCase() === pair.toUpperCase(),
-  );
-  if (idx === -1) {
-    console.error(`Unknown pair: ${pair}`);
-    console.error(`Available: ${universe.map((a: any) => a.name).join(', ')}`);
-    process.exit(1);
+): Promise<ResolvedAsset> {
+  const normalized = normalizePair(pair)
+  if (!normalized) {
+    console.error('Pair is required')
+    process.exit(1)
   }
-  return { index: idx, meta: universe[idx] as AssetMeta };
+
+  const dex = pairDex(normalized)
+  if (!dex) {
+    const metaResponse = await info.meta()
+    const universe = metaResponse.universe
+    const idx = universe.findIndex((a: any) => coinsEqual(a.name, normalized))
+    if (idx === -1) {
+      console.error(`Unknown pair: ${pair}`)
+      console.error(`Available: ${universe.map((a: any) => a.name).join(', ')}`)
+      process.exit(1)
+    }
+    const meta = universe[idx] as AssetMeta
+    return { index: idx, meta, coin: meta.name, dex: null }
+  }
+
+  const perpDexs = await info.perpDexs()
+  const dexIndex = perpDexs.findIndex(
+    (entry: any) =>
+      entry &&
+      typeof entry.name === 'string' &&
+      entry.name.toLowerCase() === dex,
+  )
+  // Index 0 is the main dex (null entry); builder dexs start at 1.
+  if (dexIndex <= 0) {
+    console.error(`Unknown HIP-3 dex: ${dex}`)
+    const known = perpDexs
+      .filter((entry: any) => entry && entry.name)
+      .map((entry: any) => entry.name)
+      .join(', ')
+    console.error(`Available HIP-3 dexs: ${known || '(none)'}`)
+    process.exit(1)
+  }
+
+  const metaResponse = await info.meta({ dex })
+  const universe = metaResponse.universe
+  const localIdx = universe.findIndex((a: any) => coinsEqual(a.name, normalized))
+  if (localIdx === -1) {
+    console.error(`Unknown pair: ${pair}`)
+    console.error(
+      `Available on ${dex}: ${universe.map((a: any) => a.name).join(', ')}`,
+    )
+    process.exit(1)
+  }
+
+  const meta = universe[localIdx] as AssetMeta
+  const index = 100_000 + dexIndex * 10_000 + localIdx
+  return { index, meta, coin: meta.name, dex }
+}
+
+async function getMidPrice(
+  info: InfoClient,
+  coin: string,
+  dex: string | null,
+): Promise<number> {
+  const mids = dex ? await info.allMids({ dex }) : await info.allMids()
+  const direct = parseFloat(mids[coin])
+  if (Number.isFinite(direct) && direct > 0) return direct
+  const key = Object.keys(mids).find((k) => coinsEqual(k, coin))
+  if (key) {
+    const px = parseFloat(mids[key])
+    if (Number.isFinite(px) && px > 0) return px
+  }
+  console.error(`Could not get mid price for ${coin}`)
+  process.exit(1)
+}
+
+async function readClearinghouseState(
+  info: InfoClient,
+  user: `0x${string}`,
+  dex: string | null,
+) {
+  return dex
+    ? info.clearinghouseState({ user, dex })
+    : info.clearinghouseState({ user })
+}
+
+async function readOpenOrders(
+  info: InfoClient,
+  user: `0x${string}`,
+  dex: string | null,
+) {
+  return dex ? info.openOrders({ user, dex }) : info.openOrders({ user })
 }
 
 function formatPrice(price: number, significantFigures: number = 5): string {
@@ -332,7 +446,7 @@ async function openPosition(
   if (!args.side) { console.error('--side is required'); process.exit(1); }
   if (!args.size) { console.error('--size is required'); process.exit(1); }
 
-  const { index: assetId, meta } = await getAssetIndex(info, args.pair);
+  const { index: assetId, meta, coin, dex } = await getAssetIndex(info, args.pair);
   const isBuy = args.side === 'long';
   const leverage = args.leverage ?? 1;
 
@@ -344,13 +458,8 @@ async function openPosition(
   });
   console.log(`Leverage set to ${leverage}x (cross margin)`);
 
-  // Get current mid price for market orders
-  const mids = await info.allMids();
-  const midPrice = parseFloat(mids[args.pair!.toUpperCase()]);
-  if (!midPrice) {
-    console.error(`Could not get mid price for ${args.pair}`);
-    process.exit(1);
-  }
+  // Get current mid price for market orders (HIP-3 mids are dex-scoped)
+  const midPrice = await getMidPrice(info, coin, dex);
 
   let orderPrice: string;
   let tif: 'Ioc' | 'Gtc';
@@ -367,7 +476,7 @@ async function openPosition(
 
   const sz = formatSize(parseFloat(args.size), midPrice, meta.szDecimals);
 
-  console.log(`Opening ${args.side} ${args.pair} — size: ${sz} ($${args.size}), price: ${orderPrice}, leverage: ${leverage}x`);
+  console.log(`Opening ${args.side} ${coin} — size: ${sz} ($${args.size}), price: ${orderPrice}, leverage: ${leverage}x`);
   if (cabalsBuilder) {
     console.log(
       `Cabals builder attached: ${cabalsBuilder.address} feeTenthsOfBps=${cabalsBuilder.feeTenthsOfBps}`,
@@ -392,7 +501,7 @@ async function openPosition(
   );
 
   console.log(JSON.stringify(result, null, 2));
-  assertOrderAccepted(result, `Open ${args.pair}`);
+  assertOrderAccepted(result, `Open ${coin}`);
 
   // Place TP/SL trigger orders if specified
   if (args.takeProfit) {
@@ -459,16 +568,20 @@ async function closePosition(
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
 
-  const { index: assetId, meta } = await getAssetIndex(info, args.pair);
+  const { index: assetId, meta, coin, dex } = await getAssetIndex(info, args.pair);
 
   // Get current position to determine size and side
-  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
-  const position = state.assetPositions.find(
-    (p: any) => p.position.coin.toUpperCase() === args.pair!.toUpperCase(),
+  const state = await readClearinghouseState(
+    info,
+    accountAddressForReads as `0x${string}`,
+    dex,
+  );
+  const position = state.assetPositions.find((p: any) =>
+    coinsEqual(p.position.coin, coin),
   );
 
   if (!position) {
-    console.error(`No open position for ${args.pair}`);
+    console.error(`No open position for ${coin}`);
     process.exit(1);
   }
 
@@ -477,8 +590,7 @@ async function closePosition(
   const fullSize = Math.abs(posSize);
 
   // Market close with 1% slippage
-  const mids = await info.allMids();
-  const midPrice = parseFloat(mids[args.pair!.toUpperCase()]);
+  const midPrice = await getMidPrice(info, coin, dex);
   const slippage = isBuy ? 1.01 : 0.99;
   const orderPrice = formatPrice(midPrice * slippage);
 
@@ -500,7 +612,7 @@ async function closePosition(
     }
   }
 
-  console.log(`Closing ${args.pair} position (${closeKind}) — size: ${sz} of ${fullSize}, price: ${orderPrice}`);
+  console.log(`Closing ${coin} position (${closeKind}) — size: ${sz} of ${fullSize}, price: ${orderPrice}`);
   if (cabalsBuilder) {
     console.log(
       `Cabals builder attached: ${cabalsBuilder.address} feeTenthsOfBps=${cabalsBuilder.feeTenthsOfBps}`,
@@ -525,7 +637,7 @@ async function closePosition(
   );
 
   console.log(JSON.stringify(result, null, 2));
-  assertOrderAccepted(result, `Close ${args.pair}`);
+  assertOrderAccepted(result, `Close ${coin}`);
 }
 
 async function modifyPosition(
@@ -541,16 +653,20 @@ async function modifyPosition(
     process.exit(1);
   }
 
-  const { index: assetId } = await getAssetIndex(info, args.pair);
+  const { index: assetId, coin, dex } = await getAssetIndex(info, args.pair);
 
   // Get current position
-  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
-  const position = state.assetPositions.find(
-    (p: any) => p.position.coin.toUpperCase() === args.pair!.toUpperCase(),
+  const state = await readClearinghouseState(
+    info,
+    accountAddressForReads as `0x${string}`,
+    dex,
+  );
+  const position = state.assetPositions.find((p: any) =>
+    coinsEqual(p.position.coin, coin),
   );
 
   if (!position) {
-    console.error(`No open position for ${args.pair}`);
+    console.error(`No open position for ${coin}`);
     process.exit(1);
   }
 
@@ -568,9 +684,13 @@ async function modifyPosition(
   }
 
   // Cancel existing TP/SL orders before placing new ones
-  const openOrders = await info.openOrders({ user: accountAddressForReads as `0x${string}` });
+  const openOrders = await readOpenOrders(
+    info,
+    accountAddressForReads as `0x${string}`,
+    dex,
+  );
   const tpslOrders = openOrders.filter(
-    (o: any) => o.coin?.toUpperCase() === args.pair!.toUpperCase() && o.orderType?.includes('trigger'),
+    (o: any) => coinsEqual(String(o.coin ?? ''), coin) && o.orderType?.includes('trigger'),
   );
   if (tpslOrders.length > 0) {
     for (const order of tpslOrders) {
@@ -685,17 +805,34 @@ async function approveCabalsBuilder(
 }
 
 async function showPositions(info: InfoClient, accountAddressForReads: string) {
-  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
-  const positions = state.assetPositions.filter(
-    (p: any) => parseFloat(p.position.szi) !== 0,
-  );
+  const user = accountAddressForReads as `0x${string}`
+  const positions: any[] = []
 
-  if (positions.length === 0) {
-    console.log('No open positions');
-    return;
+  const mainState = await info.clearinghouseState({ user })
+  for (const p of mainState.assetPositions) {
+    if (parseFloat(p.position.szi) !== 0) positions.push(p)
   }
 
-  console.log(JSON.stringify(positions, null, 2));
+  // HIP-3 positions are scoped per builder dex.
+  const perpDexs = await info.perpDexs()
+  for (const entry of perpDexs) {
+    if (!entry || typeof entry.name !== 'string' || !entry.name) continue
+    try {
+      const state = await info.clearinghouseState({ user, dex: entry.name })
+      for (const p of state.assetPositions) {
+        if (parseFloat(p.position.szi) !== 0) positions.push(p)
+      }
+    } catch {
+      // Ignore dexes the account cannot read.
+    }
+  }
+
+  if (positions.length === 0) {
+    console.log('No open positions')
+    return
+  }
+
+  console.log(JSON.stringify(positions, null, 2))
 }
 
 async function showBalance(info: InfoClient, accountAddressForReads: string) {
@@ -730,17 +867,49 @@ async function showBalance(info: InfoClient, accountAddressForReads: string) {
 }
 
 async function showTickers(info: InfoClient) {
-  const meta = await info.meta();
-  const mids = await info.allMids();
+  const tickers: Array<{
+    symbol: string
+    midPrice: string
+    maxLeverage: number
+    szDecimals: number
+    dex: string
+  }> = []
 
-  const tickers = meta.universe.map((asset: any, i: number) => ({
-    symbol: asset.name,
-    midPrice: mids[asset.name] ?? 'N/A',
-    maxLeverage: asset.maxLeverage,
-    szDecimals: asset.szDecimals,
-  }));
+  const mainMeta = await info.meta()
+  const mainMids = await info.allMids()
+  for (const asset of mainMeta.universe as any[]) {
+    tickers.push({
+      symbol: asset.name,
+      midPrice: mainMids[asset.name] ?? 'N/A',
+      maxLeverage: asset.maxLeverage,
+      szDecimals: asset.szDecimals,
+      dex: '',
+    })
+  }
 
-  console.log(JSON.stringify(tickers, null, 2));
+  const perpDexs = await info.perpDexs()
+  for (const entry of perpDexs) {
+    if (!entry || typeof entry.name !== 'string' || !entry.name) continue
+    try {
+      const [meta, mids] = await Promise.all([
+        info.meta({ dex: entry.name }),
+        info.allMids({ dex: entry.name }),
+      ])
+      for (const asset of meta.universe as any[]) {
+        tickers.push({
+          symbol: asset.name,
+          midPrice: mids[asset.name] ?? 'N/A',
+          maxLeverage: asset.maxLeverage,
+          szDecimals: asset.szDecimals,
+          dex: entry.name,
+        })
+      }
+    } catch {
+      // Ignore dexes that fail metadata reads.
+    }
+  }
+
+  console.log(JSON.stringify(tickers, null, 2))
 }
 
 // ---- Signing (ACP CLI, master wallet — no API wallet) ----
