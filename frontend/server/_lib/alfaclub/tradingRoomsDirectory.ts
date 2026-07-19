@@ -212,3 +212,78 @@ export async function listAlfaClubRoomsDirectory(
     rowToAlfaClubRoomDirectoryItem,
   )
 }
+
+/** Load one live room snapshot row for Integrity Card / ops renders. */
+export async function getAlfaClubRoomDirectoryItem(
+  roomId: string,
+): Promise<AlfaClubRoomDirectoryItem | null> {
+  const db = await getDb()
+  if (!db) return null
+  const id = String(roomId ?? '').trim()
+  if (!/^\d+$/.test(id)) return null
+
+  const result = await db.sql`
+    select
+      s.room_id::text as room_id,
+      coalesce(
+        nullif(trim(s.room_name), ''),
+        nullif(trim(s.raw->'metadata'->>'name'), ''),
+        nullif(trim(s.raw->'room'->>'name'), ''),
+        nullif(trim(s.raw->'room'->>'title'), ''),
+        nullif(trim(e.room_name), ''),
+        nullif(trim(lc.display_label), ''),
+        case
+          when nullif(trim(s.sn), '') is not null and nullif(trim(s.sn), '') !~ '^[0-9]+$'
+            then nullif(trim(s.sn), '')
+          else null
+        end
+      ) as room_name,
+      coalesce(
+        nullif(trim(s.creator_twitter_username), ''),
+        nullif(trim(s.raw->'creator'->>'twitter_username'), ''),
+        nullif(trim(s.raw->'creator'->>'username'), ''),
+        nullif(trim(s.raw->'room'->>'creatorUsername'), ''),
+        nullif(trim(s.raw->'room'->>'username'), ''),
+        nullif(trim(e.creator_twitter_username), '')
+      ) as creator_twitter_username,
+      lc.display_label as cached_display_label,
+      s.room_type,
+      s.tier,
+      s.volume::text as volume_col_raw,
+      nullif(s.raw->'room'->>'volume', '') as volume_raw,
+      s.current_supply::text as supply_col_raw,
+      coalesce(
+        nullif(s.raw->'room'->>'keySupply', ''),
+        nullif(s.raw->'room'->>'keysSupply', ''),
+        nullif(s.raw->'room'->>'totalSupply', '')
+      ) as supply_raw,
+      s.buy_price::text as buy_price_raw,
+      s.sell_price::text as sell_price_raw,
+      s.mid_price::text as mid_price_raw,
+      s.fund_size::text as fund_size_raw,
+      nullif(s.raw->'room'->>'creatorReward', '') as creator_reward_raw,
+      s.pnl::text as pnl_raw,
+      s.pnl_percentage_7d::text as pnl_pct_7d_raw,
+      s.pnl_percentage_30d::text as pnl_pct_30d_raw,
+      s.pnl_percentage_all_time::text as pnl_pct_all_raw,
+      s.image_url,
+      s.room_description,
+      s.featured,
+      s.unique_holders::text as unique_holders_raw,
+      s.ingested_at::text as ingested_at
+    from public.alfaclub_rooms_snapshot s
+    left join alfaclub.room_label_cache lc on lc.room_id = s.room_id::text
+    left join lateral (
+      select e2.creator_twitter_username, e2.room_name
+      from public.alfaclub_explore_latest e2
+      where e2.room_id = s.room_id
+      order by e2.ingested_at desc nulls last
+      limit 1
+    ) e on true
+    where s.room_id::text = ${id}
+    limit 1;
+  `
+
+  const row = ((result.rows ?? []) as AlfaClubRoomSnapshotRow[])[0]
+  return row ? rowToAlfaClubRoomDirectoryItem(row) : null
+}

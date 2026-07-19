@@ -182,7 +182,12 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
      *      moment the grace window ends. Zero-vote epochs still use the permissionless path.
      *      Once rolled, the epoch/token is closed and can no longer be claimed.
      */
-    function rolloverExpiredEpoch(uint256 epoch, address token) external onlyOwner nonReentrant returns (uint256 rolled) {
+    function rolloverExpiredEpoch(uint256 epoch, address token)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 rolled)
+    {
         if (token == address(0)) revert ZeroAddress();
 
         uint256 current = gaugeVoting.currentEpoch();

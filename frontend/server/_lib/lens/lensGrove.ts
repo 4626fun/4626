@@ -279,3 +279,20 @@ export function resolveLensUri(uri: string): string {
   }
   return uri
 }
+
+/**
+ * Derive a canonical `lens://` URI from a Grove gateway URL when the path is a
+ * 64-char content key (e.g. Integrity Scorecard provenance crumbs).
+ */
+export function lensUriFromGroveUrl(groveUrl: string): string | null {
+  try {
+    const url = new URL(groveUrl)
+    const host = url.hostname.toLowerCase()
+    if (host !== 'api.grove.storage' && host !== 'grove.storage') return null
+    const key = url.pathname.replace(/^\/+/, '').split('/')[0]?.trim() ?? ''
+    if (!/^[a-f0-9]{64}$/i.test(key)) return null
+    return `lens://${key.toLowerCase()}`
+  } catch {
+    return null
+  }
+}

@@ -593,3 +593,56 @@ contract BribeDepot4626Test is Test {
     }
 }
 
+    /// ODA-433-F6: empty live balance reverts cleanly (claimed flag not set).
+    function testClaim_RevertsWhenLiveBalanceEmpty() public {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
+        uint256 amount = 100 ether;
+        vm.startPrank(briber);
+        bribeToken.approve(address(depot), amount);
+        depot.bribe(address(bribeToken), amount);
+        vm.stopPrank();
+        _voteSingle(alice, vault1);
+
+        // Simulate deflation / theft of bribe inventory after accounting snapshot.
+        vm.prank(address(depot));
+        bribeToken.transfer(address(0xdead), amount);
+
+        vm.warp(genesis + WEEK + 1);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(BribeDepot4626.InsufficientBribeBalance.selector, amount, 0));
+        depot.claim(0, address(bribeToken));
+        assertFalse(depot.claimed(0, address(bribeToken), alice));
+    }
+
+    /// ODA-433-F6: partial shortfall rejects (no silent cap / first-mover drain).
+    function testClaim_RevertsWhenLiveBalanceBelowEntitlement() public {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
+        uint256 amount = 100 ether;
+        vm.startPrank(briber);
+        bribeToken.approve(address(depot), amount);
+        depot.bribe(address(bribeToken), amount);
+        vm.stopPrank();
+        _voteSingle(alice, vault1);
+        _voteSingle(bob, vault1);
+
+        // Leave only 10 ether — less than either voter's 50 ether entitlement.
+        vm.prank(address(depot));
+        bribeToken.transfer(address(0xdead), 90 ether);
+
+        vm.warp(genesis + WEEK + 1);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(BribeDepot4626.InsufficientBribeBalance.selector, 50 ether, 10 ether));
+        depot.claim(0, address(bribeToken));
+        assertFalse(depot.claimed(0, address(bribeToken), alice));
+        assertEq(bribeToken.balanceOf(address(depot)), 10 ether);
+    }
+}
