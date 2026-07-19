@@ -13,7 +13,9 @@
 | M-05 | Medium | `setCharmVault` leaves stale unlimited approvals | **Fixed** — revoke old + approve new (mirror `setAjnaPool`) |
 | M-06 | Medium | `AjnaERC4626Vault.maxRedeem` can exceed idle buffer | **Fixed** — shrink shares until `previewRedeem <= buffer` |
 | M-07 | Medium | Valuation windows unbounded / stale snapshot still ready | **Fixed** — `MAX_VALUATION_WINDOWS = 3`; stale ⇒ not ready |
-| M-08…M-10 | Medium | Remaining Charm/Ajna mediums | Follow-up |
+| M-08 | Medium | Admin can front-run live toll/tax changes | **Fixed** — `AjnaVaultAuth` 24h timelock after first `setToll`/`setTax` (`executeTollUpdate`/`executeTaxUpdate`) |
+| M-09 | Medium | Charm spot `getTotalAmounts` composition unbounded vs TWAP | **Residual** — NAV stays oracle-priced for share accounting; composition haircut needs calibrated TWAP mocks |
+| M-10 | Medium | Oracle withdraw sizing vs TWAP realization can brick exits | **Fixed** — `_realizableTotalAssets` + `_usdcToAssetValueRealizable` (min oracle/TWAP); `withdraw` caps to realizable |
 | L-A | Lead→maybe High | Ajna `removeQuoteToken` LP vs quote-amount unit mismatch | Verify against live `IAjnaPool` ABI |
 
-H-01 shipped with ODA 426 F1/F2 on the oda-v2-followup branch.
+H-01 shipped with ODA 426 F1/F2 on the oda-v2-followup branch. M-08/M-10 shipped on `cursor/oda-audit-followthrough-26cd`.

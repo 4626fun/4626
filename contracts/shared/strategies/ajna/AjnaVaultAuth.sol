@@ -24,6 +24,9 @@ contract AjnaVaultAuth {
     error InvalidMinBucketIndex();
     // FIX: F-04 — two-step admin transfer errors
     error NotPendingAdmin();
+    error NoPendingTollUpdate();
+    error NoPendingTaxUpdate();
+    error FeeUpdateTimelockActive(uint256 executeAfter);
 
     event AdminSet(address indexed admin);
     // FIX: F-04 — event for pending admin nomination
@@ -36,6 +39,8 @@ contract AjnaVaultAuth {
     event BufferRatioSet(uint256 bufferRatioBps);
     event TollSet(uint256 tollBps);
     event TaxSet(uint256 taxBps);
+    event TollUpdateQueued(uint256 tollBps, uint256 executeAfter);
+    event TaxUpdateQueued(uint256 taxBps, uint256 executeAfter);
     event MinBucketIndexSet(uint256 minBucketIndex);
 
     address public admin;
@@ -49,6 +54,15 @@ contract AjnaVaultAuth {
     uint256 public toll;
     uint256 public tax;
     uint256 public minBucketIndex;
+
+    /// @notice ODA-423-M08: after initial bootstrap, toll/tax changes are 24h-timelocked.
+    uint256 public constant FEE_UPDATE_TIMELOCK = 24 hours;
+    bool public tollArmed;
+    bool public taxArmed;
+    uint256 public pendingToll;
+    uint256 public pendingTax;
+    uint256 public pendingTollAt;
+    uint256 public pendingTaxAt;
 
     modifier onlyAdmin() {
         if (msg.sender != admin) revert NotAuthorized();
@@ -137,14 +151,51 @@ contract AjnaVaultAuth {
 
     function setToll(uint256 nextToll) external onlyAdmin {
         if (nextToll > 1_000) revert FeeTooHigh();
-        toll = nextToll;
-        emit TollSet(nextToll);
+        // ODA-423-M08: first set instant (deploy bootstrap); rewires cannot front-run flows.
+        if (!tollArmed) {
+            toll = nextToll;
+            tollArmed = true;
+            emit TollSet(nextToll);
+            return;
+        }
+        pendingToll = nextToll;
+        pendingTollAt = block.timestamp + FEE_UPDATE_TIMELOCK;
+        emit TollUpdateQueued(nextToll, pendingTollAt);
+    }
+
+    function executeTollUpdate() external onlyAdmin {
+        uint256 executeAfter = pendingTollAt;
+        if (executeAfter == 0) revert NoPendingTollUpdate();
+        if (block.timestamp < executeAfter) revert FeeUpdateTimelockActive(executeAfter);
+        uint256 next = pendingToll;
+        pendingToll = 0;
+        pendingTollAt = 0;
+        toll = next;
+        emit TollSet(next);
     }
 
     function setTax(uint256 nextTax) external onlyAdmin {
         if (nextTax > 1_000) revert FeeTooHigh();
-        tax = nextTax;
-        emit TaxSet(nextTax);
+        if (!taxArmed) {
+            tax = nextTax;
+            taxArmed = true;
+            emit TaxSet(nextTax);
+            return;
+        }
+        pendingTax = nextTax;
+        pendingTaxAt = block.timestamp + FEE_UPDATE_TIMELOCK;
+        emit TaxUpdateQueued(nextTax, pendingTaxAt);
+    }
+
+    function executeTaxUpdate() external onlyAdmin {
+        uint256 executeAfter = pendingTaxAt;
+        if (executeAfter == 0) revert NoPendingTaxUpdate();
+        if (block.timestamp < executeAfter) revert FeeUpdateTimelockActive(executeAfter);
+        uint256 next = pendingTax;
+        pendingTax = 0;
+        pendingTaxAt = 0;
+        tax = next;
+        emit TaxSet(next);
     }
 
     function setMinBucketIndex(uint256 nextMinBucketIndex) external onlyAdmin {

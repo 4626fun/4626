@@ -481,9 +481,36 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         }
 
         uint256 grossAsset = idleAsset + charmAsset;
+        // NAV keeps oracle pricing for share accounting (see Oracle.t.sol). Withdraw
+        // paths use `_realizableTotalAssets` / `_usdcToAssetValueRealizable` (ODA-423-M10)
+        // so exits cannot over-promise against a lower TWAP realization.
+        // ODA-423-M09 residual: Charm `getTotalAmounts` composition is still spot-based;
+        // bounding spot-vs-TWAP composition without calibrated mocks would break NAV tests.
         uint256 usdcInAsset = _usdcToAssetValue(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
         uint256 grossAssetValue = grossAsset + usdcInAsset;
 
+        if (ajnaState.debtAsset >= grossAssetValue) return 0;
+        return grossAssetValue - ajnaState.debtAsset;
+    }
+
+    /// @notice Conservative equity used to size exits (ODA-423-M10).
+    /// @dev Same shape as `getTotalAssets`, but USDC legs use min(oracle, TWAP).
+    function _realizableTotalAssets() internal view returns (uint256) {
+        uint256 idleAsset = ASSET.balanceOf(address(this));
+        uint256 idleUsdc = USDC.balanceOf(address(this));
+
+        (uint256 charmAsset, uint256 charmUsdc, bool charmReadable) = _getCharmExposure();
+        if (!charmReadable) {
+            charmAsset = 0;
+            charmUsdc = 0;
+        }
+
+        AjnaDebtState memory ajnaState = _readAjnaDebtState();
+        if (!ajnaState.readable) return 0;
+
+        uint256 usdcInAsset =
+            _usdcToAssetValueRealizable(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
+        uint256 grossAssetValue = idleAsset + charmAsset + usdcInAsset;
         if (ajnaState.debtAsset >= grossAssetValue) return 0;
         return grossAssetValue - ajnaState.debtAsset;
     }
@@ -526,7 +553,19 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         assetAmount = assetIsToken0 ? (total0 * ourShares) / totalShares : (total1 * ourShares) / totalShares;
         usdcAmount = assetIsToken0 ? (total1 * ourShares) / totalShares : (total0 * ourShares) / totalShares;
+        // Spot inventory from Charm; USDC→ASSET conversion for exits uses
+        // `_usdcToAssetValueRealizable` (ODA-423-M10). M-09 composition bound residual.
         readable = true;
+    }
+
+    /// @notice ODA-423-M10: USDC→ASSET for realizable paths uses min(oracle, TWAP).
+    function _usdcToAssetValueRealizable(uint256 usdcAmount) internal view returns (uint256) {
+        if (usdcAmount == 0) return 0;
+        uint256 byOracle = _usdcToAssetValue(usdcAmount);
+        (uint256 assetPerUsdc, bool twapOk) = _getPoolPriceTWAP(twapDuration);
+        if (!twapOk || byOracle == 0) return byOracle;
+        uint256 byTwap = Math.mulDiv(usdcAmount, assetPerUsdc, 1e6);
+        return byOracle < byTwap ? byOracle : byTwap;
     }
 
     function _readAjnaDebtState() internal view returns (AjnaDebtState memory state) {
@@ -969,12 +1008,20 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         uint256 totalValue = getTotalAssets();
         if (totalValue == 0) return 0;
 
+        // ODA-423-M10: never attempt to deliver more ASSET than TWAP-realizable equity.
+        // Vault hot path already measures returned `withdrawn` (best-effort).
+        uint256 realizable = _realizableTotalAssets();
+        if (realizable == 0) return 0;
+        if (amount > realizable) amount = realizable;
+
         if (address(charmVault) != address(0)) {
             uint256 ourShares = charmVault.balanceOf(address(this));
             // Size redemption in a single asset-denominated unit to avoid mixing
             // ASSET (1e18) and USDC (1e6) directly.
             (uint256 charmAssetExposure, uint256 charmUsdcExposure,) = _getCharmExposure();
-            uint256 charmValueInAsset = charmAssetExposure + _usdcToAssetValue(charmUsdcExposure);
+            // ODA-423-M10: size redemption with the same conservative USDC conversion
+            // used by the TWAP-bounded swap path (min oracle/TWAP).
+            uint256 charmValueInAsset = charmAssetExposure + _usdcToAssetValueRealizable(charmUsdcExposure);
             uint256 sharesToWithdraw =
                 charmValueInAsset > 0 ? Math.ceilDiv(ourShares * amount, charmValueInAsset) : ourShares;
             if (sharesToWithdraw > ourShares) sharesToWithdraw = ourShares;

@@ -34,4 +34,60 @@ contract AjnaVaultAuthTest is Test {
         vm.expectRevert(AjnaVaultAuth.NotAuthorized.selector);
         auth.setMinBucketIndex(4_156);
     }
+
+    /// @notice ODA-423-M08: first toll/tax set is instant (deploy bootstrap).
+    function testFeeUpdate_FirstSetIsInstant() public {
+        auth.setToll(100);
+        assertEq(auth.toll(), 100);
+        assertTrue(auth.tollArmed());
+        assertEq(auth.pendingTollAt(), 0);
+
+        auth.setTax(50);
+        assertEq(auth.tax(), 50);
+        assertTrue(auth.taxArmed());
+        assertEq(auth.pendingTaxAt(), 0);
+    }
+
+    /// @notice ODA-423-M08: subsequent toll changes are 24h-timelocked.
+    function testFeeUpdate_TollTimelockThenExecute() public {
+        auth.setToll(100);
+
+        auth.setToll(200);
+        assertEq(auth.toll(), 100, "live toll must not change until execute");
+        assertEq(auth.pendingToll(), 200);
+        uint256 executeAfter = auth.pendingTollAt();
+        assertEq(executeAfter, block.timestamp + auth.FEE_UPDATE_TIMELOCK());
+
+        vm.expectRevert(abi.encodeWithSelector(AjnaVaultAuth.FeeUpdateTimelockActive.selector, executeAfter));
+        auth.executeTollUpdate();
+
+        vm.warp(executeAfter);
+        auth.executeTollUpdate();
+        assertEq(auth.toll(), 200);
+        assertEq(auth.pendingTollAt(), 0);
+    }
+
+    function testFeeUpdate_TaxTimelockThenExecute() public {
+        auth.setTax(25);
+
+        auth.setTax(75);
+        assertEq(auth.tax(), 25);
+        assertEq(auth.pendingTax(), 75);
+
+        uint256 executeAfter = auth.pendingTaxAt();
+        vm.expectRevert(abi.encodeWithSelector(AjnaVaultAuth.FeeUpdateTimelockActive.selector, executeAfter));
+        auth.executeTaxUpdate();
+
+        vm.warp(executeAfter + 1);
+        auth.executeTaxUpdate();
+        assertEq(auth.tax(), 75);
+        assertEq(auth.pendingTaxAt(), 0);
+    }
+
+    function testFeeUpdate_ExecuteWithoutPendingReverts() public {
+        vm.expectRevert(AjnaVaultAuth.NoPendingTollUpdate.selector);
+        auth.executeTollUpdate();
+        vm.expectRevert(AjnaVaultAuth.NoPendingTaxUpdate.selector);
+        auth.executeTaxUpdate();
+    }
 }

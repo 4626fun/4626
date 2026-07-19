@@ -707,6 +707,9 @@ contract CharmStrategy4626OracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        // ODA-423-M10: realizable sizing may redeem nearly all shares when TWAP < oracle;
+        // mock returns fixed amounts so ignore pro-rata mins (production Charm is pro-rata).
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
@@ -745,6 +748,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
@@ -778,6 +782,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
@@ -846,6 +851,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setAmountOutToReturn(50e18);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
@@ -869,6 +875,43 @@ contract CharmStrategy4626OracleTest is Test {
         uint256 withdrawn = strategy.withdraw(100e18);
         assertEq(withdrawn, 100e18, "full withdraw should succeed via Ajna+swap composition");
         assertTrue(router.called(), "swap fallback should run when Ajna cap leaves residual");
+    }
+
+    /// @notice ODA-423-M10: oracle NAV can exceed TWAP-realizable equity; withdraw caps
+    ///         to realizable instead of reverting WithdrawLiquidityUnavailable.
+    function test_withdraw_capsToRealizable_whenTwapBelowOracle() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        // Extreme tick ⇒ TWAP values USDC far below the $1 oracle (min path binds).
+        pool.setTwapTick(0);
+        MockRouter router = new MockRouter();
+        router.setAmountOutToReturn(1e18);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true);
+        strategy.setAssetOracle(address(oracle));
+        strategy.initializeApprovals();
+
+        // USDC-heavy Charm inventory: oracle NAV ≫ TWAP-realizable ASSET.
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(0, 100_000_000e6);
+        charm.setWithdrawAmounts(0, 100_000_000e6);
+
+        usdc.mint(address(charm), 100_000_000e6);
+        creator.mint(address(router), 10_000e18);
+
+        uint256 oracleNav = strategy.getTotalAssets();
+        assertEq(oracleNav, 100_000_000e18, "oracle NAV should price 100M USDC at $1");
+
+        uint256 withdrawn = strategy.withdraw(oracleNav);
+        assertLt(withdrawn, oracleNav, "must not deliver full oracle NAV when TWAP is worse");
+        assertGt(withdrawn, 0, "realizable withdraw should still transfer some ASSET");
+        assertTrue(router.called(), "USDC to ASSET swap should run for the capped amount");
     }
 
     function test_withdraw_ajnaBorrow_usesExistingCollateral_whenNoIdleUsdc() external {
