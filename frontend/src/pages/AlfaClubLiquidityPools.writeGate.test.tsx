@@ -87,10 +87,10 @@ describe('AlfaClubLiquidityPools write gate', () => {
     expect(screen.getByText('ETH funding path (planned)')).toBeTruthy()
     expect(screen.getByText('FriendKey #1659')).toBeTruthy()
     expect(
-      screen.getByText(/currently accept AKITA Creator Coin only/i),
+      screen.getByText(/settle the official Room 1659 Sudoswap v2 pool/i),
     ).toBeTruthy()
     expect(
-      screen.getByText(/does not submit ETH, ZORA, or Uniswap legs/i),
+      screen.getByText(/wraps ETH to WETH for canonical sponsored wallets/i),
     ).toBeTruthy()
     expect(screen.getByText(/Market trades require access/i)).toBeTruthy()
     expect(
@@ -103,7 +103,7 @@ describe('AlfaClubLiquidityPools write gate', () => {
     expect(screen.queryByTestId('market-console')).toBeNull()
   })
 
-  it.each(['buy', 'sell'] as const)(
+  it.each(['buy', 'buyWithEth', 'sell'] as const)(
     'passes accepted sessions into the SmartWalletRoute %s console',
     async (initialMode) => {
       const { AlfaClubLpWriteConsole } = await import(

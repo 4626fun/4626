@@ -112,4 +112,19 @@ describe('AlfaClub official Sudoswap market readiness', () => {
     expect(getAlfaClubLiquidityDisabledReason(ready())).toBeNull()
     expect(getAlfaClubLiquidityDisabledReason(ready({ mode: 'sell' }))).toBeNull()
   })
+
+  it('allows an ETH-funded buy without a pre-existing Creator Coin balance', () => {
+    expect(
+      getAlfaClubLiquidityDisabledReason(
+        ready({
+          mode: 'buyWithEth',
+          ethAmount: 1_000_000_000_000_000n,
+          snapshot: snapshot({ creatorCoinBalance: 0n }),
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      getAlfaClubLiquidityDisabledReason(ready({ mode: 'buyWithEth' })),
+    ).toBe('Enter a positive ETH amount')
+  })
 })

@@ -644,6 +644,57 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps canonical WETH funding batches on ERC-4337 when only the deposit carries ETH', async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'wallet_sendCalls') throw new Error('Method not found')
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const sendTransaction = vi.fn(async () => HASH_A)
+    const context = makeContext({
+      signerType: 'SMART_WALLET',
+      walletClient: {
+        request,
+        sendTransaction,
+      },
+      capabilities: {
+        paymasterService: true,
+        atomicStatus: 'supported',
+        supports5792: true,
+      },
+    })
+
+    const result = await buildAndSendCalls({
+      context,
+      calls: [
+        {
+          to: '0x4200000000000000000000000000000000000006',
+          from: ADDRESS_A,
+          data: '0xd0e30db0',
+          value: '123',
+          chainId: 8453,
+        },
+        {
+          to: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+          from: ADDRESS_A,
+          data: '0x1234',
+          value: '0',
+          chainId: 8453,
+        },
+      ],
+    })
+
+    expect(result.routing.mode).toBe('sendCalls')
+    expect(result.routing.fallbackMode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonical4337')
+    expect(result.send.method).toBe('eth_sendUserOperation')
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.calls).toMatchObject([
+      { to: '0x4200000000000000000000000000000000000006', value: 123n },
+      { to: '0x6ff5693b99212da76ad316178a184ab56d299b43', value: 0n },
+    ])
+  })
+
   it('keeps approval and swap in the same direct EOA route family', async () => {
     const sendTransaction = vi
       .fn()

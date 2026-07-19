@@ -24,7 +24,7 @@ import { cn } from '@/lib/shared/utils'
 
 import { AlfaClubLiquidity } from './AlfaClubLiquidity'
 
-type TradeMode = 'buy' | 'sell'
+type TradeMode = 'buy' | 'buyWithEth' | 'sell'
 
 const MARKET_CONFIG: AlfaClubSudoswapMarketConfig = {
   pair: CONTRACTS.room1659SudoswapPair as Address,
@@ -67,8 +67,9 @@ function AlfaClubEthFundingRoute() {
             ETH → Room 1659 FriendKeys (planned)
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-            ETH → ZORA → AKITA → FriendKey is a planned funding path. The live
-            controls below currently accept AKITA Creator Coin only.
+            Quote ETH through the Base ZORA and AKITA Creator Coin markets, then
+            settle the official Room 1659 Sudoswap v2 pool in the existing
+            guarded transaction flow.
           </p>
         </div>
         <span className="self-start rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium text-sky-200 ring-1 ring-sky-300/20 lg:self-auto">
@@ -92,8 +93,11 @@ function AlfaClubEthFundingRoute() {
       </div>
 
       <p className="mt-3 text-xs text-zinc-500">
-        Informational only — this page does not submit ETH, ZORA, or Uniswap
-        legs. Hold AKITA Creator Coin to use the live Sudoswap controls below.
+        <span className="text-zinc-300">Buy with ETH</span> wraps ETH to WETH
+        for canonical sponsored wallets, signs the Zora Permit2 authorization,
+        and submits one sponsored batch. External wallets keep the native ETH
+        quote; providers without atomic batching may submit approval legs
+        sequentially.
       </p>
     </section>
   )
@@ -184,6 +188,14 @@ export function PoolCard({
         </div>
       </dl>
       <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onTrade('buyWithEth')}
+          disabled={!pool.configurationReady}
+          className="col-span-2 inline-flex h-9 items-center justify-center rounded-xl bg-sky-500/80 px-3 text-xs font-semibold text-white hover:bg-sky-400 disabled:bg-zinc-800 disabled:text-zinc-600"
+        >
+          Buy with ETH
+        </button>
         <button
           type="button"
           onClick={() => onTrade('buy')}
@@ -300,7 +312,11 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
     roomPools[0] ??
     null
   const tradeMode: TradeMode =
-    searchParams.get('side') === 'sell' ? 'sell' : 'buy'
+    searchParams.get('side') === 'sell'
+      ? 'sell'
+      : searchParams.get('side') === 'buyWithEth'
+        ? 'buyWithEth'
+        : 'buy'
 
   const selectTrade = (pool: AlfaClubLiquidityPoolSummary, mode: TradeMode) => {
     const next = new URLSearchParams(searchParams)
@@ -414,7 +430,11 @@ export function AlfaClubLiquidityPools() {
     pools[0] ??
     null
   const tradeMode: TradeMode =
-    searchParams.get('side') === 'sell' ? 'sell' : 'buy'
+    searchParams.get('side') === 'sell'
+      ? 'sell'
+      : searchParams.get('side') === 'buyWithEth'
+        ? 'buyWithEth'
+        : 'buy'
 
   const selectTrade = (pool: AlfaClubLiquidityPoolSummary, mode: TradeMode) => {
     const next = new URLSearchParams(searchParams)

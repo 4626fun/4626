@@ -17,6 +17,12 @@ const MSG_SENDER_RECIPIENT =
 const CANONICAL_PERMIT2 = getAddress(
   "0x000000000022D473030F116dDEE9F6B43aC78BA3",
 );
+const BASE_WETH = getAddress(
+  "0x4200000000000000000000000000000000000006",
+);
+const ZORA_BASE_UNIVERSAL_ROUTER = getAddress(
+  "0x6ff5693b99212da76ad316178a184ab56d299b43",
+);
 const ALFACLUB_SUDOSWAP_BUY_COMMAND = 0x41;
 const ALFACLUB_SUDOSWAP_SELL_COMMAND = 0x42;
 
@@ -73,6 +79,8 @@ const SUDOSWAP_INPUT_PARAMETERS = parseAbiParameters(
 );
 
 const EXECUTE_SELECTOR = toFunctionSelector("execute(bytes,bytes[],uint256)");
+const ZORA_EXECUTE_SELECTOR = "0x24856bc3";
+const WETH_DEPOSIT_SELECTOR = "0xd0e30db0";
 const APPROVE_SELECTOR = toFunctionSelector("approve(address,uint256)");
 const PERMIT2_APPROVE_SELECTOR = toFunctionSelector(
   "approve(address,address,uint160,uint48)",
@@ -131,6 +139,54 @@ export type AlfaClubLpPolicyResult = {
   tokenId: bigint;
   pool: Address;
 };
+
+function splitCanonicalEthFundingCalls(
+  calls: AlfaClubLpInnerCall[],
+  permit2: Address,
+): AlfaClubLpInnerCall[] | null {
+  const firstWethDeposit = calls.findIndex(
+    (call) =>
+      call.target === BASE_WETH && selector(call.data) === WETH_DEPOSIT_SELECTOR,
+  );
+  if (firstWethDeposit === -1) return null;
+  if (firstWethDeposit !== 0 || calls.length < 4) {
+    throw new Error("alfaclub_sudoswap_eth_funding_order_invalid");
+  }
+
+  const deposit = calls[0]!;
+  const wethApproval = calls[1]!;
+  const zoraCall = calls[2]!;
+  if (deposit.value <= 0n) {
+    throw new Error("alfaclub_sudoswap_eth_funding_value_invalid");
+  }
+  if (
+    wethApproval.target !== BASE_WETH ||
+    selector(wethApproval.data) !== APPROVE_SELECTOR ||
+    wethApproval.value !== 0n
+  ) {
+    throw new Error("alfaclub_sudoswap_weth_approval_invalid");
+  }
+  const approval = decodeFunctionData({
+    abi: ERC20_ABI,
+    data: wethApproval.data,
+  });
+  if (
+    approval.functionName !== "approve" ||
+    getAddress(approval.args[0]) !== permit2 ||
+    approval.args[1] !== deposit.value
+  ) {
+    throw new Error("alfaclub_sudoswap_weth_approval_mismatch");
+  }
+  if (
+    zoraCall.target !== ZORA_BASE_UNIVERSAL_ROUTER ||
+    selector(zoraCall.data) !== ZORA_EXECUTE_SELECTOR ||
+    zoraCall.value !== 0n
+  ) {
+    throw new Error("alfaclub_sudoswap_eth_funding_route_invalid");
+  }
+
+  return calls.slice(3);
+}
 
 export type AlfaClubLpPolicyConfig = {
   router: Address;
@@ -580,10 +636,12 @@ export async function validateAlfaClubLpCalls(params: {
     return null;
 
   const config = resolveAlfaClubLpPolicyConfig(params.env);
-  if (params.calls.length > 3 || params.calls.length === 0) {
+  const sudoswapCalls =
+    splitCanonicalEthFundingCalls(params.calls, config.permit2) ?? params.calls;
+  if (sudoswapCalls.length > 3 || sudoswapCalls.length === 0) {
     throw new Error("alfaclub_sudoswap_call_count_not_allowed");
   }
-  if (params.calls.some((call) => call.value !== 0n)) {
+  if (sudoswapCalls.some((call) => call.value !== 0n)) {
     throw new Error("alfaclub_sudoswap_value_not_allowed");
   }
 
@@ -663,7 +721,7 @@ export async function validateAlfaClubLpCalls(params: {
   let seenErc20Approval = false;
   let seenPermit2Approval = false;
   let seenKeyApproval = false;
-  for (const call of params.calls) {
+  for (const call of sudoswapCalls) {
     if (call === routerCall) continue;
     const callSelector = selector(call.data);
     if (direction === "buy" && callSelector === APPROVE_SELECTOR) {

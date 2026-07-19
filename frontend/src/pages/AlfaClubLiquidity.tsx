@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownUp, Coins, ShoppingCart } from "lucide-react";
-import { erc20Abi, formatUnits, getAddress, type Address } from "viem";
+import {
+  erc20Abi,
+  encodeFunctionData,
+  formatUnits,
+  getAddress,
+  parseEther,
+  type Address,
+} from "viem";
 import { base } from "viem/chains";
 import {
   useAccount,
@@ -29,10 +36,22 @@ import {
   type Permit2AllowanceSnapshot,
 } from "@/lib/alfaclub/sudoswapRouter";
 import {
+  buildAlfaClubEthFundingCalls,
+  BASE_WETH_TOKEN,
+  ZORA_NATIVE_ETH_TOKEN,
+} from "@/lib/alfaclub/ethFundingRouter";
+import {
+  buildSwapFromZoraQuote,
+  fetchZoraTradeQuoteFromApi,
+  signZoraQuotePermits,
+  zoraTradeQuoteToResponse,
+} from "@/lib/zora/zoraTradeApi";
+import {
   buildAndSendCalls,
   type TxRouterContext,
   type UserExecutionTrack,
 } from "@/lib/tx/txRouter";
+import type { TransactionRequest } from "@/lib/uniswap/tradingApi";
 import { creatorCoinRawLogo } from "@/lib/uniswap/swapUtils";
 import { useAccountContext } from "@/wallet/accountContext";
 
@@ -48,7 +67,7 @@ export const ALFACLUB_MAX_KEY_AMOUNT = 100n;
 export const ALFACLUB_MAX_SLIPPAGE_BPS = 500n;
 
 type LegacyMode = "create" | "add" | "buy" | "sell" | "remove";
-type Mode = AlfaClubSudoswapDirection;
+type Mode = AlfaClubSudoswapDirection | "buyWithEth";
 
 type Quote = {
   errorCode: bigint;
@@ -83,6 +102,7 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   snapshot: AlfaClubSudoswapSnapshot | null;
   mode: Mode;
   keyAmount: bigint | null;
+  ethAmount?: bigint | null;
 }): string | null {
   if (!params.configReady)
     return "Official Sudoswap market deployment is not configured";
@@ -90,21 +110,26 @@ export function getAlfaClubLiquidityDisabledReason(params: {
     return "No official Sudoswap market is configured for this room";
   if (!params.executionAddress) return "Connect an execution-ready wallet";
   if (!params.keyAmount) return "Enter a positive key amount";
+  if (params.mode === "buyWithEth" && !params.ethAmount)
+    return "Enter a positive ETH amount";
   if (params.keyAmount > ALFACLUB_MAX_KEY_AMOUNT)
     return "Room key amount exceeds the supported maximum of 100";
   if (params.loading) return "Verifying the live Sudoswap market";
   if (!params.snapshot) return "Onchain market verification failed";
 
   const quote =
-    params.mode === "buy"
-      ? params.snapshot.buyQuote
-      : params.snapshot.sellQuote;
+    params.mode === "sell"
+      ? params.snapshot.sellQuote
+      : params.snapshot.buyQuote;
   if (quote.errorCode !== 0n || quote.amount <= 0n)
     return "A live Sudoswap quote is unavailable";
-  if (params.mode === "buy") {
+  if (params.mode === "buy" || params.mode === "buyWithEth") {
     if (params.snapshot.pairKeyBalance < params.keyAmount)
       return "The pair has insufficient key inventory";
-    if (params.snapshot.creatorCoinBalance < quote.amount)
+    if (
+      params.mode === "buy" &&
+      params.snapshot.creatorCoinBalance < quote.amount
+    )
       return "Creator Coin balance is too low";
   } else {
     if (params.snapshot.keyBalance < params.keyAmount)
@@ -129,6 +154,15 @@ function parsePositiveBigInt(value: string): bigint | null {
   if (!/^\d+$/.test(normalized)) return null;
   const amount = BigInt(normalized);
   return amount > 0n ? amount : null;
+}
+
+function parsePositiveEther(value: string): bigint | null {
+  try {
+    const amount = parseEther(value.trim());
+    return amount > 0n ? amount : null;
+  } catch {
+    return null;
+  }
 }
 
 export function parseSlippageBps(value: string): bigint {
@@ -167,7 +201,7 @@ function shortAddress(value: string | null | undefined): string {
 type AlfaClubLiquidityProps = {
   initialCreatorCoin?: Address | null;
   initialTokenId?: bigint | null;
-  initialMode?: LegacyMode;
+  initialMode?: LegacyMode | "buyWithEth";
   embedded?: boolean;
 };
 
@@ -185,9 +219,14 @@ export function AlfaClubLiquidity({
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
 
   const [mode, setMode] = useState<Mode>(
-    initialMode === "sell" ? "sell" : "buy",
+    initialMode === "sell"
+      ? "sell"
+      : initialMode === "buyWithEth"
+        ? "buyWithEth"
+        : "buy",
   );
   const [keyAmountInput, setKeyAmountInput] = useState("1");
+  const [ethAmountInput, setEthAmountInput] = useState("0.001");
   const [slippageInput, setSlippageInput] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastHash, setLastHash] = useState<string | null>(null);
@@ -208,6 +247,10 @@ export function AlfaClubLiquidity({
   const keyAmount = useMemo(
     () => parsePositiveBigInt(keyAmountInput),
     [keyAmountInput],
+  );
+  const ethAmount = useMemo(
+    () => parsePositiveEther(ethAmountInput),
+    [ethAmountInput],
   );
   const slippageBps = useMemo(
     () => parseSlippageBps(slippageInput),
@@ -510,7 +553,7 @@ export function AlfaClubLiquidity({
   });
 
   const snapshot = snapshotQuery.data ?? null;
-  const quote = mode === "buy" ? snapshot?.buyQuote : snapshot?.sellQuote;
+  const quote = mode === "sell" ? snapshot?.sellQuote : snapshot?.buyQuote;
   const decimals = snapshot?.creatorCoinDecimals ?? 18;
   const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
 
@@ -550,6 +593,7 @@ export function AlfaClubLiquidity({
       !publicClient ||
       !executionAddress ||
       !keyAmount ||
+      (mode === "buyWithEth" && !ethAmount) ||
       !router ||
       !adapter ||
       !pair ||
@@ -582,7 +626,8 @@ export function AlfaClubLiquidity({
         publicClient.readContract({
           address: pair,
           abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
-          functionName: mode === "buy" ? "getBuyNFTQuote" : "getSellNFTQuote",
+          functionName:
+            mode === "sell" ? "getSellNFTQuote" : "getBuyNFTQuote",
           args: [ROOM_1659_TOKEN_ID, keyAmount],
         }),
         publicClient.readContract({
@@ -636,7 +681,10 @@ export function AlfaClubLiquidity({
       if (freshQuote.errorCode !== 0n || freshQuote.amount <= 0n) {
         throw new Error("Sudoswap returned a non-executable quote");
       }
-      if (mode === "buy" && pairKeyBalance < keyAmount)
+      if (
+        (mode === "buy" || mode === "buyWithEth") &&
+        pairKeyBalance < keyAmount
+      )
         throw new Error("The pair no longer has enough keys");
       if (mode === "sell" && keyBalance < keyAmount)
         throw new Error("FriendKey balance is too low");
@@ -649,28 +697,149 @@ export function AlfaClubLiquidity({
       }
 
       const limit =
-        mode === "buy"
-          ? addSlippageBps(freshQuote.amount, slippageBps)
-          : subtractSlippageBps(freshQuote.amount, slippageBps);
-      const calls = buildAlfaClubSudoswapCalls({
-        direction: mode,
-        router,
-        adapter,
-        permit2,
-        friendKey: ALFACLUB.friendKey,
-        creatorCoin: ROOM_1659_CREATOR_COIN,
-        pair,
-        sender: executionAddress,
-        keyAmount,
-        limit,
-        deadline,
-        erc20AllowanceToPermit2: erc20Allowance,
-        permit2AllowanceToAdapter: {
-          amount: permit2Allowance[0],
-          expiration: BigInt(permit2Allowance[1]),
-        },
-        keyApprovedForAdapter: keyApproved,
-      });
+        mode === "sell"
+          ? subtractSlippageBps(freshQuote.amount, slippageBps)
+          : addSlippageBps(freshQuote.amount, slippageBps);
+
+      let calls: TransactionRequest[];
+      if (mode === "buyWithEth") {
+        if (!ethAmount) throw new Error("Enter a positive ETH amount");
+        const canonicalEthFunding = executionMode === "canonical";
+        const tokenIn = canonicalEthFunding
+          ? BASE_WETH_TOKEN
+          : ZORA_NATIVE_ETH_TOKEN;
+        let zoraPayload = await fetchZoraTradeQuoteFromApi({
+          tokenIn,
+          tokenOut: ROOM_1659_CREATOR_COIN,
+          amountIn: ethAmount.toString(),
+          sender: executionAddress,
+          slippagePct: Number(slippageInput),
+        });
+        let zoraQuote = zoraTradeQuoteToResponse({
+          tokenIn,
+          tokenOut: ROOM_1659_CREATOR_COIN,
+          amountIn: ethAmount.toString(),
+          payload: zoraPayload,
+        });
+
+        const preparatoryCalls: TransactionRequest[] = [];
+        if (canonicalEthFunding) {
+          if (!walletClient || !publicClient || !accountContext.signerAddress) {
+            throw new Error(
+              "Canonical ETH funding needs an owner signer and wallet client",
+            );
+          }
+          const signatures = await signZoraQuotePermits({
+            quote: zoraQuote,
+            signerAddress: accountContext.signerAddress,
+            executionAddress,
+            forceResignPermits: true,
+            walletClient: walletClient as any,
+            publicClient: publicClient as any,
+          });
+          if (signatures.length === 0) {
+            throw new Error("Zora did not return a WETH Permit2 authorization");
+          }
+          zoraPayload = await fetchZoraTradeQuoteFromApi({
+            tokenIn,
+            tokenOut: ROOM_1659_CREATOR_COIN,
+            amountIn: ethAmount.toString(),
+            sender: executionAddress,
+            slippagePct: Number(slippageInput),
+            signatures,
+          });
+          zoraQuote = zoraTradeQuoteToResponse({
+            tokenIn,
+            tokenOut: ROOM_1659_CREATOR_COIN,
+            amountIn: ethAmount.toString(),
+            payload: zoraPayload,
+          });
+          preparatoryCalls.push(
+            {
+              to: BASE_WETH_TOKEN,
+              from: executionAddress,
+              data: encodeFunctionData({
+                abi: [
+                  {
+                    type: "function",
+                    name: "deposit",
+                    stateMutability: "payable",
+                    inputs: [],
+                    outputs: [],
+                  },
+                ] as const,
+                functionName: "deposit",
+              }),
+              value: ethAmount.toString(),
+              chainId: base.id,
+            },
+            {
+              to: BASE_WETH_TOKEN,
+              from: executionAddress,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "approve",
+                args: [permit2, ethAmount],
+              }),
+              value: "0",
+              chainId: base.id,
+            },
+          );
+        }
+
+        const { swap: fundingSwap } = buildSwapFromZoraQuote({
+          quote: zoraQuote,
+          executionAddress,
+          chainId: base.id,
+        });
+        const fundingOutputAmount = BigInt(
+          String(zoraPayload.quote?.amountOut ?? "0"),
+        );
+        if (fundingOutputAmount <= 0n) {
+          throw new Error("Zora returned no AKITA output for this ETH quote");
+        }
+
+        calls = buildAlfaClubEthFundingCalls({
+          fundingSwap,
+          preparatoryCalls,
+          fundingOutputAmount,
+          sender: executionAddress,
+          router,
+          adapter,
+          permit2,
+          friendKey: ALFACLUB.friendKey,
+          creatorCoin: ROOM_1659_CREATOR_COIN,
+          pair,
+          keyAmount,
+          buyLimit: limit,
+          deadline,
+          erc20AllowanceToPermit2: erc20Allowance,
+          permit2AllowanceToAdapter: {
+            amount: permit2Allowance[0],
+            expiration: BigInt(permit2Allowance[1]),
+          },
+        });
+      } else {
+        calls = buildAlfaClubSudoswapCalls({
+          direction: mode,
+          router,
+          adapter,
+          permit2,
+          friendKey: ALFACLUB.friendKey,
+          creatorCoin: ROOM_1659_CREATOR_COIN,
+          pair,
+          sender: executionAddress,
+          keyAmount,
+          limit,
+          deadline,
+          erc20AllowanceToPermit2: erc20Allowance,
+          permit2AllowanceToAdapter: {
+            amount: permit2Allowance[0],
+            expiration: BigInt(permit2Allowance[1]),
+          },
+          keyApprovedForAdapter: keyApproved,
+        });
+      }
 
       const result = await buildAndSendCalls({
         context: buildTxContext(),
@@ -682,7 +851,11 @@ export function AlfaClubLiquidity({
         result.send.callsId ??
         null;
       setLastHash(hash);
-      toast.success(`AlfaClub ${mode} submitted through the Universal Router.`);
+      toast.success(
+        mode === "buyWithEth"
+          ? "ETH → ZORA → AKITA → FriendKey submitted."
+          : `AlfaClub ${mode} submitted through the Universal Router.`,
+      );
       await queryClient.invalidateQueries({
         queryKey: ["alfaclub-sudoswap-market"],
       });
@@ -695,9 +868,12 @@ export function AlfaClubLiquidity({
     }
   }, [
     account.chainId,
+    accountContext.signerAddress,
     adapter,
     buildTxContext,
+    ethAmount,
     executionAddress,
+    executionMode,
     keyAmount,
     mode,
     pair,
@@ -706,7 +882,9 @@ export function AlfaClubLiquidity({
     queryClient,
     router,
     slippageBps,
+    slippageInput,
     switchChainAsync,
+    walletClient,
   ]);
 
   const disabledReason = getAlfaClubLiquidityDisabledReason({
@@ -717,6 +895,7 @@ export function AlfaClubLiquidity({
     snapshot,
     mode,
     keyAmount,
+    ethAmount,
   });
 
   return (
@@ -739,8 +918,8 @@ export function AlfaClubLiquidity({
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-black/30 p-1.5">
-                {(["buy", "sell"] as const).map((direction) => (
+              <div className="grid grid-cols-3 gap-2 rounded-xl bg-black/30 p-1.5">
+                {(["buy", "buyWithEth", "sell"] as const).map((direction) => (
                   <button
                     key={direction}
                     type="button"
@@ -751,7 +930,11 @@ export function AlfaClubLiquidity({
                         : "text-zinc-500 hover:text-zinc-200"
                     }`}
                   >
-                    {direction === "buy" ? "Buy room keys" : "Sell room keys"}
+                    {direction === "buyWithEth"
+                      ? "Buy with ETH"
+                      : direction === "buy"
+                        ? "Buy with AKITA"
+                        : "Sell room keys"}
                   </button>
                 ))}
               </div>
@@ -769,6 +952,21 @@ export function AlfaClubLiquidity({
                     className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-white outline-none"
                   />
                 </label>
+                {mode === "buyWithEth" ? (
+                  <label className="space-y-2">
+                    <span className="text-xs text-zinc-500">ETH to route</span>
+                    <div className="flex rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                      <input
+                        type="text"
+                        value={ethAmountInput}
+                        onChange={(event) => setEthAmountInput(event.target.value)}
+                        inputMode="decimal"
+                        className="min-w-0 flex-1 bg-transparent text-white outline-none"
+                      />
+                      <span className="text-zinc-500">ETH</span>
+                    </div>
+                  </label>
+                ) : null}
                 <label className="space-y-2">
                   <span className="text-xs text-zinc-500">
                     Maximum slippage
@@ -829,7 +1027,7 @@ export function AlfaClubLiquidity({
                 onClick={() => void submit()}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
               >
-                {mode === "buy" ? (
+                {mode === "buy" || mode === "buyWithEth" ? (
                   <ShoppingCart className="h-4 w-4" />
                 ) : (
                   <ArrowDownUp className="h-4 w-4" />
@@ -839,7 +1037,11 @@ export function AlfaClubLiquidity({
                   : isSubmitting
                     ? "Submitting"
                     : (disabledReason ??
-                      (mode === "buy" ? "Buy keys" : "Sell keys"))}
+                      (mode === "buyWithEth"
+                        ? "Buy keys with ETH"
+                        : mode === "buy"
+                          ? "Buy keys"
+                          : "Sell keys"))}
               </button>
               {disabledReason ? (
                 <div className="text-xs text-amber-300" role="status">

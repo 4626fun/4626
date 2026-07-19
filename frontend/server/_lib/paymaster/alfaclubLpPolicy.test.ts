@@ -220,6 +220,67 @@ describe('AlfaClub Sudoswap paymaster policy', () => {
     })
   })
 
+  it('accepts canonical ETH funding before the Zora and Sudoswap legs', async () => {
+    const amount = 1_000_000_000_000_000n
+    const batch: AlfaClubLpInnerCall[] = [
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: amount,
+        data: '0xd0e30db0',
+      },
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: 0n,
+        data: encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [PERMIT2, amount],
+        }),
+      },
+      {
+        target: getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43'),
+        value: 0n,
+        data: '0x24856bc3',
+      },
+      ...calls('buy'),
+    ]
+
+    await expect(validate(batch)).resolves.toEqual({
+      creatorCoin: ROOM_1659_CREATOR_COIN,
+      tokenId: 1659n,
+      pool: PAIR,
+    })
+  })
+
+  it('rejects a canonical ETH funding batch with a mismatched WETH approval', async () => {
+    const batch = [
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: 1_000_000_000_000_000n,
+        data: '0xd0e30db0' as Hex,
+      },
+      {
+        target: getAddress('0x4200000000000000000000000000000000000006'),
+        value: 0n,
+        data: encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [PERMIT2, 1n],
+        }),
+      },
+      {
+        target: getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43'),
+        value: 0n,
+        data: '0x24856bc3' as Hex,
+      },
+      ...calls('buy'),
+    ] satisfies AlfaClubLpInnerCall[]
+
+    await expect(validate(batch)).rejects.toThrow(
+      'alfaclub_sudoswap_weth_approval_mismatch',
+    )
+  })
+
   it('accepts FriendKey adapter approval followed by command 0x42', async () => {
     await expect(validate(calls('sell'))).resolves.toEqual({
       creatorCoin: ROOM_1659_CREATOR_COIN,
