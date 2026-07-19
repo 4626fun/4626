@@ -281,6 +281,30 @@ function deriveTokenNamesAndSymbols(
   }
 }
 
+async function readBytecodeFailClosed(params: {
+  publicClient: ReturnType<typeof createPublicClient>
+  address: Address
+  label: string
+  attempts?: number
+}): Promise<Hex | undefined> {
+  const attempts = Math.max(1, params.attempts ?? 3)
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await params.publicClient.getBytecode({ address: params.address })
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt))
+      }
+    }
+  }
+  const detail = lastError instanceof Error ? lastError.message : String(lastError)
+  throw new Error(
+    `Unable to confirm whether ${params.label} (${params.address}) is already deployed after ${attempts} RPC attempts: ${detail}`,
+  )
+}
+
 async function searchVersionForVaultPrefix(params: {
   publicClient: ReturnType<typeof createPublicClient>
   creatorToken: Address
@@ -330,7 +354,12 @@ async function searchVersionForVaultPrefix(params: {
     if (vaultAddress.slice(2, 2 + requestedPrefix.length).toLowerCase() === requestedPrefix) {
       // Skip versions whose CREATE2 vault is already live so a rebuild after a
       // partial canary does not reuse addresses that trip finalize peer quoting.
-      const code = await params.publicClient.getBytecode({ address: vaultAddress }).catch(() => null)
+      // Fail closed on RPC errors — never treat a failed read as undeployed.
+      const code = await readBytecodeFailClosed({
+        publicClient: params.publicClient,
+        address: vaultAddress,
+        label: `vanity vault candidate version ${version}`,
+      })
       if (code && code !== '0x') {
         if (attempt > 0 && attempt % 4096 === 0) {
           await new Promise((resolve) => setTimeout(resolve, 0))

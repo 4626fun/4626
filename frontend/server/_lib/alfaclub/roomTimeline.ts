@@ -348,12 +348,18 @@ function classifyFillAction(fill: HyperliquidUserFillDetailed): RoomTimelineTrad
   return 'unknown'
 }
 
+/** Wallet senders only — Chip / `trade-completed` and other system rows are not hosts. */
+export function isRoomTimelineHostAddressCandidate(address: string | null | undefined): boolean {
+  const normalized = String(address ?? '').trim().toLowerCase()
+  return /^0x[a-f0-9]{40}$/.test(normalized)
+}
+
 async function resolveRoomHostAddress(params: {
   roomId: string
   explicitHostAddress?: string | null
 }): Promise<string | null> {
   const explicit = (params.explicitHostAddress ?? '').trim().toLowerCase()
-  if (/^0x[a-f0-9]{40}$/.test(explicit)) return explicit
+  if (isRoomTimelineHostAddressCandidate(explicit)) return explicit
   if (params.roomId === '1659') {
     return resolveRoom1659HyperliquidUserForSnapshot(explicit || '0x0000000000000000000000000000000000000000')
   }
@@ -362,17 +368,22 @@ async function resolveRoomHostAddress(params: {
   if (!db) return null
   await ensureAlfaClubVigilanteSchema()
   try {
+    // Exclude Chip / trade-completed (and any non-wallet sender_address) from the
+    // frequency fallback. Once those system cards dominate chat_ingest, LIMIT 1
+    // without this filter returns a non-hex row, rejects it, and yields null —
+    // so host fills/positions never load for non-1659 rooms.
     const result = await db.sql`
       SELECT sender_address, COUNT(*)::int AS n
       FROM alfaclub.chat_ingest
       WHERE room_id = ${params.roomId}
+        AND sender_address ~* '^0x[a-fA-F0-9]{40}$'
       GROUP BY sender_address
       ORDER BY n DESC
       LIMIT 1;
     `
     const row = (result.rows ?? [])[0] as { sender_address?: string } | undefined
     const candidate = String(row?.sender_address ?? '').trim().toLowerCase()
-    if (/^0x[a-f0-9]{40}$/.test(candidate)) return candidate
+    if (isRoomTimelineHostAddressCandidate(candidate)) return candidate
   } catch {
     return null
   }
@@ -385,18 +396,20 @@ async function resolveRoomHostAddress(params: {
  * sender (the host in a one-to-many room). This keeps "Host only" working even when the
  * upstream host address — e.g. a Hyperliquid portfolio wallet for room 1659 — differs from
  * the chat sender address.
+ *
+ * System senders (Chip / `trade-completed`, ProLiquid markers, etc.) are never host candidates.
  */
-function pickEffectiveHostAddress(
+export function pickEffectiveHostAddress(
   senderAddresses: string[],
   resolvedHostAddress: string | null,
 ): string | null {
   const counts = new Map<string, number>()
   for (const address of senderAddresses) {
-    if (!address) continue
+    if (!isRoomTimelineHostAddressCandidate(address)) continue
     counts.set(address, (counts.get(address) ?? 0) + 1)
   }
   const resolved = (resolvedHostAddress ?? '').trim().toLowerCase()
-  if (resolved && counts.has(resolved)) return resolved
+  if (isRoomTimelineHostAddressCandidate(resolved) && counts.has(resolved)) return resolved
   let best: string | null = null
   let bestCount = 0
   for (const [address, count] of counts) {
