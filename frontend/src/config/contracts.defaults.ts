@@ -53,7 +53,7 @@ export const PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
 export const PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "02D7abC547F8B1e7E2D7a919D8D1005918361750",
 );
-/** v1.19.2 epoch (v1.19.1 greenfield addresses + Phase2/wrapper bytecode cutover). */
+/** v1.19.3 bytecode/module epoch on the v1.19.1 greenfield infrastructure. */
 export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "a18169caf37fa0347285B16aAFC2B09eCB43F145",
 );
@@ -66,11 +66,11 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V1191_STORE_POINTER = addr(
   "0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b",
 );
 /**
- * Live Phase1Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
- * `agentVaultCoreModule` = live AgentOVaultCoreModule instance `0x8c084A63…`.
+ * v1.19.3 Phase1Module on the v1.19.1 batcher. Both lane cores and shared
+ * modules use the OVaultModuleStorage.v5 fingerprint.
  */
 export const SPLIT_PHASE1_PHASE1_MODULE = addr(
-  "33ABACC30a4179444d9d565245561B3988650bF5",
+  "b64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61",
 );
 /** Pre-v1.14.0 Phase1Module (v1.13.0 greenfield; grandfathered vaults only). */
 export const PRE_V1140_SPLIT_PHASE1_PHASE1_MODULE = addr(
@@ -94,7 +94,7 @@ export const SPLIT_PHASE1_PHASE2_MODULE_PRE_PENDING_HASH = addr(
  * Safe swap: `0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8`.
  */
 export const SPLIT_PHASE1_PHASE2_MODULE = addr(
-  "C3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad",
+  "1217bA070DBf64303117939301788925030295d1",
 );
 export const SPLIT_PHASE1_PHASE3_HELPER = addr(
   "C54Fb8d8232a8a654E512b3bDf761c8Eb2783B74",
@@ -111,13 +111,13 @@ export const OVAULT_FACTORY4626 = addr(
   "CAb65a066A4D52DD29ffB418B319819176b89610",
 );
 export const OVAULT_CORE_MODULE = addr(
-  "5Ed463138D7bdC6566AFf5c65Dca721406973898",
+  "5A9F287910050c89cc3447f6Ac54990C2514466a",
 );
 export const OVAULT_STRATEGIES_MODULE = addr(
-  "3c32Ee5435fB3F35BCC10665f71cD7e6906dF165",
+  "6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849",
 );
 export const OVAULT_ADMIN_MODULE = addr(
-  "a32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2",
+  "D5c887cd16DBb3A9095eB9635ECf57b77D1d9B37",
 );
 
 const DEPRECATED_DEPLOYMENT_BATCHERS = new Set<string>([

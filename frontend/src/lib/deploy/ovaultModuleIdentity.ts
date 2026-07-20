@@ -24,16 +24,21 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V4 = keccak256(
   encodePacked(['string'], ['OVaultModuleStorage.v4']),
 ) as Hex
 
+/** Current source-ahead module stack (v1.19.3). */
+export const CREATOR_OVAULT_MODULE_STORAGE_V5 = keccak256(
+  encodePacked(['string'], ['OVaultModuleStorage.v5']),
+) as Hex
+
 /** Pre-v1.12.1 modules still on-chain for grandfathered vaults only. */
 export const CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT = keccak256(
   encodePacked(['string'], ['CreatorOVaultModuleStorage.current']),
 ) as Hex
 
 /** Must match live mainnet CreatorOVault module deployments wired on the split Phase-1 batcher. */
-export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = CREATOR_OVAULT_MODULE_STORAGE_V4
+export const CREATOR_OVAULT_MODULE_STORAGE_CURRENT = CREATOR_OVAULT_MODULE_STORAGE_V5
 
 /** Fingerprint embedded in frontend deploy bytecode (CreatorOVault creation code). */
-export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V4
+export const DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION = CREATOR_OVAULT_MODULE_STORAGE_V5
 
 const MODULE_IDENTITY_ABI = [
   {
@@ -111,6 +116,7 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
   }
 
   if (moduleReports.toLowerCase() !== vaultExpects.toLowerCase()) {
+    const expectsV5 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V5.toLowerCase()
     const expectsV4 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V4.toLowerCase()
     const expectsV3 = vaultExpects.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
     const moduleIsLegacyCurrent =
@@ -119,8 +125,13 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
     const moduleIsV3 =
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase()
+    const moduleIsV4 =
+      moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V4.toLowerCase()
     const hint =
-      expectsV4 && moduleIsV3
+      expectsV5 && moduleIsV4
+        ? ' Deploy bytecode expects OVaultModuleStorage.v5 but the live batcher still wires v4 modules. ' +
+          'Rotate Phase1Module and both lane core modules to the v1.19.3 v5 stack before greenfield deploy.'
+        : expectsV4 && moduleIsV3
         ? ' Deploy bytecode expects OVaultModuleStorage.v4 but the live batcher still wires v3 modules. ' +
           'Rotate Phase1Module / core modules to the v1.19.1 v4 stack, or re-seed deploy bytecode.'
         : expectsV4 && moduleIsV2

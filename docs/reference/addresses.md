@@ -5,9 +5,9 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.2** epoch (v1.19.1 greenfield stack; bytecode cutover 2026-07-17).
+Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.3** epoch (v1.19.1 greenfield stack; module and bytecode cutover 2026-07-19).
 
-v1.19.2 is live on the v1.19.1 greenfield stack: hardened `VaultAuxiliaryDeployBatcher` `0xaA9229c1…408e` (CREATE2-authorized), seeded bytecode store (incl. `AgentRevenuePolicyController`), and `LotteryAmoeRouter` `0x630c3769…` on manager `0xB45E68a5…`. Creator + Agent canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
+v1.19.3 is live on the v1.19.1 greenfield stack: current-source v5 vault modules, hardened Phase 2, a fully seeded bytecode store, and active Chainlink VRF on manager `0xB45E68a5…`. v1.19.2 remains a historical bytecode seal. Creator + Agent paid canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
@@ -29,12 +29,13 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | VRFConsumer4626                   | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670`                                |
 | UniversalBytecodeStoreV2          | `0xF9622613682a12E46b914c7498716F42E44c4d36`                                |
 | UniversalCreate2DeployerFromStore | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2`                                |
-| CreatorOVaultCoreModule           | `0x5Ed463138D7bdC6566AFf5c65Dca721406973898`                                |
-| CreatorOVaultStrategiesModule     | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165`                                |
-| CreatorOVaultAdminModule          | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2`                                |
+| CreatorOVaultCoreModule           | `0x5A9F287910050c89cc3447f6Ac54990C2514466a`                                |
+| AgentOVaultCoreModule             | `0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE`                                |
+| CreatorOVaultStrategiesModule     | `0x6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849`                                |
+| CreatorOVaultAdminModule          | `0xD5c887cd16DBb3A9095eB9635ECf57b77D1d9B37`                                |
 | DeploymentBatcher                 | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`                                |
-| DeploymentBatcherPhase1Module     | `0x33ABACC30a4179444d9d565245561B3988650bF5`                                |
-| DeploymentBatcherPhase2Module     | `0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad`                                |
+| DeploymentBatcherPhase1Module     | `0xb64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61`                                |
+| DeploymentBatcherPhase2Module     | `0x1217bA070DBf64303117939301788925030295d1`                                |
 | DeploymentBatcherPhase3Helper     | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`                                |
 | DeploymentBatcherShareMeshHelper  | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`                                |
 | DeploymentBatcherUtilsHelper      | `0x8833225A423f4B1BB071702CB68d71fA4af434f2`                                |
@@ -42,12 +43,20 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 Notes:
 
-- **v1.19.2** is the current shared/global + per-creator bytecode/CREATE2
+- **v1.19.3** is the current shared/global + per-creator bytecode/CREATE2
   namespace. Infra addresses match the v1.19.1 greenfield deploy.
-- Live `DeploymentBatcherPhase2Module` is `0xC3Af8F49…` (pending-hash F4 + F7/F8, 2026-07-17).
-  Safe swap: [`0x8ec89e09…`](https://basescan.org/tx/0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8).
+- Live `DeploymentBatcherPhase1Module` is `0xb64bA38a…` with v5 creator,
+  agent, strategies, and admin modules. Safe swap:
+  [`0xda9a2bef…`](https://basescan.org/tx/0xda9a2bef6bb2f8959325fa6da5ccbc9b779d5c159fe3de66fa4e5d6264608a9b).
+- Live `DeploymentBatcherPhase2Module` is `0x1217bA07…` (current hardened source).
+  Safe swap: [`0x95cc671f…`](https://basescan.org/tx/0x95cc671fc6854cc47425c501f63e8e59471e3340913a60a99ad64ab01dd77fbf).
   Shell `deployPhase2Core` selectors unchanged (`0xf9344d88` / `0x6004df9c`).
-  Prior module `0x3089678d…` superseded; earlier `0x0DDac7f1…` retired.
+  Prior module `0xC3Af8F49…` superseded; earlier modules retired.
+- Chainlink VRF is active on `VRFConsumer4626`: the consumer is registered on
+  subscription `478638396…980789`, configured with the Base key hash, 500,000
+  callback gas, and 3 confirmations. Activation transactions:
+  [`0x0725bbb1…`](https://basescan.org/tx/0x0725bbb14a89fe614143b26c0bc4924b126eed2ebe39dcf935c590d73a40e481),
+  [`0x7b676249…`](https://basescan.org/tx/0x7b676249ec3fe6fb939a384e40d4c6faf126ad3b71e7610d65955ac532307d0f).
 - Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
   new store/deployer/batcher stack.
 - Prior v1.18.0 stack (registry `0xDb8570…`, batcher `0x02D7…`, aux `0xde93…`)
@@ -118,7 +127,7 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
    `Lottery Manager: 0xB45E68a5867935a5734E4185977F81c528006650`
    (nonce API reads live `LOTTERY_MANAGER` env).
 
-## Environment for v1.19.1 launches
+## Environment for v1.19.3 launches
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
@@ -136,7 +145,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `DEPLOYMENT_BATCHER_AUTO_HANDOFF`                            | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
 | `VAULT_AUXILIARY_DEPLOY_BATCHER`                             | `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER`  | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` |
 | `LOTTERY_AMOE_ROUTER`                                        | —                                      | `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` |
-| —                                                            | `VITE_DEPLOYMENT_VERSION`              | `v1.19.1`                                    |
+| —                                                            | `VITE_DEPLOYMENT_VERSION`              | `v1.19.3`                                    |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 

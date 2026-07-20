@@ -12,10 +12,10 @@ POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
 VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
-CURRENT_RELEASE="v1.19.2"
+CURRENT_RELEASE="v1.19.3"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
-# Unified epoch: source artifacts and release-target guard share v1.19.2.
-SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.2}"
+# Unified epoch: source artifacts and release-target guard share v1.19.3.
+SOURCE_RELEASE="${SOURCE_RELEASE:-v1.19.3}"
 SOURCE_MANIFEST="$ROOT_DIR/deployments/base/${SOURCE_RELEASE}-bytecode-manifest.json"
 
 load_env_key_if_unset() {
@@ -50,6 +50,17 @@ require_rg() {
   fi
 }
 
+require_rg_regex() {
+  local pattern="$1"
+  local file="$2"
+  local label="$3"
+
+  if ! rg -U "$pattern" "$file" >/dev/null; then
+    echo "release target guard failed: missing ${label} in ${file}" >&2
+    exit 1
+  fi
+}
+
 load_env_key_if_unset BASE_RPC_URL "$ROOT_DIR/frontend/.env.local"
 load_env_key_if_unset BASE_RPC_URL "$ROOT_DIR/frontend/.env"
 
@@ -60,8 +71,11 @@ bytecode_store="0xF9622613682a12E46b914c7498716F42E44c4d36"
 create2_from_store="0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2"
 batcher="0xa18169caf37fa0347285B16aAFC2B09eCB43F145"
 lottery_manager="0xB45E68a5867935a5734E4185977F81c528006650"
-phase1_module="0x33ABACC30a4179444d9d565245561B3988650bF5"
-phase2_module="0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad"
+core_module="0x5A9F287910050c89cc3447f6Ac54990C2514466a"
+strategies_module="0x6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849"
+admin_module="0xD5c887cd16DBb3A9095eB9635ECf57b77D1d9B37"
+phase1_module="0xb64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61"
+phase2_module="0x1217bA070DBf64303117939301788925030295d1"
 phase3_helper="0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74"
 share_mesh_helper="0x73b6efB7196CdFa6c095Dc196559c88818Cd3211"
 utils_helper="0x8833225A423f4B1BB071702CB68d71fA4af434f2"
@@ -70,22 +84,30 @@ deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e0
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00|0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1|0x700b4BBAf965c013123bAd02a6562FBa487aC0f1|0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae'
 
 require_rg 'new per-creator launches use the' "$ADDRESSES_DOC" 'addresses doc greenfield title'
-require_rg '**v1.19.2**' "$ADDRESSES_DOC" 'addresses doc v1.19.2 epoch'
+require_rg '**v1.19.3**' "$ADDRESSES_DOC" 'addresses doc v1.19.3 epoch'
 require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current infrastructure heading'
-require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
-require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
-require_rg "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" 'VaultActivationBatcher address'
-require_rg "UniversalBytecodeStoreV2 | \`$bytecode_store\`" "$ADDRESSES_DOC" 'UniversalBytecodeStoreV2 address'
-require_rg "UniversalCreate2DeployerFromStore | \`$create2_from_store\`" "$ADDRESSES_DOC" 'UniversalCreate2DeployerFromStore address'
-require_rg "DeploymentBatcher | \`$batcher\`" "$ADDRESSES_DOC" 'DeploymentBatcher address'
-require_rg "LotteryManager4626 | \`$lottery_manager\`" "$ADDRESSES_DOC" 'LotteryManager4626 address'
-require_rg "DeploymentBatcherPhase1Module | \`$phase1_module\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase1Module address'
-require_rg "DeploymentBatcherPhase2Module | \`$phase2_module\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase2Module address'
-require_rg "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase3Helper address'
-require_rg "DeploymentBatcherShareMeshHelper | \`$share_mesh_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherShareMeshHelper address'
-require_rg "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherUtilsHelper address'
+for spec in \
+  "Registry4626|$registry" \
+  "OVaultFactory4626|$factory" \
+  "VaultActivationBatcher|$activation_batcher" \
+  "UniversalBytecodeStoreV2|$bytecode_store" \
+  "UniversalCreate2DeployerFromStore|$create2_from_store" \
+  "CreatorOVaultCoreModule|$core_module" \
+  "CreatorOVaultStrategiesModule|$strategies_module" \
+  "CreatorOVaultAdminModule|$admin_module" \
+  "DeploymentBatcher|$batcher" \
+  "LotteryManager4626|$lottery_manager" \
+  "DeploymentBatcherPhase1Module|$phase1_module" \
+  "DeploymentBatcherPhase2Module|$phase2_module" \
+  "DeploymentBatcherPhase3Helper|$phase3_helper" \
+  "DeploymentBatcherShareMeshHelper|$share_mesh_helper" \
+  "DeploymentBatcherUtilsHelper|$utils_helper"; do
+  label="${spec%%|*}"
+  value="${spec#*|}"
+  require_rg_regex "\\|[[:space:]]*${label}[[:space:]]*\\|[[:space:]]*\\x60${value}\\x60" "$ADDRESSES_DOC" "${label} address"
+done
 
-require_rg '`v1.19.2`' "$INVENTORY_DOC" 'inventory v1.19.2 scope'
+require_rg '`v1.19.3`' "$INVENTORY_DOC" 'inventory v1.19.3 scope'
 require_rg "\`lotteryManager\` | \`$lottery_manager\`" "$INVENTORY_DOC" 'inventory LotteryManager4626 address'
 require_rg "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" 'inventory bytecodeStore address'
 require_rg "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" 'inventory create2DeployerFromStore address'
@@ -96,9 +118,9 @@ require_rg "\`deploymentBatcherPhase3Helper\` | \`$phase3_helper\`" "$INVENTORY_
 require_rg "\`deploymentBatcherShareMeshHelper\` | \`$share_mesh_helper\`" "$INVENTORY_DOC" 'inventory deploymentBatcherShareMeshHelper address'
 require_rg "\`deploymentBatcherUtilsHelper\` | \`$utils_helper\`" "$INVENTORY_DOC" 'inventory deploymentBatcherUtilsHelper address'
 
-require_rg "SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('${batcher#0x}')" "$DEFAULTS" 'frontend split Phase-1 batcher constant'
-require_rg "SPLIT_PHASE1_PHASE1_MODULE = addr('${phase1_module#0x}')" "$DEFAULTS" 'frontend live Phase1Module constant'
-require_rg "SPLIT_PHASE1_PHASE2_MODULE = addr('${phase2_module#0x}')" "$DEFAULTS" 'frontend live Phase2Module constant'
+require_rg_regex "SPLIT_PHASE1_DEPLOYMENT_BATCHER[[:space:]]*=[[:space:]]*addr\\([^;]*['\"]${batcher#0x}['\"]" "$DEFAULTS" 'frontend split Phase-1 batcher constant'
+require_rg_regex "SPLIT_PHASE1_PHASE1_MODULE[[:space:]]*=[[:space:]]*addr\\([^;]*['\"]${phase1_module#0x}['\"]" "$DEFAULTS" 'frontend live Phase1Module constant'
+require_rg_regex "SPLIT_PHASE1_PHASE2_MODULE[[:space:]]*=[[:space:]]*addr\\([^;]*['\"]${phase2_module#0x}['\"]" "$DEFAULTS" 'frontend live Phase2Module constant'
 
 if rg -n 'solanaBridgeAdapter' "$DEFAULTS" >/dev/null; then
   echo "release target guard failed: frontend contracts.defaults still exports solanaBridgeAdapter (LZ ShareOFT only)" >&2
@@ -110,13 +132,13 @@ if find "$ROOT_DIR/contracts" -name 'SolanaBridgeAdapter.sol' -print -quit | gre
   exit 1
 fi
 
-require_rg "lotteryManager: addr('${lottery_manager#0x}')," "$DEFAULTS" 'frontend LotteryManager4626 default'
-require_rg "universalBytecodeStore: addr('${bytecode_store#0x}')," "$DEFAULTS" 'frontend bytecode store default'
-require_rg "universalCreate2DeployerFromStore: addr('${create2_from_store#0x}')," "$DEFAULTS" 'frontend create2 deployer default'
-require_rg "payoutRouterFactory: addr('0000000000000000000000000000000000000000')," "$DEFAULTS" 'frontend zero payoutRouterFactory default'
+require_rg_regex "lotteryManager:[[:space:]]*addr\\(['\"]${lottery_manager#0x}['\"]\\)" "$DEFAULTS" 'frontend LotteryManager4626 default'
+require_rg_regex "universalBytecodeStore:[[:space:]]*addr\\(['\"]${bytecode_store#0x}['\"]\\)" "$DEFAULTS" 'frontend bytecode store default'
+require_rg_regex "universalCreate2DeployerFromStore:[[:space:]]*addr\\([^;]*['\"]${create2_from_store#0x}['\"]" "$DEFAULTS" 'frontend create2 deployer default'
+require_rg_regex "payoutRouterFactory:[[:space:]]*addr\\(['\"]0000000000000000000000000000000000000000['\"]\\)" "$DEFAULTS" 'frontend zero payoutRouterFactory default'
 require_rg "deploymentBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcher default'
 require_rg "deploymentBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcherAutoHandoff default'
-require_rg "'$lottery_manager' as const;" "$KPR_SOLANA_CANONICAL" 'KPR canonical LotteryManager4626'
+require_rg_regex "['\"]$lottery_manager['\"][[:space:]]+as[[:space:]]+const" "$KPR_SOLANA_CANONICAL" 'KPR canonical LotteryManager4626'
 require_rg '0x5c0115589d7F4930A0dc93417aE409f44186f4E7' "$KPR_SOLANA_SEED_ENV" 'KPR retired v1.13 LotteryManager migration'
 require_rg '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1' "$KPR_SOLANA_SEED_ENV" 'KPR superseded v1.18 LotteryManager migration'
 

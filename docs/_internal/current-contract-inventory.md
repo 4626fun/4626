@@ -5,13 +5,13 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Updated on: 2026-07-17
-Scope: current live `v1.19.2` shared infrastructure (v1.19.1 greenfield addresses).
+Updated on: 2026-07-19
+Scope: current live `v1.19.3` shared infrastructure (v1.19.1 greenfield addresses).
 
 ## Sources
 
 1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.19.2-bytecode-manifest.json` (historical seal: `v1.19.1-bytecode-manifest.json`)
+2. Bytecode / codeId manifest: `deployments/base/v1.19.3-bytecode-manifest.json` (historical seals: `v1.19.2-bytecode-manifest.json`, `v1.19.1-bytecode-manifest.json`)
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.19.1-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -29,12 +29,13 @@ Scope: current live `v1.19.2` shared infrastructure (v1.19.1 greenfield addresse
 | `vrfConsumer` | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670` |
 | `bytecodeStore` | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
 | `create2DeployerFromStore` | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
-| `ovaultCoreModule` | `0x5Ed463138D7bdC6566AFf5c65Dca721406973898` |
-| `ovaultStrategiesModule` | `0x3c32Ee5435fB3F35BCC10665f71cD7e6906dF165` |
-| `ovaultAdminModule` | `0xa32c5DBCc0CC7638c80C4a3f0c2b295D9eB984C2` |
+| `ovaultCoreModule` | `0x5A9F287910050c89cc3447f6Ac54990C2514466a` |
+| `agentOVaultCoreModule` | `0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE` |
+| `ovaultStrategiesModule` | `0x6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849` |
+| `ovaultAdminModule` | `0xD5c887cd16DBb3A9095eB9635ECf57b77D1d9B37` |
 | `deploymentBatcher` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| `deploymentBatcherPhase1Module` | `0x33ABACC30a4179444d9d565245561B3988650bF5` |
-| `deploymentBatcherPhase2Module` | `0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad` |
+| `deploymentBatcherPhase1Module` | `0xb64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61` |
+| `deploymentBatcherPhase2Module` | `0x1217bA070DBf64303117939301788925030295d1` |
 | `deploymentBatcherPhase3Helper` | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74` |
 | `deploymentBatcherShareMeshHelper` | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211` |
 | `deploymentBatcherUtilsHelper` | `0x8833225A423f4B1BB071702CB68d71fA4af434f2` |
@@ -86,8 +87,8 @@ before `finalizePhase2`; there is no adapter or global-peer fallback.
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase1Module=0x33ABACC30a4179444d9d565245561B3988650bF5`
-- `DeploymentBatcherPhase2Module=0xC3Af8F49492Db7Ba0B851F3A16c13CCAa94af9Ad`
+- `DeploymentBatcherPhase1Module=0xb64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61`
+- `DeploymentBatcherPhase2Module=0x1217bA070DBf64303117939301788925030295d1`
 - `DeploymentBatcherPhase3Helper=0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`
 - `DeploymentBatcherShareMeshHelper=0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`
 - `DeploymentBatcherUtilsHelper=0x8833225A423f4B1BB071702CB68d71fA4af434f2`
@@ -103,7 +104,7 @@ Pre-v1.14.1 batcher (deprecated for new greenfield deploys): `0xa99058f424FB3ACC
 Versioning verifier (repo defaults + live getters + store seed):
 
 ```bash
-BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json \
+BYTECODE_MANIFEST=../../deployments/base/v1.19.3-bytecode-manifest.json \
   UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 ```
@@ -112,10 +113,12 @@ BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json \
 
 Primary release manifest:
 
-- `deployments/base/v1.19.1-bytecode-manifest.json`
+- `deployments/base/v1.19.3-bytecode-manifest.json`
 
 Historical reference manifests:
 
+- `deployments/base/v1.19.2-bytecode-manifest.json`
+- `deployments/base/v1.19.1-bytecode-manifest.json`
 - `deployments/base/v1.16.1-bytecode-manifest.json`
 - `deployments/base/v1.14.1-bytecode-manifest.json`
 - `deployments/base/v1.12.0-bytecode-manifest.json`
