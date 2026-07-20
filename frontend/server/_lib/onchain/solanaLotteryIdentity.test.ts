@@ -86,7 +86,9 @@ describe('solanaLotteryIdentity', () => {
       db,
       buyerSolana: '7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY',
     })
-    const fragments = db.sql.mock.calls[0]?.[0] as TemplateStringsArray
+    const fragments = (db.sql.mock.calls as unknown as Array<[TemplateStringsArray]>)[0]?.[0]
+    expect(fragments).toBeDefined()
+    if (!fragments) return
     expect(fragments.join('?')).toContain("LOWER(COALESCE(pw.chain, '')) = 'solana'")
   })
 })

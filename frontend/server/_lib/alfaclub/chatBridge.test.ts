@@ -33,6 +33,9 @@ const {
         text: string
         dateMs: number | null
         rawPayloadText?: string | null
+        username?: string | null
+        isBot?: boolean | null
+        attachmentsJson?: unknown
       }>,
   ),
   executeDeterministicCommandMock: vi.fn(async () => ({ responseText: '' })),
@@ -276,7 +279,15 @@ function mockHistorySuccess(): void {
   ) as unknown as typeof fetch
 }
 
-function mockHistoryMessages(messages: Array<{ id: string; date: number; sender: string; text: string }>): void {
+function mockHistoryMessages(messages: Array<{
+  id: string
+  date: number
+  sender: string
+  text: string
+  username?: string
+  isBot?: boolean
+  attachments?: Array<{ url: string; type: string }>
+}>): void {
   globalThis.fetch = vi.fn(async () =>
     new Response(JSON.stringify({ messages }), {
       status: 200,
@@ -1888,11 +1899,13 @@ describe('data-driven room channel origin-aware outbound fan-out', () => {
       }),
     )
 
-    const upsertRows = upsertAlfaClubIngestMessagesMock.mock.calls[0]?.[0] as Array<{
-      senderAddress?: string
-      username?: string | null
-      isBot?: boolean | null
-    }>
+    const upsertRows = (upsertAlfaClubIngestMessagesMock.mock.calls as unknown as Array<[
+      Array<{
+        senderAddress?: string
+        username?: string | null
+        isBot?: boolean | null
+      }>,
+    ]>)[0]?.[0] ?? []
     expect(upsertRows).toHaveLength(1)
     expect(upsertRows[0]?.senderAddress).toBe('trade-completed')
     expect(upsertRows[0]?.username).toBe('Chip')
@@ -2040,7 +2053,7 @@ describe('sendAlfaClubRoomText JWT message ids + refresh fallback', () => {
       })
       return { status: 'refreshed' as const, identityTokenExp: null }
     })
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input)
       if (url.includes('/api/room/') && url.includes('/message')) {
         return new Response(JSON.stringify({ error: 'invalid or revoked token' }), {

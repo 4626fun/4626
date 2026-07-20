@@ -72,15 +72,17 @@ contract CanonicalCswForkRouterDeployHarness is DeployAlfaClubUniversalRouterBas
 
 /**
  * @notice Fork-only proof that the real canonical CSW can seed Room 1659 from
- * its live FriendKey/AKITA balances, revoke temporary approvals, hand the pair
+ * its current live FriendKey/AKITA balances, revoke temporary approvals, hand the pair
  * to contract administration, and support both custom Universal Router swap
  * directions against the real production token contracts.
  * @dev Nothing is broadcast. The Sudoswap and router stack exists only inside
  * the ephemeral Base fork.
  */
 contract AlfaClubSudoswapCanonicalCswBaseForkTest is Test {
-    uint256 private constant SUDOSWAP_DEPLOYER_KEY = 0xA11CE;
-    uint256 private constant ROUTER_DEPLOYER_KEY = 0xB0B;
+    // Dedicated deterministic fork-only EOAs. The former tiny fixture keys now
+    // resolve to addresses with live Base code and correctly fail deployment.
+    uint256 private constant SUDOSWAP_DEPLOYER_KEY = 0xA11CE1659;
+    uint256 private constant ROUTER_DEPLOYER_KEY = 0xB0B1659;
 
     address private constant FRIEND_KEY = 0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F;
     address private constant AKITA = 0x5b674196812451B7cEC024FE9d22D2c0b172fa75;
@@ -89,7 +91,9 @@ contract AlfaClubSudoswapCanonicalCswBaseForkTest is Test {
     address private constant PAYER = address(0xBEEF);
 
     uint256 private constant ROOM_TOKEN_ID = 1659;
-    uint256 private constant INITIAL_KEYS = 3;
+    // This fork proof intentionally consumes only the CSW's current live key
+    // inventory. Never deal or assume historical seed balances here.
+    uint256 private constant INITIAL_KEYS = 1;
     uint256 private constant INITIAL_AKITA = 50_000_000 ether;
     uint128 private constant VIRTUAL_KEY_RESERVE = 100;
     uint128 private constant VIRTUAL_AKITA_RESERVE = 200_000_000 ether;
@@ -120,7 +124,7 @@ contract AlfaClubSudoswapCanonicalCswBaseForkTest is Test {
         akita = ERC20(AKITA);
 
         assertTrue(ICanonicalCoinbaseSmartWallet(CANONICAL_CSW).isOwnerAddress(PRIVY_OWNER), "live CSW owner");
-        assertGe(friendKey.balanceOf(CANONICAL_CSW, ROOM_TOKEN_ID), INITIAL_KEYS + 1, "retain one live key");
+        assertGe(friendKey.balanceOf(CANONICAL_CSW, ROOM_TOKEN_ID), INITIAL_KEYS, "live key supports proof");
         assertGe(akita.balanceOf(CANONICAL_CSW), INITIAL_AKITA + PAYER_AKITA, "live AKITA supports proof");
 
         _deployForkOnlyStack();
@@ -140,7 +144,7 @@ contract AlfaClubSudoswapCanonicalCswBaseForkTest is Test {
         assertEq(akita.balanceOf(address(pair)), INITIAL_AKITA, "real AKITA seeded");
         assertFalse(friendKey.isApprovedForAll(CANONICAL_CSW, address(factory)), "key approval revoked");
         assertEq(akita.allowance(CANONICAL_CSW, address(factory)), 0, "AKITA approval revoked");
-        assertGe(friendKey.balanceOf(CANONICAL_CSW, ROOM_TOKEN_ID), 1, "one key retained");
+        assertEq(friendKey.balanceOf(CANONICAL_CSW, ROOM_TOKEN_ID), 0, "live key moved into fork pair");
 
         (CurveErrorCodes.Error buyError,,, uint256 buyInput,,) = pair.getBuyNFTQuote(ROOM_TOKEN_ID, 1);
         assertEq(uint256(buyError), uint256(CurveErrorCodes.Error.OK), "buy quote");

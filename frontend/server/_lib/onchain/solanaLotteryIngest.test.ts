@@ -278,7 +278,7 @@ describe('solanaLotteryIngest', () => {
     expect(result.inserted).toBe(1)
     expect(result.scanned).toBe(2)
     // Cursor advances to newest successfully fetched signature in the drained set.
-    expect(advanced?.sig).toBe('sigForge')
+    expect(advanced).toEqual({ sig: 'sigForge', slot: 99 })
   })
 
   it('stops cursor advancement when transaction fetch returns null', async () => {

@@ -137,7 +137,7 @@ describe("Sudoswap quote preview", () => {
       slippageBps: 100n,
       oneItemQuote: {
         errorCode: 0n,
-        amount: 100n,
+        amount: 110n,
         newSpotPrice: 0n,
         newDelta: 0n,
         tradeFee: 7n,
@@ -146,17 +146,17 @@ describe("Sudoswap quote preview", () => {
       },
       quote: {
         errorCode: 0n,
-        amount: 220n,
+        amount: 242n,
         newSpotPrice: 1_220n,
         newDelta: 18n,
-        tradeFee: 14n,
+        tradeFee: 16n,
         protocolFee: 2n,
         royaltyAmount: 4n,
       },
     });
-    expect(preview.effectiveUnitPrice).toBe(110n);
+    expect(preview.effectiveUnitPrice).toBe(121n);
     expect(preview.priceImpactBps).toBe(1_000n);
-    expect(preview.maximumPaid).toBe(223n);
+    expect(preview.maximumPaid).toBe(245n);
     expect(preview.minimumReceived).toBeNull();
   });
 
@@ -167,7 +167,7 @@ describe("Sudoswap quote preview", () => {
       slippageBps: 100n,
       oneItemQuote: {
         errorCode: 0n,
-        amount: 100n,
+        amount: 90n,
         newSpotPrice: 0n,
         newDelta: 0n,
         tradeFee: 7n,
@@ -176,17 +176,17 @@ describe("Sudoswap quote preview", () => {
       },
       quote: {
         errorCode: 0n,
-        amount: 180n,
+        amount: 162n,
         newSpotPrice: 820n,
         newDelta: 22n,
-        tradeFee: 14n,
+        tradeFee: 12n,
         protocolFee: 2n,
         royaltyAmount: 4n,
       },
     });
-    expect(preview.effectiveUnitPrice).toBe(90n);
+    expect(preview.effectiveUnitPrice).toBe(81n);
     expect(preview.priceImpactBps).toBe(1_000n);
-    expect(preview.minimumReceived).toBe(178n);
+    expect(preview.minimumReceived).toBe(160n);
     expect(preview.maximumPaid).toBeNull();
   });
 });

@@ -47,6 +47,8 @@ export type AlfaClubLiquidityPoolSummary = {
   creatorCoinDecimals: number;
   creatorCoinBalance: bigint;
   keyBalance: bigint;
+  oneKeyBuyPrice: bigint;
+  oneKeySellPrice: bigint;
   factoryValid: boolean;
   routerAllowed: boolean;
   adapterMarketAllowed: boolean;
@@ -300,8 +302,27 @@ export async function readAlfaClubLiquidityPools(
           functionName: "balanceOf",
           args: [pair, tokenId],
         },
+        {
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getBuyNFTQuote",
+          args: [tokenId, 1n],
+        },
+        {
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getSellNFTQuote",
+          args: [tokenId, 1n],
+        },
       ],
-    }) as Promise<readonly [bigint, bigint]>,
+    }) as Promise<
+      readonly [
+        bigint,
+        bigint,
+        readonly [number, bigint, bigint, bigint, bigint, bigint],
+        readonly [number, bigint, bigint, bigint, bigint, bigint],
+      ]
+    >,
     publicClient
       .readContract({
         address: creatorCoin,
@@ -363,7 +384,11 @@ export async function readAlfaClubLiquidityPools(
     addressesMatch(adapterPermit2, permit2) &&
     addressesMatch(adapterRouter, router) &&
     addressesMatch(routerAdapter, adapter) &&
-    adapterMarketAllowed;
+    adapterMarketAllowed &&
+    Number(balances[2][0]) === 0 &&
+    balances[2][3] > 0n &&
+    Number(balances[3][0]) === 0 &&
+    balances[3][3] > 0n;
 
   return {
     pools: [
@@ -385,6 +410,8 @@ export async function readAlfaClubLiquidityPools(
           typeof decimalsRaw === "number" ? decimalsRaw : Number(decimalsRaw),
         creatorCoinBalance: balances[0],
         keyBalance: balances[1],
+        oneKeyBuyPrice: balances[2][3],
+        oneKeySellPrice: balances[3][3],
         factoryValid,
         routerAllowed,
         adapterMarketAllowed,

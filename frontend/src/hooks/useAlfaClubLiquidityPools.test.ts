@@ -57,6 +57,8 @@ function makePool(
     creatorCoinDecimals: 18,
     creatorCoinBalance: 10_000n,
     keyBalance: 25n,
+    oneKeyBuyPrice: 550n,
+    oneKeySellPrice: 450n,
     factoryValid: true,
     routerAllowed: true,
     adapterMarketAllowed: true,
@@ -171,6 +173,10 @@ describe("AlfaClub official Sudoswap market directory", () => {
                 return getAddress(request.address) === getAddress(CREATOR_COIN)
                   ? 12_000n
                   : 24n;
+              case "getBuyNFTQuote":
+                return [0, 21_000n, 39n, 550n, 1n, 0n] as const;
+              case "getSellNFTQuote":
+                return [0, 19_000n, 41n, 450n, 1n, 0n] as const;
               default:
                 throw new Error(
                   `Unexpected multicall read ${request.functionName}`,
@@ -197,6 +203,8 @@ describe("AlfaClub official Sudoswap market directory", () => {
           delta: 40n,
           creatorCoinBalance: 12_000n,
           keyBalance: 24n,
+          oneKeyBuyPrice: 550n,
+          oneKeySellPrice: 450n,
           routerAllowed: false,
           adapterMarketAllowed: true,
           configurationReady: true,

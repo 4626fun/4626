@@ -181,7 +181,9 @@ describe('inverseOpinionTradeStore', () => {
     })
 
     expect(sql).toHaveBeenCalledTimes(1)
-    const strings = sql.mock.calls[0]?.[0] as TemplateStringsArray
+    const strings = (sql.mock.calls as unknown as Array<[TemplateStringsArray]>)[0]?.[0]
+    expect(strings).toBeDefined()
+    if (!strings) return
     const joined = Array.from(strings).join('?')
     expect(joined).toContain('terminal_outcome = ?::text')
     expect(joined).toContain('reason_code = ?::text')

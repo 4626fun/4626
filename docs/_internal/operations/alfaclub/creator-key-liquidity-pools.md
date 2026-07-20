@@ -243,7 +243,9 @@ still render as unavailable and must not be sponsored.
 The `/swap` Liquidity panel is the supported user-facing management surface. It
 reads the factory-authenticated Room 1659 pair, its owner, actual AKITA and
 FriendKey inventories, virtual XYK reserves, spot price, delta, and fee before
-enabling any write. It supports direct inventory deposits, owner-only
+enabling any write. Readiness also requires successful, positive live one-key
+buy and sell quotes; a pair that exists but cannot quote in both directions is
+shown as unavailable. It supports direct inventory deposits, owner-only
 withdrawals, and owner-only curve/fee changes with an exact call preview.
 Canonical accounts submit the calls through the existing sponsored UserOp lane;
 external EOAs receive the same calls through the direct wallet lane.
@@ -263,9 +265,12 @@ management does not use fake TVL, APR, balances, quotes, or pair addresses.
 Buy and sell previews call the pair quote functions and the XYK curve fee
 breakdown independently. They display direction-specific execution totals,
 effective unit price, price impact, LP fee, protocol/royalty amounts, slippage
-limit, and post-trade virtual reserves. Quote errors, insufficient wallet or
-pool inventory, unsupported configuration, ownership mismatch, and sponsorship
-policy mismatch all disable submission.
+limit, and post-trade virtual reserves. Price impact compares fee-exclusive XYK
+curve amounts so LP, protocol, and royalty fees are not mislabeled as curve
+impact; the effective unit price remains the user's actual after-fee execution
+amount. Quote errors, insufficient wallet or pool inventory, unsupported
+configuration, ownership mismatch, and sponsorship policy mismatch all disable
+submission.
 
 The canonical sender remains the user's parent CSW. The embedded owner signs
 the ERC-4337 operation. The buy path atomically includes any required ERC-20

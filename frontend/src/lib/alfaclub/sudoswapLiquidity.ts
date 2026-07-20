@@ -355,6 +355,19 @@ function slippage(value: bigint, bps: bigint, add: boolean): bigint {
     : (value * (10_000n - bps)) / 10_000n;
 }
 
+function curveAmountBeforeFees(
+  direction: "buy" | "sell",
+  quote: SudoswapQuoteValues,
+): bigint {
+  const fees = quote.tradeFee + quote.protocolFee + quote.royaltyAmount;
+  if (direction === "buy") {
+    if (fees >= quote.amount)
+      throw new Error("sudoswap_quote_fee_breakdown_invalid");
+    return quote.amount - fees;
+  }
+  return quote.amount + fees;
+}
+
 export function deriveSudoswapQuotePreview(params: {
   direction: "buy" | "sell";
   quantity: bigint;
@@ -370,15 +383,23 @@ export function deriveSudoswapQuotePreview(params: {
   positive("one_item_quote_amount", params.oneItemQuote.amount);
   const effectiveUnitPrice = params.quote.amount / params.quantity;
   const marginalUnitPrice = params.oneItemQuote.amount;
+  const curveEffectiveUnitPrice =
+    curveAmountBeforeFees(params.direction, params.quote) / params.quantity;
+  const curveMarginalUnitPrice = curveAmountBeforeFees(
+    params.direction,
+    params.oneItemQuote,
+  );
+  positive("curve_effective_unit_price", curveEffectiveUnitPrice);
+  positive("curve_marginal_unit_price", curveMarginalUnitPrice);
   const priceImpactBps =
     params.direction === "buy"
-      ? effectiveUnitPrice > marginalUnitPrice
-        ? ((effectiveUnitPrice - marginalUnitPrice) * 10_000n) /
-          marginalUnitPrice
+      ? curveEffectiveUnitPrice > curveMarginalUnitPrice
+        ? ((curveEffectiveUnitPrice - curveMarginalUnitPrice) * 10_000n) /
+          curveMarginalUnitPrice
         : 0n
-      : effectiveUnitPrice < marginalUnitPrice
-        ? ((marginalUnitPrice - effectiveUnitPrice) * 10_000n) /
-          marginalUnitPrice
+      : curveEffectiveUnitPrice < curveMarginalUnitPrice
+        ? ((curveMarginalUnitPrice - curveEffectiveUnitPrice) * 10_000n) /
+          curveMarginalUnitPrice
         : 0n;
 
   return {

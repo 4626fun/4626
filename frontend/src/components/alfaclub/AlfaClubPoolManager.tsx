@@ -730,6 +730,14 @@ export function AlfaClubPoolManager() {
                 ["LP fee", `${(Number(pool.feeBps) / 100).toLocaleString()}%`],
                 ["Key inventory", pool.keyBalance.toLocaleString()],
                 [
+                  "Buy 1 key",
+                  `${amount(pool.oneKeyBuyPrice, decimals)} ${pool.creatorCoinSymbol}`,
+                ],
+                [
+                  "Sell 1 key",
+                  `${amount(pool.oneKeySellPrice, decimals)} ${pool.creatorCoinSymbol}`,
+                ],
+                [
                   pool.creatorCoinSymbol,
                   amount(pool.creatorCoinBalance, decimals),
                 ],
