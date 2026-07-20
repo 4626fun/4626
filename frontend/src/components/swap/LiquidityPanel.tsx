@@ -108,6 +108,7 @@ export function LiquidityPanel(props: {
   canonicalAddress: string | null;
   tokenIn: string;
   tokenOut: string;
+  showPanelSwitcher?: boolean;
 }) {
   // Internal LP state and logic (moved here for condensation of main Swap page)
   const [lpBusy, setLpBusy] = useState<string | null>(null);
@@ -275,22 +276,24 @@ export function LiquidityPanel(props: {
     <div className="space-y-4">
       {/* ─── Execution bar (mirrors swap panel) ─── */}
       <div className="flex items-center gap-2">
-        <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
-          {(["swap", "liquidity"] as const).map((panel) => (
-            <button
-              key={panel}
-              type="button"
-              onClick={() => props.onSetActivePanel(panel)}
-              className={`min-h-7 rounded-full px-3 py-1 transition-colors capitalize ${
-                props.activePanel === panel
-                  ? "bg-white/15 text-white font-medium"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {panel}
-            </button>
-          ))}
-        </div>
+        {props.showPanelSwitcher !== false ? (
+          <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
+            {(["swap", "liquidity"] as const).map((panel) => (
+              <button
+                key={panel}
+                type="button"
+                onClick={() => props.onSetActivePanel(panel)}
+                className={`min-h-7 rounded-full px-3 py-1 transition-colors capitalize ${
+                  props.activePanel === panel
+                    ? "bg-white/15 text-white font-medium"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {panel}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="flex-1" />
         <button
           type="button"

@@ -1029,12 +1029,33 @@ export function Swap() {
 
   useScreenshotReady(screenshotReady)
   // ─── Render ───────────────────────────────────────────────────────────────
+  const panelSwitcher = (
+    <div className="mb-3 grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5" aria-label="Swap mode">
+      {([['swap', 'Swap'], ['liquidity', 'Liquidity']] as const).map(([panel, label]) => (
+        <button
+          key={panel}
+          type="button"
+          onClick={() => setActivePanel(panel)}
+          className={`min-h-10 rounded-xl px-3 text-sm font-semibold transition ${
+            activePanel === panel
+              ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/15'
+              : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <>
       <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
       <SwapPageLayout
         swapPanel={
-          activePanel === 'swap' ? (
+          <>
+          {panelSwitcher}
+          {activePanel === 'swap' ? (
             !connectGate.ready ? (
               <div className="relative">
                 <SwapConnectGate
@@ -1171,8 +1192,10 @@ export function Swap() {
               canonicalAddress={canonicalAddress}
               tokenIn={tokenIn}
               tokenOut={tokenOut}
+              showPanelSwitcher={false}
             />
-          )
+          )}
+          </>
         }
         vaultPanel={null}
         title="Swap"

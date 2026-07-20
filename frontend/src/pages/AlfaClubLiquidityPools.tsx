@@ -296,7 +296,7 @@ export function AlfaClubLpWriteConsole(props: {
                   : 'bg-sky-500 text-white hover:bg-sky-400',
               )}
             >
-              {needsSession ? 'Sign in to trade' : 'Continue on waitlist'}
+              {needsSession ? 'Sign in to trade' : 'Open access setup'}
             </a>
           </div>
         </div>
