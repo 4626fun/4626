@@ -7,7 +7,6 @@
 
 import { Agent, createUser, createSigner, filter, getInstallationInfo } from '@xmtp/agent-sdk'
 import type { MessageContext, ConversationContext } from '@xmtp/agent-sdk'
-import type { Intent } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
 import { createHash } from 'node:crypto'
 import { AgentError } from '../../_errors.js'
@@ -27,6 +26,7 @@ import { lookupEnabledAlfaClubRoomChannelBindingByXmtpGroup } from '../../../../
 import { sendAlfaClubRoomText } from '../../../../_lib/alfaclub/chatBridge.js'
 
 const ETHEREUM_IDENTIFIER_KIND = 0
+type XmtpIntentPayload = { actionId?: unknown }
 
 function getEthereumAddressFromInboxState(state: any): string | null {
   const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
@@ -668,7 +668,7 @@ export class XmtpService {
     await this.handleInboundContent(ctx as MessageContext<string>, replyText, 'reply')
   }
 
-  private async handleIntentIncoming(ctx: MessageContext<Intent>): Promise<void> {
+  private async handleIntentIncoming(ctx: MessageContext<XmtpIntentPayload>): Promise<void> {
     const actionId = String(ctx.message.content?.actionId ?? '').trim()
     const command = resolveIntentActionId(actionId)
     if (!command) {
