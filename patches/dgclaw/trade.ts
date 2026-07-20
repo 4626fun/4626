@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -1009,12 +1009,48 @@ function getMasterAddress(): string {
   }
 }
 
+function extractAcpCliError(err: any): string {
+  for (const part of [err?.stdout, err?.stderr, err?.message]) {
+    const text = String(part ?? '').trim()
+    if (!text) continue
+    const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      try {
+        const parsed = JSON.parse(lines[i]!) as { error?: unknown }
+        if (parsed?.error != null) return String(parsed.error)
+      } catch {
+        // keep scanning
+      }
+    }
+  }
+  return String(err?.stderr || err?.message || 'unknown ACP signing error')
+}
+
+function runAcpWalletSignTypedData(typedData: unknown): string {
+  const acp = getAcpBin()
+  const args = ['wallet', 'sign-typed-data', '--data', JSON.stringify(typedData), '--json']
+  const opts = {
+    encoding: 'utf-8' as const,
+    cwd: ACP_DIR,
+    stdio: ['pipe', 'pipe', 'pipe'] as const,
+    env: process.env,
+  }
+  // Prefer execFile (no shell) when ACP_BIN is a single token (production: `acp`).
+  if (!/\s/.test(acp)) {
+    return execFileSync(acp, args, opts)
+  }
+  // Dev checkout path may be `npx tsx /path/bin/acp.ts`.
+  return execSync(
+    `${acp} wallet sign-typed-data --data ${JSON.stringify(JSON.stringify(typedData))} --json`,
+    opts,
+  )
+}
+
 // An ethers-v6-shaped signer the Hyperliquid SDK can use. Instead of holding a
 // private key, every EIP-712 signature is delegated to the ACP CLI, which signs
 // with the agent's managed (master) wallet — same mechanism as withdraw.ts.
 // The SDK detects this as an ethers v6 signer (signTypedData arity 3 + getAddress).
 function makeAcpWallet(masterAddress: string) {
-  const acp = getAcpBin();
   return {
     async getAddress(): Promise<string> {
       return masterAddress;
@@ -1027,16 +1063,19 @@ function makeAcpWallet(masterAddress: string) {
         message,
       };
       try {
-        const result = execSync(
-          `${acp} wallet sign-typed-data --data '${JSON.stringify(typedData)}' --json`,
-          { encoding: 'utf-8', cwd: ACP_DIR, stdio: ['pipe', 'pipe', 'pipe'] },
-        );
+        const result = runAcpWalletSignTypedData(typedData);
         const parsed = JSON.parse(result);
-        return parsed.signature ?? parsed.data?.signature ?? result.trim();
+        const signature = parsed.signature ?? parsed.data?.signature
+        if (typeof signature === 'string' && signature.length > 0) return signature
+        if (parsed?.error) {
+          throw new Error(String(parsed.error))
+        }
+        return result.trim();
       } catch (err: any) {
-        console.error('Failed to sign with ACP CLI. Make sure acp-cli is configured:');
-        console.error('  acp configure && acp agent add-signer');
-        console.error(err.stderr || err.message);
+        const detail = extractAcpCliError(err)
+        console.error(`Failed to sign with ACP CLI: ${detail}`);
+        console.error('Make sure acp-cli is configured: acp configure && acp agent add-signer');
+        if (err?.stderr) console.error(String(err.stderr));
         process.exit(1);
       }
     },

@@ -83,7 +83,9 @@ ARG DGCLAW_SKILL_REPO=https://github.com/Virtual-Protocol/dgclaw-skill.git
 ARG DGCLAW_SKILL_REF=2a8b79728c17c428421f30f5ed545ab5ff4f335c
 ARG ACP_CLI_REPO=https://github.com/Virtual-Protocol/acp-cli.git
 ARG ACP_CLI_REF=24e5affdd71980fd32fff177a7dac3a850c2555c
-ARG ACP_CLI_NPM_VERSION=1.0.25
+# 1.0.26 fixes SSE wallet auth context (`agentAddresses.evm` + signMessage).
+# 1.0.25 crashes sign-typed-data with: Cannot read properties of undefined (reading 'evm').
+ARG ACP_CLI_NPM_VERSION=1.0.26
 ARG VIEM_VERSION=2.45.1
 
 # Copy installed node_modules and package.json
