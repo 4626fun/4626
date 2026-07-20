@@ -536,6 +536,20 @@ async function main() {
       );
       results.push(hookPdas);
 
+      const hookFinalize = await measureStep(
+        connection,
+        payer.publicKey,
+        'path2_hook_finalize_pending_entries',
+        async () => {
+          const sig = await program.methods
+            .finalizePendingEntries()
+            .accounts({ creatorMint: mintKp.publicKey })
+            .rpc();
+          return { signature: sig };
+        },
+      );
+      results.push(hookFinalize);
+
       const extraMeta = await measureStep(
         connection,
         payer.publicKey,

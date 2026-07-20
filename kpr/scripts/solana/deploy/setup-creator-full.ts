@@ -243,6 +243,14 @@ const initSig = await program.methods
 signatures.push(initSig);
 log(`  PDAs initialized (sig: ${initSig})`);
 
+log('Step 2b: Finalizing PendingEntries (10KiB shell → full 12352-byte ring)');
+const finalizeSig = await program.methods
+  .finalizePendingEntries()
+  .accounts({ creatorMint: mintKeypair.publicKey })
+  .rpc();
+signatures.push(finalizeSig);
+log(`  PendingEntries finalized (sig: ${finalizeSig})`);
+
 // ---------------------------------------------------------------------------
 // Step 3: Initialize Extra Account Meta List (required for Transfer Hook)
 // ---------------------------------------------------------------------------

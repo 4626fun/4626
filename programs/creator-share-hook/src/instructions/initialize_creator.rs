@@ -49,15 +49,20 @@ pub struct InitializeCreator<'info> {
     )]
     pub creator_config: Box<Account<'info, CreatorConfig>>,
 
-    /// PendingEntries PDA — initialized here (zero-copy).
+    /// PendingEntries PDA shell — CPI-created at the 10 KiB runtime cap.
+    /// Full layout (`PendingEntries::LEN` = 12_352) requires a follow-up
+    /// `finalize_pending_entries` instruction in the same transaction (or next),
+    /// because a single top-level instruction cannot grow an account from 0 past 10 KiB.
+    ///
+    /// CHECK: Grown and typed by `finalize_pending_entries` before the hook may fire.
     #[account(
         init,
         payer = authority,
-        space = PendingEntries::LEN,
+        space = MAX_CPI_ACCOUNT_DATA_LEN,
         seeds = [PENDING_ENTRIES_SEED, creator_mint.key().as_ref()],
         bump,
     )]
-    pub pending_entries: AccountLoader<'info, PendingEntries>,
+    pub pending_entries: UncheckedAccount<'info>,
 
     /// WinnerRecord PDA — initialized here.
     #[account(
@@ -112,14 +117,12 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
         config.known_amm_programs[i] = *amm;
     }
 
-    // Initialize PendingEntries (zero-copy).
-    let mut entries = ctx.accounts.pending_entries.load_init()?;
-    entries.creator_mint = ctx.accounts.creator_mint.key();
-    entries.head = 0;
-    entries.count = 0;
-    entries.overflow_count = 0;
-    entries.bump = ctx.bumps.pending_entries;
-    entries._padding = [0u8; 7];
+    // PendingEntries remains a zeroed 10 KiB shell until `finalize_pending_entries`.
+    require_eq!(
+        ctx.accounts.pending_entries.data_len(),
+        MAX_CPI_ACCOUNT_DATA_LEN,
+        CreatorShareHookError::PendingEntriesResizeFailed
+    );
 
     // Initialize WinnerRecord.
     let winner = &mut ctx.accounts.winner_record;
@@ -130,4 +133,25 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
     winner.bump = ctx.bumps.winner_record;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod pending_entries_alloc_tests {
+    use super::*;
+
+    #[test]
+    fn pending_entries_requires_two_step_alloc() {
+        assert!(
+            PendingEntries::LEN > MAX_CPI_ACCOUNT_DATA_LEN,
+            "PendingEntries::LEN ({}) should exceed CPI create cap ({})",
+            PendingEntries::LEN,
+            MAX_CPI_ACCOUNT_DATA_LEN
+        );
+        let growth = PendingEntries::LEN - MAX_CPI_ACCOUNT_DATA_LEN;
+        assert!(
+            growth <= MAX_CPI_ACCOUNT_DATA_LEN,
+            "second-ix growth ({growth}) must fit in one resize step"
+        );
+        assert_eq!(PendingEntries::LEN, 12_352);
+    }
 }

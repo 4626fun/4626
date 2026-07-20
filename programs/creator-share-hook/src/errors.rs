@@ -63,4 +63,8 @@ pub enum CreatorShareHookError {
     /// M2-13 — mint is missing TransferFeeConfig extension.
     #[msg("Mint is missing TransferFeeConfig extension")]
     MissingTransferFeeConfig,
+
+    /// PendingEntries is larger than the CPI create cap; grow/realloc failed or was oversized.
+    #[msg("PendingEntries account resize failed")]
+    PendingEntriesResizeFailed,
 }

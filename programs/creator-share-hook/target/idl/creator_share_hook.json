@@ -4,7 +4,7 @@
     "name": "creator_share_hook",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "4626 Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
+    "description": "4626 Transfer Hook for Solana spoke \u2014 buy detection, lottery entry recording, fee harvesting, winner notification"
   },
   "instructions": [
     {
@@ -39,7 +39,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — mutable for updates."
+            "CreatorConfig PDA \u2014 mutable for updates."
           ],
           "writable": true,
           "pda": {
@@ -82,7 +82,8 @@
       "name": "initialize_creator",
       "docs": [
         "Initialize a new creator mint configuration.",
-        "Creates CreatorConfig + PendingEntries PDAs for the given mint."
+        "Creates CreatorConfig + WinnerRecord + a 10 KiB PendingEntries shell.",
+        "Call `finalize_pending_entries` next to grow the ring buffer to full size."
       ],
       "discriminator": [
         29,
@@ -112,7 +113,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — initialized here."
+            "CreatorConfig PDA \u2014 initialized here."
           ],
           "writable": true,
           "pda": {
@@ -146,7 +147,8 @@
         {
           "name": "pending_entries",
           "docs": [
-            "PendingEntries PDA — initialized here (zero-copy)."
+            "PendingEntries PDA shell \u2014 CPI-created at the 10 KiB runtime cap.",
+            "Full layout requires a follow-up `finalize_pending_entries` instruction."
           ],
           "writable": true,
           "pda": {
@@ -181,7 +183,7 @@
         {
           "name": "winner_record",
           "docs": [
-            "WinnerRecord PDA — initialized here."
+            "WinnerRecord PDA \u2014 initialized here."
           ],
           "writable": true,
           "pda": {
@@ -226,6 +228,110 @@
           }
         }
       ]
+    },
+    {
+      "name": "finalize_pending_entries",
+      "docs": [
+        "Grow PendingEntries from the 10 KiB CPI shell to the full 12_352-byte",
+        "zero-copy layout and initialize the ring buffer. Bundle immediately",
+        "after `initialize_creator` in the same transaction."
+      ],
+      "discriminator": [
+        255,
+        110,
+        203,
+        177,
+        152,
+        223,
+        220,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Config / mint authority (payer for any additional rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "Must match CreatorConfig.creator_mint."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_entries",
+          "writable": true,
+          "docs": [
+            "PDA shell from initialize_creator; resized and typed here."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize_extra_account_meta_list",
@@ -300,7 +406,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — must already exist (passed as extra account)."
+            "CreatorConfig PDA \u2014 must already exist (passed as extra account)."
           ],
           "pda": {
             "seeds": [
@@ -333,7 +439,7 @@
         {
           "name": "pending_entries",
           "docs": [
-            "PendingEntries PDA — must already exist (passed as extra account)."
+            "PendingEntries PDA \u2014 must already exist (passed as extra account)."
           ],
           "pda": {
             "seeds": [
@@ -402,7 +508,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
+            "CreatorConfig PDA \u2014 used to verify keeper authority."
           ],
           "pda": {
             "seeds": [
@@ -441,7 +547,7 @@
         {
           "name": "winner_record",
           "docs": [
-            "WinnerRecord PDA — mutable to update with latest winner (display)."
+            "WinnerRecord PDA \u2014 mutable to update with latest winner (display)."
           ],
           "writable": true,
           "pda": {
@@ -474,7 +580,7 @@
         {
           "name": "win_id_record",
           "docs": [
-            "M2-12 — one-shot PDA keyed by win_id. Init fails if the win was already recorded."
+            "M2-12 \u2014 one-shot PDA keyed by win_id. Init fails if the win was already recorded."
           ],
           "writable": true,
           "pda": {
@@ -553,7 +659,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
+            "CreatorConfig PDA \u2014 used to verify keeper authority."
           ],
           "pda": {
             "seeds": [
@@ -592,7 +698,7 @@
         {
           "name": "pending_entries",
           "docs": [
-            "PendingEntries PDA — zero-copy, mutable to emit + clear entries."
+            "PendingEntries PDA \u2014 zero-copy, mutable to emit + clear entries."
           ],
           "writable": true,
           "pda": {
@@ -659,7 +765,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — mutable for updates."
+            "CreatorConfig PDA \u2014 mutable for updates."
           ],
           "writable": true,
           "pda": {
@@ -730,7 +836,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — mutable for updates."
+            "CreatorConfig PDA \u2014 mutable for updates."
           ],
           "writable": true,
           "pda": {
@@ -796,7 +902,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — used to verify keeper authority + threshold."
+            "CreatorConfig PDA \u2014 used to verify keeper authority + threshold."
           ],
           "pda": {
             "seeds": [
@@ -854,7 +960,7 @@
     {
       "name": "transfer_hook",
       "docs": [
-        "Transfer Hook execute — named with Anchor discriminator.",
+        "Transfer Hook execute \u2014 named with Anchor discriminator.",
         "Also reachable via the SPL fallback below."
       ],
       "discriminator": [
@@ -933,7 +1039,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — read-only for AMM detection."
+            "CreatorConfig PDA \u2014 read-only for AMM detection."
           ],
           "pda": {
             "seeds": [
@@ -966,7 +1072,7 @@
         {
           "name": "pending_entries",
           "docs": [
-            "PendingEntries PDA — zero-copy, writable to record buy entries."
+            "PendingEntries PDA \u2014 zero-copy, writable to record buy entries."
           ],
           "writable": true,
           "pda": {
@@ -1038,7 +1144,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — mutable for updates."
+            "CreatorConfig PDA \u2014 mutable for updates."
           ],
           "writable": true,
           "pda": {
@@ -1255,7 +1361,7 @@
     {
       "code": 6007,
       "name": "InvalidMint",
-      "msg": "Invalid mint — does not match config"
+      "msg": "Invalid mint \u2014 does not match config"
     },
     {
       "code": 6008,
@@ -1265,7 +1371,7 @@
     {
       "code": 6009,
       "name": "InvalidFeeBps",
-      "msg": "Invalid fee BPS — must be <= 10000"
+      "msg": "Invalid fee BPS \u2014 must be <= 10000"
     },
     {
       "code": 6010,
@@ -1285,17 +1391,17 @@
     {
       "code": 6013,
       "name": "TransferNotInProgress",
-      "msg": "No Token-2022 transfer in progress — hook invoked outside a real transfer"
+      "msg": "No Token-2022 transfer in progress \u2014 hook invoked outside a real transfer"
     },
     {
       "code": 6014,
       "name": "InvalidWinId",
-      "msg": "Invalid win_id — zero win_id is not allowed"
+      "msg": "Invalid win_id \u2014 zero win_id is not allowed"
     },
     {
       "code": 6015,
       "name": "DuplicateWinId",
-      "msg": "Duplicate win_id — this Base win was already recorded"
+      "msg": "Duplicate win_id \u2014 this Base win was already recorded"
     },
     {
       "code": 6016,
@@ -1344,7 +1450,7 @@
           {
             "name": "keeper_authority",
             "docs": [
-              "Authorized keeper pubkey — the only signer allowed to call",
+              "Authorized keeper pubkey \u2014 the only signer allowed to call",
               "`settle_fees`, `relay_entries`, and `record_winner`."
             ],
             "type": "pubkey"
@@ -1376,7 +1482,7 @@
           {
             "name": "fee_bps",
             "docs": [
-              "Fee in basis points (informational — actual fee is enforced by",
+              "Fee in basis points (informational \u2014 actual fee is enforced by",
               "TransferFeeConfig on the mint, not by this program)."
             ],
             "type": "u16"
@@ -1694,7 +1800,7 @@
           {
             "name": "head",
             "docs": [
-              "Write pointer — next slot to write into."
+              "Write pointer \u2014 next slot to write into."
             ],
             "type": "u32"
           },
@@ -1901,7 +2007,7 @@
           {
             "name": "win_id",
             "docs": [
-              "M2-12 — Base-side win identity bound to this record."
+              "M2-12 \u2014 Base-side win identity bound to this record."
             ],
             "type": {
               "array": [

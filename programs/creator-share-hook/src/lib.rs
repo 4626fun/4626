@@ -15,12 +15,20 @@ pub mod creator_share_hook {
     use super::*;
 
     /// Initialize a new creator mint configuration.
-    /// Creates CreatorConfig + PendingEntries PDAs for the given mint.
+    /// Creates CreatorConfig + WinnerRecord + a 10 KiB PendingEntries shell.
+    /// Call `finalize_pending_entries` next to grow the ring buffer to full size.
     pub fn initialize_creator(
         ctx: Context<InitializeCreator>,
         params: InitializeCreatorParams,
     ) -> Result<()> {
         instructions::initialize_creator::handler(ctx, params)
+    }
+
+    /// Grow PendingEntries from the 10 KiB CPI shell to the full 12_352-byte
+    /// zero-copy layout and initialize the ring buffer. Bundle immediately
+    /// after `initialize_creator` in the same transaction.
+    pub fn finalize_pending_entries(ctx: Context<FinalizePendingEntries>) -> Result<()> {
+        instructions::finalize_pending_entries::handler(ctx)
     }
 
     /// Initialize the extra account meta list required by the Transfer Hook interface.

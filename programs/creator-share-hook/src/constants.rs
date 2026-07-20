@@ -24,3 +24,9 @@ pub const MAX_AMM_PROGRAMS: usize = 8;
 /// Default settlement threshold in token units (smallest denomination).
 /// Fees below this threshold are accumulated until the next settlement.
 pub const DEFAULT_SETTLEMENT_THRESHOLD: u64 = 0;
+
+/// Solana runtime cap for account data created or grown via CPI in one step (10 KiB).
+/// `PendingEntries::LEN` exceeds this, so `initialize_creator` CPI-creates at this
+/// size; `finalize_pending_entries` grows to the full ring-buffer length in a
+/// second top-level instruction.
+pub const MAX_CPI_ACCOUNT_DATA_LEN: usize = 10 * 1024;

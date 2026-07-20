@@ -67,6 +67,10 @@ impl PendingEntries {
     /// Account discriminator (8) + fields.
     /// 32 + 4 + 4 + 8 + 1 + 7(padding) + (48 * 256) = 32 + 4 + 4 + 8 + 1 + 7 + 12288 = 12344
     /// Total with discriminator: 8 + 12344 = 12352
+    ///
+    /// Exceeds Solana's 10 KiB CPI `create_account` cap — `initialize_creator`
+    /// CPI-creates at `MAX_CPI_ACCOUNT_DATA_LEN`; `finalize_pending_entries`
+    /// then resizes to this LEN in a second top-level instruction.
     pub const LEN: usize =
         8 + 32 + 4 + 4 + 8 + 1 + 7 + (LotteryEntry::LEN * MAX_PENDING_ENTRIES);
 

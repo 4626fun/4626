@@ -86,8 +86,14 @@ const sig = await program.methods
   .accounts({ creatorMint })
   .rpc();
 
+const finalizeSig = await program.methods
+  .finalizePendingEntries()
+  .accounts({ creatorMint })
+  .rpc();
+
 console.log('Creator PDAs initialized!');
 console.log('  Signature:', sig);
+console.log('  Finalize PendingEntries:', finalizeSig);
 console.log();
 console.log('Next steps:');
 console.log('  1. Initialize extra account meta list: anchor test (or manual ix)');
