@@ -102,4 +102,22 @@ describe('Swap chrome', () => {
     expect(html).toContain('Swap')
     expect(html).not.toContain('1-Click Swaps on Base')
   })
+
+  it('supports a wide liquidity canvas without widening the default swap card', () => {
+    const compactHtml = renderToStaticMarkup(
+      React.createElement(SwapPageLayout, {
+        swapPanel: React.createElement('div', null, 'swap panel'),
+      }),
+    )
+    const wideHtml = renderToStaticMarkup(
+      React.createElement(SwapPageLayout, {
+        panelWidth: 'wide',
+        swapPanel: React.createElement('div', null, 'liquidity panel'),
+      }),
+    )
+
+    expect(compactHtml).toContain('max-w-[430px]')
+    expect(wideHtml).toContain('max-w-[1180px]')
+    expect(wideHtml).toContain('min-w-0')
+  })
 })

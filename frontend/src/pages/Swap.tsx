@@ -1052,6 +1052,7 @@ export function Swap() {
     <>
       <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
       <SwapPageLayout
+        panelWidth={activePanel === 'liquidity' ? 'wide' : 'compact'}
         swapPanel={
           <>
           {panelSwitcher}
