@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_option::COption;
-use anchor_lang::solana_program::program_pack::Pack;
 use anchor_spl::token_2022;
-use anchor_spl::token_2022::spl_token_2022::state::Mint as Token2022Mint;
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::StateWithExtensions,
+    state::Mint as SplMint,
+};
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -79,9 +81,12 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
     }
 
     // Only the Token-2022 mint authority can initialize creator config for this mint.
+    // Extended mints (TransferFee / TransferHook) must use StateWithExtensions — plain
+    // Pack::unpack rejects accounts larger than the base mint layout.
     let mint_data = ctx.accounts.creator_mint.try_borrow_data()?;
-    let mint_state = Token2022Mint::unpack(&mint_data).map_err(|_| error!(CreatorShareHookError::InvalidMint))?;
-    let mint_authority = match mint_state.mint_authority {
+    let mint_state = StateWithExtensions::<SplMint>::unpack(&mint_data)
+        .map_err(|_| error!(CreatorShareHookError::InvalidMint))?;
+    let mint_authority = match mint_state.base.mint_authority {
         COption::Some(authority) => authority,
         COption::None => return err!(CreatorShareHookError::UnauthorizedAuthority),
     };
