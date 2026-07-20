@@ -4,6 +4,10 @@ import { existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { HttpTransport, ExchangeClient, InfoClient } from '@nktkas/hyperliquid';
+import {
+  formatPrice as hlFormatPrice,
+  formatSize as hlFormatSize,
+} from '@nktkas/hyperliquid/utils';
 
 // ---- Config ----
 
@@ -387,13 +391,17 @@ async function readOpenOrders(
   return dex ? info.openOrders({ user, dex }) : info.openOrders({ user })
 }
 
-function formatPrice(price: number, significantFigures: number = 5): string {
-  return price.toPrecision(significantFigures);
+/**
+ * Hyperliquid tick rules (perp): max 5 sig figs AND max (6 - szDecimals)
+ * decimal places. Naive toPrecision(5) rejects low-priced coins like ACE
+ * (szDecimals=2 → max 4 decimals) with "Order has invalid price".
+ */
+function formatPrice(price: number, szDecimals: number): string {
+  return hlFormatPrice(price, szDecimals, 'perp')
 }
 
 function formatSize(usdSize: number, price: number, szDecimals: number): string {
-  const rawSize = usdSize / price;
-  return rawSize.toFixed(szDecimals);
+  return hlFormatSize(usdSize / price, szDecimals)
 }
 
 function assertOrderAccepted(result: any, context: string): void {
@@ -465,12 +473,12 @@ async function openPosition(
   let tif: 'Ioc' | 'Gtc';
 
   if (args.orderType === 'limit' && args.limitPrice) {
-    orderPrice = args.limitPrice;
+    orderPrice = formatPrice(parseFloat(args.limitPrice), meta.szDecimals);
     tif = 'Gtc';
   } else {
     // Market order: use IoC with 1% slippage buffer
     const slippage = isBuy ? 1.01 : 0.99;
-    orderPrice = formatPrice(midPrice * slippage);
+    orderPrice = formatPrice(midPrice * slippage, meta.szDecimals);
     tif = 'Ioc';
   }
 
@@ -592,7 +600,7 @@ async function closePosition(
   // Market close with 1% slippage
   const midPrice = await getMidPrice(info, coin, dex);
   const slippage = isBuy ? 1.01 : 0.99;
-  const orderPrice = formatPrice(midPrice * slippage);
+  const orderPrice = formatPrice(midPrice * slippage, meta.szDecimals);
 
   // Optional partial close: --size <usd> reduces the position by that USD
   // notional (reduce-only). Falls back to a full close when the requested
