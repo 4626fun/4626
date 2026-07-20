@@ -1,7 +1,7 @@
 import { Check, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
 import { erc20Abi, isAddress, type Address } from 'viem'
 
@@ -17,6 +17,10 @@ import {
   fetchSwapAssetBalanceViaApi,
   swapAssetBalanceQueryKey,
 } from '@/lib/swap/useSwapAssetBalance'
+import {
+  fetchAlfaClubRoomsForTokenModal,
+  resolveAlfaClubRoomTokens,
+} from '@/lib/swap/alfaclubRoomTokens'
 import { formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
@@ -32,6 +36,8 @@ export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content' | 'trend'
   verified?: boolean
   isUserHolding?: boolean
+  /** Present when this creator coin is surfaced from an AlfaClub room pin/match. */
+  alfaclubRoomId?: string
 }
 
 type AddressMetadataCacheEntry = {
@@ -145,6 +151,8 @@ function formatSectionLabel(section: string): string {
       return 'Popular tokens'
     case 'Your holdings':
       return 'Your holdings'
+    case 'AlfaClub rooms':
+      return 'AlfaClub rooms'
     case 'Creator coins':
       return 'Creator coins'
     case 'Content coins':
@@ -246,7 +254,11 @@ function TokenSelectorRow(props: {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-[15px] font-semibold text-white">{option.symbol}</span>
-          {option.sectionTag === 'creator' ? (
+          {option.alfaclubRoomId ? (
+            <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-200">
+              Room {option.alfaclubRoomId}
+            </span>
+          ) : option.sectionTag === 'creator' ? (
             <span className="shrink-0 rounded-md bg-brand-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-200">
               Creator
             </span>
@@ -370,6 +382,22 @@ export function TokenSelectorModal({
           (order.get(b.symbol.trim().toUpperCase() as (typeof QUICK_PICK_SYMBOLS)[number]) ?? 99),
       )
   }, [matchedTokens.core, trimmedQuery])
+
+  const alfaclubRoomsQuery = useQuery({
+    queryKey: ['swap', 'token-selector', 'alfaclub-rooms'],
+    enabled: open && chainIdForLookup === BASE_CHAIN_ID,
+    staleTime: 60_000,
+    queryFn: ({ signal }) => fetchAlfaClubRoomsForTokenModal(signal),
+  })
+
+  const alfaclubRoomTokens = useMemo(() => {
+    // Mirror quick-pick behavior: hide curated room chips/section while searching.
+    if (trimmedQuery || chainIdForLookup !== BASE_CHAIN_ID) return []
+    return resolveAlfaClubRoomTokens({
+      tokenOptions,
+      rooms: alfaclubRoomsQuery.data ?? [],
+    })
+  }, [alfaclubRoomsQuery.data, chainIdForLookup, tokenOptions, trimmedQuery])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -534,6 +562,15 @@ export function TokenSelectorModal({
       list.push({ option, section: 'Your holdings' })
     })
 
+    // AlfaClub room creator coins sit just under holdings so common room markets
+    // stay one tap away from the quick-pick chips above the list.
+    alfaclubRoomTokens.forEach((option) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      list.push({ option, section: 'AlfaClub rooms' })
+    })
+
     if (!trimmedQuery) {
       resolveTrendingTokens(tokenOptions)
         .filter((option) => !option.isUserHolding) // keep user's Zora CSW holdings out of Trending so they can appear in the dedicated holdings section
@@ -567,7 +604,15 @@ export function TokenSelectorModal({
       pushUnlessSeen(option, 'Content coins')
     })
     return list
-  }, [addressCandidate, chainIdForLookup, isAddressSearchActive, matchedTokens, tokenOptions, trimmedQuery])
+  }, [
+    addressCandidate,
+    alfaclubRoomTokens,
+    chainIdForLookup,
+    isAddressSearchActive,
+    matchedTokens,
+    tokenOptions,
+    trimmedQuery,
+  ])
 
   const visibleRows = useMemo(() => rows, [rows])
 
@@ -595,10 +640,18 @@ export function TokenSelectorModal({
       addresses.push(value)
     }
     resolveTrendingTokens(tokenOptions).forEach((option) => push(option.address))
+    alfaclubRoomTokens.forEach((option) => push(option.address))
     quickPickTokens.forEach((option) => push(option.address))
     visibleRows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
     return addresses.slice(0, MAX_BALANCE_LOOKUPS)
-  }, [balanceOwnerAddress, chainIdForLookup, quickPickTokens, visibleRows, tokenOptions])
+  }, [
+    alfaclubRoomTokens,
+    balanceOwnerAddress,
+    chainIdForLookup,
+    quickPickTokens,
+    visibleRows,
+    tokenOptions,
+  ])
 
   const balanceQueries = useQueries({
     queries: balanceLookupAddresses.map((tokenAddress) => ({
@@ -789,26 +842,70 @@ export function TokenSelectorModal({
             <NetworkChip chainId={chainIdForLookup} />
           </div>
 
+          {alfaclubRoomTokens.length > 0 ? (
+            <div className="mt-3">
+              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                AlfaClub rooms
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {alfaclubRoomTokens.map((option) => (
+                  <button
+                    key={`alfaclub-room-${option.alfaclubRoomId ?? option.address}`}
+                    type="button"
+                    onClick={() => choose(option)}
+                    className="flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-2xl border border-sky-400/20 bg-sky-500/[0.06] px-2.5 py-2 transition hover:border-sky-300/35 hover:bg-sky-500/[0.1]"
+                  >
+                    <div className="relative">
+                      <TokenAvatar
+                        token={{
+                          address: option.address,
+                          logoUrl: option.logoUrl,
+                          logoUrls: option.logoUrls,
+                        }}
+                        symbol={option.symbol}
+                        size={28}
+                        noFallback
+                      />
+                    </div>
+                    <span className="text-[11px] font-semibold text-zinc-100">
+                      {option.symbol}
+                    </span>
+                    {option.alfaclubRoomId ? (
+                      <span className="text-[9px] font-medium text-sky-200/80">
+                        #{option.alfaclubRoomId}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {quickPickTokens.length > 0 ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {quickPickTokens.map((option) => (
-                <button
-                  key={option.address}
-                  type="button"
-                  onClick={() => choose(option)}
-                  className="flex min-w-[4.25rem] flex-col items-center gap-1.5 rounded-2xl border border-white/8 bg-white/[0.03] px-2.5 py-2 transition hover:border-white/14 hover:bg-white/[0.06]"
-                >
-                  <div className="relative">
-                    <TokenAvatar
-                      token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
-                      symbol={option.symbol}
-                      size={28}
-                      noFallback
-                    />
-                  </div>
-                  <span className="text-[11px] font-semibold text-zinc-200">{option.symbol}</span>
-                </button>
-              ))}
+            <div className="mt-3">
+              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                Common tokens
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {quickPickTokens.map((option) => (
+                  <button
+                    key={option.address}
+                    type="button"
+                    onClick={() => choose(option)}
+                    className="flex min-w-[4.25rem] flex-col items-center gap-1.5 rounded-2xl border border-white/8 bg-white/[0.03] px-2.5 py-2 transition hover:border-white/14 hover:bg-white/[0.06]"
+                  >
+                    <div className="relative">
+                      <TokenAvatar
+                        token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
+                        symbol={option.symbol}
+                        size={28}
+                        noFallback
+                      />
+                    </div>
+                    <span className="text-[11px] font-semibold text-zinc-200">{option.symbol}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
 
