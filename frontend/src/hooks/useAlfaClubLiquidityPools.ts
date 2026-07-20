@@ -33,6 +33,7 @@ type AlfaClubMarketReadClient = Pick<
 
 export type AlfaClubLiquidityPoolSummary = {
   pool: Address;
+  owner: Address;
   creatorCoin: Address;
   tokenId: bigint;
   feeBps: number;
@@ -146,6 +147,11 @@ export async function readAlfaClubLiquidityPools(
       {
         address: pair,
         abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+        functionName: "owner",
+      },
+      {
+        address: pair,
+        abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
         functionName: "factory",
       },
       {
@@ -244,25 +250,26 @@ export async function readAlfaClubLiquidityPools(
     ],
   })) as unknown[];
 
-  const pairFactory = coreReads[0];
-  const pairVariant = toNullableNumber(coreReads[1]);
-  const poolType = toNullableNumber(coreReads[2]);
-  const creatorCoin = getAddress(coreReads[3] as Address) as Address;
-  const nft = coreReads[4];
-  const tokenId = coreReads[5] as bigint;
-  const bondingCurve = coreReads[6];
-  const fee = coreReads[7] as bigint;
-  const spotPrice = coreReads[8] as bigint;
-  const delta = coreReads[9] as bigint;
-  const factoryValid = coreReads[10] === true;
-  const routerStatus = coreReads[11] as readonly [boolean, boolean];
-  const adapterFactory = coreReads[12];
-  const adapterFriendKey = coreReads[13];
-  const adapterCurve = coreReads[14];
-  const adapterPermit2 = coreReads[15];
-  const adapterRouter = coreReads[16];
-  const routerAdapter = coreReads[17];
-  const adapterMarket = coreReads[18] as readonly [Address, bigint, boolean];
+  const owner = getAddress(coreReads[0] as Address) as Address;
+  const pairFactory = coreReads[1];
+  const pairVariant = toNullableNumber(coreReads[2]);
+  const poolType = toNullableNumber(coreReads[3]);
+  const creatorCoin = getAddress(coreReads[4] as Address) as Address;
+  const nft = coreReads[5];
+  const tokenId = coreReads[6] as bigint;
+  const bondingCurve = coreReads[7];
+  const fee = coreReads[8] as bigint;
+  const spotPrice = coreReads[9] as bigint;
+  const delta = coreReads[10] as bigint;
+  const factoryValid = coreReads[11] === true;
+  const routerStatus = coreReads[12] as readonly [boolean, boolean];
+  const adapterFactory = coreReads[13];
+  const adapterFriendKey = coreReads[14];
+  const adapterCurve = coreReads[15];
+  const adapterPermit2 = coreReads[16];
+  const adapterRouter = coreReads[17];
+  const routerAdapter = coreReads[18];
+  const adapterMarket = coreReads[19] as readonly [Address, bigint, boolean];
   const routerAllowed = routerStatus[0] === true;
   const adapterMarketAllowed =
     adapterMarket[2] === true &&
@@ -362,6 +369,7 @@ export async function readAlfaClubLiquidityPools(
     pools: [
       {
         pool: pair,
+        owner,
         creatorCoin,
         tokenId,
         feeBps: feeToBps(fee),

@@ -19,9 +19,7 @@ const MSG_SENDER_RECIPIENT =
 const CANONICAL_PERMIT2 = getAddress(
   "0x000000000022D473030F116dDEE9F6B43aC78BA3",
 );
-const BASE_WETH = getAddress(
-  "0x4200000000000000000000000000000000000006",
-);
+const BASE_WETH = getAddress("0x4200000000000000000000000000000000000006");
 const ZORA_BASE_UNIVERSAL_ROUTER = getAddress(
   "0x6ff5693b99212da76ad316178a184ab56d299b43",
 );
@@ -39,13 +37,16 @@ export const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n;
 
 const ERC20_ABI = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address recipient, uint256 amount) returns (bool)",
   "function balanceOf(address account) view returns (uint256)",
 ]);
 const ERC1155_ABI = parseAbi([
   "function setApprovalForAll(address operator, bool approved)",
+  "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data)",
   "function balanceOf(address account, uint256 id) view returns (uint256)",
 ]);
 const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
+  "function owner() view returns (address)",
   "function factory() view returns (address)",
   "function pairVariant() pure returns (uint8)",
   "function poolType() view returns (uint8)",
@@ -54,6 +55,11 @@ const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
   "function nftId() pure returns (uint256)",
   "function bondingCurve() view returns (address)",
   "function fee() view returns (uint96)",
+  "function changeSpotPrice(uint128 newSpotPrice)",
+  "function changeDelta(uint128 newDelta)",
+  "function changeFee(uint96 newFee)",
+  "function withdrawERC20(address token, uint256 amount)",
+  "function withdrawERC1155(address token, uint256[] ids, uint256[] amounts)",
   "function getBuyNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 inputAmount, uint256 protocolFee, uint256 royaltyAmount)",
   "function getSellNFTQuote(uint256 assetId, uint256 numItems) view returns (uint8 errorCode, uint256 newSpotPrice, uint256 newDelta, uint256 outputAmount, uint256 protocolFee, uint256 royaltyAmount)",
 ]);
@@ -90,6 +96,31 @@ const PERMIT2_APPROVE_SELECTOR = toFunctionSelector(
 const SET_APPROVAL_FOR_ALL_SELECTOR = toFunctionSelector(
   "setApprovalForAll(address,bool)",
 );
+const TRANSFER_SELECTOR = toFunctionSelector("transfer(address,uint256)");
+const SAFE_TRANSFER_FROM_ERC1155_SELECTOR = toFunctionSelector(
+  "safeTransferFrom(address,address,uint256,uint256,bytes)",
+);
+const CHANGE_SPOT_PRICE_SELECTOR = toFunctionSelector(
+  "changeSpotPrice(uint128)",
+);
+const CHANGE_DELTA_SELECTOR = toFunctionSelector("changeDelta(uint128)");
+const CHANGE_FEE_SELECTOR = toFunctionSelector("changeFee(uint96)");
+const WITHDRAW_ERC20_SELECTOR = toFunctionSelector(
+  "withdrawERC20(address,uint256)",
+);
+const WITHDRAW_ERC1155_SELECTOR = toFunctionSelector(
+  "withdrawERC1155(address,uint256[],uint256[])",
+);
+
+const MANAGEMENT_SELECTORS = new Set<Hex>([
+  TRANSFER_SELECTOR,
+  SAFE_TRANSFER_FROM_ERC1155_SELECTOR,
+  CHANGE_SPOT_PRICE_SELECTOR,
+  CHANGE_DELTA_SELECTOR,
+  CHANGE_FEE_SELECTOR,
+  WITHDRAW_ERC20_SELECTOR,
+  WITHDRAW_ERC1155_SELECTOR,
+]);
 
 function decodeAlfaClubSudoswapInput(input: Hex): {
   pair: Address;
@@ -150,7 +181,8 @@ function splitCanonicalEthFundingCalls(
 ): AlfaClubLpInnerCall[] | null {
   const firstWethDeposit = calls.findIndex(
     (call) =>
-      call.target === BASE_WETH && selector(call.data) === WETH_DEPOSIT_SELECTOR,
+      call.target === BASE_WETH &&
+      selector(call.data) === WETH_DEPOSIT_SELECTOR,
   );
   if (firstWethDeposit === -1) return null;
   if (firstWethDeposit !== 0 || calls.length < 4) {
@@ -198,7 +230,9 @@ function splitCanonicalEthFundingCalls(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    throw new Error(`alfaclub_sudoswap_eth_funding_commands_invalid:${message}`);
+    throw new Error(
+      `alfaclub_sudoswap_eth_funding_commands_invalid:${message}`,
+    );
   }
 
   return calls.slice(3);
@@ -634,6 +668,319 @@ async function validateLiveMarket(params: {
   return { quoteAmount, protocolFee, royaltyAmount };
 }
 
+async function validateManagementPairIdentity(params: {
+  client: ReadClient;
+  config: AlfaClubLpPolicyConfig;
+}): Promise<Address> {
+  const [
+    validPair,
+    owner,
+    factory,
+    variant,
+    poolType,
+    token,
+    nft,
+    tokenId,
+    curve,
+    fee,
+  ] = await Promise.all([
+    params.client.readContract({
+      address: params.config.factory,
+      abi: SUDOSWAP_PAIR_FACTORY_ABI,
+      functionName: "isValidPair",
+      args: [params.config.pair],
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "owner",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "factory",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "pairVariant",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "poolType",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "token",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "nft",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "nftId",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "bondingCurve",
+    }),
+    params.client.readContract({
+      address: params.config.pair,
+      abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+      functionName: "fee",
+    }),
+  ]);
+
+  if (validPair !== true) throw new Error("alfaclub_sudoswap_pair_invalid");
+  if (
+    addressResult(factory, "alfaclub_sudoswap_pair_factory_unavailable") !==
+    params.config.factory
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_factory_mismatch");
+  }
+  if (
+    integerResult(variant, "alfaclub_sudoswap_pair_variant_unavailable") !== 3n
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_variant_mismatch");
+  }
+  if (
+    integerResult(poolType, "alfaclub_sudoswap_pool_type_unavailable") !== 2n
+  ) {
+    throw new Error("alfaclub_sudoswap_pool_type_mismatch");
+  }
+  if (
+    addressResult(token, "alfaclub_sudoswap_pair_token_unavailable") !==
+    params.config.creatorCoin
+  ) {
+    throw new Error("alfaclub_sudoswap_creator_coin_mismatch");
+  }
+  if (
+    addressResult(nft, "alfaclub_sudoswap_pair_nft_unavailable") !==
+    ALFACLUB_FRIEND_KEY
+  ) {
+    throw new Error("alfaclub_sudoswap_friend_key_mismatch");
+  }
+  if (
+    integerResult(tokenId, "alfaclub_sudoswap_pair_token_id_unavailable") !==
+    params.config.tokenId
+  ) {
+    throw new Error("alfaclub_sudoswap_token_id_mismatch");
+  }
+  if (
+    addressResult(curve, "alfaclub_sudoswap_pair_curve_unavailable") !==
+    params.config.xykCurve
+  ) {
+    throw new Error("alfaclub_sudoswap_curve_mismatch");
+  }
+  if (
+    integerResult(fee, "alfaclub_sudoswap_pair_fee_unavailable") !==
+    ROOM_1659_TRADING_PAIR_FEE
+  ) {
+    throw new Error("alfaclub_sudoswap_pair_fee_mismatch");
+  }
+  return addressResult(owner, "alfaclub_sudoswap_pair_owner_unavailable");
+}
+
+async function validateAlfaClubLiquidityManagementCalls(params: {
+  calls: AlfaClubLpInnerCall[];
+  sender: Address;
+  client: ReadClient;
+  config: AlfaClubLpPolicyConfig;
+}): Promise<AlfaClubLpPolicyResult> {
+  if (params.calls.length === 0 || params.calls.length > 3) {
+    throw new Error("alfaclub_sudoswap_management_call_count_not_allowed");
+  }
+  if (params.calls.some((call) => call.value !== 0n)) {
+    throw new Error("alfaclub_sudoswap_management_value_not_allowed");
+  }
+  const owner = await validateManagementPairIdentity({
+    client: params.client,
+    config: params.config,
+  });
+  const selectors = params.calls.map((call) => selector(call.data));
+  const isDeposit = selectors.every(
+    (value) =>
+      value === TRANSFER_SELECTOR ||
+      value === SAFE_TRANSFER_FROM_ERC1155_SELECTOR,
+  );
+
+  if (isDeposit) {
+    if (new Set(selectors).size !== selectors.length) {
+      throw new Error("alfaclub_sudoswap_deposit_selector_duplicate");
+    }
+    for (const call of params.calls) {
+      if (selector(call.data) === TRANSFER_SELECTOR) {
+        if (call.target !== params.config.creatorCoin) {
+          throw new Error("alfaclub_sudoswap_deposit_token_mismatch");
+        }
+        const decoded = decodeFunctionData({ abi: ERC20_ABI, data: call.data });
+        if (
+          decoded.functionName !== "transfer" ||
+          getAddress(decoded.args[0]) !== params.config.pair ||
+          decoded.args[1] <= 0n
+        ) {
+          throw new Error("alfaclub_sudoswap_deposit_erc20_invalid");
+        }
+        const balance = integerResult(
+          await params.client.readContract({
+            address: params.config.creatorCoin,
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [params.sender],
+          }),
+          "alfaclub_sudoswap_deposit_balance_unavailable",
+        );
+        if (decoded.args[1] > balance)
+          throw new Error("alfaclub_sudoswap_deposit_balance_insufficient");
+        continue;
+      }
+      if (call.target !== ALFACLUB_FRIEND_KEY) {
+        throw new Error("alfaclub_sudoswap_deposit_friend_key_mismatch");
+      }
+      const decoded = decodeFunctionData({ abi: ERC1155_ABI, data: call.data });
+      if (
+        decoded.functionName !== "safeTransferFrom" ||
+        getAddress(decoded.args[0]) !== params.sender ||
+        getAddress(decoded.args[1]) !== params.config.pair ||
+        decoded.args[2] !== params.config.tokenId ||
+        decoded.args[3] <= 0n ||
+        decoded.args[4] !== "0x"
+      ) {
+        throw new Error("alfaclub_sudoswap_deposit_erc1155_invalid");
+      }
+      const balance = integerResult(
+        await params.client.readContract({
+          address: ALFACLUB_FRIEND_KEY,
+          abi: ERC1155_ABI,
+          functionName: "balanceOf",
+          args: [params.sender, params.config.tokenId],
+        }),
+        "alfaclub_sudoswap_deposit_key_balance_unavailable",
+      );
+      if (decoded.args[3] > balance)
+        throw new Error("alfaclub_sudoswap_deposit_key_balance_insufficient");
+    }
+  } else {
+    if (owner !== params.sender)
+      throw new Error("alfaclub_sudoswap_pair_owner_mismatch");
+    if (params.calls.some((call) => call.target !== params.config.pair)) {
+      throw new Error("alfaclub_sudoswap_management_target_mismatch");
+    }
+    if (new Set(selectors).size !== selectors.length) {
+      throw new Error("alfaclub_sudoswap_management_selector_duplicate");
+    }
+    for (const call of params.calls) {
+      const callSelector = selector(call.data);
+      if (callSelector === CHANGE_SPOT_PRICE_SELECTOR) {
+        const decoded = decodeFunctionData({
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          data: call.data,
+        });
+        if (
+          decoded.functionName !== "changeSpotPrice" ||
+          decoded.args[0] <= 0n
+        ) {
+          throw new Error("alfaclub_sudoswap_spot_price_invalid");
+        }
+        continue;
+      }
+      if (callSelector === CHANGE_DELTA_SELECTOR) {
+        const decoded = decodeFunctionData({
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          data: call.data,
+        });
+        if (decoded.functionName !== "changeDelta" || decoded.args[0] <= 0n) {
+          throw new Error("alfaclub_sudoswap_delta_invalid");
+        }
+        continue;
+      }
+      if (callSelector === CHANGE_FEE_SELECTOR) {
+        const decoded = decodeFunctionData({
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          data: call.data,
+        });
+        if (
+          decoded.functionName !== "changeFee" ||
+          decoded.args[0] !== ROOM_1659_TRADING_PAIR_FEE
+        ) {
+          throw new Error("alfaclub_sudoswap_pair_fee_mismatch");
+        }
+        continue;
+      }
+      if (callSelector === WITHDRAW_ERC20_SELECTOR) {
+        const decoded = decodeFunctionData({
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          data: call.data,
+        });
+        if (
+          decoded.functionName !== "withdrawERC20" ||
+          getAddress(decoded.args[0]) !== params.config.creatorCoin ||
+          decoded.args[1] <= 0n
+        ) {
+          throw new Error("alfaclub_sudoswap_withdraw_erc20_invalid");
+        }
+        const balance = integerResult(
+          await params.client.readContract({
+            address: params.config.creatorCoin,
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [params.config.pair],
+          }),
+          "alfaclub_sudoswap_pair_balance_unavailable",
+        );
+        if (decoded.args[1] > balance)
+          throw new Error("alfaclub_sudoswap_withdraw_balance_insufficient");
+        continue;
+      }
+      if (callSelector === WITHDRAW_ERC1155_SELECTOR) {
+        const decoded = decodeFunctionData({
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          data: call.data,
+        });
+        if (
+          decoded.functionName !== "withdrawERC1155" ||
+          getAddress(decoded.args[0]) !== ALFACLUB_FRIEND_KEY ||
+          decoded.args[1].length !== 1 ||
+          decoded.args[1][0] !== params.config.tokenId ||
+          decoded.args[2].length !== 1 ||
+          !decoded.args[2][0] ||
+          decoded.args[2][0] <= 0n
+        ) {
+          throw new Error("alfaclub_sudoswap_withdraw_erc1155_invalid");
+        }
+        const balance = integerResult(
+          await params.client.readContract({
+            address: ALFACLUB_FRIEND_KEY,
+            abi: ERC1155_ABI,
+            functionName: "balanceOf",
+            args: [params.config.pair, params.config.tokenId],
+          }),
+          "alfaclub_sudoswap_pair_key_balance_unavailable",
+        );
+        if (decoded.args[2][0] > balance) {
+          throw new Error(
+            "alfaclub_sudoswap_withdraw_key_balance_insufficient",
+          );
+        }
+        continue;
+      }
+      throw new Error("alfaclub_sudoswap_management_selector_not_allowed");
+    }
+  }
+
+  return {
+    creatorCoin: params.config.creatorCoin,
+    tokenId: params.config.tokenId,
+    pool: params.config.pair,
+  };
+}
+
 export async function validateAlfaClubLpCalls(params: {
   calls: AlfaClubLpInnerCall[];
   sender: Address;
@@ -645,13 +992,36 @@ export async function validateAlfaClubLpCalls(params: {
     params.env.ALFACLUB_UNIVERSAL_ROUTER ??
       params.env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
   );
-  if (
-    !configuredRouter ||
-    !params.calls.some((call) => call.target === configuredRouter)
-  )
-    return null;
+  const hasRouterCall = Boolean(
+    configuredRouter &&
+      params.calls.some((call) => call.target === configuredRouter),
+  );
+  if (!hasRouterCall) {
+    const configuredPair = optionalConfiguredAddress(
+      params.env.ALFACLUB_ROOM_1659_SUDOSWAP_PAIR ??
+        params.env.VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR,
+    );
+    const looksLikeManagement = params.calls.some(
+      (call) =>
+        MANAGEMENT_SELECTORS.has(selector(call.data)) &&
+        (call.target === configuredPair ||
+          call.target === ALFACLUB_FRIEND_KEY ||
+          call.target ===
+            (optionalConfiguredAddress(params.env.ALFACLUB_LP_CREATOR_COIN) ??
+              ROOM_1659_CREATOR_COIN)),
+    );
+    if (!looksLikeManagement) return null;
+  }
 
   const config = resolveAlfaClubLpPolicyConfig(params.env);
+  if (!hasRouterCall) {
+    return validateAlfaClubLiquidityManagementCalls({
+      calls: params.calls,
+      sender: params.sender,
+      client: params.client,
+      config,
+    });
+  }
   const sudoswapCalls =
     splitCanonicalEthFundingCalls(
       params.calls,

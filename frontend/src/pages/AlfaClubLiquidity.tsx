@@ -27,6 +27,7 @@ import {
   PERMIT2_ALLOWANCE_TRANSFER_ABI,
   SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
   SUDOSWAP_PAIR_FACTORY_ABI,
+  SUDOSWAP_XYK_CURVE_ABI,
 } from "@/lib/alfaclub/contracts";
 import {
   addSlippageBps,
@@ -35,6 +36,10 @@ import {
   type AlfaClubSudoswapDirection,
   type Permit2AllowanceSnapshot,
 } from "@/lib/alfaclub/sudoswapRouter";
+import {
+  deriveSudoswapQuotePreview,
+  type SudoswapQuoteValues,
+} from "@/lib/alfaclub/sudoswapLiquidity";
 import {
   buildAlfaClubEthFundingCalls,
   BASE_WETH_TOKEN,
@@ -69,12 +74,7 @@ export const ALFACLUB_MAX_SLIPPAGE_BPS = 500n;
 type LegacyMode = "create" | "add" | "buy" | "sell" | "remove";
 type Mode = AlfaClubSudoswapDirection | "buyWithEth";
 
-type Quote = {
-  errorCode: bigint;
-  amount: bigint;
-  protocolFee: bigint;
-  royaltyAmount: bigint;
-};
+type Quote = SudoswapQuoteValues;
 
 export type AlfaClubSudoswapSnapshot = {
   creatorCoinName: string;
@@ -92,6 +92,8 @@ export type AlfaClubSudoswapSnapshot = {
   fee: bigint;
   buyQuote: Quote;
   sellQuote: Quote;
+  oneKeyBuyQuote: Quote;
+  oneKeySellQuote: Quote;
 };
 
 export function getAlfaClubLiquidityDisabledReason(params: {
@@ -175,10 +177,14 @@ export function parseSlippageBps(value: string): bigint {
 
 function normalizeQuote(
   value: readonly [number, bigint, bigint, bigint, bigint, bigint],
+  curveValue?: readonly [number, bigint, bigint, bigint, bigint, bigint],
 ): Quote {
   return {
     errorCode: BigInt(value[0]),
+    newSpotPrice: value[1],
+    newDelta: value[2],
     amount: value[3],
+    tradeFee: curveValue?.[4] ?? 0n,
     protocolFee: value[4],
     royaltyAmount: value[5],
   };
@@ -420,6 +426,29 @@ export function AlfaClubLiquidity({
           "Configured Sudoswap market failed live invariant checks",
         );
 
+      const [spotPrice, delta, fee, protocolFeeMultiplier] = await Promise.all([
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "spotPrice",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "delta",
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "fee",
+        }),
+        publicClient.readContract({
+          address: factory,
+          abi: SUDOSWAP_PAIR_FACTORY_ABI,
+          functionName: "protocolFeeMultiplier",
+        }),
+      ]);
+
       const [
         name,
         symbol,
@@ -431,11 +460,14 @@ export function AlfaClubLiquidity({
         keyApprovedForAdapter,
         pairCreatorCoinBalance,
         pairKeyBalance,
-        spotPrice,
-        delta,
-        fee,
         buyQuote,
         sellQuote,
+        oneKeyBuyQuote,
+        oneKeySellQuote,
+        buyCurveQuote,
+        sellCurveQuote,
+        oneKeyBuyCurveQuote,
+        oneKeySellCurveQuote,
       ] = await Promise.all([
         publicClient
           .readContract({
@@ -503,21 +535,6 @@ export function AlfaClubLiquidity({
         publicClient.readContract({
           address: pair,
           abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
-          functionName: "spotPrice",
-        }),
-        publicClient.readContract({
-          address: pair,
-          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
-          functionName: "delta",
-        }),
-        publicClient.readContract({
-          address: pair,
-          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
-          functionName: "fee",
-        }),
-        publicClient.readContract({
-          address: pair,
-          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
           functionName: "getBuyNFTQuote",
           args: [ROOM_1659_TOKEN_ID, keyAmount],
         }),
@@ -526,6 +543,42 @@ export function AlfaClubLiquidity({
           abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
           functionName: "getSellNFTQuote",
           args: [ROOM_1659_TOKEN_ID, keyAmount],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getBuyNFTQuote",
+          args: [ROOM_1659_TOKEN_ID, 1n],
+        }),
+        publicClient.readContract({
+          address: pair,
+          abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
+          functionName: "getSellNFTQuote",
+          args: [ROOM_1659_TOKEN_ID, 1n],
+        }),
+        publicClient.readContract({
+          address: xykCurve,
+          abi: SUDOSWAP_XYK_CURVE_ABI,
+          functionName: "getBuyInfo",
+          args: [spotPrice, delta, keyAmount, fee, protocolFeeMultiplier],
+        }),
+        publicClient.readContract({
+          address: xykCurve,
+          abi: SUDOSWAP_XYK_CURVE_ABI,
+          functionName: "getSellInfo",
+          args: [spotPrice, delta, keyAmount, fee, protocolFeeMultiplier],
+        }),
+        publicClient.readContract({
+          address: xykCurve,
+          abi: SUDOSWAP_XYK_CURVE_ABI,
+          functionName: "getBuyInfo",
+          args: [spotPrice, delta, 1n, fee, protocolFeeMultiplier],
+        }),
+        publicClient.readContract({
+          address: xykCurve,
+          abi: SUDOSWAP_XYK_CURVE_ABI,
+          functionName: "getSellInfo",
+          args: [spotPrice, delta, 1n, fee, protocolFeeMultiplier],
         }),
       ]);
 
@@ -546,14 +599,31 @@ export function AlfaClubLiquidity({
         spotPrice,
         delta,
         fee,
-        buyQuote: normalizeQuote(buyQuote),
-        sellQuote: normalizeQuote(sellQuote),
+        buyQuote: normalizeQuote(buyQuote, buyCurveQuote),
+        sellQuote: normalizeQuote(sellQuote, sellCurveQuote),
+        oneKeyBuyQuote: normalizeQuote(oneKeyBuyQuote, oneKeyBuyCurveQuote),
+        oneKeySellQuote: normalizeQuote(oneKeySellQuote, oneKeySellCurveQuote),
       };
     },
   });
 
   const snapshot = snapshotQuery.data ?? null;
   const quote = mode === "sell" ? snapshot?.sellQuote : snapshot?.buyQuote;
+  const quotePreview = useMemo(() => {
+    if (!snapshot || !keyAmount) return null;
+    try {
+      return deriveSudoswapQuotePreview({
+        direction: mode === "sell" ? "sell" : "buy",
+        quantity: keyAmount,
+        quote: mode === "sell" ? snapshot.sellQuote : snapshot.buyQuote,
+        oneItemQuote:
+          mode === "sell" ? snapshot.oneKeySellQuote : snapshot.oneKeyBuyQuote,
+        slippageBps,
+      });
+    } catch {
+      return null;
+    }
+  }, [keyAmount, mode, slippageBps, snapshot]);
   const decimals = snapshot?.creatorCoinDecimals ?? 18;
   const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
 
@@ -626,8 +696,7 @@ export function AlfaClubLiquidity({
         publicClient.readContract({
           address: pair,
           abi: SUDOSWAP_ERC1155_ERC20_PAIR_ABI,
-          functionName:
-            mode === "sell" ? "getSellNFTQuote" : "getBuyNFTQuote",
+          functionName: mode === "sell" ? "getSellNFTQuote" : "getBuyNFTQuote",
           args: [ROOM_1659_TOKEN_ID, keyAmount],
         }),
         publicClient.readContract({
@@ -959,7 +1028,9 @@ export function AlfaClubLiquidity({
                       <input
                         type="text"
                         value={ethAmountInput}
-                        onChange={(event) => setEthAmountInput(event.target.value)}
+                        onChange={(event) =>
+                          setEthAmountInput(event.target.value)
+                        }
                         inputMode="decimal"
                         className="min-w-0 flex-1 bg-transparent text-white outline-none"
                       />
@@ -1017,6 +1088,86 @@ export function AlfaClubLiquidity({
                     </div>
                   </div>
                 </div>
+                {quotePreview ? (
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-white/[0.07] pt-4 text-xs sm:grid-cols-3">
+                    <div>
+                      <dt className="text-zinc-600">
+                        {mode === "sell" ? "You receive" : "You pay"}
+                      </dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(quotePreview.amount, decimals)}{" "}
+                        {snapshot?.creatorCoinSymbol}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">Effective / key</dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(
+                          quotePreview.effectiveUnitPrice,
+                          decimals,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">Price impact</dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {(
+                          Number(quotePreview.priceImpactBps) / 100
+                        ).toLocaleString("en-US", {
+                          maximumFractionDigits: 2,
+                        })}
+                        %
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">LP fee</dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(quotePreview.tradeFee, decimals)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">Protocol + royalty</dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(
+                          quotePreview.protocolFee + quotePreview.royaltyAmount,
+                          decimals,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">
+                        {mode === "sell" ? "Minimum received" : "Maximum paid"}
+                      </dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(
+                          mode === "sell"
+                            ? quotePreview.minimumReceived
+                            : quotePreview.maximumPaid,
+                          decimals,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">Post-trade virtual keys</dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {quotePreview.newDelta.toString()}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-600">
+                        Post-trade virtual token
+                      </dt>
+                      <dd className="mt-1 text-zinc-200">
+                        {formatTokenAmount(quotePreview.newSpotPrice, decimals)}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : snapshotQuery.isLoading ? (
+                  <div
+                    className="mt-4 h-20 animate-pulse rounded-xl bg-white/[0.04]"
+                    aria-label="Loading quote preview"
+                  />
+                ) : null}
               </div>
 
               <button

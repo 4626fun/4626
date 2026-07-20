@@ -240,6 +240,33 @@ still render as unavailable and must not be sponsored.
 
 ## User execution path
 
+The `/swap` Liquidity panel is the supported user-facing management surface. It
+reads the factory-authenticated Room 1659 pair, its owner, actual AKITA and
+FriendKey inventories, virtual XYK reserves, spot price, delta, and fee before
+enabling any write. It supports direct inventory deposits, owner-only
+withdrawals, and owner-only curve/fee changes with an exact call preview.
+Canonical accounts submit the calls through the existing sponsored UserOp lane;
+external EOAs receive the same calls through the direct wallet lane.
+
+Room 1659 already has one production pair, so duplicate creation is disabled in
+the UI. The official factory five-call creation builder remains available for a
+future registry entry: temporary ERC-1155 approval, exact ERC-20 approval,
+creation and seeding, then both approval revocations. A newly created pair is
+not trade-ready until the owner Safe authorizes that exact pair in the adapter;
+the product must not advertise or sponsor it before that live check passes.
+
+For the current pilot, management is intentionally constrained to the verified
+XYK curve and the exact 6.9% pair fee. Sudoswap pair ownership is the liquidity
+position; there is no proportional LP-share withdrawal flow to display. Pool
+management does not use fake TVL, APR, balances, quotes, or pair addresses.
+
+Buy and sell previews call the pair quote functions and the XYK curve fee
+breakdown independently. They display direction-specific execution totals,
+effective unit price, price impact, LP fee, protocol/royalty amounts, slippage
+limit, and post-trade virtual reserves. Quote errors, insufficient wallet or
+pool inventory, unsupported configuration, ownership mismatch, and sponsorship
+policy mismatch all disable submission.
+
 The canonical sender remains the user's parent CSW. The embedded owner signs
 the ERC-4337 operation. The buy path atomically includes any required ERC-20
 approval to Permit2, the exact Permit2 allowance to the adapter, and router
@@ -251,6 +278,14 @@ fallback. The AlfaClub paymaster lane rejects generic Universal Router opcode
 aliasing, allow-revert (`0x80`) on the AlfaClub command, noncanonical inputs,
 alternate recipients, excess key quantities, stale deadlines, loose approvals,
 and live pair or adapter invariant drift.
+
+Inventory deposits and owner management use a separate strict paymaster policy.
+It only accepts AKITA transfers and Room 1659 FriendKey transfers into the
+verified pair, or owner calls to change spot price/delta, retain the 6.9% fee,
+and withdraw the verified assets. It checks live sender/pair balances and never
+sponsors official pair creation. Creation therefore remains unavailable for a
+canonical sponsored wallet until an explicit registry-aware creation policy is
+reviewed and enabled.
 
 ## Monitoring
 
