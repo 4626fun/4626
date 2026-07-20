@@ -9,6 +9,7 @@ export default [
     ignores: [
       'dist/**',
       'node_modules/**',
+      '.vercel/**',
       'scripts/**',
       'fix_duplicates.js',
       'src/**/generated/**',

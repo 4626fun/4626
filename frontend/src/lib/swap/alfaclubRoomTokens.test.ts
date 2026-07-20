@@ -4,7 +4,10 @@ import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import type { AlfaClubRoomDirectoryItem } from '@/lib/alfaclub/roomDirectory'
 
-import { resolveAlfaClubRoomTokens } from './alfaclubRoomTokens'
+import {
+  resolveAlfaClubRoomTokens,
+  stripAlfaClubRoomPresentation,
+} from './alfaclubRoomTokens'
 
 function creatorOption(
   overrides: Partial<SwapTokenOption> & Pick<SwapTokenOption, 'address' | 'symbol'>,
@@ -55,9 +58,11 @@ describe('resolveAlfaClubRoomTokens', () => {
     expect(resolved[0]?.address.toLowerCase()).toBe(AKITA_DEFAULTS.token.toLowerCase())
     expect(resolved[0]?.alfaclubRoomId).toBe('1659')
     expect(resolved[0]?.symbol).toBe('AKITA')
+    expect(resolved[0]?.name).toBe('AKITA')
+    expect(resolved[0]?.name).not.toMatch(/room/i)
   })
 
-  it('prefers matching token-option metadata and enriches from room directory', () => {
+  it('keeps creator logo/name and stores room image for chips only', () => {
     const akita = creatorOption({
       address: AKITA_DEFAULTS.token,
       symbol: 'AKITA',
@@ -78,8 +83,9 @@ describe('resolveAlfaClubRoomTokens', () => {
     })
 
     expect(resolved).toHaveLength(1)
-    expect(resolved[0]?.name).toContain('AKITA')
-    expect(resolved[0]?.logoUrl).toBe('https://example.com/room.gif')
+    expect(resolved[0]?.name).toBe('Akita Inu')
+    expect(resolved[0]?.logoUrl).toBe('https://example.com/akita.png')
+    expect(resolved[0]?.alfaclubRoomImageUrl).toBe('https://example.com/room.gif')
     expect(resolved[0]?.alfaclubRoomId).toBe('1659')
   })
 
@@ -109,5 +115,26 @@ describe('resolveAlfaClubRoomTokens', () => {
 
     expect(resolved.map((option) => option.symbol)).toEqual(['AKITA', 'FLIP'])
     expect(resolved[1]?.alfaclubRoomId).toBe('42')
+    expect(resolved[1]?.name).toBe('FLIP creator coin')
+    expect(resolved[1]?.name).not.toMatch(/room/i)
+  })
+})
+
+describe('stripAlfaClubRoomPresentation', () => {
+  it('removes room-only fields while keeping creator token identity', () => {
+    const option = creatorOption({
+      address: AKITA_DEFAULTS.token,
+      symbol: 'AKITA',
+      name: 'Akita Inu',
+      logoUrl: 'https://example.com/akita.png',
+      alfaclubRoomId: '1659',
+      alfaclubRoomImageUrl: 'https://example.com/room.gif',
+    })
+    const stripped = stripAlfaClubRoomPresentation(option)
+    expect(stripped.alfaclubRoomId).toBeUndefined()
+    expect(stripped.alfaclubRoomImageUrl).toBeUndefined()
+    expect(stripped.logoUrl).toBe('https://example.com/akita.png')
+    expect(stripped.name).toBe('Akita Inu')
+    expect(stripped.symbol).toBe('AKITA')
   })
 })

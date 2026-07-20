@@ -20,6 +20,7 @@ import {
 import {
   fetchAlfaClubRoomsForTokenModal,
   resolveAlfaClubRoomTokens,
+  stripAlfaClubRoomPresentation,
 } from '@/lib/swap/alfaclubRoomTokens'
 import { formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
@@ -38,6 +39,8 @@ export type SwapTokenOption = TokenOption & {
   isUserHolding?: boolean
   /** Present when this creator coin is surfaced from an AlfaClub room pin/match. */
   alfaclubRoomId?: string
+  /** Room pfp for AlfaClub room chips only — never used as the creator-coin logo. */
+  alfaclubRoomImageUrl?: string | null
 }
 
 type AddressMetadataCacheEntry = {
@@ -204,6 +207,7 @@ function NetworkChip({ chainId }: { chainId: SupportedChainId }) {
 
 function TokenSelectorRow(props: {
   option: SwapTokenOption
+  section?: string
   isActive: boolean
   isSelected: boolean
   balanceLabel?: string | null
@@ -211,23 +215,29 @@ function TokenSelectorRow(props: {
   onChoose: () => void
   onHover: () => void
 }) {
-  const { option, isActive, isSelected, balanceLabel, usdLabel, onChoose, onHover } = props
+  const { option, section, isActive, isSelected, balanceLabel, usdLabel, onChoose, onHover } = props
   const isUnverified = option.verified === false
   const showAddressHint =
     isUnverified ||
     option.sectionTag === 'creator' ||
     option.sectionTag === 'content' ||
     option.sectionTag === 'trend'
+  const linkedRoomSubtitle =
+    section === 'AlfaClub rooms' && option.alfaclubRoomId
+      ? `Linked room #${option.alfaclubRoomId}`
+      : null
   const subtitleName =
-    option.name &&
-    option.name.toLowerCase() !== option.symbol.toLowerCase() &&
-    !isOpaqueInternalTokenLabel(option.name)
-      ? option.name
-      : option.sectionTag === 'creator'
-        ? 'Creator coin'
-        : option.sectionTag === 'trend'
-          ? 'Trend coin'
-          : option.name
+    linkedRoomSubtitle
+      ? linkedRoomSubtitle
+      : option.name &&
+          option.name.toLowerCase() !== option.symbol.toLowerCase() &&
+          !isOpaqueInternalTokenLabel(option.name)
+        ? option.name
+        : option.sectionTag === 'creator'
+          ? 'Creator coin'
+          : option.sectionTag === 'trend'
+            ? 'Trend coin'
+            : option.name
 
   return (
     <button
@@ -254,11 +264,7 @@ function TokenSelectorRow(props: {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-[15px] font-semibold text-white">{option.symbol}</span>
-          {option.alfaclubRoomId ? (
-            <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-200">
-              Room {option.alfaclubRoomId}
-            </span>
-          ) : option.sectionTag === 'creator' ? (
+          {option.sectionTag === 'creator' ? (
             <span className="shrink-0 rounded-md bg-brand-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-200">
               Creator
             </span>
@@ -705,7 +711,10 @@ export function TokenSelectorModal({
         const isZoraCoin = r.option.sectionTag === 'creator' || r.option.sectionTag === 'content' ||
                            r.option.group === 'creator' || r.option.group === 'share';
         if (hasPositive && isZoraCoin) {
-          pos.push(r);
+          pos.push({
+            ...r,
+            option: stripAlfaClubRoomPresentation(r.option),
+          });
         } else {
           rem.push(r);
         }
@@ -859,8 +868,10 @@ export function TokenSelectorModal({
                       <TokenAvatar
                         token={{
                           address: option.address,
-                          logoUrl: option.logoUrl,
-                          logoUrls: option.logoUrls,
+                          logoUrl: option.alfaclubRoomImageUrl || option.logoUrl,
+                          logoUrls: option.alfaclubRoomImageUrl
+                            ? [option.alfaclubRoomImageUrl, ...(option.logoUrls ?? [])]
+                            : option.logoUrls,
                         }}
                         symbol={option.symbol}
                         size={28}
@@ -1000,6 +1011,7 @@ export function TokenSelectorModal({
                               <TokenSelectorRow
                                 key={`${section}-${option.address}`}
                                 option={option}
+                                section={section}
                                 isActive={isActive}
                                 isSelected={isSelected}
                                 balanceLabel={balanceLabel}

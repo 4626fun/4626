@@ -39,7 +39,7 @@ function pinFallbackOption(pin: AlfaClubRoomTokenPin): SwapTokenOption {
   return {
     address,
     symbol: pin.symbol,
-    name: `${pin.name} · Room ${pin.roomId}`,
+    name: pin.name,
     group: 'creator',
     sectionTag: 'creator',
     verified: true,
@@ -76,6 +76,9 @@ function matchCreatorOptionByRoomName(
  * Resolve AlfaClub room creator-coin tokens for the swap selector.
  * Prefers curated pins, then matches top/featured rooms to creator coins already
  * present in token options (by room name).
+ *
+ * Room image is stored on `alfaclubRoomImageUrl` for chip rendering only — never
+ * overwrites the creator coin's `logoUrl`.
  */
 export function resolveAlfaClubRoomTokens(params: {
   tokenOptions: readonly SwapTokenOption[]
@@ -86,7 +89,7 @@ export function resolveAlfaClubRoomTokens(params: {
   const seen = new Set<string>()
   const out: SwapTokenOption[] = []
 
-  const push = (option: SwapTokenOption, roomId: string, logoUrl?: string | null) => {
+  const push = (option: SwapTokenOption, roomId: string, roomImageUrl?: string | null) => {
     const key = option.address.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
@@ -95,12 +98,10 @@ export function resolveAlfaClubRoomTokens(params: {
       sectionTag: 'creator',
       verified: option.verified !== false,
       alfaclubRoomId: roomId,
-      name: option.alfaclubRoomId
-        ? option.name
-        : option.name.toLowerCase().includes('room')
-          ? option.name
-          : `${option.symbol} · Room ${roomId}`,
-      logoUrl: logoUrl || option.logoUrl || shareTokenLogo(option.address, BASE_CHAIN_ID),
+      alfaclubRoomImageUrl: roomImageUrl || option.alfaclubRoomImageUrl || null,
+      // Keep creator-coin identity for list/holdings rows.
+      name: option.name,
+      logoUrl: option.logoUrl || shareTokenLogo(option.address, BASE_CHAIN_ID),
     })
   }
 
@@ -134,6 +135,13 @@ export function resolveAlfaClubRoomTokens(params: {
   }
 
   return out
+}
+
+/** Strip room-only presentation so holdings/list rows stay creator-coin identity. */
+export function stripAlfaClubRoomPresentation(option: SwapTokenOption): SwapTokenOption {
+  if (!option.alfaclubRoomId && !option.alfaclubRoomImageUrl) return option
+  const { alfaclubRoomId: _roomId, alfaclubRoomImageUrl: _roomImage, ...rest } = option
+  return rest
 }
 
 export async function fetchAlfaClubRoomsForTokenModal(
