@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, type ReactNode } from 'react'
 import { ArrowRight, RefreshCw, Search, ShieldAlert } from 'lucide-react'
 import { formatUnits, type Address, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
@@ -19,12 +19,20 @@ import {
   type AlfaClubLiquidityPoolSummary,
   type AlfaClubSudoswapMarketConfig,
 } from '@/hooks/useAlfaClubLiquidityPools'
-import { ALFACLUB_EXPLORE_POOLS_PATH } from '@/lib/alfaclub/hostPaths'
+import {
+  ALFACLUB_EXPLORE_POOLS_PATH,
+  ALFACLUB_EXPLORE_ROOMS_PATH,
+} from '@/lib/alfaclub/hostPaths'
 import { cn } from '@/lib/shared/utils'
 
 import { AlfaClubLiquidity } from './AlfaClubLiquidity'
 
 type TradeMode = 'buy' | 'buyWithEth' | 'sell'
+
+const LazyConnectButton = lazy(async () => {
+  const mod = await import('@/components/account/ConnectButton')
+  return { default: mod.ConnectButton }
+})
 
 const MARKET_CONFIG: AlfaClubSudoswapMarketConfig = {
   pair: CONTRACTS.room1659SudoswapPair as Address,
@@ -51,55 +59,83 @@ function roomTypeLabel(roomType: number | null): string {
   return 'Unknown'
 }
 
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative min-h-[70vh] pb-20">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.12),transparent_35%),radial-gradient(circle_at_82%_15%,rgba(217,70,239,0.08),transparent_30%)]"
+      />
+      {children}
+    </div>
+  )
+}
+
 function AlfaClubEthFundingRoute() {
   return (
     <section
       aria-label="Planned ETH funding route"
       data-testid="eth-to-room-route"
-      className="mt-6 rounded-3xl bg-sky-500/[0.07] p-4 ring-1 ring-sky-400/20 sm:p-5"
+      className="rounded-2xl bg-white/[0.03] px-4 py-4 ring-1 ring-white/[0.07] sm:px-5"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="max-w-2xl">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-sky-300/80">
             ETH funding path (planned)
-          </span>
-          <h2 className="mt-2 text-base font-semibold text-zinc-100">
+          </p>
+          <h2 className="mt-1.5 text-sm font-medium text-zinc-100">
             ETH → Room 1659 FriendKeys (planned)
           </h2>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500">
             Quote ETH through the Base ZORA and AKITA Creator Coin markets, then
             settle the official Room 1659 Sudoswap v2 pool in the existing
             guarded transaction flow.
           </p>
         </div>
-        <span className="self-start rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium text-sky-200 ring-1 ring-sky-300/20 lg:self-auto">
+        <span className="shrink-0 self-start rounded-md bg-white/[0.04] px-2 py-1 text-[10px] font-medium text-zinc-400 ring-1 ring-white/[0.08]">
           Base · Uniswap V4 + Sudoswap v2
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-200">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-zinc-300">
         {['ETH', 'ZORA', 'AKITA', 'FriendKey #1659'].map(
           (label, index, route) => (
-            <span key={label} className="inline-flex items-center gap-2">
-              <span className="rounded-xl bg-black/30 px-3 py-2 ring-1 ring-white/[0.08]">
+            <span key={label} className="inline-flex items-center gap-1.5">
+              <span className="rounded-lg bg-black/40 px-2.5 py-1.5 ring-1 ring-white/[0.06]">
                 {label}
               </span>
               {index < route.length - 1 ? (
-                <ArrowRight className="h-3.5 w-3.5 text-sky-300" aria-hidden />
+                <ArrowRight className="h-3 w-3 text-sky-300/70" aria-hidden />
               ) : null}
             </span>
           ),
         )}
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">
-        <span className="text-zinc-300">Buy with ETH</span> wraps ETH to WETH
+      <p className="mt-3 text-[11px] leading-relaxed text-zinc-600">
+        <span className="text-zinc-400">Buy with ETH</span> wraps ETH to WETH
         for canonical sponsored wallets, signs the Zora Permit2 authorization,
         and submits one sponsored batch. External wallets keep the native ETH
         quote; providers without atomic batching may submit approval legs
         sequentially.
       </p>
     </section>
+  )
+}
+
+function MarketsConnectControl({ className }: { className?: string }) {
+  return (
+    <div className={cn('shrink-0', className)} data-testid="markets-connect">
+      <Suspense
+        fallback={
+          <div className="inline-flex h-9 w-[164px] items-center justify-center rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-400">
+            Connect
+          </div>
+        }
+      >
+        <LazyConnectButton variant="nav" />
+      </Suspense>
+    </div>
   )
 }
 
@@ -115,84 +151,85 @@ export function PoolCard({
   return (
     <article
       className={cn(
-        'rounded-2xl p-4 text-left ring-1 transition-colors',
+        'rounded-2xl p-4 text-left transition-colors ring-1',
         selected
-          ? 'bg-sky-500/10 ring-sky-400/25'
-          : 'bg-black/35 ring-white/[0.08]',
+          ? 'bg-sky-500/[0.08] ring-sky-400/25'
+          : 'bg-black/40 ring-white/[0.07] hover:ring-white/[0.12]',
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-zinc-100">
+          <div className="truncate text-sm font-medium text-zinc-100">
             {pool.creatorCoinName || 'Creator Coin'}
           </div>
-          <div className="mt-0.5 truncate font-mono text-xs text-zinc-500">
-            {pool.creatorCoinSymbol} / Key #{pool.tokenId.toString()}
+          <div className="mt-0.5 truncate text-xs text-zinc-500">
+            {pool.creatorCoinSymbol} · Key #{pool.tokenId.toString()} ·{' '}
+            {roomTypeLabel(pool.roomType)}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className="rounded-full bg-white/[0.05] px-2 py-1 text-[10px] text-zinc-400 ring-1 ring-white/[0.08]">
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
             {formatAlfaClubPoolFee(pool.feeBps)} fee
           </span>
           <span
             className={cn(
-              'rounded-full px-2 py-1 text-[10px] ring-1',
+              'rounded-md px-1.5 py-0.5 text-[10px] font-medium',
               pool.configurationReady
-                ? 'bg-emerald-500/10 text-emerald-200 ring-emerald-400/20'
-                : 'bg-amber-500/10 text-amber-200 ring-amber-400/20',
+                ? 'bg-emerald-500/10 text-emerald-200/90'
+                : 'bg-amber-500/10 text-amber-200/90',
             )}
           >
-            {pool.configurationReady
-              ? 'Official market ready'
-              : 'Configuration mismatch'}
+            {pool.configurationReady ? 'Ready' : 'Pending'}
           </span>
         </div>
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
         <div>
-          <dt className="text-zinc-600">Creator balance</dt>
-          <dd className="mt-1 truncate text-zinc-300">
+          <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+            Creator balance
+          </dt>
+          <dd className="mt-1 truncate tabular-nums text-zinc-200">
             {formatTokenAmount(
               pool.creatorCoinBalance,
               pool.creatorCoinDecimals,
             )}{' '}
-            {pool.creatorCoinSymbol}
+            <span className="text-zinc-500">{pool.creatorCoinSymbol}</span>
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-600">Key balance</dt>
-          <dd className="mt-1 text-zinc-300">
+          <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+            Key balance
+          </dt>
+          <dd className="mt-1 tabular-nums text-zinc-200">
             {pool.keyBalance.toLocaleString()}
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-600">Virtual creator balance</dt>
-          <dd className="mt-1 truncate text-zinc-300">
-            {formatTokenAmount(pool.spotPrice, pool.creatorCoinDecimals)}{' '}
-            {pool.creatorCoinSymbol}
+          <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+            Spot
+          </dt>
+          <dd className="mt-1 truncate tabular-nums text-zinc-400">
+            {formatTokenAmount(pool.spotPrice, pool.creatorCoinDecimals)} /{' '}
+            {pool.delta.toLocaleString()} keys
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-600">Virtual key balance</dt>
-          <dd className="mt-1 text-zinc-300">{pool.delta.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-600">Room type</dt>
-          <dd className="mt-1 text-zinc-300">{roomTypeLabel(pool.roomType)}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-600">Pair</dt>
-          <dd className="mt-1 font-mono text-zinc-300">
+          <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+            Pair
+          </dt>
+          <dd className="mt-1 font-mono text-[11px] text-zinc-400">
             {shortAddress(pool.pool)}
           </dd>
         </div>
       </dl>
+
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => onTrade('buyWithEth')}
           disabled={!pool.configurationReady}
-          className="col-span-2 inline-flex h-9 items-center justify-center rounded-xl bg-sky-500/80 px-3 text-xs font-semibold text-white hover:bg-sky-400 disabled:bg-zinc-800 disabled:text-zinc-600"
+          className="col-span-2 inline-flex h-9 items-center justify-center rounded-full bg-sky-500 px-3 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:bg-zinc-800 disabled:text-zinc-600"
         >
           Buy with ETH
         </button>
@@ -200,7 +237,7 @@ export function PoolCard({
           type="button"
           onClick={() => onTrade('buy')}
           disabled={!pool.configurationReady}
-          className="inline-flex h-9 items-center justify-center rounded-xl bg-sky-500 px-3 text-xs font-semibold text-white hover:bg-sky-400 disabled:bg-zinc-800 disabled:text-zinc-600"
+          className="inline-flex h-9 items-center justify-center rounded-full bg-white/[0.06] px-3 text-xs font-medium text-zinc-200 ring-1 ring-white/[0.08] transition hover:bg-white/[0.1] disabled:text-zinc-600"
         >
           Buy keys
         </button>
@@ -208,7 +245,7 @@ export function PoolCard({
           type="button"
           onClick={() => onTrade('sell')}
           disabled={!pool.configurationReady}
-          className="inline-flex h-9 items-center justify-center rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200 ring-1 ring-white/[0.08] hover:bg-white/[0.1] disabled:text-zinc-600"
+          className="inline-flex h-9 items-center justify-center rounded-full bg-white/[0.06] px-3 text-xs font-medium text-zinc-200 ring-1 ring-white/[0.08] transition hover:bg-white/[0.1] disabled:text-zinc-600"
         >
           Sell keys
         </button>
@@ -232,47 +269,55 @@ export function AlfaClubLpWriteConsole(props: {
     const href = waitlistEntryHref(access.marketingUrl, {
       alfaClubReturnPath: `${location.pathname}${location.search}`,
     })
+    const needsSession = !access.sessionValid
     return (
-      <section className="cinematic-section !pt-4">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.06]">
-            <h2 className="text-sm font-semibold text-zinc-100">
-              Market trades require access
+      <div className="rounded-2xl bg-zinc-950/40 p-5 ring-1 ring-white/[0.07] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-sm font-medium text-zinc-100">
+              {needsSession
+                ? 'Connect to trade'
+                : 'Market trades require access'}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Browse markets freely. Buying or selling FriendKeys needs an
-              accepted 4626 session and an execution-ready wallet.
+            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-500">
+              {needsSession
+                ? 'Browse markets freely. Connect your account to buy or sell FriendKeys with an execution-ready wallet.'
+                : 'Your session is connected. An accepted 4626 access grant is still required before trading opens.'}
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {needsSession ? <MarketsConnectControl /> : null}
             <a
               href={href}
-              className="mt-4 inline-flex items-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400"
+              className={cn(
+                'inline-flex h-9 items-center justify-center rounded-full px-4 text-xs font-semibold transition',
+                needsSession
+                  ? 'bg-white/[0.06] text-zinc-200 ring-1 ring-white/[0.1] hover:bg-white/[0.1]'
+                  : 'bg-sky-500 text-white hover:bg-sky-400',
+              )}
             >
-              Sign in to trade
+              {needsSession ? 'Sign in to trade' : 'Continue on waitlist'}
             </a>
           </div>
         </div>
-      </section>
+      </div>
     )
   }
 
   if (!props.selectedPool?.configurationReady) {
     return (
-      <section className="cinematic-section !pt-4">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex items-start gap-3 rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.06]">
-            <ShieldAlert className="mt-0.5 size-5 text-amber-300" aria-hidden />
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-100">
-                No execution-ready market
-              </h2>
-              <p className="mt-1 text-sm text-zinc-400">
-                Trading stays disabled until the official pair and adapter
-                binding are configured.
-              </p>
-            </div>
-          </div>
+      <div className="flex items-start gap-3 rounded-2xl bg-zinc-950/40 p-5 ring-1 ring-white/[0.07]">
+        <ShieldAlert className="mt-0.5 size-5 text-amber-300" aria-hidden />
+        <div>
+          <h2 className="text-sm font-medium text-zinc-100">
+            No execution-ready market
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Trading stays disabled until the official pair and adapter binding
+            are configured.
+          </p>
         </div>
-      </section>
+      </div>
     )
   }
 
@@ -327,34 +372,35 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.06]">
+      <section className="rounded-2xl bg-zinc-950/40 p-5 ring-1 ring-white/[0.07]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-zinc-100">
-              Room market
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">
+            <h2 className="text-base font-medium text-zinc-100">Room market</h2>
+            <p className="mt-1 text-sm text-zinc-500">
               Official Sudoswap Creator Coin / FriendKey market for token ID{' '}
               {roomId}.
             </p>
           </div>
-          {marketConfigured ? (
-            <button
-              type="button"
-              onClick={() => directory.refetch()}
-              disabled={directory.isFetching}
-              className="inline-flex h-9 items-center gap-2 rounded-xl bg-white/[0.04] px-3 text-xs text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08] disabled:text-zinc-600"
-            >
-              <RefreshCw
-                className={cn(
-                  'h-3.5 w-3.5',
-                  directory.isFetching && 'animate-spin',
-                )}
-                aria-hidden
-              />
-              Refresh
-            </button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <MarketsConnectControl className="md:hidden" />
+            {marketConfigured ? (
+              <button
+                type="button"
+                onClick={() => directory.refetch()}
+                disabled={directory.isFetching}
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-white/[0.04] px-3 text-xs text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08] disabled:text-zinc-600"
+              >
+                <RefreshCw
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    directory.isFetching && 'animate-spin',
+                  )}
+                  aria-hidden
+                />
+                Refresh
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {!marketConfigured ? (
@@ -370,11 +416,11 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
             Unable to load the room market.
           </p>
         ) : roomPools.length === 0 ? (
-          <div className="mt-5 rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
-            <h3 className="text-sm font-semibold text-zinc-100">
+          <div className="mt-5 rounded-xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
+            <h3 className="text-sm font-medium text-zinc-100">
               No configured market for this room
             </h3>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-500">
               The official AlfaClub Sudoswap market is currently assigned to
               Room 1659.
             </p>
@@ -395,7 +441,7 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
 
       <section
         id="room-liquidity-console"
-        className="scroll-mt-40 rounded-3xl bg-black/25 p-4 ring-1 ring-white/[0.06]"
+        className="scroll-mt-40 rounded-2xl bg-black/25 p-4 ring-1 ring-white/[0.06]"
       >
         <AlfaClubLpWriteConsole
           selectedPool={selectedPool}
@@ -413,8 +459,8 @@ export function AlfaClubLiquidityPools() {
     publicClient as unknown as PublicClient | undefined,
     marketConfigured ? MARKET_CONFIG : null,
   )
-  const [search, setSearch] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
 
   const pools = useMemo(
     () => directory.data?.pools ?? [],
@@ -443,57 +489,135 @@ export function AlfaClubLiquidityPools() {
     setSearchParams(next, { replace: true })
   }
 
+  const updateSearch = (value: string) => {
+    const next = new URLSearchParams(searchParams)
+    const trimmed = value.trim()
+    if (trimmed) next.set('q', value)
+    else next.delete('q')
+    setSearchParams(next, { replace: true })
+  }
+
   return (
-    <div className="relative pb-24 md:pb-0">
+    <PageShell>
       <PageMeta
         title="AlfaClub markets"
         description="Browse the official Creator Coin and FriendKey Sudoswap market, then buy or sell through the AlfaClub router on Base."
         canonicalPath={ALFACLUB_EXPLORE_POOLS_PATH}
       />
 
-      <section className="cinematic-section no-divider-top !pb-0">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <main className="mx-auto w-full max-w-[1400px] px-3 pt-6 sm:px-6 sm:pt-10">
+        <header className="border-b border-white/[0.06] pb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <span className="label">AlfaClub</span>
-              <h1 className="headline mt-3 text-3xl sm:text-5xl">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sky-300/90">
+                AlfaClub
+              </p>
+              <h1 className="mt-2 text-3xl font-medium tracking-tight text-white sm:text-4xl">
                 Room markets
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
                 Creator Coin and FriendKey secondary markets on official
                 Sudoswap v2 pairs.
               </p>
-              <p className="mt-2 text-xs text-zinc-500">
+              <p className="mt-2 text-xs text-zinc-600">
                 Looking for rooms?{' '}
                 <Link
-                  to="/rooms"
+                  to={ALFACLUB_EXPLORE_ROOMS_PATH}
                   className="text-zinc-300 underline-offset-2 hover:underline"
                 >
                   Browse trading rooms
                 </Link>
               </p>
-              <AlfaClubEthFundingRoute />
             </div>
-            {marketConfigured ? (
-              <button
-                type="button"
-                onClick={() => directory.refetch()}
-                disabled={directory.isFetching}
-                className="inline-flex h-9 items-center gap-2 self-start rounded-xl bg-white/[0.04] px-3 text-xs text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08] disabled:text-zinc-600 sm:self-auto"
-              >
-                <RefreshCw
-                  className={cn(
-                    'h-3.5 w-3.5',
-                    directory.isFetching && 'animate-spin',
-                  )}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Desktop nav already exposes Connect; keep an in-page control for mobile. */}
+              <MarketsConnectControl className="md:hidden" />
+              {marketConfigured ? (
+                <button
+                  type="button"
+                  onClick={() => directory.refetch()}
+                  disabled={directory.isFetching}
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-white/[0.04] px-3 text-xs text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08] disabled:text-zinc-600"
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      directory.isFetching && 'animate-spin',
+                    )}
+                    aria-hidden
+                  />
+                  Refresh
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <dl className="mt-6 grid max-w-md grid-cols-2 gap-px overflow-hidden rounded-xl bg-white/[0.08] ring-1 ring-white/[0.08]">
+            <div className="bg-black/70 px-4 py-3">
+              <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+                Markets
+              </dt>
+              <dd className="mt-1 text-lg font-medium tabular-nums text-zinc-100">
+                {(directory.data?.totalPoolCount ?? pools.length).toLocaleString()}
+              </dd>
+            </div>
+            <div className="bg-black/70 px-4 py-3">
+              <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
+                Status
+              </dt>
+              <dd className="mt-1 text-lg font-medium text-zinc-100">
+                {!marketConfigured
+                  ? 'Pending'
+                  : directory.isLoading
+                    ? 'Loading'
+                    : directory.error
+                      ? 'Error'
+                      : 'Live'}
+              </dd>
+            </div>
+          </dl>
+        </header>
+
+        <section className="py-6" aria-label="ETH funding path">
+          <AlfaClubEthFundingRoute />
+        </section>
+
+        <section
+          className="overflow-hidden rounded-2xl bg-zinc-950/40 ring-1 ring-white/[0.07]"
+          aria-label="Available markets"
+        >
+          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <h2 className="text-sm font-medium text-zinc-100">
+                Available markets
+              </h2>
+              <p className="mt-1 text-xs text-zinc-600">
+                {directory.data?.totalPoolCount != null
+                  ? `${directory.data.totalPoolCount.toLocaleString()} configured market${
+                      directory.data.totalPoolCount === 1 ? '' : 's'
+                    }`
+                  : 'Official Sudoswap markets'}
+              </p>
+            </div>
+            {marketConfigured && !directory.isLoading && !directory.error && pools.length > 0 ? (
+              <label className="relative block sm:w-72">
+                <span className="sr-only">Search room markets</span>
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600"
                   aria-hidden
                 />
-                Refresh markets
-              </button>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => updateSearch(event.target.value)}
+                  placeholder="Search coin, key ID, or address"
+                  className="h-10 w-full rounded-full border border-white/12 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-sky-400/40 focus:ring-2 focus:ring-sky-400/15"
+                />
+              </label>
             ) : null}
           </div>
 
-          <div className="mt-8 rounded-3xl bg-black/35 p-4 ring-1 ring-white/[0.06] sm:p-5">
+          <div className="p-4 sm:p-5">
             {!marketConfigured ? (
               <div className="flex items-start gap-3 py-2">
                 <ShieldAlert
@@ -501,95 +625,66 @@ export function AlfaClubLiquidityPools() {
                   aria-hidden
                 />
                 <div>
-                  <h2 className="text-sm font-semibold text-zinc-100">
+                  <h3 className="text-sm font-medium text-zinc-100">
                     Market deployment pending
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-400">
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-500">
                     Trading stays disabled until the reviewed Base pair,
                     adapter, factory, and curve addresses are configured.
                   </p>
                 </div>
               </div>
             ) : directory.isLoading ? (
-              <p className="py-4 text-sm text-zinc-400" role="status">
+              <p className="py-6 text-sm text-zinc-500" role="status">
                 Loading markets from Base…
               </p>
             ) : directory.error ? (
-              <div className="py-3" role="alert">
+              <div className="py-4" role="alert">
                 <p className="text-sm text-red-300">
                   Unable to load AlfaClub markets.
                 </p>
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className="mt-1 text-xs text-zinc-600">
                   {directory.error instanceof Error
                     ? directory.error.message
                     : 'Onchain read failed'}
                 </p>
               </div>
             ) : pools.length === 0 ? (
-              <div className="py-3">
-                <h2 className="text-sm font-semibold text-zinc-100">
+              <div className="py-4">
+                <h3 className="text-sm font-medium text-zinc-100">
                   No markets configured
-                </h2>
-                <p className="mt-1 text-sm text-zinc-400">
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
                   A reviewed official pair must be configured before trading can
                   open.
                 </p>
               </div>
+            ) : filteredPools.length === 0 ? (
+              <p className="py-10 text-center text-sm text-zinc-600">
+                No markets match that search.
+              </p>
             ) : (
-              <>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-zinc-100">
-                      Available markets
-                    </h2>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {directory.data?.totalPoolCount.toLocaleString()}{' '}
-                      configured market
-                      {directory.data?.totalPoolCount === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <label className="relative block sm:w-72">
-                    <span className="sr-only">Search room markets</span>
-                    <Search
-                      className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600"
-                      aria-hidden
-                    />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Search coin, key ID, or address"
-                      className="w-full rounded-xl bg-black/45 py-2 pl-9 pr-3 text-sm text-zinc-200 ring-1 ring-white/[0.08] outline-none focus:ring-sky-500/40"
-                    />
-                  </label>
-                </div>
-
-                {filteredPools.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-zinc-500">
-                    No markets match that search.
-                  </p>
-                ) : (
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredPools.map((pool) => (
-                      <PoolCard
-                        key={pool.pool}
-                        pool={pool}
-                        selected={selectedPool?.pool === pool.pool}
-                        onTrade={(mode) => selectTrade(pool, mode)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {filteredPools.map((pool) => (
+                  <PoolCard
+                    key={pool.pool}
+                    pool={pool}
+                    selected={selectedPool?.pool === pool.pool}
+                    onTrade={(mode) => selectTrade(pool, mode)}
+                  />
+                ))}
+              </div>
             )}
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      <AlfaClubLpWriteConsole
-        selectedPool={selectedPool}
-        initialMode={tradeMode}
-      />
-    </div>
+      <section className="mx-auto w-full max-w-[1400px] px-3 pt-6 sm:px-6">
+        <AlfaClubLpWriteConsole
+          selectedPool={selectedPool}
+          initialMode={tradeMode}
+        />
+      </section>
+    </PageShell>
   )
 }

@@ -132,7 +132,11 @@ export function VaultNavBarContent(props: VaultNavBarContentProps) {
           ? 'Search trends'
           : location.pathname.startsWith('/explore/transactions')
             ? 'Search transactions'
-            : 'Search explore'
+            : location.pathname.startsWith('/explore/pools')
+              ? 'Search markets'
+              : location.pathname.startsWith('/explore/rooms')
+                ? 'Search rooms'
+                : 'Search explore'
   const brandElement = (
     <>
       <Logo showText={false} width={28} height={28} forceHover={brandHovered} />

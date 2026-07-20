@@ -56,6 +56,10 @@ vi.mock('@/components/layout/AppLoadingOverlay', () => ({
   AppLoadingRegistrar: () => <div data-testid="loading">loading</div>,
 }))
 
+vi.mock('@/components/account/ConnectButton', () => ({
+  ConnectButton: () => <button type="button">Connect</button>,
+}))
+
 describe('AlfaClubLiquidityPools write gate', () => {
   it('keeps the directory public and blocks the write console without accepted access', async () => {
     const { AlfaClubLiquidityPools } = await import(
@@ -92,7 +96,8 @@ describe('AlfaClubLiquidityPools write gate', () => {
     expect(
       screen.getByText(/wraps ETH to WETH for canonical sponsored wallets/i),
     ).toBeTruthy()
-    expect(screen.getByText(/Market trades require access/i)).toBeTruthy()
+    expect(screen.getByText(/Connect to trade/i)).toBeTruthy()
+    expect(screen.getAllByTestId('markets-connect').length).toBeGreaterThan(0)
     expect(
       screen
         .getByRole('link', { name: /Sign in to trade/i })
