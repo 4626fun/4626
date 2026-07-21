@@ -375,7 +375,7 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
       <section className="rounded-2xl bg-zinc-950/40 p-5 ring-1 ring-white/[0.07]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-medium text-zinc-100">Room market</h2>
+            <h2 className="text-base font-medium text-zinc-100">Key market</h2>
             <p className="mt-1 text-sm text-zinc-500">
               Official Sudoswap Creator Coin / FriendKey market for token ID{' '}
               {roomId}.
@@ -409,20 +409,20 @@ export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
           </p>
         ) : directory.isLoading ? (
           <p className="mt-5 text-sm text-zinc-400" role="status">
-            Loading room market from Base…
+            Loading key market from Base…
           </p>
         ) : directory.error ? (
           <p className="mt-5 text-sm text-red-300" role="alert">
-            Unable to load the room market.
+            Unable to load the key market.
           </p>
         ) : roomPools.length === 0 ? (
           <div className="mt-5 rounded-xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
             <h3 className="text-sm font-medium text-zinc-100">
-              No configured market for this room
+              No configured market for this key
             </h3>
             <p className="mt-1 text-sm text-zinc-500">
               The official AlfaClub Sudoswap market is currently assigned to
-              Room 1659.
+              Key #1659.
             </p>
           </div>
         ) : (
@@ -513,7 +513,7 @@ export function AlfaClubLiquidityPools() {
                 AlfaClub
               </p>
               <h1 className="mt-2 text-3xl font-medium tracking-tight text-white sm:text-4xl">
-                Room markets
+                Key markets
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
                 Creator Coin and FriendKey secondary markets on official
@@ -601,7 +601,7 @@ export function AlfaClubLiquidityPools() {
             </div>
             {marketConfigured && !directory.isLoading && !directory.error && pools.length > 0 ? (
               <label className="relative block sm:w-72">
-                <span className="sr-only">Search room markets</span>
+                <span className="sr-only">Search key markets</span>
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600"
                   aria-hidden

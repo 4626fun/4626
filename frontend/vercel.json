@@ -145,15 +145,27 @@
       "dest": "https://app.4626.fun/$1"
     },
     {
+      "src": "/explore/rooms(.*)",
+      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "status": 308,
+      "dest": "https://app.4626.fun/explore/keys$1"
+    },
+    {
+      "src": "/rooms(.*)",
+      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "status": 308,
+      "dest": "https://app.4626.fun/keys$1"
+    },
+    {
       "src": "/alfaclub/key-safety(.*)",
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
+      "dest": "https://app.4626.fun/keys?tab=safety"
     },
     {
       "src": "/alfaclub/trading-rooms(.*)",
       "status": 308,
       "headers": {
-        "location": "https://alfaclub.4626.fun/explore/rooms$1"
+        "location": "https://app.4626.fun/explore/keys$1"
       }
     },
     {
@@ -170,7 +182,7 @@
       "src": "/alfaclub/?",
       "status": 308,
       "headers": {
-        "location": "https://alfaclub.4626.fun/explore/rooms"
+        "location": "https://app.4626.fun/explore/keys"
       }
     },
     {
@@ -194,13 +206,13 @@
       "src": "/explore/rooms(.*)",
       "has": [{ "type": "host", "value": "4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/explore/rooms$1"
+      "dest": "https://app.4626.fun/explore/keys$1"
     },
     {
       "src": "/explore/rooms(.*)",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/explore/rooms$1"
+      "dest": "https://app.4626.fun/explore/keys$1"
     },
     {
       "src": "/inverseakita(.*)",

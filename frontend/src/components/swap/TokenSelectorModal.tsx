@@ -1,4 +1,4 @@
-import { Check, Search, X } from 'lucide-react'
+import { Check, KeyRound, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
 import { useQueries, useQuery } from '@tanstack/react-query'
@@ -19,12 +19,16 @@ import {
 } from '@/lib/swap/useSwapAssetBalance'
 import {
   fetchAlfaClubRoomsForTokenModal,
-  resolveAlfaClubRoomTokens,
-  stripAlfaClubRoomPresentation,
+  resolveAlfaClubKeys,
+  type AlfaClubKeyOption,
 } from '@/lib/swap/alfaclubRoomTokens'
 import { formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { apiFetch } from '@/lib/api/apiBase'
+import { ALFACLUB } from '@/lib/alfaclub/contracts'
+import { sameSwapAsset, type SwapAssetRef } from '@/lib/swap/swapAssetIdentity'
 import {
   BASE_CHAIN_ID,
   shareTokenLogo,
@@ -37,10 +41,6 @@ export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content' | 'trend'
   verified?: boolean
   isUserHolding?: boolean
-  /** Present when this creator coin is surfaced from an AlfaClub room pin/match. */
-  alfaclubRoomId?: string
-  /** Room pfp for AlfaClub room chips only — never used as the creator-coin logo. */
-  alfaclubRoomImageUrl?: string | null
 }
 
 type AddressMetadataCacheEntry = {
@@ -91,11 +91,15 @@ const MAX_BALANCE_LOOKUPS = 18
 
 type TokenRow = { option: SwapTokenOption; section: string }
 
+export type SwapSelectorAsset =
+  | { ref: Extract<SwapAssetRef, { kind: 'erc20' }>; token: SwapTokenOption }
+  | { ref: Extract<SwapAssetRef, { kind: 'erc1155-key' }>; key: AlfaClubKeyOption }
+
 type TokenSelectorModalProps = {
   open: boolean
   query: string
   tokenOptions: SwapTokenOption[]
-  selectedToken: string
+  selectedAsset: SwapAssetRef | null
   recentTokenAddresses: string[]
   chainId?: SupportedChainId
   balanceOwnerAddress?: Address | null
@@ -104,7 +108,7 @@ type TokenSelectorModalProps = {
   isSearchLoading?: boolean
   onQueryChange: (value: string) => void
   onClose: () => void
-  onSelect: (option: SwapTokenOption) => void
+  onSelectAsset: (asset: SwapSelectorAsset) => void
 }
 
 const SUPPORTED_CHAIN_IDS: SupportedChainId[] = [1, 10, 137, 42161, 8453]
@@ -154,8 +158,8 @@ function formatSectionLabel(section: string): string {
       return 'Popular tokens'
     case 'Your holdings':
       return 'Your holdings'
-    case 'AlfaClub rooms':
-      return 'AlfaClub rooms'
+    case 'AlfaClub keys':
+      return 'AlfaClub keys'
     case 'Creator coins':
       return 'Creator coins'
     case 'Content coins':
@@ -222,14 +226,7 @@ function TokenSelectorRow(props: {
     option.sectionTag === 'creator' ||
     option.sectionTag === 'content' ||
     option.sectionTag === 'trend'
-  const linkedRoomSubtitle =
-    section === 'AlfaClub rooms' && option.alfaclubRoomId
-      ? `Linked room #${option.alfaclubRoomId}`
-      : null
-  const subtitleName =
-    linkedRoomSubtitle
-      ? linkedRoomSubtitle
-      : option.name &&
+  const subtitleName = option.name &&
           option.name.toLowerCase() !== option.symbol.toLowerCase() &&
           !isOpaqueInternalTokenLabel(option.name)
         ? option.name
@@ -313,11 +310,52 @@ function TokenSelectorRow(props: {
   )
 }
 
+function KeySelectorRow(props: {
+  option: AlfaClubKeyOption
+  isSelected: boolean
+  onChoose: () => void
+}) {
+  const { option, isSelected, onChoose } = props
+  const disabled = !option.marketReady
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onChoose}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors',
+        isSelected ? 'bg-sky-500/14' : 'hover:bg-white/[0.05]',
+        disabled ? 'cursor-not-allowed opacity-55' : null,
+      )}
+    >
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-300/30 bg-sky-500/[0.08]">
+        {option.imageUrl ? <img src={option.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+        <KeyRound className="absolute h-4 w-4 text-sky-100" aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[15px] font-semibold text-white">{option.label}</span>
+          <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-100">Key</span>
+        </div>
+        <div className="truncate text-xs text-zinc-500">
+          {option.marketReady
+            ? `${option.creatorHandle ? `${option.creatorHandle} · ` : ''}AKITA access · AlfaClub`
+            : 'No market'}
+        </div>
+      </div>
+      <div className="flex min-w-[4.75rem] shrink-0 flex-col items-end gap-0.5 pl-1">
+        {option.balance != null ? <span className="text-sm font-medium tabular-nums text-zinc-200">{option.balance.toString()}</span> : null}
+        {isSelected ? <Check className="h-4 w-4 text-sky-200" strokeWidth={2.5} /> : null}
+      </div>
+    </button>
+  )
+}
+
 export function TokenSelectorModal({
   open,
   query,
   tokenOptions,
-  selectedToken,
+  selectedAsset,
   recentTokenAddresses,
   chainId,
   balanceOwnerAddress,
@@ -325,7 +363,7 @@ export function TokenSelectorModal({
   isSearchLoading = false,
   onQueryChange,
   onClose,
-  onSelect,
+  onSelectAsset,
 }: TokenSelectorModalProps) {
   const [debouncedQuery] = useDebounceValue(query, 250)
   const trimmedQuery = debouncedQuery.trim()
@@ -396,14 +434,57 @@ export function TokenSelectorModal({
     queryFn: ({ signal }) => fetchAlfaClubRoomsForTokenModal(signal),
   })
 
-  const alfaclubRoomTokens = useMemo(() => {
-    // Mirror quick-pick behavior: hide curated room chips/section while searching.
-    if (trimmedQuery || chainIdForLookup !== BASE_CHAIN_ID) return []
-    return resolveAlfaClubRoomTokens({
-      tokenOptions,
-      rooms: alfaclubRoomsQuery.data ?? [],
-    })
-  }, [alfaclubRoomsQuery.data, chainIdForLookup, tokenOptions, trimmedQuery])
+  const friendKeyHoldingsQuery = useQuery({
+    queryKey: ['swap', 'token-selector', 'friend-key-holdings', balanceOwnerAddress?.toLowerCase() ?? ''],
+    enabled: open && Boolean(balanceOwnerAddress) && chainIdForLookup === BASE_CHAIN_ID,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const response = await apiFetch(API_ENDPOINTS.wallet.friendKeyHoldings, { method: 'GET' })
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean
+        data?: { keys?: Array<{ tokenId: string; balance: string; creator: string }> }
+      } | null
+      return response.ok && payload?.success && Array.isArray(payload.data?.keys) ? payload.data.keys : []
+    },
+  })
+
+  const alfaclubKeys = useMemo(() => {
+    if (chainIdForLookup !== BASE_CHAIN_ID) return []
+    const directory = resolveAlfaClubKeys({ rooms: alfaclubRoomsQuery.data ?? [] })
+    const byId = new Map(directory.map((key) => [key.keyId, key]))
+    for (const holding of friendKeyHoldingsQuery.data ?? []) {
+      const existing = byId.get(holding.tokenId)
+      const balance = /^\d+$/.test(holding.balance) ? BigInt(holding.balance) : 0n
+      if (existing) {
+        existing.balance = balance
+        continue
+      }
+      byId.set(holding.tokenId, {
+        assetKind: 'erc1155-key',
+        contractAddress: ALFACLUB.friendKey,
+        keyId: holding.tokenId,
+        label: `Key #${holding.tokenId}`,
+        balance,
+        marketReady: holding.tokenId === '1659',
+        asset: { kind: 'erc1155-key', chainId: 8453, contractAddress: ALFACLUB.friendKey, tokenId: BigInt(holding.tokenId) },
+      })
+    }
+    const normalized = trimmedQuery.replace(/^key\s*/i, '').replace(/^#/, '').trim().toLowerCase()
+    return [...byId.values()]
+      .filter((key) => !normalized || [key.keyId, key.label, key.creatorHandle ?? ''].some((value) => value.toLowerCase().includes(normalized)))
+      .sort((a, b) => {
+        const balanceOrder = (b.balance ?? 0n) > (a.balance ?? 0n) ? 1 : (b.balance ?? 0n) < (a.balance ?? 0n) ? -1 : 0
+        return balanceOrder || Number(b.marketReady) - Number(a.marketReady)
+      })
+  }, [alfaclubRoomsQuery.data, chainIdForLookup, friendKeyHoldingsQuery.data, trimmedQuery])
+  const heldKeys = useMemo(
+    () => alfaclubKeys.filter((key) => key.balance != null && key.balance > 0n),
+    [alfaclubKeys],
+  )
+  const marketKeys = useMemo(
+    () => alfaclubKeys.filter((key) => !heldKeys.some((held) => held.keyId === key.keyId)),
+    [alfaclubKeys, heldKeys],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -568,15 +649,6 @@ export function TokenSelectorModal({
       list.push({ option, section: 'Your holdings' })
     })
 
-    // AlfaClub room creator coins sit just under holdings so common room markets
-    // stay one tap away from the quick-pick chips above the list.
-    alfaclubRoomTokens.forEach((option) => {
-      const key = option.address.toLowerCase()
-      if (seen.has(key)) return
-      seen.add(key)
-      list.push({ option, section: 'AlfaClub rooms' })
-    })
-
     if (!trimmedQuery) {
       resolveTrendingTokens(tokenOptions)
         .filter((option) => !option.isUserHolding) // keep user's Zora CSW holdings out of Trending so they can appear in the dedicated holdings section
@@ -612,7 +684,6 @@ export function TokenSelectorModal({
     return list
   }, [
     addressCandidate,
-    alfaclubRoomTokens,
     chainIdForLookup,
     isAddressSearchActive,
     matchedTokens,
@@ -646,12 +717,10 @@ export function TokenSelectorModal({
       addresses.push(value)
     }
     resolveTrendingTokens(tokenOptions).forEach((option) => push(option.address))
-    alfaclubRoomTokens.forEach((option) => push(option.address))
     quickPickTokens.forEach((option) => push(option.address))
     visibleRows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
     return addresses.slice(0, MAX_BALANCE_LOOKUPS)
   }, [
-    alfaclubRoomTokens,
     balanceOwnerAddress,
     chainIdForLookup,
     quickPickTokens,
@@ -711,10 +780,7 @@ export function TokenSelectorModal({
         const isZoraCoin = r.option.sectionTag === 'creator' || r.option.sectionTag === 'content' ||
                            r.option.group === 'creator' || r.option.group === 'share';
         if (hasPositive && isZoraCoin) {
-          pos.push({
-            ...r,
-            option: stripAlfaClubRoomPresentation(r.option),
-          });
+          pos.push(r);
         } else {
           rem.push(r);
         }
@@ -777,12 +843,12 @@ export function TokenSelectorModal({
           setNeedsUnverifiedConfirm(option)
           return
         }
-        onSelect(option)
+        onSelectAsset({ ref: { kind: 'erc20', chainId: option.chainId, address: option.address }, token: option })
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [activeIndex, onSelect, open, flatDisplayRows])
+  }, [activeIndex, onSelectAsset, open, flatDisplayRows])
 
   useEffect(() => {
     const active = flatDisplayRows[activeIndex]
@@ -797,13 +863,13 @@ export function TokenSelectorModal({
       setNeedsUnverifiedConfirm(option)
       return
     }
-    onSelect(option)
+    onSelectAsset({ ref: { kind: 'erc20', chainId: option.chainId, address: option.address }, token: option })
     onClose()
   }
 
   function confirmUnverified() {
     if (!needsUnverifiedConfirm) return
-    onSelect(needsUnverifiedConfirm)
+    onSelectAsset({ ref: { kind: 'erc20', chainId: needsUnverifiedConfirm.chainId, address: needsUnverifiedConfirm.address }, token: needsUnverifiedConfirm })
     setNeedsUnverifiedConfirm(null)
     onClose()
   }
@@ -819,7 +885,7 @@ export function TokenSelectorModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Select a token"
+      title="Select an asset"
       maxWidth="max-w-md"
       headerClassName="border-b border-white/6 px-4 pb-3 pt-4"
       className="gap-0 overflow-hidden border border-white/10 bg-[#131313] p-0 shadow-2xl"
@@ -834,7 +900,7 @@ export function TokenSelectorModal({
                 type="text"
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="Search tokens"
+                placeholder="Search tokens or keys"
                 className="h-11 w-full rounded-2xl border-0 bg-white/[0.06] pl-10 pr-10 text-sm text-white placeholder:text-zinc-500 outline-none ring-1 ring-white/8 transition focus-visible:ring-brand-primary/50"
               />
               {query ? (
@@ -851,41 +917,27 @@ export function TokenSelectorModal({
             <NetworkChip chainId={chainIdForLookup} />
           </div>
 
-          {alfaclubRoomTokens.length > 0 ? (
+          {alfaclubKeys.length > 0 && !trimmedQuery ? (
             <div className="mt-3">
               <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-                AlfaClub rooms
+                AlfaClub keys
               </div>
               <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {alfaclubRoomTokens.map((option) => (
+                {alfaclubKeys.map((key) => (
                   <button
-                    key={`alfaclub-room-${option.alfaclubRoomId ?? option.address}`}
+                    key={`alfaclub-key-${key.keyId}`}
                     type="button"
-                    onClick={() => choose(option)}
-                    className="flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-2xl border border-sky-400/20 bg-sky-500/[0.06] px-2.5 py-2 transition hover:border-sky-300/35 hover:bg-sky-500/[0.1]"
+                    disabled={!key.marketReady}
+                    onClick={() => onSelectAsset({ ref: key.asset, key })}
+                    className="flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-2xl border border-sky-400/20 bg-sky-500/[0.06] px-2.5 py-2 transition hover:border-sky-300/35 hover:bg-sky-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <div className="relative">
-                      <TokenAvatar
-                        token={{
-                          address: option.address,
-                          logoUrl: option.alfaclubRoomImageUrl || option.logoUrl,
-                          logoUrls: option.alfaclubRoomImageUrl
-                            ? [option.alfaclubRoomImageUrl, ...(option.logoUrls ?? [])]
-                            : option.logoUrls,
-                        }}
-                        symbol={option.symbol}
-                        size={28}
-                        noFallback
-                      />
+                      <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border border-sky-300/30 bg-sky-500/[0.08]">
+                        {key.imageUrl ? <img src={key.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+                        <KeyRound className="absolute h-3.5 w-3.5 text-sky-100" />
+                      </div>
                     </div>
-                    <span className="text-[11px] font-semibold text-zinc-100">
-                      {option.symbol}
-                    </span>
-                    {option.alfaclubRoomId ? (
-                      <span className="text-[9px] font-medium text-sky-200/80">
-                        #{option.alfaclubRoomId}
-                      </span>
-                    ) : null}
+                    <span className="text-[11px] font-semibold text-zinc-100">Key #{key.keyId}</span>
                   </button>
                 ))}
               </div>
@@ -976,7 +1028,7 @@ export function TokenSelectorModal({
             </div>
           ) : null}
 
-          {!listLoading && flatDisplayRows.length === 0 && !addressLookupLoading ? (
+          {!listLoading && flatDisplayRows.length === 0 && alfaclubKeys.length === 0 && !addressLookupLoading ? (
             <div className="py-14 text-center">
               <p className="text-sm font-medium text-zinc-300">No tokens found</p>
               <p className="mt-1 text-xs text-zinc-500">
@@ -1000,7 +1052,9 @@ export function TokenSelectorModal({
                       {sectionOpen
                         ? sectionRows.map(({ option }) => {
                             const isActive = activeIndex === visibleIdx
-                            const isSelected = option.address.toLowerCase() === selectedToken.toLowerCase()
+                            const isSelected =
+                              selectedAsset?.kind === 'erc20' &&
+                              option.address.toLowerCase() === selectedAsset.address.toLowerCase()
                             const { balanceLabel, usdLabel } = resolveTokenRowAmountLabels({
                               address: option.address,
                               symbol: option.symbol,
@@ -1029,6 +1083,42 @@ export function TokenSelectorModal({
                 })
               })()
             : null}
+
+          {!listLoading && heldKeys.length > 0 ? (
+            <div>
+              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">Your keys</div>
+              {heldKeys.map((key) => (
+                <KeySelectorRow
+                  key={`held-key-${key.keyId}`}
+                  option={key}
+                  isSelected={sameSwapAsset(selectedAsset, key.asset)}
+                  onChoose={() => {
+                    if (!key.marketReady) return
+                    onSelectAsset({ ref: key.asset, key })
+                    onClose()
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {!listLoading && marketKeys.length > 0 ? (
+            <div>
+              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">AlfaClub keys</div>
+              {marketKeys.map((key) => (
+                <KeySelectorRow
+                  key={`market-key-${key.keyId}`}
+                  option={key}
+                  isSelected={sameSwapAsset(selectedAsset, key.asset)}
+                  onChoose={() => {
+                    if (!key.marketReady) return
+                    onSelectAsset({ ref: key.asset, key })
+                    onClose()
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {needsUnverifiedConfirm ? (

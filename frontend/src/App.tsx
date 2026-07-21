@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router
 
 import { Button } from '@/components/ui/Button'
 import { APP_ORIGIN, getHostMode } from '@/lib/env/host'
+import { resolveAlfaClubCanonicalPath } from '@/lib/alfaclub/hostPaths'
 
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
 import { AlfaClubHostApp, LegacyAlfaClubRedirect } from './app/alfaclubHostRoutes'
@@ -106,7 +107,8 @@ function NotFoundPage() {
 }
 
 function App() {
-  if (getHostMode() === 'alfaclub') {
+  const location = useLocation()
+  if (getHostMode() === 'alfaclub' && resolveAlfaClubCanonicalPath(location.pathname)) {
     return <AlfaClubHostApp />
   }
 
@@ -128,7 +130,11 @@ function App() {
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
 
-        {/* Legacy AlfaClub surfaces hard-cut to alfaclub.4626.fun */}
+        {/* Canonical AlfaClub key surfaces live on app.4626.fun. */}
+        <Route path="/keys" element={<AlfaClubHostApp />} />
+        <Route path="/explore/keys" element={<AlfaClubHostApp />} />
+        <Route path="/rooms" element={<LegacyAlfaClubRedirect />} />
+        <Route path="/explore/rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/alfaclub" element={<LegacyAlfaClubRedirect />} />
         <Route path="/alfaclub/trading-rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/alfaclub/key-safety" element={<LegacyAlfaClubRedirect />} />

@@ -36,6 +36,10 @@ describe('AlfaClub My Rooms', () => {
     expect(result).toEqual({
       canonicalCswAddress: CANONICAL_CSW,
       roomIds: ['1659', '97'],
+      keys: [
+        { tokenId: '1659', balance: '2', creator: CANONICAL_CSW },
+        { tokenId: '97', balance: '1', creator: CANONICAL_CSW },
+      ],
     })
   })
 
@@ -49,7 +53,7 @@ describe('AlfaClub My Rooms', () => {
         getPublicClient,
         getHoldings,
       }),
-    ).resolves.toEqual({ canonicalCswAddress: null, roomIds: [] })
+    ).resolves.toEqual({ canonicalCswAddress: null, roomIds: [], keys: [] })
 
     expect(getPublicClient).not.toHaveBeenCalled()
     expect(getHoldings).not.toHaveBeenCalled()

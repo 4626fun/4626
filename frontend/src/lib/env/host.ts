@@ -137,6 +137,7 @@ export const CONFIGURED_MARKETING_ORIGIN =
 export const CONFIGURED_APP_ORIGIN =
   (import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun'
 
+/** Legacy AlfaClub shell; key URLs intentionally use APP_ORIGIN via hostPaths. */
 export const CONFIGURED_ALFACLUB_ORIGIN =
   (import.meta.env.VITE_ALFACLUB_ORIGIN as string)?.trim() || 'https://alfaclub.4626.fun'
 
@@ -178,7 +179,7 @@ export const MARKETING_ORIGIN = resolveConfiguredOrigin(CONFIGURED_MARKETING_ORI
 /** Canonical app domain origin (post-acceptance). */
 export const APP_ORIGIN = resolveConfiguredOrigin(CONFIGURED_APP_ORIGIN)
 
-/** Canonical AlfaClub product host origin. */
+/** Canonical AlfaClub key surface origin. */
 export const ALFACLUB_ORIGIN = resolveConfiguredOrigin(CONFIGURED_ALFACLUB_ORIGIN)
 
 /**
@@ -262,14 +263,7 @@ export function getMarketingBaseUrl(): string {
  */
 export function getAlfaClubBaseUrl(): string {
   if (typeof window === 'undefined') return ALFACLUB_ORIGIN
-  const mode = getHostMode()
-  if (mode === 'alfaclub') {
-    return resolveLoopbackOriginForCurrentWindow({
-      configuredOrigin: ALFACLUB_ORIGIN,
-      currentOrigin: window.location.origin,
-    })
-  }
-  return ALFACLUB_ORIGIN
+  return getHostMode() === 'alfaclub' ? window.location.origin : ALFACLUB_ORIGIN
 }
 
 /**

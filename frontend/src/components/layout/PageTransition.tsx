@@ -15,7 +15,7 @@ export function getRouteTransitionKey(pathname: string, locationKey: string): st
   // on this one route. Pinning the key to the pathname keeps the sidebar, tab panels,
   // and room fetch mounted across those clicks instead of replaying the route fade
   // (and refetching rooms) on every `?roomId=`/`?tab=` change.
-  if (pathname === '/rooms') return '/rooms'
+  if (pathname === '/keys') return '/keys'
   return locationKey
 }
 

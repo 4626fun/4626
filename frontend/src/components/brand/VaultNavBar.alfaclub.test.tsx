@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { VaultNavBarContent } from './VaultNavBar'
 
 describe('VaultNavBar AlfaClub navigation', () => {
-  it('shows Rooms, InverseAKITA, and Arena and marks the strategy route active', () => {
+  it('shows Keys, InverseAKITA, and Arena and marks the strategy route active', () => {
     render(
       <MemoryRouter initialEntries={['/inverseakita']}>
         <VaultNavBarContent
@@ -20,8 +20,8 @@ describe('VaultNavBar AlfaClub navigation', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('link', { name: 'Rooms' }).getAttribute('href')).toBe(
-      '/explore/rooms',
+    expect(screen.getByRole('link', { name: 'Keys' }).getAttribute('href')).toBe(
+      '/explore/keys',
     )
     const inverseLink = screen.getByRole('link', { name: 'InverseAKITA' })
     expect(inverseLink.getAttribute('href')).toBe('/inverseakita')

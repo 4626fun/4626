@@ -4,86 +4,36 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { AlfaClubHubRedirect, RedirectPreserve } from '@/app/alfaclubHostRoutes'
-import {
-  ALFACLUB_EXPLORE_POOLS_PATH,
-  ALFACLUB_EXPLORE_ROOMS_PATH,
-  ALFACLUB_POOLS_PATH,
-  ALFACLUB_ROOMS_PATH,
-  ALFACLUB_SAFETY_PATH,
-  buildAlfaClubAbsoluteUrl,
-  resolveAlfaClubCanonicalPath,
-} from '@/lib/alfaclub/hostPaths'
+import { RedirectPreserve } from '@/app/alfaclubHostRoutes'
+import { ALFACLUB_EXPLORE_KEYS_PATH, ALFACLUB_KEYS_PATH } from '@/lib/alfaclub/hostPaths'
 
 function LocationProbe() {
   const location = useLocation()
-  return (
-    <div data-testid="location">
-      {location.pathname}
-      {location.search}
-      {location.hash}
-    </div>
-  )
+  return <div data-testid="location">{location.pathname}{location.search}{location.hash}</div>
 }
 
-describe('AlfaClub host path redirects', () => {
-  it('preserves query and hash on same-host alias redirects', () => {
+describe('AlfaClub key path redirects', () => {
+  it('normalizes roomId to keyId on the key detail path', () => {
     render(
-      <MemoryRouter initialEntries={['/trading-rooms?roomId=9#top']}>
+      <MemoryRouter initialEntries={['/rooms?roomId=1659&tab=liquidity#trade']}>
         <Routes>
-          <Route
-            path="/trading-rooms"
-            element={<RedirectPreserve to={ALFACLUB_EXPLORE_ROOMS_PATH} />}
-          />
-          <Route path={ALFACLUB_EXPLORE_ROOMS_PATH} element={<LocationProbe />} />
+          <Route path="/rooms" element={<RedirectPreserve to={ALFACLUB_KEYS_PATH} />} />
+          <Route path={ALFACLUB_KEYS_PATH} element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     )
-
-    expect(screen.getByTestId('location').textContent).toBe('/explore/rooms?roomId=9#top')
+    expect(screen.getByTestId('location').textContent).toBe('/keys?tab=liquidity&keyId=1659#trade')
   })
 
-  it('maps the full legacy redirect matrix to canonical short paths', () => {
-    expect(resolveAlfaClubCanonicalPath('/alfaclub')).toBe(ALFACLUB_EXPLORE_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/trading-rooms')).toBe(
-      ALFACLUB_EXPLORE_ROOMS_PATH,
-    )
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_EXPLORE_POOLS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_EXPLORE_POOLS_PATH)
-
-    expect(
-      buildAlfaClubAbsoluteUrl({
-        pathname: '/alfaclub/trading-rooms',
-        search: '?roomId=1',
-        origin: 'https://alfaclub.4626.fun',
-      }),
-    ).toBe('https://alfaclub.4626.fun/explore/rooms?roomId=1')
-  })
-
-  it('redirects safety into the room hub while preserving roomId and forcing its tab', () => {
+  it('preserves explore filters while moving to the key directory', () => {
     render(
-      <MemoryRouter initialEntries={['/safety?roomId=1659&tab=overview#analysis']}>
+      <MemoryRouter initialEntries={['/explore/rooms?sort=volume#top']}>
         <Routes>
-          <Route path={ALFACLUB_SAFETY_PATH} element={<AlfaClubHubRedirect />} />
-          <Route path={ALFACLUB_ROOMS_PATH} element={<LocationProbe />} />
+          <Route path="/explore/rooms" element={<RedirectPreserve to={ALFACLUB_EXPLORE_KEYS_PATH} />} />
+          <Route path={ALFACLUB_EXPLORE_KEYS_PATH} element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     )
-
-    expect(screen.getByTestId('location').textContent).toBe('/rooms?roomId=1659&tab=safety#analysis')
-  })
-
-  it('redirects pools into the explore planner while preserving pool selection', () => {
-    render(
-      <MemoryRouter initialEntries={['/pools?roomId=9&pool=0xabc']}>
-        <Routes>
-          <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubHubRedirect />} />
-          <Route path={ALFACLUB_EXPLORE_POOLS_PATH} element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(screen.getByTestId('location').textContent).toBe('/explore/pools?roomId=9&pool=0xabc')
+    expect(screen.getByTestId('location').textContent).toBe('/explore/keys?sort=volume#top')
   })
 })

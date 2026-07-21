@@ -17,6 +17,12 @@ type MyRoomsDependencies = {
   ) => Promise<AlfaClubHoldingsResult>
 }
 
+export type FriendKeyHolding = {
+  tokenId: string
+  balance: string
+  creator: Address
+}
+
 export async function resolveCanonicalCswForSession(
   sessionAddress: string,
 ): Promise<Address | null> {
@@ -28,11 +34,11 @@ export async function resolveCanonicalCswForSession(
 export async function listMyAlfaClubRoomIds(
   sessionAddress: string,
   dependencies: MyRoomsDependencies = {},
-): Promise<{ canonicalCswAddress: Address | null; roomIds: string[] }> {
+): Promise<{ canonicalCswAddress: Address | null; roomIds: string[]; keys: FriendKeyHolding[] }> {
   const resolveCanonicalCsw =
     dependencies.resolveCanonicalCsw ?? resolveCanonicalCswForSession
   const canonicalCswAddress = await resolveCanonicalCsw(sessionAddress)
-  if (!canonicalCswAddress) return { canonicalCswAddress: null, roomIds: [] }
+  if (!canonicalCswAddress) return { canonicalCswAddress: null, roomIds: [], keys: [] }
 
   const client = await (dependencies.getPublicClient ?? getAlfaClubPublicClient)()
   const holdings = await (dependencies.getHoldings ?? getAlfaClubHoldings)(
@@ -43,5 +49,10 @@ export async function listMyAlfaClubRoomIds(
   return {
     canonicalCswAddress,
     roomIds: holdings.holdings.map(({ tokenId }) => tokenId.toString()),
+    keys: holdings.holdings.map(({ tokenId, balance, creator }) => ({
+      tokenId: tokenId.toString(),
+      balance: balance.toString(),
+      creator,
+    })),
   }
 }

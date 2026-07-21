@@ -109,13 +109,13 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   if (!params.configReady)
     return "Official Sudoswap market deployment is not configured";
   if (!params.requestedMarketMatches)
-    return "No official Sudoswap market is configured for this room";
+    return "No official Sudoswap market is configured for this key";
   if (!params.executionAddress) return "Connect an execution-ready wallet";
   if (!params.keyAmount) return "Enter a positive key amount";
   if (params.mode === "buyWithEth" && !params.ethAmount)
     return "Enter a positive ETH amount";
   if (params.keyAmount > ALFACLUB_MAX_KEY_AMOUNT)
-    return "Room key amount exceeds the supported maximum of 100";
+    return "Key amount exceeds the supported maximum of 100";
   if (params.loading) return "Verifying the live Sudoswap market";
   if (!params.snapshot) return "Onchain market verification failed";
 
@@ -976,7 +976,7 @@ export function AlfaClubLiquidity({
               <div>
                 <span className="label">AlfaClub secondary market</span>
                 <h1 className="headline mt-3 text-3xl sm:text-5xl">
-                  Room keys / Creator Coin
+                  Keys / Creator Coin
                 </h1>
               </div>
               <div className="font-mono text-xs text-zinc-500">
@@ -1003,14 +1003,14 @@ export function AlfaClubLiquidity({
                       ? "Buy with ETH"
                       : direction === "buy"
                         ? "Buy with AKITA"
-                        : "Sell room keys"}
+                        : "Sell keys"}
                   </button>
                 ))}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-xs text-zinc-500">Room keys</span>
+                  <span className="text-xs text-zinc-500">Keys</span>
                   <input
                     value={keyAmountInput}
                     onChange={(event) =>
@@ -1075,7 +1075,7 @@ export function AlfaClubLiquidity({
                         {snapshot?.creatorCoinName ?? "AKITA Creator Coin"}
                       </div>
                       <div className="font-mono text-xs text-zinc-600">
-                        Room #{ROOM_1659_TOKEN_ID.toString()}
+                        Key #{ROOM_1659_TOKEN_ID.toString()}
                       </div>
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { PageMeta } from '@/components/seo/PageMeta'
+import { APP_ORIGIN } from '@/lib/env/host'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
@@ -153,9 +154,10 @@ export function AlfaClubExploreRooms() {
   return (
     <div className="relative min-h-[70vh] pb-20">
       <PageMeta
-        title="Explore AlfaClub Rooms"
-        description="Search and compare AlfaClub Trading and Social Rooms by volume, key quote, fund PnL, and bonding-curve tier."
-        canonicalPath="/explore/rooms"
+        title="Explore AlfaClub Keys"
+        description="Search and compare AlfaClub keys by volume, key quote, fund PnL, and bonding-curve tier."
+        canonicalPath="/explore/keys"
+        canonicalOrigin={APP_ORIGIN}
       />
       <div
         aria-hidden
@@ -168,13 +170,13 @@ export function AlfaClubExploreRooms() {
             AlfaClub
           </p>
           <h1 className="mt-2 text-3xl font-medium tracking-tight text-white sm:text-4xl">
-            Explore rooms
+            Explore keys
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
-            Browse Trading and Social Rooms by price, volume, fund size, and PnL.
+            Browse AlfaClub keys by price, volume, fund size, and PnL. Rooms are optional chat venues, not the asset.
           </p>
           <dl className="mt-6 grid max-w-xl grid-cols-3 gap-px overflow-hidden rounded-xl bg-white/[0.08] ring-1 ring-white/[0.08]">
-            <Metric label="All rooms" value={rooms.length} />
+            <Metric label="All keys" value={rooms.length} />
             <Metric label="Trading" value={tradingCount} />
             <Metric label="Social" value={socialCount} />
           </dl>
@@ -187,8 +189,8 @@ export function AlfaClubExploreRooms() {
               <input
                 value={filters.query}
                 onChange={(event) => updateFilter('q', event.target.value)}
-                placeholder="Search rooms, creators, or room ID"
-                aria-label="Search AlfaClub rooms"
+                placeholder="Search keys, creators, or key ID"
+                aria-label="Search AlfaClub keys"
                 className="h-10 w-full rounded-full border border-white/12 bg-white/[0.04] pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-sky-400/40 focus:ring-2 focus:ring-sky-400/15"
               />
             </div>
@@ -359,7 +361,7 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
 
   return (
     <Link
-      to={`/rooms?roomId=${encodeURIComponent(room.roomId)}`}
+      to={`/keys?keyId=${encodeURIComponent(room.roomId)}`}
       className="group grid grid-cols-[minmax(260px,2.2fr)_minmax(128px,1fr)_minmax(96px,0.85fr)_minmax(96px,0.85fr)_minmax(132px,1.1fr)_72px] items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3.5">
@@ -462,4 +464,3 @@ function DirectoryMessage({
     </div>
   )
 }
-

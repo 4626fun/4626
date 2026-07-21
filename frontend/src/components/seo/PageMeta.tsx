@@ -32,6 +32,8 @@ type PageMetaProps = {
   robots?: string
   /** Canonical path (relative, e.g. '/vault/0x...') */
   canonicalPath?: string
+  /** Use only for cross-host canonical surfaces such as AlfaClub keys. */
+  canonicalOrigin?: string
   /** OG image URL */
   ogImage?: string
   /** Twitter image URL. Defaults to the canonical Twitter card asset. */
@@ -99,13 +101,14 @@ export function PageMeta({
   description,
   robots = 'noindex,follow',
   canonicalPath,
+  canonicalOrigin,
   ogImage,
   twitterImage,
   structuredData = null,
 }: PageMetaProps) {
   useEffect(() => {
     const origin = getPageOrigin()
-    const canonical = normalizeCanonicalUrl(canonicalPath, origin)
+    const canonical = normalizeCanonicalUrl(canonicalPath, canonicalOrigin || origin)
     const fallbackOgImage = `${origin}${SITE_ASSETS.ogImage}`
     const fallbackTwitterImage = `${origin}${SITE_ASSETS.twitterImage}`
     const resolvedDescription = String(description ?? '').trim() || SITE_DESCRIPTION
@@ -146,7 +149,7 @@ export function PageMeta({
 
     // JSON-LD
     setOrCreateJsonLd('page', structuredData)
-  }, [title, description, robots, canonicalPath, ogImage, twitterImage, structuredData])
+  }, [title, description, robots, canonicalPath, canonicalOrigin, ogImage, twitterImage, structuredData])
 
   return null
 }

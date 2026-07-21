@@ -1,8 +1,11 @@
-import { ALFACLUB_ORIGIN } from '@/lib/env/host'
+import { APP_ORIGIN } from '@/lib/env/host'
 
-/** Canonical hub and retained alias paths on alfaclub.4626.fun. */
-export const ALFACLUB_ROOMS_PATH = '/rooms'
-export const ALFACLUB_EXPLORE_ROOMS_PATH = '/explore/rooms'
+/** Canonical AlfaClub key surfaces live on app.4626.fun. */
+export const ALFACLUB_KEYS_PATH = '/keys'
+export const ALFACLUB_EXPLORE_KEYS_PATH = '/explore/keys'
+/** @deprecated Internal compatibility aliases; public URLs are keys, never rooms. */
+export const ALFACLUB_ROOMS_PATH = ALFACLUB_KEYS_PATH
+export const ALFACLUB_EXPLORE_ROOMS_PATH = ALFACLUB_EXPLORE_KEYS_PATH
 export const ALFACLUB_EXPLORE_POOLS_PATH = '/explore/pools'
 export const ALFACLUB_INVERSE_AKITA_PATH = '/inverseakita'
 export const ALFACLUB_ARENA_PATH = '/arena'
@@ -15,28 +18,10 @@ type AlfaClubRedirectTarget = {
 }
 
 const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
-  '/alfaclub': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
-  '/alfaclub/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
-  '/trading-rooms': { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
-  [ALFACLUB_EXPLORE_ROOMS_PATH]: { pathname: ALFACLUB_EXPLORE_ROOMS_PATH },
-  [ALFACLUB_EXPLORE_POOLS_PATH]: { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
-  [ALFACLUB_INVERSE_AKITA_PATH]: { pathname: ALFACLUB_INVERSE_AKITA_PATH },
-  [ALFACLUB_ARENA_PATH]: { pathname: ALFACLUB_ARENA_PATH },
-  '/arena/introduction': { pathname: '/arena/introduction' },
-  '/arena/getting-started': { pathname: '/arena/getting-started' },
-  '/arena/view-status': { pathname: '/arena/view-status' },
-  '/arena/view-chart': { pathname: '/arena/view-chart' },
-  '/arena/how-it-works': { pathname: '/arena/how-it-works' },
-  '/arena/backtest': { pathname: '/arena/backtest' },
-  '/arena/positions': { pathname: '/arena/positions' },
-  '/safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
-  '/alfaclub/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
-  '/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
-  '/pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
-  '/alfaclub/liquidity': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
-  '/alfaclub/liquidity-pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
-  '/liquidity': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
-  '/liquidity-pools': { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
+  '/rooms': { pathname: ALFACLUB_KEYS_PATH },
+  '/explore/rooms': { pathname: ALFACLUB_EXPLORE_KEYS_PATH },
+  [ALFACLUB_KEYS_PATH]: { pathname: ALFACLUB_KEYS_PATH },
+  [ALFACLUB_EXPLORE_KEYS_PATH]: { pathname: ALFACLUB_EXPLORE_KEYS_PATH },
 }
 
 function normalizePathname(pathname: string): string {
@@ -44,7 +29,7 @@ function normalizePathname(pathname: string): string {
   return pathname || '/'
 }
 
-/** Map legacy AlfaClub pathnames to canonical short paths (same-host). */
+/** Map old room pathnames to canonical key paths. */
 export function resolveAlfaClubCanonicalPath(pathname: string): string | null {
   const normalized = normalizePathname(pathname)
   return LEGACY_TO_CANONICAL[normalized]?.pathname ?? null
@@ -60,17 +45,21 @@ export function buildAlfaClubRedirectLocation(input: {
   const pathname = target?.pathname ?? normalized
   const search = new URLSearchParams(input.search ?? '')
   if (target?.forcedTab) search.set('tab', target.forcedTab)
+  if (pathname === ALFACLUB_KEYS_PATH && search.has('roomId') && !search.has('keyId')) {
+    search.set('keyId', search.get('roomId') ?? '')
+    search.delete('roomId')
+  }
   const query = search.toString()
   return `${pathname}${query ? `?${query}` : ''}${input.hash ?? ''}`
 }
 
-/** Absolute URL on the AlfaClub product host, preserving query/hash. */
+/** Absolute canonical URL on the app host, preserving query/hash. */
 export function buildAlfaClubAbsoluteUrl(input: {
   pathname: string
   search?: string
   hash?: string
   origin?: string
 }): string {
-  const origin = (input.origin ?? ALFACLUB_ORIGIN).replace(/\/+$/, '')
+  const origin = (input.origin ?? APP_ORIGIN).replace(/\/+$/, '')
   return `${origin}${buildAlfaClubRedirectLocation(input)}`
 }

@@ -32,6 +32,7 @@ import { RoomChatPanel } from '@/components/alfaclub/RoomChatPanel'
 import { RoomTradingActivity } from '@/components/alfaclub/RoomTradingActivity'
 import { Modal } from '@/components/ui/Modal'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { APP_ORIGIN } from '@/lib/env/host'
 import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
@@ -185,8 +186,10 @@ async function fetchSafetySummary(
 export function AlfaClubTradingRooms() {
   const { authAddress, hasSession, sessionHydrated } = useSiweAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const selectedRoomId = /^\d+$/.test(searchParams.get('roomId')?.trim() ?? '')
-    ? searchParams.get('roomId')!.trim()
+  const selectedRoomId = /^\d+$/.test(searchParams.get('keyId')?.trim() ?? '')
+    ? searchParams.get('keyId')!.trim()
+    : /^\d+$/.test(searchParams.get('roomId')?.trim() ?? '')
+      ? searchParams.get('roomId')!.trim()
     : ''
   const requestedTab = searchParams.get('tab')
   const activeTab = resolveAlfaClubRoomHubTab(requestedTab, selectedRoomId)
@@ -302,18 +305,27 @@ export function AlfaClubTradingRooms() {
     [selectedRoomId],
   )
 
-  const updateQuery = (changes: Record<string, string | null>) => {
+  const updateQuery = useCallback((changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams)
     for (const [key, value] of Object.entries(changes)) {
       if (value === null) next.delete(key)
       else next.set(key, value)
     }
     setSearchParams(next, { replace: true })
-  }
+  }, [searchParams, setSearchParams])
+
+  // Old room links resolve to this key surface. Normalize the public query name
+  // without changing the underlying FriendKey token id used by the data APIs.
+  useEffect(() => {
+    const legacyRoomId = searchParams.get('roomId')?.trim() ?? ''
+    if (searchParams.has('keyId') || !/^\d+$/.test(legacyRoomId)) return
+    updateQuery({ keyId: legacyRoomId, roomId: null })
+  }, [searchParams, updateQuery])
 
   const selectRoom = (roomId: string) => {
     updateQuery({
-      roomId,
+      keyId: roomId,
+      roomId: null,
       tab: activeTab === 'inverse' && roomId !== '1659' ? 'overview' : activeTab,
       pool: null,
     })
@@ -380,14 +392,15 @@ export function AlfaClubTradingRooms() {
   return (
     <div className="relative min-h-[70vh] pb-16" style={layoutStyle}>
       <PageMeta
-        title="AlfaClub Rooms"
-        description="Discover AlfaClub Trading and Social Rooms, review key safety, and manage room liquidity."
-        canonicalPath="/rooms"
+        title="AlfaClub Keys"
+        description="Browse AlfaClub keys, review key safety, and manage the official key market."
+        canonicalPath="/keys"
+        canonicalOrigin={APP_ORIGIN}
       />
 
       <aside
         className="fixed left-0 top-0 z-20 hidden h-screen overflow-hidden border-r border-zinc-900/70 bg-black/70 backdrop-blur-md transition-[width] duration-200 motion-reduce:transition-none lg:block"
-        aria-label="Discover AlfaClub rooms"
+        aria-label="Discover AlfaClub keys"
         style={{ width: effectiveTrayWidth }}
       >
         <button
@@ -463,10 +476,10 @@ export function AlfaClubTradingRooms() {
         >
           <span className="min-w-0">
             <span className="block text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-              AlfaClub rooms
+              AlfaClub keys
             </span>
             <span className="block truncate text-sm font-medium text-zinc-200">
-              {selectedRoom ? alfaclubRoomPrimaryTitle(selectedRoom) : selectedRoomId ? `Room #${selectedRoomId}` : 'Choose a room'}
+              {selectedRoom ? alfaclubRoomPrimaryTitle(selectedRoom) : selectedRoomId ? `Key #${selectedRoomId}` : 'Choose a key'}
             </span>
             {selectedRoom ? (
               <span className="mt-0.5 block truncate font-mono text-[10px] capitalize text-zinc-400">
@@ -485,8 +498,8 @@ export function AlfaClubTradingRooms() {
       <Modal
         open={mobileListOpen}
         onClose={() => setMobileListOpen(false)}
-        title="Discover rooms"
-        description="Browse Trading and Social Rooms."
+        title="Discover keys"
+        description="Browse AlfaClub membership keys. Rooms remain optional chat venues."
         placement="bottom-sheet"
         maxWidth="max-w-xl"
         className="h-[100dvh] max-h-[100dvh] rounded-none bg-zinc-950 px-4 pb-5 pt-4 lg:hidden"
@@ -504,7 +517,7 @@ export function AlfaClubTradingRooms() {
               <MissingRoomBanner
                 roomId={selectedRoomId}
                 onBrowse={() => {
-                  updateQuery({ roomId: null, tab: null, pool: null })
+                  updateQuery({ keyId: null, roomId: null, tab: null, pool: null })
                   setMobileListOpen(true)
                 }}
               />
@@ -628,7 +641,7 @@ function CollapsedRoomRail({
   return (
     <div
       className="absolute inset-x-0 top-32 flex flex-col items-center gap-3 px-2 text-center"
-      aria-label={roomId ? `Selected room #${roomId}` : 'No room selected'}
+      aria-label={roomId ? `Selected key #${roomId}` : 'No key selected'}
     >
       <SelectedRoomAvatar room={room} />
       <span className="max-w-full truncate rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-sky-200">
@@ -637,7 +650,7 @@ function CollapsedRoomRail({
       <span className="h-px w-6 bg-white/[0.08]" aria-hidden />
       <span className="font-mono text-[9px] tabular-nums text-zinc-500">
         {roomCount.toLocaleString()}
-        <span className="sr-only"> rooms</span>
+        <span className="sr-only"> keys</span>
       </span>
     </div>
   )
@@ -661,7 +674,7 @@ function RoomHeader({
   const selectedHandle = (room?.creatorHandle ?? '').trim().replace(/^@+/, '')
   const title = room
     ? alfaclubRoomPrimaryTitle(room)
-    : `Room #${roomId}`
+    : `Key #${roomId}`
   const bannerSrc = room?.imageUrl?.trim() || null
   return (
     <header className="pt-2">
@@ -869,9 +882,9 @@ function CategoryCard({
 function MissingRoomBanner({ roomId, onBrowse }: { roomId: string; onBrowse: () => void }) {
   return (
     <div className="mb-4 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-100 ring-1 ring-amber-400/20" role="alert">
-      <p>Room #{roomId} is not in the latest directory snapshot. Live room tools may still resolve it.</p>
+      <p>Key #{roomId} is not in the latest directory snapshot. Live key tools may still resolve it.</p>
       <button type="button" onClick={onBrowse} className="mt-2 font-semibold text-amber-200 underline underline-offset-4">
-        Browse available rooms
+        Browse available keys
       </button>
     </div>
   )
@@ -902,7 +915,7 @@ function OverviewPanel({
     >
       <div className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06] sm:p-6">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-base font-semibold text-zinc-100">Room overview</h2>
+          <h2 className="text-base font-semibold text-zinc-100">Key overview</h2>
           <a
             href={`https://alfaclub.app/rooms/${roomId}/`}
             target="_blank"

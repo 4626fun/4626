@@ -7,9 +7,9 @@ export const WAITLIST_CONTINUE_QUERY_KEY = 'continue'
 export const WAITLIST_RETURN_PATH_QUERY_KEY = 'returnPath'
 
 const ALFACLUB_CONTINUE_VALUE = 'alfaclub'
-const ALFACLUB_ROOMS_PATH = '/rooms'
+const ALFACLUB_KEYS_PATH = '/keys'
 const ALFACLUB_ROOM_TABS = new Set(['overview', 'safety', 'liquidity', 'inverse'])
-const ALFACLUB_RETURN_QUERY_KEYS = new Set(['roomId', 'tab', 'pool'])
+const ALFACLUB_RETURN_QUERY_KEYS = new Set(['keyId', 'tab', 'pool'])
 
 export const WAITLIST_REFERRAL_CODE_STORAGE_KEY = 'cv:waitlist:referral_code'
 export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_session'
@@ -100,8 +100,8 @@ export function normalizeAlfaClubWaitlistReturnPath(value: string | null | undef
   if (!candidate.startsWith('/') || candidate.startsWith('//')) return null
 
   try {
-    const parsed = new URL(candidate, 'https://alfaclub.4626.fun')
-    if (parsed.origin !== 'https://alfaclub.4626.fun' || parsed.pathname !== ALFACLUB_ROOMS_PATH) {
+    const parsed = new URL(candidate, 'https://app.4626.fun')
+    if (parsed.origin !== 'https://app.4626.fun' || parsed.pathname !== ALFACLUB_KEYS_PATH) {
       return null
     }
     if (parsed.hash || parsed.searchParams.has('cv_handoff')) return null
@@ -109,8 +109,8 @@ export function normalizeAlfaClubWaitlistReturnPath(value: string | null | undef
       return null
     }
 
-    const roomId = parsed.searchParams.get('roomId')
-    if (roomId !== null && !/^\d+$/.test(roomId)) return null
+    const keyId = parsed.searchParams.get('keyId')
+    if (keyId !== null && !/^\d+$/.test(keyId)) return null
 
     const tab = parsed.searchParams.get('tab')
     if (tab !== null && !ALFACLUB_ROOM_TABS.has(tab)) return null

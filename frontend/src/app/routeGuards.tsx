@@ -162,9 +162,9 @@ export function getGenericNotFoundCta(hostMode: HostMode): {
   }
   if (hostMode === 'alfaclub') {
     return {
-      href: '/rooms',
-      label: 'Go To Rooms',
-      hint: 'Continue to the AlfaClub trading rooms directory.',
+      href: 'https://app.4626.fun/explore/keys',
+      label: 'Explore Keys',
+      hint: 'Continue to the AlfaClub keys directory.',
     }
   }
   return {

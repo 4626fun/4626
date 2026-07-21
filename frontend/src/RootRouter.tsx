@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { AlfaClubHostApp, AlfaClubHostRedirect } from '@/app/alfaclubHostRoutes'
+import { AlfaClubHostRedirect } from '@/app/alfaclubHostRoutes'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
@@ -122,9 +122,10 @@ export function RootRouter() {
   const location = useLocation()
   const hostMode = getHostMode()
   const isMarketingHost = hostMode === 'marketing'
-  const isAlfaClubHost = hostMode === 'alfaclub'
   const legacyAlfaClubPath = resolveAlfaClubCanonicalPath(location.pathname)
-  const shouldRouteToAlfaClub = Boolean(legacyAlfaClubPath) && !isAlfaClubHost
+  // Only legacy room/key paths move hosts. Arena, chat, and other AlfaClub
+  // routes remain on their existing product host.
+  const shouldRouteToAlfaClub = Boolean(legacyAlfaClubPath)
   const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
   const shouldRouteToApp =
     isMarketingHost &&
@@ -142,15 +143,7 @@ export function RootRouter() {
       <AppLoadingProvider>
         <AppCanvas />
         <AppLoadingOverlay />
-        {isAlfaClubHost ? (
-          <LazyRouteBoundary>
-            {/* Same QueryClient stack as ProtectedAppBoundary — LazyAccessBoundary
-                mounts Wagmi without AppQueryProvider of its own. */}
-            <AppQueryProvider>
-              <AlfaClubHostApp />
-            </AppQueryProvider>
-          </LazyRouteBoundary>
-        ) : shouldRouteToAlfaClub ? (
+        {shouldRouteToAlfaClub ? (
           <AlfaClubHostRedirect pathname={location.pathname} />
         ) : shouldRouteAppHostRootToMarketing ? (
           <AppHostRedirect target={marketingHomeTarget} />

@@ -65,6 +65,10 @@ import { useAccountContext } from '@/wallet/accountContext'
 import { isCanonicalCsw } from '@/wallet/canonicalWalletPolicy'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { normalizeSwapAddress } from '@/lib/swap/resolveSwapBalanceOwner'
+import { AlfaClubLiquidity } from '@/pages/AlfaClubLiquidity'
+import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
+import type { AlfaClubKeyOption } from '@/lib/swap/alfaclubRoomTokens'
+import type { SwapAssetRef } from '@/lib/swap/swapAssetIdentity'
 
 let warnedSwapPrivyHookFailure = false
 let canonicalSessionAutoRefreshAttemptedGlobal = false
@@ -92,6 +96,58 @@ function parsePositiveAmountToUnits(value: string, decimals: number): bigint | n
   } catch {
     return null
   }
+}
+
+type KeySwapSelection = { key: AlfaClubKeyOption; side: 'input' | 'output' }
+
+function KeySwapSurface(props: {
+  selection: KeySwapSelection
+  onSwitch: () => void
+  onOpenPicker: (side: 'input' | 'output') => void
+}) {
+  const sellingKey = props.selection.side === 'input'
+  const key = props.selection.key
+  const sellLabel = sellingKey ? key.label : 'AKITA'
+  const buyLabel = sellingKey ? 'AKITA' : key.label
+  const keyIsSell = sellingKey
+  return (
+    <div className="bv-panel border-0 vault-hover-lift p-4">
+      <div className="mb-3 flex items-center justify-between gap-2 text-[10px] text-vault-subtext">
+        <span>Official AlfaClub key market</span>
+        <span className="rounded-md border border-sky-300/20 bg-sky-500/[0.07] px-2 py-1 font-medium text-sky-100">Key</span>
+      </div>
+      <div className="space-y-3">
+        {(['Sell', 'Buy'] as const).map((label) => {
+          const isSell = label === 'Sell'
+          const isKey = isSell ? keyIsSell : !keyIsSell
+          const assetLabel = isSell ? sellLabel : buyLabel
+          return (
+            <div key={label} className="rounded-[20px] border border-white/[0.08] bg-[rgb(var(--vault-card-raised)/0.72)] p-4">
+              <span className="text-[14px] font-medium leading-none text-zinc-400">{label}</span>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-[24px] font-medium text-zinc-500">{isSell ? 'Enter amount below' : 'Live quote below'}</span>
+                <button type="button" onClick={() => props.onOpenPicker(isSell ? props.selection.side : (props.selection.side === 'input' ? 'output' : 'input'))} className="inline-flex h-11 items-center gap-2 rounded-full bg-[rgb(var(--vault-card)/0.95)] px-3 py-2 transition-colors hover:bg-white/[0.08]" aria-label={`Select ${label.toLowerCase()} asset`}>
+                  <span className={isKey ? 'flex h-6 w-6 items-center justify-center rounded-lg border border-sky-300/30 bg-sky-500/[0.08] text-xs text-sky-100' : 'flex h-6 w-6 items-center justify-center rounded-full bg-brand-primary/15 text-[10px] font-bold text-brand-100'}>{isKey ? '⌘' : 'A'}</span>
+                  <span className="max-w-[8rem] truncate text-[16px] font-semibold text-white">{assetLabel}</span>
+                </button>
+              </div>
+              {isKey ? <div className="mt-1 text-xs text-sky-100/70">ERC-1155 Key #{key.keyId}</div> : <div className="mt-1 text-xs text-zinc-500">Creator coin · AKITA</div>}
+            </div>
+          )
+        })}
+        <button type="button" onClick={props.onSwitch} className="mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[rgb(var(--vault-card-raised)/0.95)] text-zinc-200" aria-label="Switch key market direction">↕</button>
+      </div>
+      <div className="mt-3 border-t border-white/8 pt-3">
+        <AlfaClubLiquidity
+          key={`${key.keyId}-${props.selection.side}`}
+          initialCreatorCoin={AKITA_DEFAULTS.token}
+          initialTokenId={BigInt(key.keyId)}
+          initialMode={sellingKey ? 'sell' : 'buy'}
+          embedded
+        />
+      </div>
+    </div>
+  )
 }
 
 
@@ -169,6 +225,7 @@ export function Swap() {
   })
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false)
   const [tokenSelectorSide, setTokenSelectorSide] = useState<'input' | 'output'>('input')
+  const [keySwapSelection, setKeySwapSelection] = useState<KeySwapSelection | null>(null)
   const [tokenSelectorQuery, setTokenSelectorQuery] = useState('')
   const [debouncedTokenSelectorQuery] = useDebounceValue(tokenSelectorQuery, 250)
   const normalizedTokenSelectorQuery = debouncedTokenSelectorQuery.trim().toLowerCase()
@@ -929,9 +986,13 @@ export function Swap() {
 
 
   const handleSwitchTokens = useCallback(() => {
+    if (keySwapSelection) {
+      setKeySwapSelection((selection) => selection ? { ...selection, side: selection.side === 'input' ? 'output' : 'input' } : selection)
+      return
+    }
     switchTokens()
     resetTradeState()
-  }, [switchTokens, resetTradeState])
+  }, [keySwapSelection, switchTokens, resetTradeState])
 
   const handleSelectSwapChain = useCallback(
     (nextChainId: SupportedChainId) => {
@@ -958,6 +1019,7 @@ export function Swap() {
       if (!option.verified) {
         registerTokenForIdentity(option)
       }
+      setKeySwapSelection(null)
       if (tokenSelectorSide === 'input') {
         setTokenIn(address)
       } else {
@@ -981,6 +1043,7 @@ export function Swap() {
   // request flood when the upstream API is unhealthy (e.g. 403/429).
   const busyRef = useRef(busy)
   busyRef.current = busy
+  const isKeySwapActive = keySwapSelection !== null
 
   const autoQuoteSlippagePct = slippageAuto ? effectiveSlippagePct : parsedSlippage
 
@@ -989,7 +1052,7 @@ export function Swap() {
     // Quotes are read-only and only need a session plus execution address.
     // Keep submit/build gated by `executionReady`, but still show pricing while
     // the account needs 4626 signing setup.
-    if (!executionAddress || !quoteReady || quoteCooldownActive) return
+    if (isKeySwapActive || !executionAddress || !quoteReady || quoteCooldownActive) return
     if (txState === 'signing') return
     if (tokenInAmountExceedsBalance) return
     const timer = window.setTimeout(() => {
@@ -1011,6 +1074,7 @@ export function Swap() {
     quoteReady,
     quoteCooldownActive,
     tokenInAmountExceedsBalance,
+    isKeySwapActive,
     txState,
     handleQuote,
   ])
@@ -1089,7 +1153,13 @@ export function Swap() {
                     style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
                     className="space-y-3"
                   >
-                    <SwapCard
+                    {keySwapSelection ? (
+                      <KeySwapSurface
+                        selection={keySwapSelection}
+                        onSwitch={handleSwitchTokens}
+                        onOpenPicker={openTokenSelector}
+                      />
+                    ) : <SwapCard
                       tokenInDisplay={tokenInDisplay}
                       tokenOutDisplay={tokenOutDisplay}
                       tokenInIdentityLoading={tokenInIdentity.isLoading}
@@ -1177,7 +1247,7 @@ export function Swap() {
                                 ? swapExecutionChrome.swapSenderLabel
                                 : null
                         }
-                      />
+                      />}
                     </motion.div>
                   </AnimatePresence>
               </div>
@@ -1251,7 +1321,11 @@ export function Swap() {
       <TokenSelectorModal
         open={tokenSelectorOpen}
         query={tokenSelectorQuery}
-        selectedToken={tokenSelectorSide === 'input' ? tokenIn : tokenOut}
+        selectedAsset={keySwapSelection?.key.asset ?? {
+          kind: 'erc20',
+          chainId: swapChainId,
+          address: (tokenSelectorSide === 'input' ? tokenIn : tokenOut) as Address,
+        } satisfies SwapAssetRef}
         tokenOptions={swapTokenOptions}
         recentTokenAddresses={recentTokenAddresses}
         chainId={swapChainId}
@@ -1262,7 +1336,21 @@ export function Swap() {
         }
         onQueryChange={setTokenSelectorQuery}
         onClose={() => setTokenSelectorOpen(false)}
-        onSelect={onSelectToken}
+        onSelectAsset={(asset) => {
+          if ('token' in asset) {
+            onSelectToken(asset.token)
+            return
+          }
+          if (!asset.key.marketReady) return
+          setKeySwapSelection({ key: asset.key, side: tokenSelectorSide })
+          if (tokenSelectorSide === 'input') {
+            setTokenOut(AKITA_DEFAULTS.token)
+          } else {
+            setTokenIn(AKITA_DEFAULTS.token)
+          }
+          setTokenSelectorOpen(false)
+          resetTradeState()
+        }}
       />
 
 

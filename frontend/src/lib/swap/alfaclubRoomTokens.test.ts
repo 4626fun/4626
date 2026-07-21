@@ -1,140 +1,31 @@
 import { describe, expect, it } from 'vitest'
 
-import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
-import type { SwapTokenOption } from '@/components/swap/TokenSelectorModal'
+import { ALFACLUB } from '@/lib/alfaclub/contracts'
 import type { AlfaClubRoomDirectoryItem } from '@/lib/alfaclub/roomDirectory'
 
-import {
-  resolveAlfaClubRoomTokens,
-  stripAlfaClubRoomPresentation,
-} from './alfaclubRoomTokens'
+import { resolveAlfaClubKeys } from './alfaclubRoomTokens'
 
-function creatorOption(
-  overrides: Partial<SwapTokenOption> & Pick<SwapTokenOption, 'address' | 'symbol'>,
-): SwapTokenOption {
+function key(overrides: Partial<AlfaClubRoomDirectoryItem> & Pick<AlfaClubRoomDirectoryItem, 'roomId' | 'roomName'>): AlfaClubRoomDirectoryItem {
   return {
-    name: overrides.symbol,
-    group: 'creator',
-    sectionTag: 'creator',
-    verified: true,
-    chainId: 8453,
-    ...overrides,
+    displayLabel: overrides.roomName, creatorHandle: null, roomType: 'trading', tier: 'club', keySupply: 10,
+    roomPoints: 100, keyPriceUsdc: 1, buyPriceUsdc: 1, sellPriceUsdc: 1, volumeUsdc: 100,
+    feesGeneratedUsdc: 1, tradingFundUsdc: 10, pnlUsdc: 0, pnlPct7d: 0, pnlPct30d: 0,
+    pnlPctAllTime: 0, imageUrl: null, description: null, featured: false, uniqueHolders: 3,
+    ingestedAt: '2026-07-19T00:00:00.000Z', ...overrides,
   }
 }
 
-function room(
-  overrides: Partial<AlfaClubRoomDirectoryItem> & Pick<AlfaClubRoomDirectoryItem, 'roomId' | 'roomName'>,
-): AlfaClubRoomDirectoryItem {
-  return {
-    displayLabel: overrides.roomName,
-    creatorHandle: null,
-    roomType: 'trading',
-    tier: 'club',
-    keySupply: 10,
-    roomPoints: 100,
-    keyPriceUsdc: 1,
-    buyPriceUsdc: 1,
-    sellPriceUsdc: 1,
-    volumeUsdc: 100,
-    feesGeneratedUsdc: 1,
-    tradingFundUsdc: 10,
-    pnlUsdc: 0,
-    pnlPct7d: 0,
-    pnlPct30d: 0,
-    pnlPctAllTime: 0,
-    imageUrl: null,
-    description: null,
-    featured: false,
-    uniqueHolders: 3,
-    ingestedAt: '2026-07-19T00:00:00.000Z',
-    ...overrides,
-  }
-}
-
-describe('resolveAlfaClubRoomTokens', () => {
-  it('always surfaces the curated Room 1659 AKITA pin', () => {
-    const resolved = resolveAlfaClubRoomTokens({ tokenOptions: [] })
-    expect(resolved).toHaveLength(1)
-    expect(resolved[0]?.address.toLowerCase()).toBe(AKITA_DEFAULTS.token.toLowerCase())
-    expect(resolved[0]?.alfaclubRoomId).toBe('1659')
-    expect(resolved[0]?.symbol).toBe('AKITA')
-    expect(resolved[0]?.name).toBe('AKITA')
-    expect(resolved[0]?.name).not.toMatch(/room/i)
+describe('resolveAlfaClubKeys', () => {
+  it('uses the FriendKey ERC-1155 contract and token id, never a creator coin', () => {
+    const [resolved] = resolveAlfaClubKeys({ rooms: [key({ roomId: '1659', roomName: 'AKITA' })] })
+    expect(resolved).toMatchObject({
+      assetKind: 'erc1155-key', contractAddress: ALFACLUB.friendKey, keyId: '1659', label: 'Key #1659',
+    })
   })
 
-  it('keeps creator logo/name and stores room image for chips only', () => {
-    const akita = creatorOption({
-      address: AKITA_DEFAULTS.token,
-      symbol: 'AKITA',
-      name: 'Akita Inu',
-      logoUrl: 'https://example.com/akita.png',
+  it('keeps Key #1659 available before the directory loads', () => {
+    expect(resolveAlfaClubKeys({ rooms: [] })[0]).toMatchObject({
+      assetKind: 'erc1155-key', keyId: '1659', label: 'Key #1659',
     })
-    const resolved = resolveAlfaClubRoomTokens({
-      tokenOptions: [akita],
-      rooms: [
-        room({
-          roomId: '1659',
-          roomName: 'AKITA',
-          imageUrl: 'https://example.com/room.gif',
-          featured: true,
-          volumeUsdc: 5000,
-        }),
-      ],
-    })
-
-    expect(resolved).toHaveLength(1)
-    expect(resolved[0]?.name).toBe('Akita Inu')
-    expect(resolved[0]?.logoUrl).toBe('https://example.com/akita.png')
-    expect(resolved[0]?.alfaclubRoomImageUrl).toBe('https://example.com/room.gif')
-    expect(resolved[0]?.alfaclubRoomId).toBe('1659')
-  })
-
-  it('matches additional featured rooms to creator coins by room name', () => {
-    const flip = creatorOption({
-      address: '0x1111111111111111111111111111111111111111',
-      symbol: 'FLIP',
-      name: 'FLIP creator coin',
-    })
-    const resolved = resolveAlfaClubRoomTokens({
-      tokenOptions: [flip],
-      rooms: [
-        room({
-          roomId: '42',
-          roomName: 'FLIP',
-          featured: true,
-          volumeUsdc: 9000,
-        }),
-        room({
-          roomId: '7',
-          roomName: 'NOMATCH',
-          featured: true,
-          volumeUsdc: 8000,
-        }),
-      ],
-    })
-
-    expect(resolved.map((option) => option.symbol)).toEqual(['AKITA', 'FLIP'])
-    expect(resolved[1]?.alfaclubRoomId).toBe('42')
-    expect(resolved[1]?.name).toBe('FLIP creator coin')
-    expect(resolved[1]?.name).not.toMatch(/room/i)
-  })
-})
-
-describe('stripAlfaClubRoomPresentation', () => {
-  it('removes room-only fields while keeping creator token identity', () => {
-    const option = creatorOption({
-      address: AKITA_DEFAULTS.token,
-      symbol: 'AKITA',
-      name: 'Akita Inu',
-      logoUrl: 'https://example.com/akita.png',
-      alfaclubRoomId: '1659',
-      alfaclubRoomImageUrl: 'https://example.com/room.gif',
-    })
-    const stripped = stripAlfaClubRoomPresentation(option)
-    expect(stripped.alfaclubRoomId).toBeUndefined()
-    expect(stripped.alfaclubRoomImageUrl).toBeUndefined()
-    expect(stripped.logoUrl).toBe('https://example.com/akita.png')
-    expect(stripped.name).toBe('Akita Inu')
-    expect(stripped.symbol).toBe('AKITA')
   })
 })

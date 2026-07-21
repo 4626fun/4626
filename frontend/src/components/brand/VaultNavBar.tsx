@@ -39,9 +39,9 @@ const NAV_ITEMS_PUBLIC: NavItem[] = [
 
 const NAV_ITEMS_ALFACLUB: NavItem[] = [
   {
-    label: 'Rooms',
-    to: '/explore/rooms',
-    activePrefixes: ['/explore/rooms', '/explore/pools', '/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
+    label: 'Keys',
+    to: '/explore/keys',
+    activePrefixes: ['/explore/keys', '/keys'],
   },
   {
     label: 'InverseAKITA',
@@ -118,7 +118,7 @@ export function VaultNavBarContent(props: VaultNavBarContentProps) {
       ? [...baseItems, ADMIN_ITEM]
       : baseItems
   const brandHref =
-    hostMode === 'marketing' ? MARKETING_ORIGIN : hostMode === 'alfaclub' ? '/explore/rooms' : '/swap'
+    hostMode === 'marketing' ? MARKETING_ORIGIN : hostMode === 'alfaclub' ? 'https://app.4626.fun/explore/keys' : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
   const isExploreRoute = location.pathname.startsWith('/explore')
   const exploreSearchValue = searchParams.get('q') ?? ''
@@ -134,8 +134,8 @@ export function VaultNavBarContent(props: VaultNavBarContentProps) {
             ? 'Search transactions'
             : location.pathname.startsWith('/explore/pools')
               ? 'Search markets'
-              : location.pathname.startsWith('/explore/rooms')
-                ? 'Search rooms'
+              : location.pathname.startsWith('/explore/keys')
+                ? 'Search keys'
                 : 'Search explore'
   const brandElement = (
     <>

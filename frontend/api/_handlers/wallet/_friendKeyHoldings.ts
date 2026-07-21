@@ -16,24 +16,25 @@ import { listMyAlfaClubRoomIds } from '../../../server/_lib/alfaclub/alfaclubMyR
 
 type FriendKeyHoldingsResponse = {
   roomIds: string[]
+  keys: Array<{ tokenId: string; balance: string; creator: string }>
   generatedAt: string
 }
 
 const CACHE_TTL_MS = 60_000
 const MAX_CACHE_ENTRIES = 200
-const cache = new Map<string, { roomIds: string[]; expiresAt: number }>()
+const cache = new Map<string, { roomIds: string[]; keys: FriendKeyHoldingsResponse['keys']; expiresAt: number }>()
 
-function readCachedRoomIds(key: string): string[] | null {
+function readCachedHoldings(key: string): Pick<FriendKeyHoldingsResponse, 'roomIds' | 'keys'> | null {
   const cached = cache.get(key)
   if (!cached || cached.expiresAt <= Date.now()) {
     cache.delete(key)
     return null
   }
-  return cached.roomIds
+  return { roomIds: cached.roomIds, keys: cached.keys }
 }
 
-function writeCachedRoomIds(key: string, roomIds: string[]): void {
-  cache.set(key, { roomIds, expiresAt: Date.now() + CACHE_TTL_MS })
+function writeCachedHoldings(key: string, holdings: Pick<FriendKeyHoldingsResponse, 'roomIds' | 'keys'>): void {
+  cache.set(key, { ...holdings, expiresAt: Date.now() + CACHE_TTL_MS })
   while (cache.size > MAX_CACHE_ENTRIES) {
     const firstKey = cache.keys().next().value
     if (typeof firstKey !== 'string') break
@@ -73,12 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const roomIds =
-      readCachedRoomIds(principalAddress) ??
-      (await listMyAlfaClubRoomIds(principalAddress)).roomIds
-    writeCachedRoomIds(principalAddress, roomIds)
+    const holdings = readCachedHoldings(principalAddress) ?? await listMyAlfaClubRoomIds(principalAddress)
+    writeCachedHoldings(principalAddress, holdings)
     const data: FriendKeyHoldingsResponse = {
-      roomIds,
+      roomIds: holdings.roomIds,
+      keys: holdings.keys,
       generatedAt: new Date().toISOString(),
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<typeof data>)
