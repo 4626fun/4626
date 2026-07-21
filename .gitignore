@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+**/keypair*.json
+**/id.json
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+cache/
+broadcast/
+typechain-types/
+artifacts/
+coverage/
+lcov.info
+*.tsbuildinfo
+
+# Foundry / Solidity
+cache_forge/
+out/
+broadcast/
+
+# Solana / Anchor
+target/
+.test-ledger/
+.anchor/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and local state
+*.log
+.tmp/
+.temp/
