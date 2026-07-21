@@ -14,14 +14,14 @@ This monorepo is the public face of the 4626 product. Package directories:
 
 | Path | Role |
 | --- | --- |
-| `frontend/` | Vite/React app and API |
-| `contracts/` | Solidity — vaults, gauges, lottery, OFT |
-| `programs/` | Solana programs (creator share hook and related) |
-| `kpr/` | Keeper / automation workflows |
-| `indexer/` | Chain indexing tooling |
-| `supabase/` | Database migrations and config |
 | `apps/docs-site/` | Documentation site |
+| `contracts/` | Solidity — vaults, gauges, lottery, OFT |
 | `docs/` | Public documentation source |
+| `frontend/` | Vite/React app and API |
+| `indexer/` | Chain indexing tooling |
+| `kpr/` | Keeper / automation workflows |
+| `programs/` | Solana programs (creator share hook and related) |
+| `supabase/` | Database migrations and config |
 
 Source migration into this repository is staged. Production hosting (Vercel, Railway, Supabase) remains on the existing private working tree until cutover.
 
