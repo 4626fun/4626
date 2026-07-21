@@ -6,7 +6,7 @@ Thank you for helping keep **4626** secure.
 
 ## How to Report
 
-Email **keepr@4626.fun** with the subject line:
+Email **hello@4626.fun** with the subject line:
 
 `[SECURITY] short description`
 

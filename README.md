@@ -35,4 +35,4 @@ Source migration into this repository is staged. Production hosting (Vercel, Rai
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). Report vulnerabilities to **keepr@4626.fun**.
+See [SECURITY.md](SECURITY.md). Report vulnerabilities to **hello@4626.fun**.
