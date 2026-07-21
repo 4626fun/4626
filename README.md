@@ -27,6 +27,10 @@ Source migration into this repository is staged. Production hosting (Vercel, Rai
 
 ## Sponsors
 
+Solana sponsor market for this open repo ([Tribe.run](https://www.tribe.run)) — not the Base protocol token (`$4626`) and not vault shares.
+
+When live: name **4626fun**, symbol **4626FUN**. Holding at least 10,000 tokens counts as a sponsor.
+
 <!-- Tribe.run sponsor badge will appear here after token launch -->
 
 ## License
