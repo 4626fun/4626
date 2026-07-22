@@ -1,0 +1,1319 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+
+interface ICreatorOVault {
+    function burnSharesForPriceIncrease(uint256 shares) external;
+    function pricePerShare() external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+    function totalAssets() external view returns (uint256);
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
+    function asset() external view returns (address);
+}
+
+interface ICreatorOVaultWrapper {
+    function wrap(uint256 amount) external returns (uint256);
+    function unwrap(uint256 amount) external returns (uint256);
+    function vaultShares() external view returns (address);
+}
+
+interface ILotteryManager4626 {
+    function addToJackpot(address token, uint256 amount) external;
+}
+
+interface IWETH {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+}
+
+interface ISwapRouter {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+}
+
+interface Ive4626GaugeVoting {
+    function getVaultWeight(address vault) external view returns (uint256);
+    function getTotalWeight() external view returns (uint256);
+    function getVaultWeightBps(address vault) external view returns (uint256);
+    function currentEpoch() external view returns (uint256);
+}
+
+interface Ive4626VoterRewardsDistributor {
+    function notifyRewards(address vault, address token, uint256 amount) external;
+}
+
+/**
+ * @title CreatorGaugeController
+ * @author 0xakita.eth
+ * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, splits in ■, unwraps only the burn slice
+ * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
+ *      Split (all paths):
+ *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)
+ *      - 21.39% ■ ShareOFT → ve4626VoterRewardsDistributor (ve4626 voter lane)
+ *      - 9.61% ▢ vault shares burned (PPS accrual for all holders)
+ *      - 0% creatorTreasury ongoing lane (disabled by default; creatorShareBps = 0)
+ */
+contract CreatorGaugeController is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    // ================================
+    // CONSTANTS
+    // ================================
+
+    uint256 public constant MAX_BPS = 10000;
+    uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
+    /// @notice Delay before a lottery-manager reassignment can execute (ODA-424-M2).
+    uint256 public constant LOTTERY_MANAGER_UPDATE_TIMELOCK = 1 days;
+
+    /// @notice WETH on Base
+    address public constant WETH = 0x4200000000000000000000000000000000000006;
+
+    /// @notice Uniswap V3 Router on Base (for WETH → CreatorCoin swaps)
+    address public constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
+
+    /// @notice Default swap fee tier (0.3%)
+    uint24 public constant DEFAULT_SWAP_FEE = 3000;
+
+    // Uniswap v3 math constants for sqrtPriceLimitX96 bounds.
+    uint256 private constant Q192 = 1 << 192;
+    uint160 private constant MIN_SQRT_RATIO = 4295128739;
+    uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342;
+
+    // ================================
+    // STATE
+    // ================================
+
+    /// @notice The ShareOFT token (e.g., ■AKITA) - what we receive as fees
+    IERC20 public immutable shareOFT;
+
+    /// @notice The underlying Creator Coin (e.g., akita)
+    IERC20 public creatorCoin;
+
+    /// @notice The wrapper to unwrap OFT → vault shares
+    ICreatorOVaultWrapper public wrapper;
+
+    /// @notice The ERC-4626 vault (e.g., ▢AKITA)
+    ICreatorOVault public vault;
+
+    /// @notice Vault shares token (same as vault address, but as IERC20)
+    IERC20 public vaultShares;
+
+    /// @notice Lottery manager for jackpot
+    ILotteryManager4626 public lotteryManager;
+    /// @notice Pending lottery-manager reassignment (timelocked after first set).
+    ILotteryManager4626 public pendingLotteryManager;
+    uint256 public pendingLotteryManagerAt;
+
+    /// @notice Creator's treasury wallet
+    address public creatorTreasury;
+
+    /// @notice Protocol multisig (4626 treasury)
+    address public protocolTreasury;
+
+    /// @notice Swap fee tier for WETH → CreatorCoin
+    uint24 public swapFeeTier = DEFAULT_SWAP_FEE;
+
+    /// @notice Slippage tolerance for swaps (in bps, default 100 = 1%)
+    uint256 public swapSlippageBps = 100;
+
+    /// @notice Oracle for price-based slippage protection
+    IOracle4626 public oracle;
+
+    /// @notice TWAP duration for oracle price (default 30 min)
+    uint32 public oracleTwapDuration = 1800;
+
+    /// @notice Whether to use oracle for slippage (if false, uses 0 minimum)
+    bool public useOracleSlippage = true;
+
+    // DEPRECATED / unused (ODA-424-M1): raw WETH-unit fallback mixed output units.
+    // Kept for storage layout; setter rejects nonzero values. Fail closed instead.
+    uint256 public fallbackMinOutputBps = 0;
+
+    /// @notice ve4626GaugeVoting for ve(3,3) probability direction
+    Ive4626GaugeVoting public ve4626GaugeVoting;
+
+    /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
+    Ive4626VoterRewardsDistributor public ve4626VoterRewardsDistributor;
+
+    // ================================
+    // FEE SPLIT (in basis points) — IMMUTABLE
+    // ================================
+    /// @dev Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
+    ///      off-chain monitors (e.g. KPR payout-integrity) and integrators. Do not rename.
+
+    /// @notice Percentage burned as vault shares (increases PPS for all holders)
+    uint256 public constant burnShareBps = 961; // 9.61%
+
+    /// @notice Percentage to lottery reserve (ShareOFT units)
+    uint256 public constant lotteryShareBps = 6900; // 69%
+
+    /// @notice Percentage to creator treasury
+    uint256 public constant creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
+
+    /// @notice Voter slice (ShareOFT units via ve4626VoterRewardsDistributor or treasury fallbacks)
+    uint256 public constant protocolShareBps = 2139; // 21.39%
+
+    // ================================
+    // ACCUMULATION & DISTRIBUTION
+    // ================================
+
+    /// @notice Pending OFT fees to distribute
+    uint256 public pendingFees;
+
+    /// @notice Minimum amount before auto-distribution
+    uint256 public distributionThreshold = 100e18; // 100 OFT tokens
+
+    /// @notice Last ShareOFT distribution timestamp
+    uint256 public lastDistribution;
+
+    /// @notice Last WETH-lane distribution timestamp (ODA-424-L4 / 432-F3)
+    /// @dev Independent of `lastDistribution` so WETH processing cannot suppress OFT cadence.
+    uint256 public lastWethDistribution;
+
+    /// @notice Minimum time between distributions
+    uint256 public distributionInterval = 1 hours;
+
+    // ================================
+    // JACKPOT RESERVE
+    // ================================
+
+    /// @notice ShareOFT (■) held as jackpot reserve for lottery payouts
+    uint256 public jackpotReserve;
+
+    // ================================
+    // LIFETIME STATS
+    // ================================
+
+    /// @notice Total vault shares burned (lifetime)
+    uint256 public totalSharesBurned;
+
+    /// @notice Total distributed to lottery (lifetime)
+    uint256 public totalLotteryFunded;
+
+    /// @notice Total distributed to creator (lifetime)
+    uint256 public totalCreatorEarned;
+
+    /// @notice Total distributed to protocol (lifetime)
+    uint256 public totalProtocolEarned;
+
+    /// @notice Total OFT fees received (lifetime)
+    uint256 public totalFeesReceived;
+
+    /// @notice Total WETH fees received from tax hook (lifetime)
+    uint256 public totalWETHFeesReceived;
+
+    /// @notice Pending WETH fees from tax hook
+    uint256 public pendingWETHFees;
+
+    // ================================
+    // WETH FEE PROCESSING (MEV HARDENING)
+    // ================================
+
+    /// @notice Optional keeper allowed to process large WETH fee batches.
+    /// @dev Default: address(0) (disabled). Owner is always authorized.
+    address public wethFeeKeeper;
+
+    /// @notice Maximum WETH amount that permissionless callers may process in a single call.
+    /// @dev Default: 0 (permissionless processing disabled).
+    uint256 public maxPermissionlessWethProcess;
+
+    /// @notice If true, `receiveWETHFees()` may auto-process (only up to the permissionless cap).
+    /// @dev Default: false (intake should not trigger public mempool swaps).
+    bool public autoProcessWethFees;
+
+    address public pendingEmergencyWithdrawToken;
+    uint256 public pendingEmergencyWithdrawAmount;
+    address public pendingEmergencyWithdrawTo;
+    uint256 public pendingEmergencyWithdrawAt;
+
+    // ================================
+    // EVENTS
+    // ================================
+
+    event FeesReceived(address indexed from, uint256 oftAmount);
+    event WETHFeesReceived(address indexed from, uint256 wethAmount);
+    event FeesDistributed(
+        uint256 sharesBurned, uint256 toLottery, uint256 toCreator, uint256 toProtocol, uint256 newPricePerShare
+    );
+    event WETHFeesProcessed(uint256 wethAmount, uint256 creatorCoinReceived, uint256 sharesReceived);
+    event SharesBurned(uint256 shares, uint256 newPPS);
+    event JackpotPaid(address indexed winner, uint256 shares);
+
+    event VaultSet(address indexed vault);
+    event WrapperSet(address indexed wrapper);
+    event LotteryManagerSet(address indexed manager);
+    event LotteryManagerUpdateQueued(address indexed pendingManager, uint256 executeAfter);
+    event CreatorTreasurySet(address indexed treasury);
+    event ProtocolTreasurySet(address indexed treasury);
+    event CreatorCoinSet(address indexed coin);
+    event ThresholdUpdated(uint256 newThreshold);
+    event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
+    event OracleSet(address indexed oracle);
+    event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
+    event ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
+    event ve4626VoterRewardsDistributorUpdated(address indexed distributor);
+
+    event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
+    event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
+    event EmergencyWithdrawQueued(address indexed token, uint256 amount, address indexed to, uint256 executeAfter);
+    event EmergencyWithdrawCancelled(address indexed token, uint256 amount, address indexed to);
+
+    // ================================
+    // ERRORS
+    // ================================
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error NothingToDistribute();
+    error TooSoon();
+    error VaultNotSet();
+    error WrapperNotSet();
+    error CreatorCoinNotSet();
+    error InsufficientJackpot();
+    error OnlyLotteryManager();
+    error SwapFailed();
+    error InvalidSlippage();
+    error MinOutputUnavailable();
+    error NotAuthorized();
+    error CreatorTreasuryRequired();
+    error JackpotReserveProtected();
+    error PendingOftFeesProtected();
+    // FIX: L-4 (audit `docs/audits/aristotle/oracle`) — block draining WETH fees
+    // still pending processing.
+    error PendingWethFeesProtected();
+    error NoPendingEmergencyWithdraw();
+    error EmergencyWithdrawTooEarly(uint256 executeAfter);
+    error NoPendingLotteryManager();
+    error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
+    error FallbackMinOutputDisabled();
+    error OwnershipRenounceDisabled();
+    error InvalidAmount();
+
+    // ================================
+    // CONSTRUCTOR
+    // ================================
+
+    /**
+     * @notice Create gauge controller for a Creator Coin vault
+     * @param _shareOFT The ShareOFT token address (e.g., ■AKITA)
+     * @param _creatorTreasury Creator's treasury wallet
+     * @param _protocolTreasury Protocol multisig (4626 treasury)
+     * @param _owner Owner (usually the creator)
+     */
+    constructor(address _shareOFT, address _creatorTreasury, address _protocolTreasury, address _owner)
+        Ownable(_owner)
+    {
+        if (_shareOFT == address(0)) revert ZeroAddress();
+        if (_protocolTreasury == address(0)) revert ZeroAddress();
+
+        // FIX: L-03 (4626-351) — constant WETH / SWAP_ROUTER addresses above
+        // are hardcoded to Base (chain id 8453). Deploying this controller to
+        // any other chain would silently succeed but every swap path would
+        // target addresses that do not exist on that chain, bricking fee
+        // routing. Assert chain id at construction so misdeployment fails
+        // fast rather than on the first swap attempt.
+        require(block.chainid == 8453, "Only Base supported");
+
+        // FIX: G-24 — compile/deploy-time assertion that fee split constants sum to MAX_BPS
+        require(
+            burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == MAX_BPS,
+            "BPS mismatch"
+        );
+
+        shareOFT = IERC20(_shareOFT);
+        creatorTreasury = _creatorTreasury;
+        protocolTreasury = _protocolTreasury;
+    }
+
+    // ================================
+    // RECEIVE FEES
+    // ================================
+
+    /**
+     * @notice Receive fees from CreatorShareOFT buy transactions
+     * @dev Called by ShareOFT when buy fees are collected
+     *      Fees arrive as OFT tokens (e.g., ■AKITA)
+     * @param amount Amount of OFT tokens received
+     */
+    function receiveFees(uint256 amount) external nonReentrant {
+        if (amount == 0) return;
+
+        // Pull OFT tokens from sender and account only what arrived.
+        uint256 balBefore = shareOFT.balanceOf(address(this));
+        shareOFT.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
+
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
+
+        // Auto-distribute if above threshold and enough time has passed
+        if (pendingFees >= distributionThreshold && block.timestamp >= lastDistribution + distributionInterval) {
+            _distribute();
+        }
+    }
+
+    /**
+     * @notice Direct deposit for manual fee deposits
+     */
+    function deposit(uint256 amount) external nonReentrant {
+        if (amount == 0) return;
+
+        uint256 balBefore = shareOFT.balanceOf(address(this));
+        shareOFT.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
+
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
+    }
+
+    /**
+     * @notice Account for OFT tokens that arrived via cross-chain fee flush
+     * @dev When remote CreatorShareOFTs flush fees via OFT send(), the tokens
+     *      are minted directly to this contract by LayerZero's _credit().
+     *      This function sweeps the unaccounted balance into pendingFees.
+     *
+     *      Permissionless — anyone can trigger this (keeper, owner, etc.)
+     */
+    // FIX: G-11 — track explicitly how much OFT the contract expects to hold
+    uint256 public accountedOFTBalance;
+
+    function receiveBridgedFees() external nonReentrant {
+        uint256 balance = shareOFT.balanceOf(address(this));
+
+        // FIX: G-11 — use explicit accounted OFT balance instead of just pendingFees
+        // This prevents jackpot ShareOFT from being swept as bridged fees
+        uint256 accounted = accountedOFTBalance;
+        if (balance <= accounted) return;
+
+        uint256 bridgedAmount = balance - accounted;
+        pendingFees += bridgedAmount;
+        accountedOFTBalance += bridgedAmount;
+        totalFeesReceived += bridgedAmount;
+
+        emit FeesReceived(address(0), bridgedAmount); // address(0) signals bridged origin
+
+        // Auto-distribute if above threshold and enough time has passed
+        if (pendingFees >= distributionThreshold && block.timestamp >= lastDistribution + distributionInterval) {
+            _distribute();
+        }
+    }
+
+    // ================================
+    // RECEIVE WETH FEES (FROM V4 TAX HOOK)
+    // ================================
+
+    /**
+     * @notice Receive WETH fees from the V4 Tax Hook
+     * @dev Called when swaps happen on the ■AKITA/ETH pool with tax hook
+     *      The tax hook sends WETH here, which we convert to vault shares
+     * @param amount Amount of WETH received
+     */
+    function receiveWETHFees(uint256 amount) external nonReentrant {
+        if (amount == 0) return;
+
+        // Pull WETH from sender (the tax hook) and account only what arrived.
+        uint256 balBefore = IERC20(WETH).balanceOf(address(this));
+        IERC20(WETH).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = IERC20(WETH).balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
+
+        pendingWETHFees += received;
+        totalWETHFeesReceived += received;
+
+        emit WETHFeesReceived(msg.sender, received);
+
+        // Default: do not auto-swap on fee intake (public mempool MEV risk).
+        // If enabled, only process up to the permissionless cap to avoid large public swaps.
+        if (!autoProcessWethFees) return;
+
+        uint256 cap = maxPermissionlessWethProcess;
+        if (cap == 0) return;
+
+        // Auto-process if we have enough and enough time has passed
+        if (
+            pendingWETHFees >= distributionThreshold / 10 // Lower threshold for WETH
+                && block.timestamp >= lastWethDistribution + distributionInterval
+        ) {
+            uint256 amountToProcess = pendingWETHFees > cap ? cap : pendingWETHFees;
+
+            // Keep fee intake permissionless even during oracle outages.
+            // If oracle-derived protection is unavailable, leave fees pending.
+            if (_calculateMinOutput(amountToProcess) > 0) {
+                _processWETHFees(amountToProcess);
+            }
+        }
+    }
+
+    /**
+     * @notice Receive native ETH (e.g., from tax hook that sends ETH directly)
+     */
+    receive() external payable {
+        if (msg.value == 0) return;
+
+        // Wrap ETH to WETH
+        IWETH(WETH).deposit{value: msg.value}();
+        pendingWETHFees += msg.value;
+        totalWETHFeesReceived += msg.value;
+
+        emit WETHFeesReceived(msg.sender, msg.value);
+    }
+
+    /**
+     * @notice Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
+     */
+    function processWETHFees() external nonReentrant {
+        uint256 amountToProcess = _wethAmountToProcessForCaller(msg.sender);
+        if (amountToProcess == 0) return;
+        _processWETHFees(amountToProcess);
+    }
+
+    function _wethAmountToProcessForCaller(address caller) internal view returns (uint256 amountToProcess) {
+        uint256 pending = pendingWETHFees;
+        if (pending == 0) return 0;
+
+        if (caller == owner() || caller == wethFeeKeeper) {
+            return pending;
+        }
+
+        uint256 cap = maxPermissionlessWethProcess;
+        if (cap == 0) revert NotAuthorized();
+        return pending > cap ? cap : pending;
+    }
+
+    function _processWETHFees(uint256 wethAmount) internal {
+        if (wethAmount == 0) return;
+        if (pendingWETHFees < wethAmount) revert SwapFailed();
+        if (address(vault) == address(0)) revert VaultNotSet();
+        if (address(creatorCoin) == address(0)) revert CreatorCoinNotSet();
+
+        // Optimistically decrement; any revert restores state.
+        pendingWETHFees -= wethAmount;
+
+        // Step 1: Calculate minimum output using oracle (if enabled)
+        uint256 minAmountOut = _calculateMinOutput(wethAmount);
+        if (minAmountOut == 0) revert MinOutputUnavailable();
+
+        // ODA-424-M3: do not derive sqrtPriceLimitX96 from average minOut/amountIn.
+        // That marginal-price bound + exact-spend check made permissionless swaps
+        // griefable via partial fills. Rely on amountOutMinimum only (limit = 0).
+        uint160 sqrtPriceLimitX96 = 0;
+
+        // Step 2: Swap WETH → CreatorCoin
+        IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);
+
+        uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
+
+        uint256 creatorCoinReceived = ISwapRouter(SWAP_ROUTER)
+            .exactInputSingle(
+                ISwapRouter.ExactInputSingleParams({
+                tokenIn: WETH,
+                tokenOut: address(creatorCoin),
+                fee: swapFeeTier,
+                recipient: address(this),
+                // FIX: H-03 — give the swap a real 2-minute deadline window
+                // instead of block.timestamp, which provides zero slack against
+                // sequencer delays or re-orgs on L2 and effectively disables
+                // deadline protection.
+                deadline: block.timestamp + 2 minutes,
+                amountIn: wethAmount,
+                amountOutMinimum: minAmountOut,
+                sqrtPriceLimitX96: sqrtPriceLimitX96
+            })
+            );
+
+        // Defense-in-depth: exactInputSingle should always spend `amountIn`.
+        uint256 wethAfter = IERC20(WETH).balanceOf(address(this));
+        if (wethAfter > wethBefore || wethBefore - wethAfter != wethAmount) revert SwapFailed();
+
+        if (creatorCoinReceived == 0) revert SwapFailed();
+
+        // Step 3: Deposit CreatorCoin → Vault (receive vault shares)
+        creatorCoin.forceApprove(address(vault), creatorCoinReceived);
+        uint256 sharesReceived = vault.deposit(creatorCoinReceived, address(this));
+
+        emit WETHFeesProcessed(wethAmount, creatorCoinReceived, sharesReceived);
+
+        // Step 4: Distribute the vault shares
+        _distributeVaultShares(sharesReceived);
+    }
+
+    /**
+     * @notice Calculate minimum output for WETH → CreatorCoin swap using oracle
+     * @param wethAmount Amount of WETH to swap
+     * @return minOut Minimum Creator Coin to receive (0 if oracle disabled/unavailable)
+     */
+    function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
+        // ODA-424-M1: WETH and creatorCoin are different units. A fallback derived
+        // from raw `wethAmount` collapses both slippage layers. Fail closed when
+        // oracle pricing is unavailable (parity with AgentGaugeController).
+        if (!useOracleSlippage || address(oracle) == address(0)) {
+            return 0;
+        }
+
+        // Require freshness; if stale/unavailable, fail closed and leave fees pending.
+        try oracle.isPriceFresh() returns (bool fresh) {
+            if (!fresh) return 0;
+        } catch {
+            return 0;
+        }
+
+        // Try to get TWAP price from oracle
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
+            if (creatorPerEth == 0) return 0;
+
+            // Expected output = wethAmount * creatorPerEth / 1e18
+            uint256 expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
+
+            // Apply slippage tolerance
+            minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
+        } catch {
+            // Oracle failed, return 0 (no slippage protection)
+            return 0;
+        }
+    }
+
+    /**
+     * @notice Derive sqrtPriceLimitX96 from an oracle-derived minOut.
+     * @dev Uniswap v3 price is expressed as sqrt(token1/token0) Q64.96, where token0/token1 are sorted by address.
+     *      We compute a limit price from `minAmountOut / amountIn` (or its inverse), scale to Q192, then sqrt.
+     *      - If WETH is token0: swap is token0->token1 (zeroForOne), price decreases, so we enforce a MIN price.
+     *      - If WETH is token1: swap is token1->token0 (oneForZero), price increases, so we enforce a MAX price.
+     */
+    function _sqrtPriceLimitX96(uint256 amountIn, uint256 minAmountOut)
+        internal
+        view
+        returns (uint160 sqrtPriceLimitX96)
+    {
+        if (amountIn == 0 || minAmountOut == 0) return 0;
+
+        address tokenIn = WETH;
+        address tokenOut = address(creatorCoin);
+        bool tokenInIsToken0 = tokenIn < tokenOut;
+
+        // Uniswap pool bounds require: MIN_SQRT_RATIO < limit < MAX_SQRT_RATIO
+        uint160 minLimit = MIN_SQRT_RATIO + 1;
+        uint160 maxLimit = MAX_SQRT_RATIO - 1;
+
+        uint256 priceX192 = tokenInIsToken0
+            ? Math.mulDiv(minAmountOut, Q192, amountIn)  // token1/token0 (min)
+            : Math.mulDiv(amountIn, Q192, minAmountOut); // token1/token0 (max)
+
+        uint256 sqrtP = tokenInIsToken0 ? Math.sqrt(priceX192, Math.Rounding.Ceil) : Math.sqrt(priceX192);
+
+        if (sqrtP <= minLimit) return minLimit;
+        if (sqrtP >= maxLimit) return maxLimit;
+        return uint160(sqrtP);
+    }
+
+    // ================================
+    // DISTRIBUTION
+    // ================================
+
+    /**
+     * @notice Distribute accumulated fees
+     * @dev Can be called by anyone (permissionless)
+     */
+    function distribute() external nonReentrant {
+        _distribute();
+    }
+
+    // FIX: G-19 — event for emergency force distributions (auditing/monitoring)
+    event ForceDistributed(uint256 amount, uint256 timestamp);
+
+    /**
+     * @notice Force distribution (owner only, bypasses time check)
+     * @dev EMERGENCY ONLY — bypasses distributionInterval. Should be behind timelock/multisig.
+     */
+    function forceDistribute() external nonReentrant onlyOwner {
+        if (pendingFees == 0) revert NothingToDistribute();
+        uint256 amount = pendingFees;
+        _distributeInternal();
+        emit ForceDistributed(amount, block.timestamp);
+    }
+
+    function _distribute() internal {
+        if (pendingFees == 0) revert NothingToDistribute();
+        if (block.timestamp < lastDistribution + distributionInterval) revert TooSoon();
+
+        _distributeInternal();
+    }
+
+    function _distributeInternal() internal {
+        if (address(vault) == address(0)) revert VaultNotSet();
+
+        uint256 oftAmount = pendingFees;
+        pendingFees = 0;
+        accountedOFTBalance -= oftAmount;
+        lastDistribution = block.timestamp;
+
+        (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft) =
+            _splitShareOftAmount(oftAmount);
+
+        if (toLottery > 0) {
+            jackpotReserve += toLottery;
+            totalLotteryFunded += toLottery;
+            accountedOFTBalance += toLottery;
+        }
+
+        if (toCreator > 0 && creatorTreasury != address(0)) {
+            shareOFT.safeTransfer(creatorTreasury, toCreator);
+            totalCreatorEarned += toCreator;
+        } else if (toCreator > 0) {
+            jackpotReserve += toCreator;
+            totalLotteryFunded += toCreator;
+            toLottery += toCreator;
+            accountedOFTBalance += toCreator;
+            toCreator = 0;
+        }
+
+        uint256 vaultSharesBurned = _burnShareOftSlice(toBurnOft);
+        _routeVoterShareOft(toVoters);
+
+        emit FeesDistributed(vaultSharesBurned, toLottery, toCreator, toVoters, vault.pricePerShare());
+    }
+
+    /**
+     * @notice Internal function to distribute vault shares from the WETH/tax-hook path
+     * @dev Wraps lottery + voter slices to ShareOFT; burns the burn slice as vault shares.
+     */
+    function _distributeVaultShares(uint256 vaultSharesReceived) internal {
+        if (vaultSharesReceived == 0) return;
+        if (address(vault) == address(0)) revert VaultNotSet();
+
+        lastWethDistribution = block.timestamp;
+
+        uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
+        uint256 toLotteryVs = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
+        uint256 toCreatorVs = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
+        uint256 toVotersVs = vaultSharesReceived - toBurn - toLotteryVs - toCreatorVs;
+
+        uint256 toLotteryOft;
+        uint256 toVotersOft;
+
+        if (toLotteryVs > 0) {
+            toLotteryOft = _wrapVaultSharesToShareOft(toLotteryVs);
+            if (toLotteryOft > 0) {
+                jackpotReserve += toLotteryOft;
+                totalLotteryFunded += toLotteryOft;
+                accountedOFTBalance += toLotteryOft;
+            }
+        }
+
+        if (toCreatorVs > 0 && creatorTreasury != address(0)) {
+            vaultShares.safeTransfer(creatorTreasury, toCreatorVs);
+            totalCreatorEarned += toCreatorVs;
+        } else if (toCreatorVs > 0) {
+            uint256 creatorOft = _wrapVaultSharesToShareOft(toCreatorVs);
+            if (creatorOft > 0) {
+                jackpotReserve += creatorOft;
+                totalLotteryFunded += creatorOft;
+                accountedOFTBalance += creatorOft;
+                toLotteryOft += creatorOft;
+            }
+        }
+
+        if (toVotersVs > 0) {
+            toVotersOft = _wrapVaultSharesToShareOft(toVotersVs);
+            _routeVoterShareOft(toVotersOft);
+        }
+
+        if (toBurn > 0) {
+            vaultShares.forceApprove(address(vault), toBurn);
+            vault.burnSharesForPriceIncrease(toBurn);
+            totalSharesBurned += toBurn;
+            emit SharesBurned(toBurn, vault.pricePerShare());
+        }
+
+        emit FeesDistributed(toBurn, toLotteryOft, toCreatorVs, toVotersOft, vault.pricePerShare());
+    }
+
+    function _splitShareOftAmount(uint256 oftAmount)
+        internal
+        pure
+        returns (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft)
+    {
+        toLottery = (oftAmount * lotteryShareBps) / MAX_BPS;
+        toVoters = (oftAmount * protocolShareBps) / MAX_BPS;
+        toCreator = (oftAmount * creatorShareBps) / MAX_BPS;
+        toBurnOft = oftAmount - toLottery - toVoters - toCreator;
+    }
+
+    function _wrapVaultSharesToShareOft(uint256 vaultShareAmount) internal returns (uint256 oftOut) {
+        if (vaultShareAmount == 0) return 0;
+        if (address(wrapper) == address(0)) revert WrapperNotSet();
+
+        vaultShares.forceApprove(address(wrapper), vaultShareAmount);
+        oftOut = ICreatorOVaultWrapper(address(wrapper)).wrap(vaultShareAmount);
+    }
+
+    function _burnShareOftSlice(uint256 oftAmount) internal returns (uint256 vaultSharesBurned) {
+        if (oftAmount == 0) return 0;
+        if (address(wrapper) == address(0)) revert WrapperNotSet();
+
+        shareOFT.forceApprove(address(wrapper), oftAmount);
+        vaultSharesBurned = wrapper.unwrap(oftAmount);
+
+        vaultShares.forceApprove(address(vault), vaultSharesBurned);
+        vault.burnSharesForPriceIncrease(vaultSharesBurned);
+        totalSharesBurned += vaultSharesBurned;
+
+        emit SharesBurned(vaultSharesBurned, vault.pricePerShare());
+    }
+
+    function _routeVoterShareOft(uint256 toVoters) internal {
+        if (toVoters == 0) return;
+
+        if (address(ve4626VoterRewardsDistributor) != address(0)) {
+            uint256 balanceBefore = shareOFT.balanceOf(address(this));
+            shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), toVoters);
+            try ve4626VoterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
+                uint256 balanceAfter = shareOFT.balanceOf(address(this));
+                uint256 spent = balanceBefore > balanceAfter ? balanceBefore - balanceAfter : 0;
+                if (spent > toVoters) spent = toVoters;
+
+                if (spent > 0) {
+                    totalProtocolEarned += spent;
+                }
+
+                uint256 remainder = toVoters - spent;
+                if (remainder > 0) {
+                    if (protocolTreasury != address(0)) {
+                        shareOFT.safeTransfer(protocolTreasury, remainder);
+                        totalProtocolEarned += remainder;
+                    } else {
+                        jackpotReserve += remainder;
+                        totalLotteryFunded += remainder;
+                        accountedOFTBalance += remainder;
+                    }
+                }
+                // Always clear allowance after notifyRewards to avoid stale approvals.
+                shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
+            } catch {
+                shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
+                if (protocolTreasury != address(0)) {
+                    shareOFT.safeTransfer(protocolTreasury, toVoters);
+                    totalProtocolEarned += toVoters;
+                } else {
+                    jackpotReserve += toVoters;
+                    totalLotteryFunded += toVoters;
+                    accountedOFTBalance += toVoters;
+                }
+            }
+        } else if (protocolTreasury != address(0)) {
+            shareOFT.safeTransfer(protocolTreasury, toVoters);
+            totalProtocolEarned += toVoters;
+        } else {
+            jackpotReserve += toVoters;
+            totalLotteryFunded += toVoters;
+            accountedOFTBalance += toVoters;
+        }
+    }
+
+    // ================================
+    // JACKPOT (FOR LOTTERY)
+    // ================================
+
+    /**
+     * @notice Jackpot ShareOFT available for lottery payout (conservative view for sizing).
+     */
+    function availableJackpotReserve() public view returns (uint256) {
+        return jackpotReserve;
+    }
+
+    /**
+     * @notice Pay jackpot to lottery winner in ShareOFT (■)
+     * @dev Only callable by lottery manager; reverts when reserve is insufficient (M-02).
+     * @param winner Winner's address
+     * @param amount Amount of ShareOFT to pay
+     */
+    function payJackpot(address winner, uint256 amount) external nonReentrant {
+        if (msg.sender != address(lotteryManager)) revert OnlyLotteryManager();
+        if (amount > jackpotReserve) revert InsufficientJackpot();
+        if (winner == address(0)) revert ZeroAddress();
+
+        jackpotReserve -= amount;
+        accountedOFTBalance -= amount;
+        shareOFT.safeTransfer(winner, amount);
+
+        emit JackpotPaid(winner, amount);
+    }
+
+    /**
+     * @notice Get available jackpot
+     */
+    function getJackpotReserve() external view returns (uint256) {
+        return jackpotReserve;
+    }
+
+    /**
+     * @notice Legacy alias — returns unreserved jackpot capacity for lottery sizing.
+     */
+    function getAvailableJackpotReserve() external view returns (uint256) {
+        return availableJackpotReserve();
+    }
+
+    // ================================
+    // ADMIN - CONFIGURATION
+    // ================================
+
+    /**
+     * @notice Set the vault address
+     * @param _vault CreatorOVault address
+     */
+    function setVault(address _vault) external onlyOwner {
+        if (_vault == address(0)) revert ZeroAddress();
+        vault = ICreatorOVault(_vault);
+        vaultShares = IERC20(_vault); // Vault is also the share token
+        emit VaultSet(_vault);
+    }
+
+    /**
+     * @notice Set the wrapper address
+     * @param _wrapper CreatorOVaultWrapper address
+     */
+    function setWrapper(address _wrapper) external onlyOwner {
+        if (_wrapper == address(0)) revert ZeroAddress();
+        wrapper = ICreatorOVaultWrapper(_wrapper);
+        emit WrapperSet(_wrapper);
+    }
+
+    /**
+     * @notice Set the lottery manager
+     * @dev First set is immediate (deploy wiring). Later reassignments are
+     *      timelocked (ODA-424-M2) so jackpot custody cannot be drained via
+     *      instant `setLotteryManager` → `payJackpot` without the delay that
+     *      `executeEmergencyWithdraw` already enforces.
+     * @param _lotteryManager Lottery manager address
+     */
+    function setLotteryManager(address _lotteryManager) external onlyOwner {
+        if (_lotteryManager == address(0)) revert ZeroAddress();
+        if (address(lotteryManager) == address(0)) {
+            lotteryManager = ILotteryManager4626(_lotteryManager);
+            emit LotteryManagerSet(_lotteryManager);
+            return;
+        }
+        pendingLotteryManager = ILotteryManager4626(_lotteryManager);
+        pendingLotteryManagerAt = block.timestamp + LOTTERY_MANAGER_UPDATE_TIMELOCK;
+        emit LotteryManagerUpdateQueued(_lotteryManager, pendingLotteryManagerAt);
+    }
+
+    function executeLotteryManagerUpdate() external onlyOwner {
+        uint256 executeAfter = pendingLotteryManagerAt;
+        if (executeAfter == 0) revert NoPendingLotteryManager();
+        if (block.timestamp < executeAfter) revert LotteryManagerUpdateTimelockActive(executeAfter);
+
+        ILotteryManager4626 next = pendingLotteryManager;
+        pendingLotteryManager = ILotteryManager4626(address(0));
+        pendingLotteryManagerAt = 0;
+        lotteryManager = next;
+        emit LotteryManagerSet(address(next));
+    }
+
+    /**
+     * @notice Set creator treasury
+     * @param _treasury Creator's treasury wallet
+     */
+    function setCreatorTreasury(address _treasury) external onlyOwner {
+        if (_treasury == address(0) && creatorShareBps > 0) revert CreatorTreasuryRequired();
+        creatorTreasury = _treasury;
+        emit CreatorTreasurySet(_treasury);
+    }
+
+    /**
+     * @notice Set protocol treasury (multisig)
+     * @param _treasury Protocol multisig address
+     */
+    function setProtocolTreasury(address _treasury) external onlyOwner {
+        if (_treasury == address(0)) revert ZeroAddress();
+        protocolTreasury = _treasury;
+        emit ProtocolTreasurySet(_treasury);
+    }
+
+    /**
+     * @notice Set the creator coin address
+     * @param _creatorCoin Creator coin address (e.g., akita)
+     */
+    function setCreatorCoin(address _creatorCoin) external onlyOwner {
+        if (_creatorCoin == address(0)) revert ZeroAddress();
+        creatorCoin = IERC20(_creatorCoin);
+        emit CreatorCoinSet(_creatorCoin);
+    }
+
+    /**
+     * @notice Set swap configuration for WETH → CreatorCoin
+     * @param _feeTier Uniswap fee tier (100, 500, 3000, 10000)
+     * @param _slippageBps Slippage tolerance in basis points
+     */
+    function setSwapConfig(uint24 _feeTier, uint256 _slippageBps) external onlyOwner {
+        if (_slippageBps > 1000) revert InvalidSlippage(); // Max 10% slippage
+        swapFeeTier = _feeTier;
+        swapSlippageBps = _slippageBps;
+        emit SwapConfigUpdated(_feeTier, _slippageBps);
+    }
+
+    /**
+     * @notice Set keeper for processing large WETH fee batches.
+     * @dev Owner is always authorized; keeper can be address(0) to disable.
+     */
+    function setWethFeeKeeper(address _keeper) external onlyOwner {
+        address old = wethFeeKeeper;
+        wethFeeKeeper = _keeper;
+        emit WethFeeKeeperUpdated(old, _keeper);
+    }
+
+    /**
+     * @notice Configure permissionless WETH processing and auto-processing on intake.
+     * @param _maxPermissionlessWethProcess Max WETH per permissionless `processWETHFees()` call (0 disables).
+     * @param _autoProcessWethFees If true, `receiveWETHFees()` may auto-process (only up to the cap).
+     */
+    function setWethProcessingConfig(uint256 _maxPermissionlessWethProcess, bool _autoProcessWethFees)
+        external
+        onlyOwner
+    {
+        maxPermissionlessWethProcess = _maxPermissionlessWethProcess;
+        autoProcessWethFees = _autoProcessWethFees;
+        emit WethProcessingConfigUpdated(_maxPermissionlessWethProcess, _autoProcessWethFees);
+    }
+
+    /**
+     * @notice Set the oracle for price-based slippage protection
+     * @param _oracle CreatorOracle address
+     */
+    function setOracle(address _oracle) external onlyOwner {
+        // ODA-424-L10: disallow zero; disable slippage via `setOracleConfig(_, false)`.
+        if (_oracle == address(0)) revert ZeroAddress();
+        oracle = IOracle4626(_oracle);
+        emit OracleSet(_oracle);
+    }
+
+    /**
+     * @notice Configure oracle settings
+     * @param _twapDuration TWAP duration in seconds
+     * @param _useOracle Whether to use oracle for slippage protection
+     */
+    function setOracleConfig(uint32 _twapDuration, bool _useOracle) external onlyOwner {
+        require(_twapDuration >= 60 && _twapDuration <= 7200, "Invalid duration");
+        oracleTwapDuration = _twapDuration;
+        useOracleSlippage = _useOracle;
+        emit OracleConfigUpdated(_twapDuration, _useOracle);
+    }
+
+    // ODA-424-M1: unit-mismatched fallback removed; only clearing to 0 is allowed.
+    function setFallbackMinOutputBps(uint256 _bps) external onlyOwner {
+        if (_bps != 0) revert FallbackMinOutputDisabled();
+        fallbackMinOutputBps = 0;
+    }
+
+    /// @notice Ownable renounce disabled — bricks config + emergency response (ODA-424-L8).
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
+    }
+
+    /**
+     * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
+     * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
+     */
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
+        ve4626GaugeVoting = Ive4626GaugeVoting(_ve4626GaugeVoting);
+        emit ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
+    }
+
+    /**
+     * @notice Set the ve4626VoterRewardsDistributor to receive the 21.39% ShareOFT voter slice.
+     * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
+     */
+    function setve4626VoterRewardsDistributor(address _distributor) external onlyOwner {
+        ve4626VoterRewardsDistributor = Ive4626VoterRewardsDistributor(_distributor);
+        emit ve4626VoterRewardsDistributorUpdated(_distributor);
+    }
+
+    /**
+     * @notice Set distribution threshold
+     * @param _threshold Minimum OFT tokens before auto-distribution
+     */
+    function setDistributionThreshold(uint256 _threshold) external onlyOwner {
+        distributionThreshold = _threshold;
+        emit ThresholdUpdated(_threshold);
+    }
+
+    /**
+     * @notice Set distribution interval
+     * @param _interval Minimum time between distributions
+     */
+    function setDistributionInterval(uint256 _interval) external onlyOwner {
+        distributionInterval = _interval;
+    }
+
+    // ================================
+    // VIEW FUNCTIONS
+    // ================================
+
+    /**
+     * @notice Get current fee split configuration
+     */
+    function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
+        return (burnShareBps, lotteryShareBps, creatorShareBps, protocolShareBps);
+    }
+
+    /**
+     * @notice Preview how pending ShareOFT fees would be distributed
+     * @dev Lottery and voter amounts are ShareOFT (■); burn preview is approximate vault-share units after unwrap.
+     */
+    function previewDistribution()
+        external
+        view
+        returns (uint256 toBurn, uint256 toLottery, uint256 toCreator, uint256 toProtocol)
+    {
+        toLottery = (pendingFees * lotteryShareBps) / MAX_BPS;
+        toCreator = (pendingFees * creatorShareBps) / MAX_BPS;
+        toProtocol = (pendingFees * protocolShareBps) / MAX_BPS;
+        toBurn = pendingFees - toLottery - toCreator - toProtocol;
+    }
+
+    /**
+     * @notice Get lifetime statistics
+     */
+    function getStats()
+        external
+        view
+        returns (
+            uint256 _totalFeesReceived,
+            uint256 _totalWETHFeesReceived,
+            uint256 _totalSharesBurned,
+            uint256 _totalLotteryFunded,
+            uint256 _totalCreatorEarned,
+            uint256 _totalProtocolEarned,
+            uint256 _pendingFees,
+            uint256 _pendingWETHFees,
+            uint256 _jackpotReserve,
+            uint256 _lastDistribution
+        )
+    {
+        return (
+            totalFeesReceived,
+            totalWETHFeesReceived,
+            totalSharesBurned,
+            totalLotteryFunded,
+            totalCreatorEarned,
+            totalProtocolEarned,
+            pendingFees,
+            pendingWETHFees,
+            jackpotReserve,
+            lastDistribution
+        );
+    }
+
+    /**
+     * @notice Get total pending fees (both OFT and WETH)
+     */
+    function getTotalPendingFees()
+        external
+        view
+        returns (uint256 oftPending, uint256 wethPending, uint256 totalPending)
+    {
+        return (pendingFees, pendingWETHFees, pendingFees + pendingWETHFees);
+    }
+
+    /**
+     * @notice Check if distribution is possible
+     */
+    function canDistribute() external view returns (bool) {
+        return pendingFees >= distributionThreshold && block.timestamp >= lastDistribution + distributionInterval;
+    }
+
+    /**
+     * @notice Time until next possible distribution
+     */
+    function timeUntilDistribution() external view returns (uint256) {
+        if (block.timestamp >= lastDistribution + distributionInterval) return 0;
+        return (lastDistribution + distributionInterval) - block.timestamp;
+    }
+
+    /**
+     * @notice Estimate PPS increase from burning shares
+     * @param sharesToBurn Amount of shares that would be burned
+     */
+    function estimatePPSIncrease(uint256 sharesToBurn) external view returns (uint256 ppsIncrease) {
+        if (address(vault) == address(0)) return 0;
+
+        uint256 totalAssets = vault.totalAssets();
+        uint256 totalSupply = vault.totalSupply();
+
+        if (totalSupply == 0 || totalSupply <= sharesToBurn) return 0;
+
+        // Current PPS
+        uint256 currentPPS = (totalAssets * 1e18) / totalSupply;
+
+        // PPS after burn
+        uint256 newPPS = (totalAssets * 1e18) / (totalSupply - sharesToBurn);
+
+        ppsIncrease = newPPS - currentPPS;
+    }
+
+    /**
+     * @notice Get vault info
+     */
+    function getVaultInfo() external view returns (uint256 totalAssets, uint256 totalSupply, uint256 pricePerShare) {
+        if (address(vault) == address(0)) return (0, 0, 0);
+
+        totalAssets = vault.totalAssets();
+        totalSupply = vault.totalSupply();
+        pricePerShare = vault.pricePerShare();
+    }
+
+    /**
+     * @notice Preview WETH → CreatorCoin swap output with slippage protection
+     * @param wethAmount Amount of WETH to swap
+     * @return expectedOut Expected Creator Coin output (from oracle)
+     * @return minOut Minimum output after slippage
+     * @return oracleActive Whether oracle slippage is active
+     */
+    function previewSwap(uint256 wethAmount)
+        external
+        view
+        returns (uint256 expectedOut, uint256 minOut, bool oracleActive)
+    {
+        oracleActive = useOracleSlippage && address(oracle) != address(0);
+
+        if (!oracleActive) {
+            return (0, 0, false);
+        }
+
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
+            if (creatorPerEth == 0) return (0, 0, false);
+
+            expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
+            minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
+            oracleActive = true;
+        } catch {
+            return (0, 0, false);
+        }
+    }
+
+    /**
+     * @notice Get oracle info
+     */
+    function getOracleInfo()
+        external
+        view
+        returns (
+            address oracleAddress,
+            bool isActive,
+            bool priceFresh,
+            int256 assetPriceUSD,
+            uint32 twapDuration,
+            uint256 slippageBps
+        )
+    {
+        oracleAddress = address(oracle);
+        isActive = useOracleSlippage && oracleAddress != address(0);
+        twapDuration = oracleTwapDuration;
+        slippageBps = swapSlippageBps;
+
+        if (oracleAddress != address(0)) {
+            try oracle.isPriceFresh() returns (bool fresh) {
+                priceFresh = fresh;
+            } catch {}
+
+            try oracle.getAssetPrice() returns (int256 price, uint256) {
+                assetPriceUSD = price;
+            } catch {}
+        }
+    }
+
+    // ================================
+    // EMERGENCY
+    // ================================
+
+    /**
+     * @notice Emergency withdraw (owner only)
+     * @param token Token to withdraw
+     * @param amount Amount to withdraw
+     * @param to Recipient
+     */
+    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        pendingEmergencyWithdrawToken = token;
+        pendingEmergencyWithdrawAmount = amount;
+        pendingEmergencyWithdrawTo = to;
+        pendingEmergencyWithdrawAt = block.timestamp + EMERGENCY_WITHDRAW_DELAY;
+        emit EmergencyWithdrawQueued(token, amount, to, pendingEmergencyWithdrawAt);
+    }
+
+    function cancelEmergencyWithdraw() external onlyOwner {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        if (to == address(0) || amount == 0) revert NoPendingEmergencyWithdraw();
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+        emit EmergencyWithdrawCancelled(token, amount, to);
+    }
+
+    function executeEmergencyWithdraw() external onlyOwner {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        uint256 executeAfter = pendingEmergencyWithdrawAt;
+        if (to == address(0) || amount == 0 || executeAfter == 0) revert NoPendingEmergencyWithdraw();
+        if (block.timestamp < executeAfter) revert EmergencyWithdrawTooEarly(executeAfter);
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+
+        if (to == address(0)) revert ZeroAddress();
+        // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
+        if (token == address(shareOFT) && (jackpotReserve > 0 || pendingFees > 0)) {
+            revert JackpotReserveProtected();
+        }
+        if (token == address(shareOFT)) {
+            if (pendingFees > 0) revert PendingOftFeesProtected();
+            if (amount >= accountedOFTBalance) {
+                accountedOFTBalance = 0;
+            } else {
+                accountedOFTBalance -= amount;
+            }
+        }
+        // ODA-424-L3: protect only earmarked pending WETH fees. Owner may withdraw
+        // surplus WETH (donations / dust) so griefers cannot block rescue by
+        // donating 1 wei via `receive()` after the timelock elapses.
+        if (token == WETH) {
+            uint256 bal = IERC20(WETH).balanceOf(address(this));
+            uint256 free = bal > pendingWETHFees ? bal - pendingWETHFees : 0;
+            if (amount > free) revert PendingWethFeesProtected();
+        }
+        IERC20(token).safeTransfer(to, amount);
+    }
+}

@@ -1,0 +1,3165 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+/**
+ * @title LotteryManager4626
+ * @author 0xakita.eth
+ * @notice Shared swap-based lottery service for all lanes (creator, agent, future ecosystems) - hub-only on Base
+ *
+ * @dev ARCHITECTURE (Hub-Centric):
+ *      Shared hub service on Base only. Serves all via Registry4626 lookups (creator/agent/future).
+ *      Remote chain buys queue entries on the remote ShareOFT; buyers submit with native LZ fee.
+ *      Hub ShareOFT peer forwards MSG_TYPE_LOTTERY_ENTRY to receiveRemoteLotteryEntry().
+ *
+ * @dev LOTTERY MECHANICS:
+ *      1. User buys ANY share token (■AKITA, ■DRAGON, ◆AGENT etc.) on any chain
+ *      2. Hub: ShareOFT calls processSwapLottery() directly on buy
+ *         Remote: buyer calls submitPendingLotteryEntry() after buy queues the entry
+ *      3. Win probability scales with trade size and ve4626 / coverage boosts
+ *      4. Winners paid from jackpotCustodian reserves across active vaults (creator/agent/future lanes)
+ *      5. MSG_TYPE_WINNER_CALLBACK sent to source-chain ShareOFT for UX notification
+ *
+ * @dev MULTI-VAULT PRIZE PAYOUT:
+ *      On win, jackpotPayoutAuthority draws from each active vault's jackpotCustodian reserve.
+ *      Winner receives a diversified basket of vault shares across the 4626 mesh (creator + agent lanes).
+ *      (69% on gauge is lotteryShareBps of trade fees routed to reserve — not a per-payout slice.)
+ *
+ * @dev CROSS-CHAIN FLOW:
+ *      Trade on Base:
+ *        1. ShareOFT buy → processSwapLottery() inline
+ *        2. VRF + payout on Base
+ *
+ *      Trade on remote chain:
+ *        1. ShareOFT buy queues pendingLotteryEntry; buyer submits with native LZ fee
+ *        2. Hub ShareOFT forwards entry → receiveRemoteLotteryEntry()
+ *        3. VRF + payout on Base from all active jackpotCustodian reserves
+ *        4. MSG_TYPE_WINNER_CALLBACK to source-chain ShareOFT
+ */
+
+import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
+import {EnforcedOptionParam} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppOptionsType3.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+import {ITradeFeeCollector4626} from
+    "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
+import {IShareOFT4626} from "@4626/shared/interfaces/vault/IShareOFT4626.sol";
+import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
+
+// ================================
+// INTERFACES
+// ================================
+
+interface IRegistry4626Lottery {
+    // Per-token lookups
+    function getVaultForToken(address _token) external view returns (address);
+    function getShareOFTForToken(address _token) external view returns (address);
+    function getTokenForShareOFT(address _shareOFT) external view returns (address);
+    function getOracleForToken(address _token) external view returns (address);
+    function getGaugeControllerForToken(address _token) external view returns (address);
+    function isTokenActive(address _token) external view returns (bool);
+
+    // Chain infrastructure
+    function getLayerZeroEndpoint(uint256 _chainId) external view returns (address);
+
+    // Global queries
+    function getAllTokens() external view returns (address[] memory);
+}
+
+interface IVRFConsumer4626 {
+    function requestRandomWords() external returns (uint256 requestId);
+}
+
+interface IChainlinkVRFIntegrator {
+    function quoteFee() external view returns (MessagingFee memory);
+    function requestRandomWordsPayable(uint32 targetEid) external payable returns (MessagingReceipt memory, uint64);
+}
+
+interface Ive4626BoostManager {
+    /// @notice Curve working-balance boost for (l, L, ve/Ve). Sole personal-boost path.
+    function calculateBoostForPosition(
+        address user,
+        uint256 shareBalanceUSD,
+        uint256 swapAmountUSD,
+        uint256 totalShareUSD
+    ) external view returns (uint256 boostBps);
+}
+
+interface Ive4626GaugeVoting {
+    /// @notice Vault's vote-directed probability boost (PPM) from the global gauge budget.
+    function getVaultProbabilityBoostPPM(address vault) external view returns (uint256);
+}
+
+contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
+    using OptionsBuilder for bytes;
+    using SafeERC20 for IERC20;
+
+    // ================================
+    // CONSTANTS
+    // ================================
+
+    uint256 public constant MIN_SWAP_USD = 1_000_000; // $1 (6 decimals)
+    uint256 public constant MAX_SWAP_USD = 1_000_000_000_000; // $1M
+    /// @notice Mirror of `LotteryAmoeRouter.MAX_POINTS_AS_USD` (SCAN-L1).
+    uint256 public constant MAX_POINTS_AS_USD = 10_000 * 1_000_000;
+    uint256 public constant BASIS_POINTS = 10_000;
+
+    /// @notice Hard cap on the number of *active* lane tokens evaluated in
+    /// a single jackpot payout. Caps the gas cost of
+    /// _payoutLocalJackpotInner() so the function cannot be bricked by a
+    /// growing registry (M-06 / 4626-315). Remainder active coins roll to
+    /// the next jackpot via the payout cursor.
+    uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+
+    /// @notice Hard cap on the number of registry slots scanned in a single
+    /// jackpot payout, regardless of active/inactive status. Because
+    /// registeredTokens is append-only and inactive entries are never
+    /// removed, a long prefix of inactive coins would otherwise consume the
+    /// active cap without paying any active token. The slot cap bounds the
+    /// worst-case all-inactive loop while the cursor carries progress into
+    /// the next call until an active token is found. Set materially higher
+    /// than MAX_JACKPOT_PAYOUT_ITERATIONS so natural inactive density does
+    /// not starve active tokens.
+    uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024;
+
+    /// @notice Message types for hub-centric architecture
+    uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
+    uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
+    uint32 internal constant SOLANA_LZ_EID = 30168;
+
+    /// @notice Delay between proposing and committing a boost-source change
+    /// once `timelockArmed` is true. See `proposeBoostManager` /
+    /// `proposeve4626GaugeVoting` and docs/security/amoe-pr3-handoff.md.
+    /// @dev `internal` on main to save EIP-170 budget; the same constant is
+    ///      exposed `public` on the admin module for off-chain consumers and
+    ///      is also surfaced via `getBoostSourceTimelockState`.
+    uint256 internal constant BOOST_SOURCE_TIMELOCK = 24 hours;
+
+    uint128 internal constant DEFAULT_GAS_LIMIT = 200_000;
+    uint128 internal constant DEFAULT_MSG_VALUE = 0;
+    uint128 internal constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
+    uint256 internal constant DEFAULT_SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 internal constant DEFAULT_VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 internal constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 internal constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 internal constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether;
+    bytes32 internal constant VRF_REQUEST_CONTEXT =
+        0xd84f4bdfe2e4cf43345263bca820ebe0fd153da9fd7f53871b6103ba604a4430;
+    bytes32 internal constant WINNER_CALLBACK_CONTEXT =
+        0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
+
+    // Safety defaults: sponsorship is opt-in and bounded.
+    uint256 internal constant DEFAULT_SPONSORED_VRF_MIN_SWAP_USD = 10_000_000; // $10 (6 decimals)
+    uint32 internal constant DEFAULT_VRF_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 2;
+    uint32 internal constant DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
+    uint32 internal constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 1;
+    uint32 internal constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
+
+    // ================================
+    // STATE - SHARED SERVICE
+    // ================================
+
+    /// @notice Registry for looking up per-token contracts
+    IRegistry4626Lottery public immutable registry;
+
+    /// @notice Authorized swap contracts that can trigger lottery
+    mapping(address => bool) public authorizedSwapContracts;
+
+    /// @notice VRF providers (shared across all tokens)
+    IVRFConsumer4626 public localVRFConsumer;
+    IChainlinkVRFIntegrator public vrfIntegrator;
+    uint32 public targetEid;
+    bool public useLocalVRF;
+    mapping(address => bool) public trustedVrfIntegrators;
+
+    /// @notice Boost manager for ve4626 lockers
+    Ive4626BoostManager public boostManager;
+
+    /// @notice ve4626GaugeVoting for ve(3,3) vault probability direction
+    Ive4626GaugeVoting public ve4626GaugeVoting;
+
+    /// @notice Lottery configuration (shared across all tokens)
+    struct LotteryConfig {
+        uint256 minSwapAmount;
+        uint256 rewardPercentage; // bps of jackpot
+        bool isActive;
+        uint256 baseWinChance; // PPM (parts per million)
+        uint256 maxWinChance; // PPM
+        // Tunable lottery-odds boost knob applied inside `_calculateTokenUSD`
+        // to every paid-path token→USD conversion (swap input + balance read).
+        // Bounds [10_000, 15_000]: 10_000 = neutral (1.00x, no effect),
+        // > 10_000 inflates lottery PPM as a marketing/engagement boost.
+        // Production must set this to 10_000 at deploy via setLotteryConfig.
+        // Historically labeled "slippage bonus" but it does not function as one:
+        // applies uniformly to balance reads, only scales upward, and
+        // directly inflates `winChancePPM = swapValueUSD / 250_000` rather
+        // than truing-up an executed value. AMOE bypasses this multiplier
+        // entirely because `pointsBurnedAsUSD` is already an end-value USD
+        // figure (no token→USD conversion). At the production setting of
+        // 10_000, AMOE and paid paths produce identical PPM at equal notional.
+        uint256 usdMultiplierBps;
+    }
+
+    LotteryConfig public lotteryConfig;
+
+    /// @notice Max acceptable oracle staleness (seconds).
+    /// @dev Used as defense-in-depth; default preserves prior 2h hardcode.
+    uint256 public oracleMaxStaleness = 2 hours;
+
+    // FIX: CLM-02 — grace period after which VRF results are rejected as stale
+    uint256 public vrfResultGracePeriod = 30 minutes;
+
+    /// @notice Circuit breaker: maximum allowed price deviation (bps) within `oracleDeviationWindow`.
+    /// @dev If the reference is recent and the oracle price jumps beyond this, the entry is skipped (no VRF request).
+    uint256 public oracleMaxDeviationBps = 2000; // 20%
+    uint256 public oracleDeviationWindow = 30 minutes;
+
+    /// @notice Per-token reference price used for deviation checks (USD 1e18).
+    mapping(address => uint256) public lastAcceptedPriceUSD1e18;
+    mapping(address => uint256) public lastAcceptedPriceTimestamp;
+
+    /// @notice VRF request tracking - includes lane token and source chain
+    enum VRFType {
+        LOCAL,
+        CROSS_CHAIN
+    }
+    enum SponsorshipSkipReason {
+        DISABLED,
+        BELOW_MIN_SWAP,
+        FEE_ABOVE_CAP,
+        BUDGET_EXCEEDED,
+        INSUFFICIENT_BALANCE,
+        SEND_FAILED,
+        RATE_LIMITED
+    }
+    enum CallbackDropReason {
+        BUYER_RATE_LIMITED,
+        ORIGIN_RATE_LIMITED,
+        SPONSORSHIP_UNAVAILABLE,
+        /// @notice Messaging-layer failure (`_quote` / `_lzSend`) — ODA-426-F1.
+        SEND_FAILED
+    }
+
+    struct SponsorshipPolicy {
+        bool enabled;
+        uint256 maxFeePerMessage;
+        uint256 budgetPerEpoch;
+        uint256 epochDuration;
+        uint256 epochStart;
+        uint256 spentInEpoch;
+    }
+
+    struct VRFRequest {
+        address user;
+        address token; // Which lane token this entry is for
+        uint256 amountUSD;
+        uint256 effectiveWinChancePPM;
+        VRFType vrfType;
+        uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
+        // FIX: CLM-02 — track request creation time to reject stale VRF results
+        uint256 requestTimestamp;
+    }
+
+    mapping(uint256 => VRFRequest) public vrfRequests;
+
+    /// @notice Deferred VRF results while the contract is paused.
+    /// @dev While paused, callbacks store randomness and do not settle wins/losses.
+    mapping(uint256 => uint256) public pendingRandomWord;
+    mapping(uint256 => bool) public hasPendingRandomWord;
+    /// @dev FIFO queue of requestIds deferred during pause (M2-07 / H-02).
+    ///      Settlement is head-only so owners cannot cherry-pick wins; batch flush
+    ///      avoids OOG on large queues (apply up to DEFERRED_VRF_FLUSH_BATCH_MAX).
+    uint256[] internal _deferredVrfRequestIds;
+
+    /// @notice ODA-426-F6: true while admin flush settles a deferred result (skip re-enqueue).
+    bool private _settlingDeferredVrf;
+    /// @notice Hard cap on deferred VRF FIFO length (M2-07).
+    uint256 public constant MAX_DEFERRED_VRF_QUEUE = 128;
+    /// @notice Max items settled per `processDeferredVrfBatch` / single call (M2-07).
+    uint256 public constant DEFERRED_VRF_FLUSH_BATCH_MAX = 16;
+
+    /// @notice Hub ShareOFT contracts authorized to forward remote lottery entries.
+    mapping(address => bool) public authorizedHubShareOftForwarders;
+
+    /// @notice Funding policy for cross-chain VRF requests and winner callbacks.
+    SponsorshipPolicy public vrfSponsorshipPolicy;
+    SponsorshipPolicy public callbackSponsorshipPolicy;
+    uint256 public sponsoredVrfMinSwapAmountUSD = DEFAULT_SPONSORED_VRF_MIN_SWAP_USD;
+
+    /// @notice Sponsorship anti-spam rate limits (count-based per epoch). 0 = unlimited.
+    uint32 public vrfMaxSponsoredPerBuyerPerEpoch;
+    uint32 public vrfMaxSponsoredPerOriginPerEpoch;
+    uint32 public callbackMaxSponsoredPerBuyerPerEpoch;
+    uint32 public callbackMaxSponsoredPerOriginPerEpoch;
+
+    mapping(address => uint32) public vrfSponsoredCountByBuyer;
+    mapping(address => uint256) public vrfBuyerEpochStart;
+    mapping(bytes32 => uint32) public vrfSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public vrfOriginEpochStart;
+
+    mapping(address => uint32) public callbackSponsoredCountByBuyer;
+    mapping(address => uint256) public callbackBuyerEpochStart;
+    mapping(bytes32 => uint32) public callbackSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public callbackOriginEpochStart;
+
+    /// @notice Authorized remote OFT peers that can send lottery entries
+    /// @dev Maps (srcEid, senderBytes32) → authorized
+    mapping(uint32 => mapping(bytes32 => bool)) public authorizedRemoteOFTs;
+
+    /// @notice Gas limit for winner callback messages
+    uint128 public callbackGasLimit = DEFAULT_CALLBACK_GAS_LIMIT;
+
+    /// @notice Total remote lottery entries received
+    uint256 public totalRemoteLotteryEntries;
+
+    /// @notice Global statistics (vault share units)
+    uint256 public totalLotteryEntries;
+    uint256 public totalWinners;
+    uint256 public totalRewardsPaid;
+
+    /// @notice Per-token statistics (vault share units)
+    struct TokenStats {
+        uint256 entries;
+        uint256 winners;
+        uint256 rewardsPaid;
+    }
+    mapping(address => TokenStats) public tokenStats;
+
+    // Guard against re-entrant payouts triggered by external vault/gauge calls.
+    uint256 private _payoutLock;
+    address private immutable _adminModule;
+
+    // ================================
+    // STATE — AMOE LINEAR PARITY (PR 1)
+    // ================================
+    //
+    // The fields below are appended at the END of contract storage so the slot
+    // layout remains a strict superset of the audited version. The mirror in
+    // LotteryManager4626AdminModule appends the same fields in the same
+    // order so delegatecall continues to read/write identical slots.
+    //
+    // baseCeilingPPM: pre-boost win-chance cap. Default 40_000 PPM = 4%.
+    //   The new linear formula is `winChancePPM = swapValueUSD / 250_000`,
+    //   capped at baseCeilingPPM. The legacy `lotteryConfig.baseWinChance`
+    //   field is retained for slot/ABI parity but is no longer read.
+    // authorizedAmoeRelayer: the only address allowed to call
+    //   `processAmoeEntry`. Single-address allowlist (rather than a mapping)
+    //   to keep the audit surface minimal. The relayer is the same trusted
+    //   off-chain key that today signs AMOE submissions in lotteryAmoe.ts.
+    /// @notice Pre-boost win-chance ceiling (PPM). The linear formula is
+    /// `winChancePPM = swapValueUSD / 250_000` capped at this value.
+    /// Default 40_000 PPM (= 4% at $10K swap).
+    uint256 public baseCeilingPPM;
+
+    /// @notice Trusted relayer authorized to call `processAmoeEntry`.
+    /// Off-chain points-to-USD accounting is trusted to this key in PR 1;
+    /// PR 4 (zkMetal-bound pointsBurned) will move that trust into a
+    /// circuit-bound public input. See docs/security/amoe-pr1-handoff.md.
+    address public authorizedAmoeRelayer;
+
+    // ================================
+    // STATE — BOOST-SOURCE TIMELOCK (PR 3)
+    // ================================
+    //
+    // Appended at the end of contract storage; mirrored in
+    // LotteryManager4626AdminModule in the same order so delegatecall
+    // continues to read/write identical slots. See docs/security/amoe-pr3-handoff.md.
+    //
+    // Threat model: a compromised owner key swapping in a malicious
+    // boostManager / ve4626GaugeVoting could lift any user's odds up to the
+    // absolute `lotteryConfig.maxWinChance` cap (default 15%) in a single tx.
+    // The timelock forces a 24h pending-then-effective window so off-chain
+    // monitoring + emergency response (or `disableBoostSources`) can react.
+    //
+    // Until `armBoostSourceTimelock()` is called, the legacy single-call
+    // setters (`setBoostManager`, `setve4626GaugeVoting`) continue to work for
+    // operational bootstrap. Once armed they revert and the
+    // propose/commit/cancel flow is the only path forward.
+
+    /// @dev Pending replacement for `boostManager`, set by `proposeBoostManager`.
+    /// Read via `getPendingBoostSources()` to keep main-contract bytecode
+    /// under EIP-170; the storage layout is mirrored in the admin module.
+    address internal _pendingBoostManager;
+    uint256 internal _pendingBoostManagerEffectiveAt;
+    address internal _pendingve4626GaugeVoting;
+    uint256 internal _pendingve4626GaugeVotingEffectiveAt;
+
+    /// @dev Once true, the legacy `setBoostManager` / `setve4626GaugeVoting`
+    /// setters revert and the timelocked propose/commit/cancel flow is the
+    /// only path. One-way switch (no disarm). Read via `isTimelockArmed()`.
+    bool internal _timelockArmed;
+
+    // ================================
+    // STATE — LOCAL VRF CONSUMER TIMELOCK (R-H04)
+    // ================================
+    //
+    // Appended after boost-source timelock storage; mirrored in
+    // LotteryManager4626AdminModule. Instant `setLocalVRFConsumer` is only
+    // allowed while consumer is unset (bootstrap). Subsequent changes use
+    // queue (2d) → execute, matching VRFConsumer4626 coordinator policy.
+
+    /// @notice Pending local VRF consumer (0 if none queued).
+    address public pendingLocalVRFConsumer;
+    /// @notice Earliest timestamp at which `executeLocalVRFConsumerChange` may run.
+    uint256 public pendingLocalVRFConsumerEffectiveAt;
+
+    // ================================
+    // STATE — JACKPOT PAYOUT SCOPE (R-H05)
+    // ================================
+    //
+    // Launch default true = single-vault prize (only the triggering coin's gauge pays).
+    // Multi-vault skimming (false) requires explicit product disclosure before enable.
+    // See docs/audits/R-H05-multi-vault-jackpot-decision.md.
+
+    /// @notice If true, jackpot payouts only debit the triggering vault's gauge.
+    /// @dev Defaults to true for launch safety (R-H05). Owner may set false for multi-vault.
+    bool public singleVaultJackpotOnly = true;
+
+    // ================================
+    // STATE — AMOE RELAYER TIMELOCK (M-12)
+    // ================================
+    //
+    // Instant `setAuthorizedAmoeRelayer` is bootstrap-only (while unset).
+    // Subsequent rewires use the same 2-day queue/execute flow as local VRF consumer.
+
+    address public pendingAmoeRelayer;
+    uint256 public pendingAmoeRelayerEffectiveAt;
+
+    // ================================
+    // EVENTS
+    // ================================
+
+    event LotteryEntryCreated(
+        address indexed token,
+        address indexed user,
+        uint256 swapAmountUSD,
+        uint256 winChancePPM,
+        uint256 requestId
+    );
+    event LotteryWinner(
+        address indexed token,
+        address indexed user,
+        uint256 swapAmountUSD,
+        uint256 rewardAmount,
+        uint256 requestId
+    );
+    event LotteryResultProcessed(
+        address indexed token,
+        address indexed user,
+        uint256 swapAmountUSD,
+        bool won,
+        uint256 rewardAmount,
+        uint256 requestId
+    );
+    event SwapContractAuthorized(address indexed swapContract, bool authorized);
+    event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
+    event OracleMaxStalenessUpdated(uint256 maxStaleness);
+    event OracleDeviationGuardUpdated(uint256 maxDeviationBps, uint256 deviationWindow);
+    event CrossChainJackpotPaid(
+        address indexed token, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event LotteryWon(
+        address indexed token, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
+    event JackpotPayoutFailed(address indexed token, address indexed winner, uint256 shares);
+    event RemoteLotteryEntryReceived(
+        uint32 indexed srcEid, address indexed buyer, address indexed tokenIn, uint256 amount, uint32 sourceChainId
+    );
+    event WinnerCallbackSent(
+        uint32 indexed dstEid, address indexed winner, address indexed token, uint256 totalSharesPaid
+    );
+    event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
+    event CallbackGasLimitUpdated(uint128 newGasLimit);
+    event VRFConsumerUpdated(address indexed consumer);
+    event LocalVRFConsumerChangeQueued(address indexed newConsumer, uint256 effectiveAt);
+    event LocalVRFConsumerChangeExecuted(address indexed newConsumer);
+    event LocalVRFConsumerChangeCancelled(address indexed cancelled);
+    event SingleVaultJackpotOnlyUpdated(bool enabled);
+    event AmoeRelayerChangeQueued(address indexed newRelayer, uint256 effectiveAt);
+    event AmoeRelayerChangeExecuted(address indexed newRelayer);
+    event AmoeRelayerChangeCancelled(address indexed cancelled);
+    event TargetEidUpdated(uint32 indexed targetEid);
+    event VRFIntegratorUpdated(address indexed integrator, bool trusted);
+    event VrfResultDeferred(uint256 indexed requestId, uint256 randomWord);
+    event SponsorshipPolicyUpdated(
+        bytes32 indexed context, bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration
+    );
+    event SponsorshipRateLimitsUpdated(
+        uint32 vrfMaxPerBuyerPerEpoch,
+        uint32 vrfMaxPerOriginPerEpoch,
+        uint32 callbackMaxPerBuyerPerEpoch,
+        uint32 callbackMaxPerOriginPerEpoch
+    );
+    event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+    event SponsorshipSpendRecorded(
+        bytes32 indexed context, uint256 amount, uint256 spentInEpoch, uint256 budgetPerEpoch, uint256 epochStart
+    );
+    event SponsorshipSkipped(
+        bytes32 indexed context, SponsorshipSkipReason reason, uint256 feeNative, uint256 valueHint
+    );
+    // FIX: CLM-03 — compact reason code to reduce bytecode from repeated string literals
+    event WinnerCallbackDropped(
+        uint32 indexed dstEid,
+        address indexed winner,
+        address indexed token,
+        uint256 totalSharesPaid,
+        uint8 reason
+    );
+    // FIX: CLM-09 — event for invalid payloads (replaces revert to avoid bricking LZ lane)
+    event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
+    // FIX: CLM-02 — event for stale VRF results that are discarded
+    event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
+
+    // PR 1 — AMOE Linear Parity events.
+    // Note: AMOE entries also emit `LotteryEntryCreated` (same shape as paid path).
+    // `AmoeEntryRecorded` is intentionally omitted to keep runtime bytecode under EIP-170.
+    // Off-chain: filter LotteryEntryCreated and cross-reference msg.sender / relayer
+    // (or watch for any future AMOE-specific event added in PR 4 once we have headroom).
+    event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+    event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
+
+    // PR 3 — Boost-source timelock events.
+    event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event BoostManagerProposalCancelled(address indexed cancelled);
+    event BoostManagerUpdated(address indexed previous, address indexed newManager);
+    event ve4626GaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event ve4626GaugeVotingProposalCancelled(address indexed cancelled);
+    event ve4626GaugeVotingUpdated(address indexed previous, address indexed newGauge);
+    event BoostSourceTimelockArmed();
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousve4626GaugeVoting);
+
+    // ================================
+    // ERRORS
+    // ================================
+
+    error ZeroAddress();
+    error Unauthorized();
+    error InvalidAmount();
+    error CallerFeeMismatch(uint256 provided, uint256 required);
+    error ETHRefundFailed();
+    /// @notice M2-07 — deferred VRF FIFO is full; settle some items before pausing further callbacks.
+    error DeferredVrfQueueFull();
+    /// @notice H-02 / M2-07 — only the FIFO head may be settled (prevents cherry-picking).
+    error DeferredVrfOutOfOrder(uint256 expectedHead, uint256 provided);
+
+    // PR 3 — Boost-source timelock errors.
+    error TimelockNotArmed();
+    error TimelockAlreadyArmed();
+    error TimelockNotExpired();
+    error NoPendingProposal();
+    error LegacySetterDisabled();
+
+    // R-H04 — Local VRF consumer timelock errors.
+    error LocalVRFConsumerAlreadySet();
+    error NoPendingLocalVRFConsumer();
+    // M-12 — AMOE relayer timelock errors.
+    error AmoeRelayerAlreadySet();
+    error NoPendingAmoeRelayer();
+
+    /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
+    /// @dev Logic lives in the admin module; constant is exposed on the main ABI for ops/tests.
+    ///      ODA-426-F3 reuses this 2-day window for VRF integrator, swap-auth, and reward%.
+    uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
+    /// @notice Delay for AMOE relayer rewires (same window as local VRF consumer).
+    uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
+
+    // ================================
+    // CONSTRUCTOR
+    // ================================
+
+    /**
+     * @notice Deploy shared lottery manager
+     * @param _registry Registry4626 address
+     * @param owner_ Owner address
+     */
+    constructor(address _registry, address owner_)
+        OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        Ownable(owner_)
+    {
+        if (owner_ == address(0)) revert ZeroAddress();
+        if (_registry == address(0)) revert ZeroAddress();
+
+        registry = IRegistry4626Lottery(_registry);
+
+        // Initialize lottery config
+        lotteryConfig = LotteryConfig({
+            minSwapAmount: MIN_SWAP_USD,
+            rewardPercentage: 6900, // 69% of jackpot
+            isActive: true,
+            baseWinChance: 40, // legacy slot — retained for layout parity but no longer read by calculateWinChance
+            maxWinChance: 150_000, // 15% absolute (post-boost) cap
+            // Constructor default. Production rollout sets this to 10_000
+            // via `setLotteryConfig` for paid/AMOE PPM parity at equal
+            // notional. See storage-field comment for full rationale.
+            usdMultiplierBps: 10000
+        });
+
+        // PR 1 — AMOE Linear Parity: pre-boost ceiling. 40_000 PPM = 4% at $10K swap.
+        baseCeilingPPM = 40_000;
+
+        vrfSponsorshipPolicy = SponsorshipPolicy({
+            enabled: false,
+            maxFeePerMessage: DEFAULT_VRF_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_VRF_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
+        });
+
+        callbackSponsorshipPolicy = SponsorshipPolicy({
+            enabled: false,
+            maxFeePerMessage: DEFAULT_CALLBACK_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_CALLBACK_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
+        });
+
+        // Default anti-spam limits for sponsored traffic (caller-funded bypasses these).
+        vrfMaxSponsoredPerBuyerPerEpoch = DEFAULT_VRF_MAX_SPONSORED_PER_BUYER_PER_EPOCH;
+        vrfMaxSponsoredPerOriginPerEpoch = DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
+        callbackMaxSponsoredPerBuyerPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH;
+        callbackMaxSponsoredPerOriginPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
+        _adminModule = address(new LotteryManager4626AdminModule(_registry, owner_));
+    }
+
+    // ================================
+    // MODIFIERS
+    // ================================
+
+    modifier onlyAuthorizedSwapContract() {
+        if (!authorizedSwapContracts[msg.sender]) revert Unauthorized();
+        _;
+    }
+
+    // ================================
+    // MAIN LOTTERY FUNCTION
+    // ================================
+
+    /**
+     * @notice Process swap-based lottery entry for ANY registered lane token
+     * @param buyer User's wallet address (recipient of the swap)
+     *        Supports EOAs, smart contract wallets (Coinbase Smart Wallet, Safe),
+     *        and ERC-4337 accounts. Passed by the calling swap contract.
+     * @param tokenIn Token swapped (■TOKEN / ShareOFT)
+     * @param amountIn Amount swapped
+     * @return entryId VRF request ID (0 if no entry)
+     */
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
+        external
+        payable
+        nonReentrant
+        onlyAuthorizedSwapContract
+        whenNotPaused
+        returns (uint256 entryId)
+    {
+        if (buyer == address(0)) revert ZeroAddress();
+        if (tokenIn == address(0)) revert ZeroAddress();
+        if (amountIn == 0) revert InvalidAmount();
+
+        // Derive lane token from tokenIn (■TOKEN)
+        address token = registry.getTokenForShareOFT(tokenIn);
+        if (token == address(0)) {
+            // Silently skip unregistered tokens (no lottery entry)
+            // ODA-426-F4: refund any attached native fee on early-return paths.
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
+            return 0;
+        }
+
+        // Verify lane token is registered AND active
+        if (!registry.isTokenActive(token)) {
+            // Silently skip inactive/unregistered tokens (no lottery entry)
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
+            return 0;
+        }
+
+        // Calculate USD value using per-token oracle (plus reference price for circuit breakers)
+        (uint256 swapValueUSD, uint256 oraclePriceUSD1e18,) = _calculateTokenUSD(token, tokenIn, amountIn);
+
+        if (swapValueUSD < lotteryConfig.minSwapAmount) {
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
+            return 0;
+        }
+
+        if (!lotteryConfig.isActive) {
+            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
+            return 0;
+        }
+
+        // AUDIT-2026-07-08-H02: coverage must not count flash-borrowed or just-purchased ShareOFT.
+        // Authorized ShareOFT passes block-start eligible balance; we still cap by live pre-buy max.
+        uint256 shareBalanceUSD = 0;
+        uint256 coverageBal = _coverageShareBalance(tokenIn, buyer, amountIn, buyerCurrentShareBalance);
+        if (coverageBal > 0) {
+            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, coverageBal);
+        }
+
+        (entryId, ) = _boostAndDispatchVRF(buyer, token, tokenIn, shareBalanceUSD, swapValueUSD, msg.value);
+
+        // Update reference only when an entry is actually created.
+        if (entryId > 0 && oraclePriceUSD1e18 > 0) {
+            lastAcceptedPriceUSD1e18[token] = oraclePriceUSD1e18;
+            lastAcceptedPriceTimestamp[token] = block.timestamp;
+        }
+        return entryId;
+    }
+
+    /// @dev Shared boost + VRF dispatch path. Used by both `processSwapLottery`
+    ///      and `processAmoeEntry` to keep their behavior identical at the
+    ///      boost / VRF layer (Option B2 boost parity).
+    function _boostAndDispatchVRF(
+        address buyer,
+        address token,
+        address shareBalanceToken,
+        uint256 shareBalanceUSD,
+        uint256 swapValueUSD,
+        uint256 callerFeeValue
+    ) internal returns (uint256 entryId, uint256 boostedWinChanceOut) {
+        address vault = registry.getVaultForToken(token);
+        uint256 baseWinChance = calculateWinChance(swapValueUSD);
+        uint256 boostedWinChance = _applyBoost(
+            buyer, token, shareBalanceToken, shareBalanceUSD, vault, swapValueUSD, baseWinChance
+        );
+
+        if (useLocalVRF && address(localVRFConsumer) != address(0)) {
+            if (callerFeeValue != 0) revert InvalidAmount();
+            entryId = _requestLocalVRF(token, buyer, swapValueUSD, boostedWinChance);
+        } else {
+            entryId = _requestCrossChainVRF(token, buyer, swapValueUSD, boostedWinChance, callerFeeValue);
+        }
+
+        // Return tuple via storage of effective PPM via the assigned VRF request.
+        // Note: callers (processSwapLottery / processAmoeEntry) decide whether
+        // to emit LotteryEntryCreated to preserve historical event semantics.
+        boostedWinChanceOut = boostedWinChance;
+    }
+
+    // ================================
+    // AMOE ENTRY PATH (PR 1 — Linear Parity)
+    // ================================
+
+    /**
+     * @notice Process an Alternative Method Of Entry (AMOE) lottery entry.
+     * @dev Gated to a single trusted off-chain relayer (`authorizedAmoeRelayer`).
+     *      The relayer is responsible for converting points-burned to a USD
+     *      value (1e6 / USDC units) before calling. PR 1 trusts that key for
+     *      points-to-USD accounting; PR 4 will move that trust into a
+     *      zkMetal-bound public input. See docs/security/amoe-pr1-handoff.md.
+     *
+     *      Boost flow mirrors `processSwapLottery` so AMOE entries get the
+     *      same ve4626 personal + vault gauge boost parity (Option B2). The
+     *      `pointsBurnedAsUSD` value is treated identically to a paid swap
+     *      value for the purpose of `calculateWinChance` and `_applyBoost`.
+     *
+     *      Defense-in-depth: enforces `pointsBurnedAsUSD >= minSwapAmount`
+     *      on-chain even though the relayer also enforces it off-chain.
+     *
+     * @param buyer The user receiving the lottery entry.
+     * @param token The lane token the entry is for.
+     * @param pointsBurnedAsUSD Off-chain-computed USD value of burnt points (1e6 units).
+     * @return entryId VRF request ID (0 if no entry).
+     */
+    function processAmoeEntry(address buyer, address token, uint256 pointsBurnedAsUSD)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 entryId)
+    {
+        // Relayer gate — single-address allowlist. Combined check rejects
+        // both unauthorized callers and the disabled-relayer (address(0)) case.
+        address relayer = authorizedAmoeRelayer;
+        if (relayer == address(0) || msg.sender != relayer) revert Unauthorized();
+        if (buyer == address(0) || token == address(0)) revert ZeroAddress();
+        if (pointsBurnedAsUSD == 0) revert InvalidAmount();
+        // SCAN-L1: mirror router ceiling so a misconfigured / legacy relayer
+        // cannot push an oversize points value past the AMOE protocol cap.
+        if (pointsBurnedAsUSD > MAX_POINTS_AS_USD) revert InvalidAmount();
+
+        // Verify lane token is registered AND active. Silent skip preserves
+        // off-chain idempotency on inactive tokens.
+        if (!registry.isTokenActive(token)) {
+            return 0;
+        }
+
+        // Defense-in-depth: floor matches paid path.
+        if (pointsBurnedAsUSD < lotteryConfig.minSwapAmount) {
+            return 0;
+        }
+
+        if (!lotteryConfig.isActive) {
+            return 0;
+        }
+
+        // AUDIT-2026-07-08-H03: coverage is ShareOFT holdings (not the lane coin).
+        // Prefer ShareOFT block-start eligible balance when the OFT exposes it
+        // so same-tx flash-borrowed shares do not inflate AMOE odds.
+        uint256 shareBalanceUSD = 0;
+        address shareOFT = registry.getShareOFTForToken(token);
+        uint256 buyerShareBalance = 0;
+        if (shareOFT != address(0)) {
+            buyerShareBalance = _eligibleShareBalance(shareOFT, buyer);
+            if (buyerShareBalance > 0) {
+                (shareBalanceUSD,,) = _calculateTokenUSD(token, shareOFT, buyerShareBalance);
+            }
+        }
+
+        uint256 boostedWinChance;
+        (entryId, boostedWinChance) = _boostAndDispatchVRF(
+            buyer, token, shareOFT == address(0) ? token : shareOFT, shareBalanceUSD, pointsBurnedAsUSD, 0
+        );
+
+        if (entryId > 0) {
+            emit LotteryEntryCreated(token, buyer, pointsBurnedAsUSD, boostedWinChance, entryId);
+        }
+        return entryId;
+    }
+
+    /**
+     * @notice Request cross-chain VRF (hub local call path, sourceChainEid = 0)
+     */
+    function _requestCrossChainVRF(
+        address token,
+        address buyer,
+        uint256 swapValueUSD,
+        uint256 winChancePPM,
+        uint256 callerFeeValue
+    ) internal returns (uint256) {
+        return _requestCrossChainVRFWithSource(
+            token, buyer, swapValueUSD, winChancePPM, 0, bytes32(0), callerFeeValue
+        );
+    }
+
+    /**
+     * @notice Request local VRF (hub local call path, sourceChainEid = 0)
+     */
+    function _requestLocalVRF(address token, address buyer, uint256 swapValueUSD, uint256 winChancePPM)
+        internal
+        returns (uint256)
+    {
+        return _requestLocalVRFWithSource(token, buyer, swapValueUSD, winChancePPM, 0);
+    }
+
+    // ================================
+    // VRF CALLBACKS
+    // ================================
+
+    // FIX: CLM-01 — namespace helpers to prevent local/cross-chain VRF request ID collision
+    function _localVrfKey(uint256 requestId) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encode("LOCAL", requestId)));
+    }
+
+    function _crossChainVrfKey(uint256 sequence) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encode("CC", sequence)));
+    }
+
+    /**
+     * @notice Local VRF callback
+     */
+    function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external nonReentrant {
+        if (msg.sender != address(localVRFConsumer)) revert Unauthorized();
+        // FIX: CLM-01 — use namespaced key
+        _processVRFResult(_localVrfKey(requestId), randomWords);
+    }
+
+    /**
+     * @notice Cross-chain VRF callback
+     */
+    function receiveRandomWords(uint256[] memory randomWords, uint256 sequence) external nonReentrant {
+        if (msg.sender != address(vrfIntegrator)) revert Unauthorized();
+        // FIX: CLM-01 — use namespaced key
+        _processVRFResult(_crossChainVrfKey(sequence), randomWords);
+    }
+
+    /**
+     * @notice Apply the FIFO head deferred VRF result (H-02 / M2-07).
+     * @dev `requestId` must equal the queue head — prevents cherry-picking. Prefer
+     *      `processDeferredVrfBatch` for multi-item drains.
+     */
+    function applyDeferredVrf(uint256 requestId) external nonReentrant {
+        if (msg.sender != owner()) revert Unauthorized();
+        if (_deferredVrfRequestIds.length == 0) {
+            if (!hasPendingRandomWord[requestId]) return;
+            // Legacy orphan pending word without queue entry: allow one-shot drain.
+            _settleDeferredVrfAt(requestId);
+            return;
+        }
+        uint256 head = _deferredVrfRequestIds[0];
+        if (requestId != head) revert DeferredVrfOutOfOrder(head, requestId);
+        _popDeferredVrfHead();
+        _settleDeferredVrfAt(requestId);
+    }
+
+    /**
+     * @notice Settle up to `maxCount` deferred VRF results in FIFO order (M2-07).
+     * @dev Caps at `DEFERRED_VRF_FLUSH_BATCH_MAX` to avoid OOG. Safe to call repeatedly
+     *      until `deferredVrfQueueLength() == 0`. Settles while paused or unpaused (ODA-426-F6).
+     */
+    function processDeferredVrfBatch(uint256 maxCount) external nonReentrant returns (uint256 processed) {
+        if (msg.sender != owner()) revert Unauthorized();
+        if (maxCount == 0) return 0;
+        uint256 limit = maxCount > DEFERRED_VRF_FLUSH_BATCH_MAX ? DEFERRED_VRF_FLUSH_BATCH_MAX : maxCount;
+        uint256 qLen = _deferredVrfRequestIds.length;
+        if (limit > qLen) limit = qLen;
+        for (; processed < limit;) {
+            uint256 requestId = _deferredVrfRequestIds[0];
+            _popDeferredVrfHead();
+            _settleDeferredVrfAt(requestId);
+            unchecked {
+                ++processed;
+            }
+        }
+    }
+
+    function deferredVrfQueueLength() external view returns (uint256) {
+        return _deferredVrfRequestIds.length;
+    }
+
+    function deferredVrfQueueHead() external view returns (uint256) {
+        if (_deferredVrfRequestIds.length == 0) return 0;
+        return _deferredVrfRequestIds[0];
+    }
+
+    function _pushDeferredVrf(uint256 requestId) internal {
+        if (_deferredVrfRequestIds.length >= MAX_DEFERRED_VRF_QUEUE) revert DeferredVrfQueueFull();
+        _deferredVrfRequestIds.push(requestId);
+    }
+
+    function _popDeferredVrfHead() internal {
+        uint256 len = _deferredVrfRequestIds.length;
+        if (len == 0) return;
+        for (uint256 i = 1; i < len;) {
+            _deferredVrfRequestIds[i - 1] = _deferredVrfRequestIds[i];
+            unchecked {
+                ++i;
+            }
+        }
+        _deferredVrfRequestIds.pop();
+    }
+
+    function _settleDeferredVrfAt(uint256 requestId) internal {
+        if (!hasPendingRandomWord[requestId]) return;
+        uint256 word = pendingRandomWord[requestId];
+        delete pendingRandomWord[requestId];
+        delete hasPendingRandomWord[requestId];
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = word;
+        // Deferred results are settled after an admin pause window. Refresh the
+        // staleness reference so a long pause does not discard already-arrived VRF.
+        vrfRequests[requestId].requestTimestamp = block.timestamp;
+        // ODA-426-F6: force settle even if still paused (do not re-enqueue to FIFO tail).
+        _settlingDeferredVrf = true;
+        _processVRFResult(requestId, randomWords);
+        _settlingDeferredVrf = false;
+    }
+
+    /**
+     * @notice Receive a remote lottery entry forwarded by a hub ShareOFT peer.
+     * @dev Remote chains deliver to the hub ShareOFT; the OFT forwards here with the
+     *      original LayerZero origin preserved for `authorizedRemoteOFTs` checks.
+     *      ODA-426-F2: independently re-verify `originSender` against
+     *      `authorizedRemoteOFTs` (do not trust forwarder-supplied origin alone),
+     *      require MSG_TYPE_LOTTERY_ENTRY, and require a V3 non-zero `sourceEventId`
+     *      replay key for every forwarder lane (parity with Solana).
+     */
+    function receiveRemoteLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata payload)
+        external
+        nonReentrant
+    {
+        if (!authorizedHubShareOftForwarders[msg.sender]) revert Unauthorized();
+        if (!authorizedRemoteOFTs[srcEid][originSender]) revert Unauthorized();
+        _requireNotPaused();
+
+        // Forwarder path: V3 only (224 bytes) with non-zero message-level replay id.
+        if (payload.length != 224) {
+            emit InvalidPayloadReceived(srcEid, payload.length);
+            return;
+        }
+        uint256 msgType;
+        assembly { msgType := calldataload(payload.offset) }
+        if (msgType != MSG_TYPE_LOTTERY_ENTRY) {
+            emit InvalidPayloadReceived(srcEid, payload.length);
+            return;
+        }
+        _handleLotteryEntry(srcEid, originSender, payload);
+    }
+
+    function setAuthorizedHubShareOftForwarder(address shareOft, bool authorized) external {
+        shareOft;
+        authorized;
+        _delegateAdmin();
+    }
+
+    function _processVRFResult(uint256 requestId, uint256[] memory randomWords) internal {
+        if (randomWords.length == 0) return;
+
+        VRFRequest memory request = vrfRequests[requestId];
+        if (request.user == address(0)) return;
+
+        // FIX: CLM-02 — reject stale VRF results that arrive after grace period
+        if (vrfResultGracePeriod > 0 && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
+            delete vrfRequests[requestId];
+            emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
+            return;
+        }
+
+        // If paused, defer settlement and preserve the request for later FIFO flush.
+        // M2-07 / H-02: enqueue once so unpause-time settlement cannot cherry-pick.
+        // ODA-426-F6: admin flush sets `_settlingDeferredVrf` to settle without re-enqueue.
+        if (paused() && !_settlingDeferredVrf) {
+            if (!hasPendingRandomWord[requestId]) {
+                pendingRandomWord[requestId] = randomWords[0];
+                hasPendingRandomWord[requestId] = true;
+                _pushDeferredVrf(requestId);
+                emit VrfResultDeferred(requestId, randomWords[0]);
+            }
+            return;
+        }
+
+        delete vrfRequests[requestId];
+
+        uint256 winChancePPM = request.effectiveWinChancePPM;
+
+        if ((randomWords[0] % 1_000_000) < winChancePPM) {
+            uint256 reward = _processWin(
+                request.token,
+                request.user,
+                request.amountUSD,
+                requestId,
+                request.sourceChainEid
+            );
+            emit LotteryResultProcessed(request.token, request.user, request.amountUSD, true, reward, requestId);
+        } else {
+            emit LotteryResultProcessed(request.token, request.user, request.amountUSD, false, 0, requestId);
+        }
+    }
+
+    // ================================
+    // INTERNAL FUNCTIONS
+    // ================================
+
+    /**
+     * @notice Calculate USD value of tokens using per-token oracle
+     */
+    function _calculateTokenUSD(address token, address tokenIn, uint256 amount)
+        internal
+        view
+        returns (uint256 usd1e6, uint256 priceUSD1e18, uint256 oracleTimestamp)
+    {
+        return LotteryManager4626PricingLib.calculateTokenUSD(
+            address(registry),
+            token,
+            tokenIn,
+            amount,
+            oracleMaxStaleness,
+            oracleMaxDeviationBps,
+            oracleDeviationWindow,
+            lastAcceptedPriceUSD1e18[token],
+            lastAcceptedPriceTimestamp[token],
+            lotteryConfig.usdMultiplierBps
+        );
+    }
+
+
+    /// @notice Linear pre-boost win chance (PR 1 — AMOE Linear Parity).
+    /// @dev Formula: `winChancePPM = swapValueUSD / 250_000`, capped at
+    ///      `baseCeilingPPM`. swapValueUSD is in 1e6 (USDC) units, so:
+    ///        $1     → 1_000_000  / 250_000 =     4 PPM   (0.0004%)
+    ///        $10    → 10_000_000 / 250_000 =    40 PPM   (0.004%)
+    ///        $100   → 100_000_000 / 250_000 =   400 PPM   (0.04%)
+    ///        $1_000 → 1_000_000_000 / 250_000 = 4_000 PPM (0.4%)
+    ///        $10_000 → 10_000_000_000 / 250_000 = 40_000 PPM (4% — base ceiling)
+    ///
+    ///      The legacy `lotteryConfig.baseWinChance` field is retained for
+    ///      slot/ABI parity but is no longer read. `lotteryConfig.maxWinChance`
+    ///      remains the absolute (post-boost) cap and is enforced in `_applyBoost`.
+    function calculateWinChance(uint256 swapAmountUSD) public view returns (uint256 winChancePPM) {
+        if (swapAmountUSD < lotteryConfig.minSwapAmount) {
+            return 0;
+        }
+
+        winChancePPM = swapAmountUSD / 250_000;
+
+        uint256 ceiling = baseCeilingPPM;
+        if (winChancePPM > ceiling) {
+            winChancePPM = ceiling;
+        }
+    }
+
+    /**
+     * @notice Apply ve(3,3) boosts to base win probability
+     * @dev Personal: Curve quoted boost BPS ∈ [10_000, 25_000] via
+     *      `calculateBoostForPosition` (= working/(0.4*l); working capped at l).
+     *      Only the covered fraction of the trade receives the uplift.
+     *      Gauge is flat additive PPM.
+     */
+    function _applyBoost(
+        address user,
+        address token,
+        address shareBalanceToken,
+        uint256 shareBalanceAmount,
+        address vault,
+        uint256 swapAmountUSD,
+        uint256 baseWinChance
+    )
+        internal
+        view
+        returns (uint256 boostedWinChance)
+    {
+        boostedWinChance = baseWinChance;
+
+        // STEP 1: Curve quoted boost BPS [10_000, 25_000] (position-aware). Requires covered Share USD.
+        // Managers must implement calculateBoostForPosition (DeployRewardsEcosystem wiring).
+        if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
+            uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
+            try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
+            returns (uint256 boostBPS) {
+                if (boostBPS > BASIS_POINTS) {
+                    uint256 coveredUSD =
+                        shareBalanceAmount < swapAmountUSD ? shareBalanceAmount : swapAmountUSD;
+                    uint256 coverageBPS = FullMath.mulDiv(coveredUSD, BASIS_POINTS, swapAmountUSD);
+                    uint256 coveredUpliftBPS =
+                        FullMath.mulDiv(boostBPS - BASIS_POINTS, coverageBPS, BASIS_POINTS);
+                    boostedWinChance =
+                        FullMath.mulDiv(baseWinChance, BASIS_POINTS + coveredUpliftBPS, BASIS_POINTS);
+                }
+            } catch {}
+        }
+
+        // STEP 2: Add vault gauge boost (vote-directed budget).
+        // Scale by swap size so tiny swaps cannot fully consume gauge probability budget.
+        if (address(ve4626GaugeVoting) != address(0) && vault != address(0)) {
+            try ve4626GaugeVoting.getVaultProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
+                if (gaugeBoostPPM > 0) {
+                    boostedWinChance += _scaleGaugeBoostBySwapSize(gaugeBoostPPM, swapAmountUSD);
+                }
+            } catch {}
+        }
+
+        // Cap at maximum
+        if (boostedWinChance > lotteryConfig.maxWinChance) {
+            boostedWinChance = lotteryConfig.maxWinChance;
+        }
+    }
+
+    /// @dev Value full ShareOFT supply in USD for Curve pool size L. Zero if unreadable.
+    function _totalShareUsd(address token, address shareBalanceToken) internal view returns (uint256 totalShareUSD) {
+        if (shareBalanceToken == address(0) || shareBalanceToken.code.length == 0) return 0;
+        // Low-level staticcall keeps size down vs try/catch + nested legacy paths.
+        (bool ok, bytes memory data) =
+            shareBalanceToken.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
+        if (!ok || data.length < 32) return 0;
+        uint256 supply = abi.decode(data, (uint256));
+        if (supply == 0) return 0;
+        (totalShareUSD,,) = _calculateTokenUSD(token, shareBalanceToken, supply);
+    }
+
+    function _scaleGaugeBoostBySwapSize(uint256 gaugeBoostPPM, uint256 swapAmountUSD) internal view returns (uint256) {
+        uint256 minSwap = lotteryConfig.minSwapAmount;
+        if (swapAmountUSD <= minSwap) return 0;
+
+        uint256 scaledAmount = swapAmountUSD - minSwap;
+        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
+        if (scaledAmount >= maxScale) return gaugeBoostPPM;
+
+        return (gaugeBoostPPM * scaledAmount) / maxScale;
+    }
+
+    /**
+     * @notice Process a lottery win (hub-only, all wins are paid on Base)
+     * @param sourceChainEid The EID of the chain where the trade originated (0 = local hub)
+     */
+    function _processWin(
+        address token,
+        address user,
+        uint256 swapAmountUSD,
+        uint256 requestId,
+        uint32 sourceChainEid
+    ) internal returns (uint256) {
+        totalWinners++;
+        tokenStats[token].winners++;
+        emit LotteryWinner(token, user, swapAmountUSD, 0, requestId);
+
+        // All wins are paid from hub vaults
+        uint256 localPayout = _payoutLocalJackpot(token, user, uint16(lotteryConfig.rewardPercentage));
+
+        // If the trade originated on a remote chain, send a winner callback
+        // so the user gets notified on the chain they traded on.
+        // ODA-426-F1: never let a messaging-layer revert unwind the hub payout —
+        // `_quote`/`_lzSend` can fail (unset peer, endpoint issues). Isolate via
+        // external self-call try/catch and emit WinnerCallbackDropped instead.
+        if (sourceChainEid != 0) {
+            try this.sendWinnerCallbackExternal(sourceChainEid, user, token, localPayout) {}
+            catch {
+                emit WinnerCallbackDropped(
+                    sourceChainEid, user, token, localPayout, uint8(CallbackDropReason.SEND_FAILED)
+                );
+            }
+        }
+
+        return localPayout;
+    }
+
+    /// @notice External entry for try/catch isolation of winner callbacks (ODA-426-F1).
+    /// @dev Only callable by this contract (`_processWin` self-call).
+    function sendWinnerCallbackExternal(uint32 dstEid, address winner, address token, uint256 totalSharesPaid)
+        external
+    {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _sendWinnerCallback(dstEid, winner, token, totalSharesPaid);
+    }
+
+    // ================================
+    // CROSS-CHAIN MESSAGING (Hub-Centric)
+    // ================================
+
+    /**
+     * @notice Receive LayerZero messages (lottery entries from remote OFTs)
+     * @dev Only accepts MSG_TYPE_LOTTERY_ENTRY from authorized remote OFTs
+     */
+    function _lzReceive(Origin calldata _origin, bytes32, bytes calldata _payload, address, bytes calldata)
+        internal
+        override
+    {
+        _requireNotPaused();
+
+        // Verify sender is an authorized remote OFT
+        if (!authorizedRemoteOFTs[_origin.srcEid][_origin.sender]) revert Unauthorized();
+
+        // Decode message type
+        if (_payload.length < 32) revert InvalidAmount();
+        uint256 msgType;
+        assembly { msgType := calldataload(_payload.offset) }
+
+        if (msgType == MSG_TYPE_LOTTERY_ENTRY) {
+            _handleLotteryEntry(_origin.srcEid, _origin.sender, _payload);
+        } else {
+            revert InvalidAmount();
+        }
+    }
+
+    /**
+     * @dev Handle a lottery entry from a remote chain OFT
+     *      Legacy payload: (msgType, buyer, tokenIn, amount, sourceChainId)
+     *      V2 payload:     (msgType, buyer, tokenIn, amount, sourceChainId, buyerCurrentShareBalance)
+     *      Solana V3:      (msgType, buyer, tokenIn, amount, sourceChainId, buyerCurrentShareBalance, sourceEventId)
+     */
+    function _handleLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata _payload) internal {
+        address buyer;
+        address tokenIn;
+        uint256 amount;
+        uint32 sourceChainId;
+        uint256 buyerCurrentShareBalance;
+        bytes32 sourceEventId;
+
+        if (_payload.length != 224 && _payload.length != 192 && _payload.length != 160) {
+            // FIX: CLM-09 — emit event instead of reverting to avoid bricking the LZ inbound lane
+            emit InvalidPayloadReceived(srcEid, _payload.length);
+            return;
+        }
+
+        // The first five ABI words are shared by all supported payload versions.
+        // Read them directly after validating their canonical ABI widths; this
+        // avoids carrying three full tuple decoders into the main runtime.
+        uint256 malformed;
+        assembly {
+            let ptr := _payload.offset
+            let buyerWord := calldataload(add(ptr, 32))
+            let tokenWord := calldataload(add(ptr, 64))
+            let sourceWord := calldataload(add(ptr, 128))
+            malformed := or(or(shr(160, buyerWord), shr(160, tokenWord)), shr(32, sourceWord))
+            buyer := and(buyerWord, 0xffffffffffffffffffffffffffffffffffffffff)
+            tokenIn := and(tokenWord, 0xffffffffffffffffffffffffffffffffffffffff)
+            amount := calldataload(add(ptr, 96))
+            sourceChainId := and(sourceWord, 0xffffffff)
+            if gt(_payload.length, 160) { buyerCurrentShareBalance := calldataload(add(ptr, 160)) }
+            if eq(_payload.length, 224) { sourceEventId := calldataload(add(ptr, 192)) }
+        }
+        if (malformed != 0) {
+            emit InvalidPayloadReceived(srcEid, _payload.length);
+            return;
+        }
+
+        if (srcEid == SOLANA_LZ_EID && sourceEventId == bytes32(0)) return;
+        bytes32 sourceEventKey;
+        if (sourceEventId != bytes32(0)) {
+            assembly {
+                mstore(0, sourceEventId)
+                mstore(32, _processedRemoteLotterySourceEvents.slot)
+                sourceEventKey := keccak256(0, 64)
+                if sload(sourceEventKey) { return(0, 0) }
+            }
+        }
+
+        if (buyer == address(0) || tokenIn == address(0) || amount == 0) return;
+
+        totalRemoteLotteryEntries++;
+        emit RemoteLotteryEntryReceived(srcEid, buyer, tokenIn, amount, sourceChainId);
+
+        // Derive lane token from tokenIn (■ creator or ◆ agent token etc.)
+        address token = registry.getTokenForShareOFT(tokenIn);
+        if (token == address(0)) return;
+        if (!registry.isTokenActive(token)) return;
+
+        // Calculate USD value using per-lane oracle (plus reference price for circuit breakers)
+        (uint256 swapValueUSD, uint256 oraclePriceUSD1e18,) = _calculateTokenUSD(token, tokenIn, amount);
+        if (swapValueUSD < lotteryConfig.minSwapAmount) return;
+        if (!lotteryConfig.isActive) return;
+
+        // AUDIT-2026-07-08-R-H03: cap remote-reported coverage when tokenIn is present
+        // on this chain (hub ShareOFT / CREATE2-parity address). Pure remote addresses
+        // with no hub code trust the payload (remote OFT must queue eligible balance).
+        uint256 coverageBal = buyerCurrentShareBalance;
+        if (tokenIn.code.length > 0) {
+            coverageBal = _coverageShareBalance(tokenIn, buyer, amount, buyerCurrentShareBalance);
+        }
+
+        uint256 shareBalanceUSD = 0;
+        if (coverageBal > 0) {
+            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, coverageBal);
+        }
+
+        // Get vault for this lane token (for ve(3,3) vault weighting)
+        address vault = registry.getVaultForToken(token);
+
+        // Calculate win probability with ve(3,3) boosts
+        uint256 baseWinChance = calculateWinChance(swapValueUSD);
+        uint256 boostedWinChance = _applyBoost(
+            buyer, token, tokenIn, shareBalanceUSD, vault, swapValueUSD, baseWinChance
+        );
+
+        // Request VRF with sourceChainEid so we can send callback on win
+        uint256 entryId;
+        if (useLocalVRF && address(localVRFConsumer) != address(0)) {
+            entryId = _requestLocalVRFWithSource(token, buyer, swapValueUSD, boostedWinChance, srcEid);
+        } else {
+            entryId = _requestCrossChainVRFWithSource(
+                token, buyer, swapValueUSD, boostedWinChance, srcEid, originSender, 0
+            );
+        }
+
+        // Solana exactly-once: consume the V3 digest after the entry opportunity is
+        // processed — including sponsorship/VRF skips (entryId == 0). Prevents LZ
+        // redelivery from requesting VRF later. Early rejects above do not mark.
+        if (sourceEventId != bytes32(0)) {
+            assembly { sstore(sourceEventKey, 1) }
+        }
+
+        if (entryId > 0) {
+            // Update reference only when an entry is actually created.
+            if (oraclePriceUSD1e18 > 0) {
+                lastAcceptedPriceUSD1e18[token] = oraclePriceUSD1e18;
+                lastAcceptedPriceTimestamp[token] = block.timestamp;
+            }
+            emit LotteryEntryCreated(token, buyer, swapValueUSD, boostedWinChance, entryId);
+        }
+    }
+
+    /**
+     * @notice Request local VRF with source chain tracking
+     */
+    function _requestLocalVRFWithSource(
+        address token,
+        address buyer,
+        uint256 swapValueUSD,
+        uint256 winChancePPM,
+        uint32 sourceChainEid
+    ) internal returns (uint256) {
+        if (address(localVRFConsumer) == address(0)) return 0;
+
+        try localVRFConsumer.requestRandomWords() returns (uint256 requestId) {
+            // FIX: CLM-01 — store under namespaced key to avoid cross-chain collision
+            uint256 namespacedKey = _localVrfKey(requestId);
+            vrfRequests[namespacedKey] = VRFRequest({
+                user: buyer,
+                token: token,
+                amountUSD: swapValueUSD,
+                effectiveWinChancePPM: winChancePPM,
+                vrfType: VRFType.LOCAL,
+                sourceChainEid: sourceChainEid,
+                requestTimestamp: block.timestamp
+            });
+            totalLotteryEntries++;
+            tokenStats[token].entries++;
+            return namespacedKey;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * @notice Request cross-chain VRF with source chain tracking
+     */
+    function _requestCrossChainVRFWithSource(
+        address token,
+        address buyer,
+        uint256 swapValueUSD,
+        uint256 winChancePPM,
+        uint32 sourceChainEid,
+        bytes32 originSender,
+        uint256 callerFeeValue
+    ) internal returns (uint256) {
+        if (address(vrfIntegrator) == address(0) || targetEid == 0) {
+            if (callerFeeValue > 0) _refundCallerFeeOrRevert(callerFeeValue);
+            return 0;
+        }
+        if (!trustedVrfIntegrators[address(vrfIntegrator)]) {
+            if (callerFeeValue > 0) _refundCallerFeeOrRevert(callerFeeValue);
+            return 0;
+        }
+
+        try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
+            uint256 nativeFee = fee.nativeFee;
+            bool useCallerFunds = callerFeeValue > 0;
+            // FIX: CLM-06 — accept >= nativeFee to avoid griefing via fee front-running
+            if (useCallerFunds && callerFeeValue < nativeFee) {
+                revert CallerFeeMismatch(callerFeeValue, nativeFee);
+            }
+            uint256 epochStart;
+            bytes32 originKey;
+
+            if (!useCallerFunds && nativeFee > 0) {
+                // Sync epoch before rate limit checks.
+                _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
+                epochStart = vrfSponsorshipPolicy.epochStart;
+
+                // Per-buyer cap (applies to both local and remote entries).
+                if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
+                    uint32 buyerCount =
+                        _syncSponsoredCountByBuyer(vrfSponsoredCountByBuyer, vrfBuyerEpochStart, buyer, epochStart);
+                    if (buyerCount >= vrfMaxSponsoredPerBuyerPerEpoch) {
+                        emit SponsorshipSkipped(
+                            VRF_REQUEST_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, swapValueUSD
+                        );
+                        return 0;
+                    }
+                }
+
+                // Per-origin cap (remote-only).
+                if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
+                    originKey = _rateLimitOriginKey(sourceChainEid, originSender);
+                    uint32 originCount = _syncSponsoredCountByOrigin(
+                        vrfSponsoredCountByOrigin, vrfOriginEpochStart, originKey, epochStart
+                    );
+                    if (originCount >= vrfMaxSponsoredPerOriginPerEpoch) {
+                        emit SponsorshipSkipped(
+                            VRF_REQUEST_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, swapValueUSD
+                        );
+                        return 0;
+                    }
+                }
+
+                if (!_consumeSponsorship(vrfSponsorshipPolicy, VRF_REQUEST_CONTEXT, nativeFee, swapValueUSD, true)) {
+                    return 0;
+                }
+            }
+
+            // FIX: CLM-05 — increment rate-limit counters BEFORE external call to close TOCTOU window
+            if (!useCallerFunds && nativeFee > 0) {
+                if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
+                    uint32 buyerCount =
+                        _syncSponsoredCountByBuyer(vrfSponsoredCountByBuyer, vrfBuyerEpochStart, buyer, epochStart);
+                    vrfSponsoredCountByBuyer[buyer] = buyerCount + 1;
+                }
+                if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
+                    uint32 originCount = _syncSponsoredCountByOrigin(
+                        vrfSponsoredCountByOrigin, vrfOriginEpochStart, originKey, epochStart
+                    );
+                    vrfSponsoredCountByOrigin[originKey] = originCount + 1;
+                }
+            }
+
+            try vrfIntegrator.requestRandomWordsPayable{value: nativeFee}(targetEid) returns (
+                MessagingReceipt memory, uint64 sequence
+            ) {
+
+                // FIX: CLM-01 — store under namespaced key to avoid local collision
+                uint256 namespacedKey = _crossChainVrfKey(uint256(sequence));
+                vrfRequests[namespacedKey] = VRFRequest({
+                    user: buyer,
+                    token: token,
+                    amountUSD: swapValueUSD,
+                    effectiveWinChancePPM: winChancePPM,
+                    vrfType: VRFType.CROSS_CHAIN,
+                    sourceChainEid: sourceChainEid,
+                    requestTimestamp: block.timestamp
+                });
+                totalLotteryEntries++;
+                tokenStats[token].entries++;
+                // FIX: CLM-06 — refund excess ETH when caller overpaid
+                if (useCallerFunds && callerFeeValue > nativeFee) {
+                    _refundCallerFeeOrRevert(callerFeeValue - nativeFee);
+                }
+                return namespacedKey;
+            } catch {
+                // FIX: CLM-05 — rollback optimistic rate-limit increments on failure
+                if (!useCallerFunds && nativeFee > 0) {
+                    if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
+                        uint32 curCount = vrfSponsoredCountByBuyer[buyer];
+                        if (curCount > 0) vrfSponsoredCountByBuyer[buyer] = curCount - 1;
+                    }
+                    if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
+                        uint32 curOriginCount = vrfSponsoredCountByOrigin[originKey];
+                        if (curOriginCount > 0) vrfSponsoredCountByOrigin[originKey] = curOriginCount - 1;
+                    }
+                }
+                if (useCallerFunds && nativeFee > 0) {
+                    // If the caller provided the fee, never trap value on failure.
+                    _refundCallerFeeOrRevert(callerFeeValue);
+                } else if (nativeFee > 0) {
+                    _rollbackSponsoredSpend(vrfSponsorshipPolicy, nativeFee);
+                    emit SponsorshipSkipped(
+                        VRF_REQUEST_CONTEXT, SponsorshipSkipReason.SEND_FAILED, nativeFee, swapValueUSD
+                    );
+                }
+                return 0;
+            }
+        } catch {
+            if (callerFeeValue > 0) _refundCallerFeeOrRevert(callerFeeValue);
+            return 0;
+        }
+    }
+
+    /**
+     * @dev Send winner callback to the source chain OFT
+     *      Payload: (msgType, winner, token, totalSharesPaid)
+     *      Target: the remote CreatorShareOFT that sent the lottery entry
+     */
+    function _sendWinnerCallback(uint32 dstEid, address winner, address token, uint256 totalSharesPaid) internal {
+        // Build callback payload (matches CreatorShareOFT._handleWinnerCallback decoder)
+        bytes memory payload = abi.encode(MSG_TYPE_WINNER_CALLBACK, winner, token, totalSharesPaid);
+
+        bytes memory options = _buildOptions(dstEid);
+
+        MessagingFee memory fee = _quote(dstEid, payload, options, false);
+        uint256 nativeFee = fee.nativeFee;
+
+        if (nativeFee > 0) {
+            // Sync epoch before rate limit checks.
+            _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
+            uint256 epochStart = callbackSponsorshipPolicy.epochStart;
+
+            if (callbackMaxSponsoredPerBuyerPerEpoch > 0) {
+                uint32 buyerCount = _syncSponsoredCountByBuyer(
+                    callbackSponsoredCountByBuyer, callbackBuyerEpochStart, winner, epochStart
+                );
+                if (buyerCount >= callbackMaxSponsoredPerBuyerPerEpoch) {
+                    emit SponsorshipSkipped(
+                        WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
+                    );
+                    // FIX: CLM-03 — emit event instead of silent drop
+                    emit WinnerCallbackDropped(
+                        dstEid, winner, token, totalSharesPaid, uint8(CallbackDropReason.BUYER_RATE_LIMITED)
+                    );
+                    return;
+                }
+            }
+
+            if (callbackMaxSponsoredPerOriginPerEpoch > 0) {
+                bytes32 originKey = _rateLimitOriginKey(dstEid, peers[dstEid]);
+                uint32 originCount = _syncSponsoredCountByOrigin(
+                    callbackSponsoredCountByOrigin, callbackOriginEpochStart, originKey, epochStart
+                );
+                if (originCount >= callbackMaxSponsoredPerOriginPerEpoch) {
+                    emit SponsorshipSkipped(
+                        WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
+                    );
+                    // FIX: CLM-03 — emit event instead of silent drop
+                    emit WinnerCallbackDropped(
+                        dstEid, winner, token, totalSharesPaid, uint8(CallbackDropReason.ORIGIN_RATE_LIMITED)
+                    );
+                    return;
+                }
+            }
+        }
+
+        // FIX: CLM-03 — emit event when sponsorship is not consumed
+        if (!_consumeSponsorship(callbackSponsorshipPolicy, WINNER_CALLBACK_CONTEXT, nativeFee, 0, false)) {
+            emit WinnerCallbackDropped(
+                dstEid, winner, token, totalSharesPaid, uint8(CallbackDropReason.SPONSORSHIP_UNAVAILABLE)
+            );
+            return;
+        }
+
+        // FIX: M-05 (4626-314) — CEI ordering. Increment rate-limit counters
+        // BEFORE the external _lzSend so a reentering LayerZero hook or
+        // callback cannot observe pre-increment counter state and bypass the
+        // per-buyer / per-origin caps. The counters are consumed in the same
+        // `if (nativeFee > 0)` branch as before; only the ordering changed.
+        if (nativeFee > 0) {
+            uint256 epochStart = callbackSponsorshipPolicy.epochStart;
+            if (callbackMaxSponsoredPerBuyerPerEpoch > 0) {
+                uint32 buyerCount = _syncSponsoredCountByBuyer(
+                    callbackSponsoredCountByBuyer, callbackBuyerEpochStart, winner, epochStart
+                );
+                callbackSponsoredCountByBuyer[winner] = buyerCount + 1;
+            }
+            if (callbackMaxSponsoredPerOriginPerEpoch > 0) {
+                bytes32 originKey = _rateLimitOriginKey(dstEid, peers[dstEid]);
+                uint32 originCount = _syncSponsoredCountByOrigin(
+                    callbackSponsoredCountByOrigin, callbackOriginEpochStart, originKey, epochStart
+                );
+                callbackSponsoredCountByOrigin[originKey] = originCount + 1;
+            }
+        }
+
+        _lzSend(dstEid, payload, options, fee, payable(address(this)));
+
+        emit WinnerCallbackSent(dstEid, winner, token, totalSharesPaid);
+        // If insufficient gas, silently skip — payout already happened on hub
+    }
+
+    /// @dev Override LayerZero default behavior to support contract-sponsored messaging fees.
+    ///      ODA-426-F5: accept `msg.value >= fee` and return `msg.value` so LZ refunds excess.
+    function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
+        if (msg.value == 0) {
+            // Sponsorship path: spend from contract balance.
+            if (address(this).balance < _nativeFee) revert NotEnoughNative(msg.value);
+            return _nativeFee;
+        }
+        if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
+        return msg.value;
+    }
+
+    function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {
+        if (policy.epochDuration == 0) return;
+        if (block.timestamp >= policy.epochStart + policy.epochDuration) {
+            policy.epochStart = block.timestamp;
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _consumeSponsorship(
+        SponsorshipPolicy storage policy,
+        bytes32 context,
+        uint256 feeNative,
+        uint256 valueHint,
+        bool enforceMinSwap
+    ) internal returns (bool) {
+        if (feeNative == 0) return true;
+
+        _refreshSponsorshipEpoch(policy);
+
+        if (!policy.enabled) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.DISABLED, feeNative, valueHint);
+            return false;
+        }
+
+        if (enforceMinSwap && valueHint < sponsoredVrfMinSwapAmountUSD) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BELOW_MIN_SWAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (feeNative > policy.maxFeePerMessage) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.FEE_ABOVE_CAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (address(this).balance < feeNative) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.INSUFFICIENT_BALANCE, feeNative, valueHint);
+            return false;
+        }
+
+        if (policy.spentInEpoch + feeNative > policy.budgetPerEpoch) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BUDGET_EXCEEDED, feeNative, valueHint);
+            return false;
+        }
+
+        policy.spentInEpoch += feeNative;
+        emit SponsorshipSpendRecorded(context, feeNative, policy.spentInEpoch, policy.budgetPerEpoch, policy.epochStart);
+        return true;
+    }
+
+    function _rollbackSponsoredSpend(SponsorshipPolicy storage policy, uint256 feeNative) internal {
+        if (feeNative == 0) return;
+        if (policy.spentInEpoch >= feeNative) {
+            policy.spentInEpoch -= feeNative;
+        } else {
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _refundCallerFeeOrRevert(uint256 amount) internal {
+        if (amount == 0) return;
+        // Only used on the `processSwapLottery()` payable path, which is nonReentrant.
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        if (!success) revert ETHRefundFailed();
+    }
+
+    /// @dev Cap coverage balance to tokens that cannot be explained by this purchase alone.
+    ///      Prefer caller-reported eligible balance (block-start snapshot from ShareOFT) when stricter.
+    function _coverageShareBalance(
+        address shareOFT,
+        address buyer,
+        uint256 amountIn,
+        uint256 reportedEligible
+    ) internal view returns (uint256 coverageBal) {
+        // No code (test mocks / pure remote addresses): trust reportedEligible only, no live cap.
+        if (shareOFT.code.length == 0) {
+            return reportedEligible;
+        }
+        uint256 live = IERC20(shareOFT).balanceOf(buyer);
+        uint256 maxPreBuy = live > amountIn ? live - amountIn : 0;
+        coverageBal = reportedEligible;
+        if (coverageBal > maxPreBuy) coverageBal = maxPreBuy;
+        if (coverageBal > live) coverageBal = live;
+    }
+
+    /// @dev Read ShareOFT block-start eligible balance when available; else live balance.
+    function _eligibleShareBalance(address shareOFT, address buyer) internal view returns (uint256) {
+        try IShareOFT4626(shareOFT).balanceEligibleForLotteryCoverage(buyer) returns (uint256 eligible) {
+            return eligible;
+        } catch {
+            return IERC20(shareOFT).balanceOf(buyer);
+        }
+    }
+
+    function _rateLimitOriginKey(uint32 eid, bytes32 sender) internal pure returns (bytes32) {
+        return keccak256(abi.encode(eid, sender));
+    }
+
+    function _syncSponsoredCountByBuyer(
+        mapping(address => uint32) storage counts,
+        mapping(address => uint256) storage epochStarts,
+        address buyer,
+        uint256 epochStart
+    ) internal returns (uint32) {
+        if (epochStarts[buyer] != epochStart) {
+            epochStarts[buyer] = epochStart;
+            counts[buyer] = 0;
+        }
+        return counts[buyer];
+    }
+
+    function _syncSponsoredCountByOrigin(
+        mapping(bytes32 => uint32) storage counts,
+        mapping(bytes32 => uint256) storage epochStarts,
+        bytes32 originKey,
+        uint256 epochStart
+    ) internal returns (uint32) {
+        if (epochStarts[originKey] != epochStart) {
+            epochStarts[originKey] = epochStart;
+            counts[originKey] = 0;
+        }
+        return counts[originKey];
+    }
+
+    function _buildOptions(uint32 dstEid) internal view returns (bytes memory) {
+        bytes memory enforcedOpts = enforcedOptions[dstEid][MSG_TYPE_WINNER_CALLBACK];
+
+        if (enforcedOpts.length > 0) {
+            return enforcedOpts;
+        }
+
+        return OptionsBuilder.newOptions().addExecutorLzReceiveOption(callbackGasLimit, DEFAULT_MSG_VALUE);
+    }
+
+    /**
+     * @notice Pay jackpot (single- or multi-vault) via AdminModule DELEGATECALL.
+     * @dev Size extraction: payout body lives on AdminModule with mirrored storage.
+     *      Reverts bubble with original data; failed DELEGATECALL reverts roll back
+     *      `_payoutLock` writes inside the module frame.
+     */
+    function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
+        address module = _adminModule;
+        if (module == address(0)) revert ZeroAddress();
+        if (winner == address(0)) revert ZeroAddress();
+        // Cap is basis points; reject > 100% so a misconfigured rewardPercentage cannot drain.
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
+
+        (bool ok, bytes memory data) = module.delegatecall(
+            abi.encodeWithSelector(
+                LotteryManager4626AdminModule.payoutLocalJackpot.selector,
+                triggeringCoin,
+                winner,
+                payoutBps
+            )
+        );
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
+        }
+        // Empty success data would decode-fail; treat as zero paid.
+        if (data.length < 32) return 0;
+        return abi.decode(data, (uint256));
+    }
+
+
+
+    /// @notice Cursor that advances through the token registry between
+    /// jackpot payouts so that when the registry is larger than
+    /// MAX_JACKPOT_PAYOUT_ITERATIONS, all coins eventually receive payouts
+    /// across successive jackpots rather than being starved behind the cap.
+    /// Incremented after each payout in AdminModule.payoutLocalJackpotInner (M-06).
+    /// @dev STORAGE: declared after `pendingAmoeRelayerEffectiveAt` (slot order).
+    ///      AdminModule MUST declare `jackpotPayoutCursor` in the same relative order
+    ///      for DELEGATECALL payout. Do not reorder without a storage migration.
+    uint256 public jackpotPayoutCursor;
+
+    /// @notice Solana V3 source-event digests that already created a Base VRF request.
+    /// @dev Appended storage; mirrored in LotteryManager4626AdminModule.
+    mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
+
+    // ================================
+    // STATE — ODA-426-F3 TRUST-ROOT TIMELOCKS
+    // ================================
+    //
+    // Appended after `_processedRemoteLotterySourceEvents`; mirrored in
+    // LotteryManager4626AdminModule in the same order (delegatecall layout).
+    // Fields are internal + packed getter to keep main runtime under EIP-170.
+
+    address internal _pendingVRFIntegrator;
+    uint256 internal _pendingVRFIntegratorEffectiveAt;
+    address internal _pendingSwapContract;
+    bool internal _pendingSwapAuthorized;
+    uint256 internal _pendingSwapContractEffectiveAt;
+    bool internal _swapAuthBootstrapComplete;
+    uint256 internal _pendingRewardPercentage;
+    uint256 internal _pendingRewardPercentageEffectiveAt;
+
+    /// @notice Emitted when the per-call iteration cap truncated the payout.
+    /// Off-chain monitors can use this to reconcile that the remaining coins
+    /// will be reached on subsequent jackpots via the advancing cursor.
+    /// @param totalRegistrySize Full registry size at the time of the call.
+    /// @param startIndex First registry index visited (pre-wrap).
+    /// @param activeIterated Number of *active* lane tokens actually evaluated.
+    /// @param slotsScanned Number of registry slots scanned (active + inactive).
+    event JackpotPayoutCapped(
+        uint256 totalRegistrySize,
+        uint256 startIndex,
+        uint256 activeIterated,
+        uint256 slotsScanned
+    );
+
+    /// @dev R-H05 single-vault: pay only the triggering coin's gauge (no registry scan).
+
+
+    // ================================
+    // ADMIN FUNCTIONS
+    // ================================
+
+    function _delegateAdmin() internal {
+        address module = _adminModule;
+        assembly {
+            let size := calldatasize()
+            calldatacopy(0, 0, size)
+            let ok := delegatecall(gas(), module, 0, size, 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            if iszero(ok) { revert(0, returndatasize()) }
+            return(0, returndatasize())
+        }
+    }
+
+    function setAuthorizedSwapContract(address, bool) external {
+        _delegateAdmin();
+    }
+
+    function setLocalVRFConsumer(address) external {
+        _delegateAdmin();
+    }
+
+    function queueLocalVRFConsumerChange(address) external {
+        _delegateAdmin();
+    }
+
+    function executeLocalVRFConsumerChange() external {
+        _delegateAdmin();
+    }
+
+    function cancelLocalVRFConsumerChange() external {
+        _delegateAdmin();
+    }
+
+    function setSingleVaultJackpotOnly(bool) external {
+        _delegateAdmin();
+    }
+
+    function queueAmoeRelayerChange(address) external {
+        _delegateAdmin();
+    }
+
+    function executeAmoeRelayerChange() external {
+        _delegateAdmin();
+    }
+
+    function cancelAmoeRelayerChange() external {
+        _delegateAdmin();
+    }
+
+    function setVRFIntegrator(address) external {
+        _delegateAdmin();
+    }
+
+    function setTargetEid(uint32) external {
+        _delegateAdmin();
+    }
+
+    function setUseLocalVRF(bool) external {
+        _delegateAdmin();
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256) external {
+        _delegateAdmin();
+    }
+
+    function setVrfSponsorshipPolicy(bool, uint256, uint256, uint256) external {
+        _delegateAdmin();
+    }
+
+    function setCallbackSponsorshipPolicy(bool, uint256, uint256, uint256) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Configure sponsorship anti-spam rate limits (count-based per epoch).
+     * @dev A value of 0 means unlimited.
+     */
+    function setSponsorshipRateLimits(uint32, uint32, uint32, uint32) external {
+        _delegateAdmin();
+    }
+
+    function setBoostManager(address) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
+     */
+    function setve4626GaugeVoting(address) external {
+        _delegateAdmin();
+    }
+
+    // PR 1 — AMOE Linear Parity admin stubs.
+    function setAuthorizedAmoeRelayer(address) external {
+        _delegateAdmin();
+    }
+
+    function setBaseCeilingPPM(uint256) external {
+        _delegateAdmin();
+    }
+
+    // PR 3 — Boost-source timelock admin stubs. Bodies live in the admin module.
+    function proposeBoostManager(address) external {
+        _delegateAdmin();
+    }
+
+    function commitBoostManager() external {
+        _delegateAdmin();
+    }
+
+    function cancelBoostManagerProposal() external {
+        _delegateAdmin();
+    }
+
+    function proposeve4626GaugeVoting(address) external {
+        _delegateAdmin();
+    }
+
+    function commitve4626GaugeVoting() external {
+        _delegateAdmin();
+    }
+
+    function cancelve4626GaugeVotingProposal() external {
+        _delegateAdmin();
+    }
+
+    function armBoostSourceTimelock() external {
+        _delegateAdmin();
+    }
+
+    function disableBoostSources() external {
+        _delegateAdmin();
+    }
+
+    function setLotteryConfig(uint256, uint256, bool, uint256, uint256, uint256) external {
+        _delegateAdmin();
+    }
+
+    /// @notice Delegate arbitrary admin-module calldata (ODA-426-F3 queue/execute/cancel).
+    /// @dev Keeps named queue/execute/cancel off the main runtime to stay under EIP-170.
+    ///      Admin module enforces `onlyOwner` / `onlyDelegateCall`.
+    function adminModuleCall(bytes calldata data) external {
+        address module = _adminModule;
+        assembly {
+            let size := data.length
+            calldatacopy(0, data.offset, size)
+            let ok := delegatecall(gas(), module, 0, size, 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            if iszero(ok) { revert(0, returndatasize()) }
+            return(0, returndatasize())
+        }
+    }
+
+    function setOracleMaxStaleness(uint256) external {
+        _delegateAdmin();
+    }
+
+    // FIX: CLM-02 — allow owner to configure VRF result grace period
+    function setVrfResultGracePeriod(uint256) external {
+        _delegateAdmin();
+    }
+
+    function setOracleDeviationGuard(uint256, uint256) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Set enforced options for winner callback messages
+     */
+    function setCallbackOptions(uint32, uint128, uint128) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Authorize a remote OFT as a valid lottery entry sender
+     */
+    function setAuthorizedRemoteOFT(uint32, bytes32, bool) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Batch authorize remote OFTs
+     */
+    function batchSetAuthorizedRemoteOFTs(uint32[] calldata, bytes32[] calldata, bool) external {
+        _delegateAdmin();
+    }
+
+    /**
+     * @notice Set the gas limit for winner callback messages
+     */
+    function setCallbackGasLimit(uint128) external {
+        _delegateAdmin();
+    }
+
+    function pause() external {
+        _delegateAdmin();
+    }
+
+    function unpause() external {
+        _delegateAdmin();
+    }
+
+    // ================================
+    // VIEW FUNCTIONS
+    // ================================
+
+    function getTokenLotteryStats(address token)
+        external
+        view
+        returns (uint256 entries, uint256 winners, uint256 rewardsPaid, uint256 jackpotBalance)
+    {
+        TokenStats storage stats = tokenStats[token];
+        address gaugeAddr = registry.getGaugeControllerForToken(token);
+        if (gaugeAddr != address(0)) {
+            jackpotBalance = ITradeFeeCollector4626(gaugeAddr).getJackpotReserve();
+        }
+        return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
+    }
+
+    // ================================
+    // EMERGENCY
+    // ================================
+
+    // FIX: CLM-12 — only allow emergency withdraw when paused to prevent draining active sponsorship funds
+    function emergencyWithdraw(address, uint256) external {
+        _delegateAdmin();
+    }
+
+    receive() external payable {}
+}
+
+contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
+    using OptionsBuilder for bytes;
+    using SafeERC20 for IERC20;
+
+    uint256 public constant MIN_SWAP_USD = 1_000_000;
+    uint256 public constant MAX_SWAP_USD = 1_000_000_000_000;
+    uint256 public constant BASIS_POINTS = 10_000;
+    uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+    uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024;
+    uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
+
+    uint128 internal constant DEFAULT_MSG_VALUE = 0;
+    bytes32 internal constant VRF_REQUEST_CONTEXT =
+        0xd84f4bdfe2e4cf43345263bca820ebe0fd153da9fd7f53871b6103ba604a4430;
+    bytes32 internal constant WINNER_CALLBACK_CONTEXT =
+        0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
+
+    IRegistry4626Lottery public immutable registry;
+
+    mapping(address => bool) public authorizedSwapContracts;
+    IVRFConsumer4626 public localVRFConsumer;
+    IChainlinkVRFIntegrator public vrfIntegrator;
+    uint32 public targetEid;
+    bool public useLocalVRF;
+    mapping(address => bool) public trustedVrfIntegrators;
+    Ive4626BoostManager public boostManager;
+    Ive4626GaugeVoting public ve4626GaugeVoting;
+
+    struct LotteryConfig {
+        uint256 minSwapAmount;
+        uint256 rewardPercentage;
+        bool isActive;
+        uint256 baseWinChance;
+        uint256 maxWinChance;
+        uint256 usdMultiplierBps;
+    }
+
+    LotteryConfig public lotteryConfig;
+    uint256 public oracleMaxStaleness;
+    uint256 public vrfResultGracePeriod;
+    uint256 public oracleMaxDeviationBps;
+    uint256 public oracleDeviationWindow;
+    mapping(address => uint256) public lastAcceptedPriceUSD1e18;
+    mapping(address => uint256) public lastAcceptedPriceTimestamp;
+
+    enum VRFType {
+        LOCAL,
+        CROSS_CHAIN
+    }
+    enum SponsorshipSkipReason {
+        DISABLED,
+        BELOW_MIN_SWAP,
+        FEE_ABOVE_CAP,
+        BUDGET_EXCEEDED,
+        INSUFFICIENT_BALANCE,
+        SEND_FAILED,
+        RATE_LIMITED
+    }
+
+    struct SponsorshipPolicy {
+        bool enabled;
+        uint256 maxFeePerMessage;
+        uint256 budgetPerEpoch;
+        uint256 epochDuration;
+        uint256 epochStart;
+        uint256 spentInEpoch;
+    }
+
+    struct VRFRequest {
+        address user;
+        address token;
+        uint256 amountUSD;
+        uint256 effectiveWinChancePPM;
+        VRFType vrfType;
+        uint32 sourceChainEid;
+        uint256 requestTimestamp;
+    }
+
+    mapping(uint256 => VRFRequest) public vrfRequests;
+    mapping(uint256 => uint256) public pendingRandomWord;
+    mapping(uint256 => bool) public hasPendingRandomWord;
+    uint256[] internal _deferredVrfRequestIds;
+    /// @dev Storage-layout mirror of main `LotteryManager4626._settlingDeferredVrf` (ODA-426-F6).
+    ///      Unused by admin paths; must stay here so delegatecall slots stay aligned.
+    bool private _settlingDeferredVrf;
+    mapping(address => bool) public authorizedHubShareOftForwarders;
+
+    SponsorshipPolicy public vrfSponsorshipPolicy;
+    SponsorshipPolicy public callbackSponsorshipPolicy;
+    uint256 public sponsoredVrfMinSwapAmountUSD;
+
+    uint32 public vrfMaxSponsoredPerBuyerPerEpoch;
+    uint32 public vrfMaxSponsoredPerOriginPerEpoch;
+    uint32 public callbackMaxSponsoredPerBuyerPerEpoch;
+    uint32 public callbackMaxSponsoredPerOriginPerEpoch;
+
+    mapping(address => uint32) public vrfSponsoredCountByBuyer;
+    mapping(address => uint256) public vrfBuyerEpochStart;
+    mapping(bytes32 => uint32) public vrfSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public vrfOriginEpochStart;
+
+    mapping(address => uint32) public callbackSponsoredCountByBuyer;
+    mapping(address => uint256) public callbackBuyerEpochStart;
+    mapping(bytes32 => uint32) public callbackSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public callbackOriginEpochStart;
+
+    mapping(uint32 => mapping(bytes32 => bool)) public authorizedRemoteOFTs;
+    uint128 public callbackGasLimit;
+    uint256 public totalRemoteLotteryEntries;
+    uint256 public totalLotteryEntries;
+    uint256 public totalWinners;
+    uint256 public totalRewardsPaid;
+
+    struct TokenStats {
+        uint256 entries;
+        uint256 winners;
+        uint256 rewardsPaid;
+    }
+    mapping(address => TokenStats) public tokenStats;
+    uint256 private _payoutLock;
+
+    // ================================
+    // STATE — AMOE LINEAR PARITY (PR 1) — MIRROR
+    // ================================
+    //
+    // These fields MUST mirror the slot order of LotteryManager4626 so the
+    // delegatecall storage layout stays consistent. See the same block in the
+    // main contract for semantics.
+    /// @notice Pre-boost win-chance ceiling (PPM). Default 40_000 = 4%.
+    uint256 public baseCeilingPPM;
+
+    /// @notice Trusted relayer authorized to call `processAmoeEntry`.
+    address public authorizedAmoeRelayer;
+
+    // ================================
+    // STATE — BOOST-SOURCE TIMELOCK (PR 3) — MIRROR
+    // ================================
+    /// @dev Pending replacement for `boostManager`. Public view via `getPendingBoostSources()`.
+    address internal _pendingBoostManager;
+    uint256 internal _pendingBoostManagerEffectiveAt;
+    address internal _pendingve4626GaugeVoting;
+    uint256 internal _pendingve4626GaugeVotingEffectiveAt;
+    /// @dev Once true, legacy single-call setters revert. Read via `isTimelockArmed()`.
+    bool internal _timelockArmed;
+
+    // ================================
+    // STATE — LOCAL VRF CONSUMER TIMELOCK (R-H04) — MIRROR
+    // ================================
+    address public pendingLocalVRFConsumer;
+    uint256 public pendingLocalVRFConsumerEffectiveAt;
+
+    // ================================
+    // STATE — JACKPOT PAYOUT SCOPE (R-H05) — MIRROR
+    // ================================
+    bool public singleVaultJackpotOnly;
+
+    // ================================
+    // STATE — AMOE RELAYER TIMELOCK (M-12) — MIRROR
+    // ================================
+    address public pendingAmoeRelayer;
+    uint256 public pendingAmoeRelayerEffectiveAt;
+
+    /// @dev Mirrors main jackpotPayoutCursor (declared later in main source; next storage slot).
+    uint256 public jackpotPayoutCursor;
+
+    /// @dev Mirrors main processedRemoteLotterySourceEvents (next appended storage slot).
+    mapping(bytes32 => bool) internal _processedRemoteLotterySourceEvents;
+
+    // ODA-426-F3 — mirror of main trust-root timelock storage (append-only; keep order).
+    address internal _pendingVRFIntegrator;
+    uint256 internal _pendingVRFIntegratorEffectiveAt;
+    address internal _pendingSwapContract;
+    bool internal _pendingSwapAuthorized;
+    uint256 internal _pendingSwapContractEffectiveAt;
+    bool internal _swapAuthBootstrapComplete;
+    uint256 internal _pendingRewardPercentage;
+    uint256 internal _pendingRewardPercentageEffectiveAt;
+
+    address private immutable _self;
+
+    event LotteryWon(
+        address indexed token, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event CrossChainJackpotPaid(
+        address indexed token, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event JackpotPayoutFailed(address indexed token, address indexed winner, uint256 shares);
+    event JackpotPayoutCapped(
+        uint256 totalRegistrySize,
+        uint256 startIndex,
+        uint256 activeIterated,
+        uint256 slotsScanned
+    );
+    event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
+    event SwapContractAuthorized(address indexed swapContract, bool authorized);
+    event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
+    event OracleMaxStalenessUpdated(uint256 maxStaleness);
+    event OracleDeviationGuardUpdated(uint256 maxDeviationBps, uint256 deviationWindow);
+    event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
+    event CallbackGasLimitUpdated(uint128 newGasLimit);
+    event VRFConsumerUpdated(address indexed consumer);
+    event LocalVRFConsumerChangeQueued(address indexed newConsumer, uint256 effectiveAt);
+    event LocalVRFConsumerChangeExecuted(address indexed newConsumer);
+    event LocalVRFConsumerChangeCancelled(address indexed cancelled);
+    event SingleVaultJackpotOnlyUpdated(bool enabled);
+    event AmoeRelayerChangeQueued(address indexed newRelayer, uint256 effectiveAt);
+    event AmoeRelayerChangeExecuted(address indexed newRelayer);
+    event AmoeRelayerChangeCancelled(address indexed cancelled);
+    event VRFIntegratorChangeQueued(address indexed newIntegrator, uint256 effectiveAt);
+    event VRFIntegratorChangeExecuted(address indexed newIntegrator);
+    event VRFIntegratorChangeCancelled(address indexed cancelled);
+    event SwapContractAuthQueued(address indexed swapContract, bool authorized, uint256 effectiveAt);
+    event SwapContractAuthExecuted(address indexed swapContract, bool authorized);
+    event SwapContractAuthCancelled(address indexed swapContract, bool authorized);
+    event RewardPercentageChangeQueued(uint256 rewardPercentage, uint256 effectiveAt);
+    event RewardPercentageChangeExecuted(uint256 rewardPercentage);
+    event RewardPercentageChangeCancelled(uint256 rewardPercentage);
+    event TargetEidUpdated(uint32 indexed targetEid);
+    event VRFIntegratorUpdated(address indexed integrator, bool trusted);
+    event SponsorshipPolicyUpdated(
+        bytes32 indexed context, bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration
+    );
+    event SponsorshipRateLimitsUpdated(
+        uint32 vrfMaxPerBuyerPerEpoch,
+        uint32 vrfMaxPerOriginPerEpoch,
+        uint32 callbackMaxPerBuyerPerEpoch,
+        uint32 callbackMaxPerOriginPerEpoch
+    );
+    event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+
+    // PR 1 — AMOE Linear Parity events (mirror of main contract).
+    event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+    event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
+
+    // PR 3 — Boost-source timelock events (mirror of main contract).
+    event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event BoostManagerProposalCancelled(address indexed cancelled);
+    event BoostManagerUpdated(address indexed previous, address indexed newManager);
+    event ve4626GaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event ve4626GaugeVotingProposalCancelled(address indexed cancelled);
+    event ve4626GaugeVotingUpdated(address indexed previous, address indexed newGauge);
+    event BoostSourceTimelockArmed();
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousve4626GaugeVoting);
+
+    /// @notice Mirror of main-contract `BOOST_SOURCE_TIMELOCK`.
+    uint256 public constant BOOST_SOURCE_TIMELOCK = 24 hours;
+
+    error ZeroAddress();
+    error InvalidAmount();
+    error OnlyDelegateCall();
+
+    // PR 3 — Boost-source timelock errors.
+    error TimelockNotArmed();
+    error TimelockAlreadyArmed();
+    error TimelockNotExpired();
+    error NoPendingProposal();
+    error LegacySetterDisabled();
+    error LocalVRFConsumerAlreadySet();
+    error NoPendingLocalVRFConsumer();
+    error AmoeRelayerAlreadySet();
+    error NoPendingAmoeRelayer();
+    error VRFIntegratorAlreadySet();
+    error NoPendingVRFIntegrator();
+    error SwapAuthMustBeQueued();
+    error NoPendingSwapAuth();
+    error NoPendingRewardPercentage();
+
+    /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
+    /// @dev ODA-426-F3 reuses this 2-day window for VRF integrator, swap-auth, and reward%.
+    uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
+    uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
+
+    constructor(address _registry, address owner_)
+        OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        Ownable(owner_)
+    {
+        registry = IRegistry4626Lottery(_registry);
+        _self = address(this);
+    }
+
+    modifier onlyDelegateCall() {
+        if (address(this) == _self) revert OnlyDelegateCall();
+        _;
+    }
+
+    /// @notice Authorize/deauthorize a swap contract.
+    /// @dev Deauthorize is always instant (emergency). First authorize is bootstrap-instant;
+    ///      further authorizations require `queueSwapContractAuth` → wait → `executeSwapContractAuth`
+    ///      (ODA-426-F3).
+    function setAuthorizedSwapContract(address swapContract, bool authorized) external onlyDelegateCall onlyOwner {
+        if (swapContract == address(0)) revert ZeroAddress();
+        if (!authorized) {
+            authorizedSwapContracts[swapContract] = false;
+            emit SwapContractAuthorized(swapContract, false);
+            return;
+        }
+        if (_swapAuthBootstrapComplete) revert SwapAuthMustBeQueued();
+        authorizedSwapContracts[swapContract] = true;
+        _swapAuthBootstrapComplete = true;
+        emit SwapContractAuthorized(swapContract, true);
+    }
+
+    function queueSwapContractAuth(address swapContract, bool authorized) external onlyDelegateCall onlyOwner {
+        if (swapContract == address(0)) revert ZeroAddress();
+        _pendingSwapContract = swapContract;
+        _pendingSwapAuthorized = authorized;
+        _pendingSwapContractEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit SwapContractAuthQueued(swapContract, authorized, _pendingSwapContractEffectiveAt);
+    }
+
+    function executeSwapContractAuth() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingSwapContractEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingSwapAuth();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address swapContract = _pendingSwapContract;
+        bool authorized = _pendingSwapAuthorized;
+        authorizedSwapContracts[swapContract] = authorized;
+        if (authorized) _swapAuthBootstrapComplete = true;
+        _pendingSwapContract = address(0);
+        _pendingSwapAuthorized = false;
+        _pendingSwapContractEffectiveAt = 0;
+        emit SwapContractAuthExecuted(swapContract, authorized);
+        emit SwapContractAuthorized(swapContract, authorized);
+    }
+
+    function cancelSwapContractAuth() external onlyDelegateCall onlyOwner {
+        if (_pendingSwapContractEffectiveAt == 0) revert NoPendingSwapAuth();
+        address swapContract = _pendingSwapContract;
+        bool authorized = _pendingSwapAuthorized;
+        _pendingSwapContract = address(0);
+        _pendingSwapAuthorized = false;
+        _pendingSwapContractEffectiveAt = 0;
+        emit SwapContractAuthCancelled(swapContract, authorized);
+    }
+
+    /// @notice Bootstrap-only setter while `localVRFConsumer` is unset.
+    /// @dev After the first non-zero consumer is set, use
+    ///      `queueLocalVRFConsumerChange` → wait `LOCAL_VRF_CONSUMER_TIMELOCK` →
+    ///      `executeLocalVRFConsumerChange` (audit R-H04).
+    function setLocalVRFConsumer(address _consumer) external onlyDelegateCall onlyOwner {
+        if (address(localVRFConsumer) != address(0)) revert LocalVRFConsumerAlreadySet();
+        localVRFConsumer = IVRFConsumer4626(_consumer);
+        emit VRFConsumerUpdated(_consumer);
+    }
+
+    function queueLocalVRFConsumerChange(address _consumer) external onlyDelegateCall onlyOwner {
+        pendingLocalVRFConsumer = _consumer;
+        pendingLocalVRFConsumerEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit LocalVRFConsumerChangeQueued(_consumer, pendingLocalVRFConsumerEffectiveAt);
+    }
+
+    function executeLocalVRFConsumerChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = pendingLocalVRFConsumerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingLocalVRFConsumer();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address newConsumer = pendingLocalVRFConsumer;
+        localVRFConsumer = IVRFConsumer4626(newConsumer);
+        pendingLocalVRFConsumer = address(0);
+        pendingLocalVRFConsumerEffectiveAt = 0;
+        emit LocalVRFConsumerChangeExecuted(newConsumer);
+        emit VRFConsumerUpdated(newConsumer);
+    }
+
+    function cancelLocalVRFConsumerChange() external onlyDelegateCall onlyOwner {
+        if (pendingLocalVRFConsumerEffectiveAt == 0) revert NoPendingLocalVRFConsumer();
+        address cancelled = pendingLocalVRFConsumer;
+        pendingLocalVRFConsumer = address(0);
+        pendingLocalVRFConsumerEffectiveAt = 0;
+        emit LocalVRFConsumerChangeCancelled(cancelled);
+    }
+
+    /// @notice R-H05: scope jackpot payouts to the triggering vault only when `true`.
+    /// @dev Launch default is `true` (single-vault). Set `false` only after multi-vault
+    ///      prize economics are product-approved and disclosed.
+
+    // ================================
+    // JACKPOT PAYOUT (delegatecall from main)
+    // ================================
+
+    /// @notice Jackpot payout entry (main DELEGATECALLs here). Storage layout must match main.
+    /// @dev Reentrancy: `_payoutLock` + caller paths are `nonReentrant`. Inner gauge failures
+    ///      are try/caught; a hard revert rolls back the lock via DELEGATECALL semantics.
+    function payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        external
+        onlyDelegateCall
+        returns (uint256 totalSharesPaid)
+    {
+        if (winner == address(0)) revert ZeroAddress();
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
+        if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
+        _payoutLock = 1;
+        // Inner paths catch per-gauge failures; any uncaught revert undoes this lock.
+        totalSharesPaid = payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
+        _payoutLock = 0;
+    }
+
+    function payTriggeringVaultJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
+        if (triggeringCoin == address(0)) return 0;
+
+        // Match multi-vault path: suppress payout if the lane was deactivated after entry.
+        bool isActive;
+        try registry.isTokenActive(triggeringCoin) returns (bool result) {
+            isActive = result;
+        } catch {
+            return 0;
+        }
+        if (!isActive) return 0;
+
+        address vaultAddr;
+        address gaugeAddr;
+        try registry.getVaultForToken(triggeringCoin) returns (address result) {
+            vaultAddr = result;
+        } catch {
+            return 0;
+        }
+        try registry.getGaugeControllerForToken(triggeringCoin) returns (address result) {
+            gaugeAddr = result;
+        } catch {
+            return 0;
+        }
+        if (vaultAddr == address(0) || gaugeAddr == address(0)) return 0;
+
+        ITradeFeeCollector4626 gaugeController = ITradeFeeCollector4626(gaugeAddr);
+        uint256 jackpotShares;
+        try gaugeController.availableJackpotReserve() returns (uint256 result) {
+            jackpotShares = result;
+        } catch {
+            return 0;
+        }
+        if (jackpotShares == 0) return 0;
+
+        uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
+        if (rewardShares == 0) return 0;
+
+        try gaugeController.payJackpot(winner, rewardShares) {
+            totalSharesPaid = rewardShares;
+            totalRewardsPaid += rewardShares;
+            tokenStats[triggeringCoin].rewardsPaid += rewardShares;
+            emit LotteryWon(triggeringCoin, 0, winner, rewardShares, 0);
+            emit CrossChainJackpotPaid(triggeringCoin, winner, rewardShares, 0);
+            emit MultiTokenJackpotWon(triggeringCoin, winner, 1);
+        } catch {
+            emit JackpotPayoutFailed(triggeringCoin, winner, rewardShares);
+            return 0;
+        }
+    }
+
+    function payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
+        // R-H05: single-vault mode must not depend on the multi-vault cursor window.
+        // A large registry + scan cap could otherwise skip the triggering coin entirely.
+        if (singleVaultJackpotOnly) {
+            return payTriggeringVaultJackpot(triggeringCoin, winner, payoutBps);
+        }
+
+        // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
+        address[] memory allTokens;
+        try registry.getAllTokens() returns (address[] memory result) {
+            allTokens = result;
+        } catch {
+            return 0;
+        }
+
+        uint256 vaultsPaid;
+
+        uint256 registrySize = allTokens.length;
+        if (registrySize == 0) {
+            return 0;
+        }
+
+        // M-06: cap the per-call iteration count so the payout cannot be
+        // bricked by a growing registry. The cap is applied to *active*
+        // tokens actually evaluated, not to raw slot visits, so a long
+        // prefix of inactive entries at the front of registeredTokens (it
+        // is append-only) cannot starve active tokens of payouts.
+        //
+        // To keep the loop bounded in the worst case where every slot is
+        // inactive, we also cap total slot scans at
+        // MAX_JACKPOT_PAYOUT_SLOT_SCANS. If the scan budget is exhausted
+        // before the active cap fills, the cursor advances past the last
+        // slot scanned so subsequent jackpots continue where this one
+        // stopped and eventually reach every active token.
+        uint256 activeCap = registrySize < MAX_JACKPOT_PAYOUT_ITERATIONS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_ITERATIONS;
+        uint256 slotCap = registrySize < MAX_JACKPOT_PAYOUT_SLOT_SCANS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_SLOT_SCANS;
+        uint256 startIndex = jackpotPayoutCursor % registrySize;
+
+        uint256 activeIterated;
+        uint256 slotsScanned;
+
+        // Pay from every active lane vault within the iteration window.
+        // Loop variable k counts slot visits; activeIterated counts active
+        // tokens whose gauge was actually queried.
+        for (uint256 k = 0; k < slotCap; k++) {
+            if (activeIterated >= activeCap) break;
+
+            uint256 i = (startIndex + k) % registrySize;
+            address token = allTokens[i];
+            slotsScanned = k + 1;
+
+            // Skip inactive tokens
+            // slither-disable-next-line calls-loop
+            bool isActive;
+            try registry.isTokenActive(token) returns (bool result) {
+                isActive = result;
+            } catch {
+                continue;
+            }
+            if (!isActive) continue;
+
+            activeIterated++;
+
+            // Look up per-token contracts
+            // slither-disable-next-line calls-loop
+            address vaultAddr;
+            address gaugeAddr;
+            try registry.getVaultForToken(token) returns (address result) {
+                vaultAddr = result;
+            } catch {
+                continue;
+            }
+            // slither-disable-next-line calls-loop
+            try registry.getGaugeControllerForToken(token) returns (address result) {
+                gaugeAddr = result;
+            } catch {
+                continue;
+            }
+
+            if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
+
+            ITradeFeeCollector4626 gaugeController = ITradeFeeCollector4626(gaugeAddr);
+
+            // slither-disable-next-line calls-loop
+            uint256 jackpotShares;
+            try gaugeController.availableJackpotReserve() returns (uint256 result) {
+                jackpotShares = result;
+            } catch {
+                continue;
+            }
+
+            if (jackpotShares == 0) continue;
+
+            uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
+
+            if (rewardShares > 0) {
+                // slither-disable-next-line calls-loop
+                // slither-disable-next-line reentrancy-no-eth
+                try gaugeController.payJackpot(winner, rewardShares) {
+                    totalRewardsPaid += rewardShares;
+                    tokenStats[token].rewardsPaid += rewardShares;
+                    // M-12: accumulate ShareOFT units paid (not vault count) for callbacks/return.
+                    totalSharesPaid += rewardShares;
+                    vaultsPaid++;
+
+                    emit LotteryWon(token, 0, winner, rewardShares, 0);
+                    emit CrossChainJackpotPaid(token, winner, rewardShares, 0);
+                } catch {
+                    emit JackpotPayoutFailed(token, winner, rewardShares);
+                }
+            }
+        }
+
+        // Advance the cursor past the last slot actually scanned. Using
+        // unchecked add is safe: the cursor is taken modulo registrySize
+        // on every read.
+        unchecked {
+            jackpotPayoutCursor = startIndex + slotsScanned;
+        }
+
+        // Emit a capped event if either bound actually bit. This lets the
+        // off-chain monitor detect starvation (e.g. many inactive slots
+        // accumulating) and prioritise registry compaction.
+        if (activeIterated < registrySize || slotsScanned < registrySize) {
+            if (activeIterated >= activeCap || slotsScanned >= slotCap) {
+                emit JackpotPayoutCapped(registrySize, startIndex, activeIterated, slotsScanned);
+            }
+        }
+
+        // Emit special event for multi-token win (num vaults paid, not share units).
+        if (vaultsPaid > 0) {
+            emit MultiTokenJackpotWon(triggeringCoin, winner, vaultsPaid);
+        }
+    }
+
+    function setSingleVaultJackpotOnly(bool onlyTrigger) external onlyDelegateCall onlyOwner {
+        singleVaultJackpotOnly = onlyTrigger;
+        emit SingleVaultJackpotOnlyUpdated(onlyTrigger);
+    }
+
+    /// @notice Bootstrap-only VRF integrator set while unset (ODA-426-F3).
+    /// @dev After the first non-zero integrator is set, use
+    ///      `queueVRFIntegratorChange` → wait `LOCAL_VRF_CONSUMER_TIMELOCK` →
+    ///      `executeVRFIntegratorChange`.
+    function setVRFIntegrator(address _integrator) external onlyDelegateCall onlyOwner {
+        if (address(vrfIntegrator) != address(0)) revert VRFIntegratorAlreadySet();
+        vrfIntegrator = IChainlinkVRFIntegrator(_integrator);
+        if (_integrator != address(0)) {
+            trustedVrfIntegrators[_integrator] = true;
+        }
+        emit VRFIntegratorUpdated(_integrator, _integrator != address(0));
+    }
+
+    function queueVRFIntegratorChange(address _integrator) external onlyDelegateCall onlyOwner {
+        _pendingVRFIntegrator = _integrator;
+        _pendingVRFIntegratorEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit VRFIntegratorChangeQueued(_integrator, _pendingVRFIntegratorEffectiveAt);
+    }
+
+    function executeVRFIntegratorChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingVRFIntegratorEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingVRFIntegrator();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address oldIntegrator = address(vrfIntegrator);
+        address next = _pendingVRFIntegrator;
+        if (oldIntegrator != address(0)) {
+            trustedVrfIntegrators[oldIntegrator] = false;
+        }
+        vrfIntegrator = IChainlinkVRFIntegrator(next);
+        if (next != address(0)) {
+            trustedVrfIntegrators[next] = true;
+        }
+        _pendingVRFIntegrator = address(0);
+        _pendingVRFIntegratorEffectiveAt = 0;
+        emit VRFIntegratorChangeExecuted(next);
+        emit VRFIntegratorUpdated(next, next != address(0));
+    }
+
+    function cancelVRFIntegratorChange() external onlyDelegateCall onlyOwner {
+        if (_pendingVRFIntegratorEffectiveAt == 0) revert NoPendingVRFIntegrator();
+        address cancelled = _pendingVRFIntegrator;
+        _pendingVRFIntegrator = address(0);
+        _pendingVRFIntegratorEffectiveAt = 0;
+        emit VRFIntegratorChangeCancelled(cancelled);
+    }
+
+    function setTargetEid(uint32 _eid) external onlyDelegateCall onlyOwner {
+        targetEid = _eid;
+    }
+
+    function setUseLocalVRF(bool _useLocal) external onlyDelegateCall onlyOwner {
+        useLocalVRF = _useLocal;
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyDelegateCall onlyOwner {
+        if (_minSwapAmountUSD < MIN_SWAP_USD || _minSwapAmountUSD > MAX_SWAP_USD) revert InvalidAmount();
+        sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
+        emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
+    }
+
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyDelegateCall onlyOwner {
+        if (epochDuration == 0) revert InvalidAmount();
+        _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
+        vrfSponsorshipPolicy.enabled = enabled;
+        vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        vrfSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        vrfSponsorshipPolicy.epochDuration = epochDuration;
+        if (vrfSponsorshipPolicy.epochStart == 0) {
+            vrfSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(VRF_REQUEST_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration);
+    }
+
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyDelegateCall onlyOwner {
+        if (epochDuration == 0) revert InvalidAmount();
+        _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
+        callbackSponsorshipPolicy.enabled = enabled;
+        callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        callbackSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        callbackSponsorshipPolicy.epochDuration = epochDuration;
+        if (callbackSponsorshipPolicy.epochStart == 0) {
+            callbackSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            WINNER_CALLBACK_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
+        );
+    }
+
+    function setSponsorshipRateLimits(
+        uint32 _vrfMaxPerBuyerPerEpoch,
+        uint32 _vrfMaxPerOriginPerEpoch,
+        uint32 _callbackMaxPerBuyerPerEpoch,
+        uint32 _callbackMaxPerOriginPerEpoch
+    ) external onlyDelegateCall onlyOwner {
+        vrfMaxSponsoredPerBuyerPerEpoch = _vrfMaxPerBuyerPerEpoch;
+        vrfMaxSponsoredPerOriginPerEpoch = _vrfMaxPerOriginPerEpoch;
+        callbackMaxSponsoredPerBuyerPerEpoch = _callbackMaxPerBuyerPerEpoch;
+        callbackMaxSponsoredPerOriginPerEpoch = _callbackMaxPerOriginPerEpoch;
+
+        emit SponsorshipRateLimitsUpdated(
+            _vrfMaxPerBuyerPerEpoch,
+            _vrfMaxPerOriginPerEpoch,
+            _callbackMaxPerBuyerPerEpoch,
+            _callbackMaxPerOriginPerEpoch
+        );
+    }
+
+    /// @notice Legacy single-call setter for `boostManager`.
+    /// @dev Disabled once `armBoostSourceTimelock()` has been called. Until
+    ///      then, this preserves the original ops bootstrap path so initial
+    ///      deploys can wire up the boost source without going through the
+    ///      24h timelock dance. Once armed, callers must use
+    ///      `proposeBoostManager` + `commitBoostManager`.
+    function setBoostManager(address _manager) external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert LegacySetterDisabled();
+        address previous = address(boostManager);
+        boostManager = Ive4626BoostManager(_manager);
+        emit BoostManagerUpdated(previous, _manager);
+    }
+
+    /// @notice Legacy single-call setter for `ve4626GaugeVoting`.
+    /// @dev Disabled once `armBoostSourceTimelock()` has been called.
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert LegacySetterDisabled();
+        address previous = address(ve4626GaugeVoting);
+        ve4626GaugeVoting = Ive4626GaugeVoting(_ve4626GaugeVoting);
+        emit ve4626GaugeVotingUpdated(previous, _ve4626GaugeVoting);
+    }
+
+    // ================================
+    // PR 3 — Boost-source timelock
+    // ================================
+
+    /// @notice Engage the boost-source timelock. One-way switch.
+    /// @dev After this is called, `setBoostManager` / `setve4626GaugeVoting`
+    ///      revert with `LegacySetterDisabled` and the only path forward is
+    ///      `proposeBoostManager` + (24h delay) + `commitBoostManager`
+    ///      (and the symmetric pair for `ve4626GaugeVoting`). The emergency
+    ///      `disableBoostSources()` circuit breaker remains available with no
+    ///      timelock.
+    function armBoostSourceTimelock() external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert TimelockAlreadyArmed();
+        _timelockArmed = true;
+        emit BoostSourceTimelockArmed();
+    }
+
+    /// @notice Propose a new `boostManager`. Effective after `BOOST_SOURCE_TIMELOCK`
+    ///         has elapsed, via `commitBoostManager()`. Owner can cancel during
+    ///         the window via `cancelBoostManagerProposal()`.
+    /// @dev Requires `timelockArmed`. Pass `address(0)` to propose disabling the
+    ///      personal boost source entirely (still subject to the same delay).
+    function proposeBoostManager(address _manager) external onlyDelegateCall onlyOwner {
+        if (!_timelockArmed) revert TimelockNotArmed();
+        uint256 effectiveAt = block.timestamp + BOOST_SOURCE_TIMELOCK;
+        _pendingBoostManager = _manager;
+        _pendingBoostManagerEffectiveAt = effectiveAt;
+        emit BoostManagerProposed(address(boostManager), _manager, effectiveAt);
+    }
+
+    /// @notice Commit a previously proposed `boostManager` once the timelock has elapsed.
+    function commitBoostManager() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingBoostManagerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingProposal();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = address(boostManager);
+        address proposed = _pendingBoostManager;
+        boostManager = Ive4626BoostManager(proposed);
+        // Clear pending state so the slot is reusable for the next proposal.
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        emit BoostManagerUpdated(previous, proposed);
+    }
+
+
+
+    /// @notice Propose a new `ve4626GaugeVoting`. Symmetric to `proposeBoostManager`.
+    function proposeve4626GaugeVoting(address _gauge) external onlyDelegateCall onlyOwner {
+        if (!_timelockArmed) revert TimelockNotArmed();
+        uint256 effectiveAt = block.timestamp + BOOST_SOURCE_TIMELOCK;
+        _pendingve4626GaugeVoting = _gauge;
+        _pendingve4626GaugeVotingEffectiveAt = effectiveAt;
+        emit ve4626GaugeVotingProposed(address(ve4626GaugeVoting), _gauge, effectiveAt);
+    }
+
+    /// @notice Commit a previously proposed `ve4626GaugeVoting` once the timelock has elapsed.
+    function commitve4626GaugeVoting() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingve4626GaugeVotingEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingProposal();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = address(ve4626GaugeVoting);
+        address proposed = _pendingve4626GaugeVoting;
+        ve4626GaugeVoting = Ive4626GaugeVoting(proposed);
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
+        emit ve4626GaugeVotingUpdated(previous, proposed);
+    }
+
+    /// @notice Cancel an in-flight `boostManager` proposal during the timelock window.
+    function cancelBoostManagerProposal() external onlyDelegateCall onlyOwner {
+        if (_pendingBoostManagerEffectiveAt == 0) revert NoPendingProposal();
+        address cancelled = _pendingBoostManager;
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        emit BoostManagerProposalCancelled(cancelled);
+    }
+
+    /// @notice Cancel an in-flight `ve4626GaugeVoting` proposal during the timelock window.
+    function cancelve4626GaugeVotingProposal() external onlyDelegateCall onlyOwner {
+        if (_pendingve4626GaugeVotingEffectiveAt == 0) revert NoPendingProposal();
+        address cancelled = _pendingve4626GaugeVoting;
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
+        emit ve4626GaugeVotingProposalCancelled(cancelled);
+    }
+
+    /// @notice Emergency circuit breaker: zero out both boost sources atomically,
+    ///         no timelock. Use during incident response when a malicious
+    ///         proposal has already been committed and the next safe state is
+    ///         "no boost at all".
+    /// @dev Also clears any in-flight pending proposals so a queued malicious
+    ///      address can't be committed after the breaker is pulled.
+    function disableBoostSources() external onlyDelegateCall onlyOwner {
+        address prevBoost = address(boostManager);
+        address prevGauge = address(ve4626GaugeVoting);
+        boostManager = Ive4626BoostManager(address(0));
+        ve4626GaugeVoting = Ive4626GaugeVoting(address(0));
+        // Clear any pending proposals so they can't be committed post-breaker.
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
+        emit BoostSourcesDisabled(prevBoost, prevGauge);
+    }
+
+    // ================================
+    // PR 3 — Boost-source timelock views
+    // ================================
+    //
+    // Single combined getter for the entire timelock state, exposed only on
+    // the admin module to keep main-contract bytecode under EIP-170. The main
+    // contract delegates to this via `_delegateAdmin()`.
+
+    /// @notice Read the entire boost-source timelock state in one call.
+    /// @return pendingBoostMgr The pending replacement for `boostManager`, or address(0).
+    /// @return boostMgrEffectiveAt Timestamp at which `commitBoostManager` may run, or 0 if no proposal.
+    /// @return pendingGauge The pending replacement for `ve4626GaugeVoting`, or address(0).
+    /// @return gaugeEffectiveAt Timestamp at which `commitve4626GaugeVoting` may run, or 0 if no proposal.
+    /// @return armed Whether the timelock has been armed (legacy setters disabled).
+    function getBoostSourceTimelockState()
+        external
+        view
+        returns (
+            address pendingBoostMgr,
+            uint256 boostMgrEffectiveAt,
+            address pendingGauge,
+            uint256 gaugeEffectiveAt,
+            bool armed
+        )
+    {
+        return (
+            _pendingBoostManager,
+            _pendingBoostManagerEffectiveAt,
+            _pendingve4626GaugeVoting,
+            _pendingve4626GaugeVotingEffectiveAt,
+            _timelockArmed
+        );
+    }
+
+    // PR 1 — AMOE Linear Parity admin impls.
+
+    /// @notice Bootstrap-only AMOE relayer set while unset (M-12).
+    /// @dev After the first non-zero set, use queue/execute with `AMOE_RELAYER_TIMELOCK`.
+    ///      Pass address(0) only via the timelocked path once a relayer is live
+    ///      (bootstrap may still set zero while unset for no-op).
+    function setAuthorizedAmoeRelayer(address _relayer) external onlyDelegateCall onlyOwner {
+        if (authorizedAmoeRelayer != address(0)) revert AmoeRelayerAlreadySet();
+        address previous = authorizedAmoeRelayer;
+        authorizedAmoeRelayer = _relayer;
+        emit AuthorizedAmoeRelayerUpdated(previous, _relayer);
+    }
+
+    function queueAmoeRelayerChange(address _relayer) external onlyDelegateCall onlyOwner {
+        pendingAmoeRelayer = _relayer;
+        pendingAmoeRelayerEffectiveAt = block.timestamp + AMOE_RELAYER_TIMELOCK;
+        emit AmoeRelayerChangeQueued(_relayer, pendingAmoeRelayerEffectiveAt);
+    }
+
+    function executeAmoeRelayerChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = pendingAmoeRelayerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingAmoeRelayer();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = authorizedAmoeRelayer;
+        address next = pendingAmoeRelayer;
+        authorizedAmoeRelayer = next;
+        pendingAmoeRelayer = address(0);
+        pendingAmoeRelayerEffectiveAt = 0;
+        emit AmoeRelayerChangeExecuted(next);
+        emit AuthorizedAmoeRelayerUpdated(previous, next);
+    }
+
+    function cancelAmoeRelayerChange() external onlyDelegateCall onlyOwner {
+        if (pendingAmoeRelayerEffectiveAt == 0) revert NoPendingAmoeRelayer();
+        address cancelled = pendingAmoeRelayer;
+        pendingAmoeRelayer = address(0);
+        pendingAmoeRelayerEffectiveAt = 0;
+        emit AmoeRelayerChangeCancelled(cancelled);
+    }
+
+    /// @notice Set the pre-boost win-chance ceiling (PPM).
+    /// @dev Bounded by `lotteryConfig.maxWinChance` (so a misconfigured ceiling
+    ///      cannot widen the absolute cap) and by 100_000 PPM (10%) as a hard
+    ///      sanity ceiling on the *unboosted* chance — if you ever need more,
+    ///      raise this constant deliberately in a future audit.
+    function setBaseCeilingPPM(uint256 _ceilingPPM) external onlyDelegateCall onlyOwner {
+        if (_ceilingPPM == 0) revert InvalidAmount();
+        if (_ceilingPPM > lotteryConfig.maxWinChance) revert InvalidAmount();
+        if (_ceilingPPM > 100_000) revert InvalidAmount();
+        uint256 previous = baseCeilingPPM;
+        baseCeilingPPM = _ceilingPPM;
+        emit BaseCeilingPPMUpdated(previous, _ceilingPPM);
+    }
+
+    /// @notice Update lottery config. Non-reward fields apply immediately.
+    /// @dev If `_rewardPercentage` differs from the live value it is queued under
+    ///      `LOCAL_VRF_CONSUMER_TIMELOCK` instead of applying instantly (ODA-426-F3).
+    function setLotteryConfig(
+        uint256 _minSwap,
+        uint256 _rewardPercentage,
+        bool _isActive,
+        uint256 _baseWinChance,
+        uint256 _maxWinChance,
+        uint256 _usdMultiplierBps
+    ) external onlyDelegateCall onlyOwner {
+        if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
+        if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
+        if (_maxWinChance > 150_000) revert InvalidAmount();
+        if (_baseWinChance > _maxWinChance) revert InvalidAmount();
+        if (_usdMultiplierBps < 10_000 || _usdMultiplierBps > 15_000) revert InvalidAmount();
+        // PR 1 — AMOE Linear Parity invariant: never let maxWinChance drop
+        // below the active pre-boost ceiling, otherwise calculateWinChance could
+        // exceed _applyBoost's cap.
+        if (baseCeilingPPM > 0 && _maxWinChance < baseCeilingPPM) revert InvalidAmount();
+
+        lotteryConfig.minSwapAmount = _minSwap;
+        lotteryConfig.isActive = _isActive;
+        lotteryConfig.baseWinChance = _baseWinChance;
+        lotteryConfig.maxWinChance = _maxWinChance;
+        lotteryConfig.usdMultiplierBps = _usdMultiplierBps;
+
+        if (_rewardPercentage != lotteryConfig.rewardPercentage) {
+            _pendingRewardPercentage = _rewardPercentage;
+            _pendingRewardPercentageEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+            emit RewardPercentageChangeQueued(_rewardPercentage, _pendingRewardPercentageEffectiveAt);
+        }
+
+        emit LotteryConfigUpdated(_minSwap, lotteryConfig.rewardPercentage, _isActive);
+    }
+
+    function executeRewardPercentageChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingRewardPercentageEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingRewardPercentage();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        uint256 next = _pendingRewardPercentage;
+        lotteryConfig.rewardPercentage = next;
+        _pendingRewardPercentage = 0;
+        _pendingRewardPercentageEffectiveAt = 0;
+        emit RewardPercentageChangeExecuted(next);
+        emit LotteryConfigUpdated(lotteryConfig.minSwapAmount, next, lotteryConfig.isActive);
+    }
+
+    function cancelRewardPercentageChange() external onlyDelegateCall onlyOwner {
+        if (_pendingRewardPercentageEffectiveAt == 0) revert NoPendingRewardPercentage();
+        uint256 cancelled = _pendingRewardPercentage;
+        _pendingRewardPercentage = 0;
+        _pendingRewardPercentageEffectiveAt = 0;
+        emit RewardPercentageChangeCancelled(cancelled);
+    }
+
+    function setOracleMaxStaleness(uint256 _maxStaleness) external onlyDelegateCall onlyOwner {
+        oracleMaxStaleness = _maxStaleness;
+        emit OracleMaxStalenessUpdated(_maxStaleness);
+    }
+
+    function setVrfResultGracePeriod(uint256 _gracePeriod) external onlyDelegateCall onlyOwner {
+        if (_gracePeriod > 0 && _gracePeriod < 5 minutes) revert InvalidAmount();
+        vrfResultGracePeriod = _gracePeriod;
+    }
+
+    function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        if (_maxDeviationBps > BASIS_POINTS) revert InvalidAmount();
+        oracleMaxDeviationBps = _maxDeviationBps;
+        oracleDeviationWindow = _deviationWindow;
+        emit OracleDeviationGuardUpdated(_maxDeviationBps, _deviationWindow);
+    }
+
+    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external onlyDelegateCall onlyOwner {
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(gasLimit, msgValue);
+
+        EnforcedOptionParam[] memory params = new EnforcedOptionParam[](1);
+        params[0] = EnforcedOptionParam({eid: dstEid, msgType: MSG_TYPE_WINNER_CALLBACK, options: options});
+        _setEnforcedOptions(params);
+    }
+
+    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        authorizedRemoteOFTs[srcEid][sender] = authorized;
+        emit RemoteOFTAuthorized(srcEid, sender, authorized);
+    }
+
+    function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        if (srcEids.length != senders.length) revert InvalidAmount();
+        for (uint256 i; i < srcEids.length;) {
+            authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
+            emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setCallbackGasLimit(uint128 _gasLimit) external onlyDelegateCall onlyOwner {
+        callbackGasLimit = _gasLimit;
+    }
+
+    function pause() external onlyDelegateCall onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyDelegateCall onlyOwner nonReentrant {
+        _unpause();
+    }
+
+    function setAuthorizedHubShareOftForwarder(address shareOft, bool authorized) external onlyDelegateCall onlyOwner {
+        if (shareOft == address(0)) revert ZeroAddress();
+        authorizedHubShareOftForwarders[shareOft] = authorized;
+    }
+
+    function emergencyWithdraw(address token, uint256 amount) external onlyDelegateCall onlyOwner whenPaused {
+        if (token == address(0)) {
+            (bool ok,) = payable(owner()).call{value: amount}("");
+            if (!ok) revert InvalidAmount();
+        } else {
+            IERC20(token).safeTransfer(owner(), amount);
+        }
+    }
+
+    function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {
+        uint256 start = policy.epochStart;
+        if (start == 0) {
+            policy.epochStart = block.timestamp;
+            return;
+        }
+        if (policy.epochDuration == 0) return;
+        if (block.timestamp >= start + policy.epochDuration) {
+            policy.epochStart = block.timestamp;
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata)
+        internal
+        pure
+        override
+    {
+        revert OnlyDelegateCall();
+    }
+}
