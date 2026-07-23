@@ -301,7 +301,6 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
               WHEN source = 'amoe_entry_refund'   THEN amount
               WHEN source = 'amoe_twitter_daily'  THEN amount * 1.00
               WHEN source = 'amoe_xmtp_daily'     THEN amount * 1.00
-              WHEN source = 'amoe_checkin'        THEN amount * 1.00
               WHEN source = 'waitlist_signup'     THEN amount * 1.00
               WHEN source = 'csw_link'            THEN amount * 1.00
               WHEN source = 'resolve_csw'         THEN amount * 0.60

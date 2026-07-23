@@ -239,6 +239,24 @@ describe('AMOE submit relay key scope (A4)', () => {
     expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
   })
 
+  it('does not inherit a complete generic keeper ERC-4337 signer tuple', async () => {
+    restoreEnv = applyEnv({
+      LOTTERY_AMOE_RELAY_PRIVATE_KEY: undefined,
+      LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY: undefined,
+      LOTTERY_AMOE_RELAY_SMART_WALLET: undefined,
+      LOTTERY_AMOE_RELAY_BUNDLER_URL: undefined,
+      LOTTERY_AMOE_RELAY_PRIVY_WALLET_ID: undefined,
+      LOTTERY_AMOE_RELAY_OWNER: undefined,
+      KPR_ERC4337_SMART_WALLET: '0x' + '11'.repeat(20),
+      KPR_ERC4337_BUNDLER_URL: 'https://keeper-bundler.example',
+      KPR_ERC4337_PRIVY_WALLET_ID: 'keeper-wallet-id',
+      KPR_ERC4337_OWNER: '0x' + '22'.repeat(20),
+    })
+
+    const { hasAmoeRelayConfig } = await import('../../server/_lib/lottery/amoeRelay')
+    expect(hasAmoeRelayConfig()).toBe(false)
+  })
+
   it('relays successfully when LOTTERY_AMOE_RELAY_PRIVATE_KEY is set even if PRIVATE_KEY is unset', async () => {
     // Stub out viem so we don't actually broadcast. We just need to confirm
     // the handler reached the relay code path with a key it accepted.

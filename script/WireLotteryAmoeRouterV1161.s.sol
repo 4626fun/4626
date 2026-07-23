@@ -26,14 +26,14 @@ interface ILotteryManager4626AmoeWire {
  * Optional:
  * - AMOE_ROUTER (default v3 router `0x066e11…`)
  * - AMOE_MANAGER (default v1.16.1 manager `0xD62a…`)
- * - AMOE_PUBLISHER (default canonical CSW `0xAb6d5…`)
+ * - AMOE_PUBLISHER (default protocol CSW `0x793c…`)
  * - LEGACY_AMOE_MANAGER (default v1.11 manager `0x04CADE…`)
  * - DISABLE_LEGACY_AMOE_RELAYER=1 (default 1) — zero relayer on legacy manager
  */
 contract WireLotteryAmoeRouterV1161 is Script {
     address constant DEFAULT_AMOE_ROUTER = 0x066e11d795656A2A980585a414BC0fD6BB12e057;
     address constant DEFAULT_AMOE_MANAGER = 0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b;
-    address constant DEFAULT_AMOE_PUBLISHER = 0xAb6d5C10b03300326CD7fAb7267Ae192842967b5;
+    address constant DEFAULT_AMOE_PUBLISHER = 0x793CA28123cBA3cA3c20b9C6C67f37510c89C145;
     address constant DEFAULT_LEGACY_AMOE_MANAGER = 0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8;
 
     function run() external {

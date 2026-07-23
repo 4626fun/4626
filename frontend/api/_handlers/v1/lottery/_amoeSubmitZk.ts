@@ -478,18 +478,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ----------------------------------------------------------------
-    // 4. Consume the nonce atomically. After this point, the same
-    //    (wallet, creatorCoin, nonce) tuple cannot reach the witness
-    //    layer twice.
-    // ----------------------------------------------------------------
-    await consumeAmoeNonceForSubmit({
-      wallet,
-      creatorCoin,
-      nonce: nonceRaw as `0x${string}`,
-    })
-
-    // ----------------------------------------------------------------
-    // 5. Pre-flight balance gate (legacy single-call flow only).
+    // 4. Pre-flight balance gate (legacy single-call flow only).
     //
     //    When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the burn already
     //    happened in phase A (`/api/v1/lottery/amoe/burn-credits`) —
@@ -512,7 +501,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ----------------------------------------------------------------
-    // 5b. Burn-then-submit reader pre-flight (PR 6b).
+    // 4b. Burn-then-submit reader pre-flight (PR 6b).
     //
     //    When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the L1 burn row for
     //    `(signupId, spendRefId)` was written by phase A and the
@@ -601,6 +590,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw e
       }
     }
+
+    // ----------------------------------------------------------------
+    // 5. Consume the nonce only after every retriable readiness and balance
+    //    pre-flight has passed. A missing/not-yet-confirmed burn snapshot or
+    //    insufficient legacy balance must leave the signed request retryable.
+    // ----------------------------------------------------------------
+    await consumeAmoeNonceForSubmit({
+      wallet,
+      creatorCoin,
+      nonce: nonceRaw as `0x${string}`,
+    })
 
     // ----------------------------------------------------------------
     // 6. Replay store — insert `pending` row before any heavy work.

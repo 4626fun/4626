@@ -8,6 +8,7 @@ import {
   verifyLotteryProductionReadiness,
   readLotteryBoostTimelockArmed,
 } from '../../server/_lib/lottery/lotteryProductionReadiness.ts'
+import { evaluateLotteryCanarySafety } from '../../server/_lib/lottery/lotteryCanarySafety.ts'
 
 const LM_ABI = [
   { type: 'function', name: 'boostManager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -96,11 +97,19 @@ async function main() {
   })
 
   const zero = '0x0000000000000000000000000000000000000000'
+  const canarySafety = evaluateLotteryCanarySafety({
+    singleVaultReadOk: singleVault.ok,
+    singleVaultJackpotOnly: singleVault.ok ? singleVault.value : null,
+    deferredQueueReadOk: deferred.ok,
+    deferredVrfQueueLength: deferred.ok ? deferred.value : null,
+  })
   const phase0 = {
     boostManagerZero: boostManager.ok && String(boostManager.value).toLowerCase() === zero,
     vaultGaugeZero: vaultGauge.ok && String(vaultGauge.value).toLowerCase() === zero,
     singleVaultPresent: singleVault.ok,
     deferredPresent: deferred.ok,
+    singleVaultEnabled: canarySafety.singleVaultEnabled,
+    deferredQueueEmpty: canarySafety.deferredQueueEmpty,
     oracleGuards:
       staleness.ok &&
       maxDev.ok &&
@@ -147,11 +156,12 @@ async function main() {
       phase0BoostOff: phase0.boostManagerZero && phase0.vaultGaugeZero,
       remediationBytecode: phase0.singleVaultPresent && phase0.deferredPresent,
       readyForBaseOddsCanary:
-        phase0.boostManagerZero && phase0.vaultGaugeZero && phase0.oracleGuards && readiness.violations.filter((v) => v.severity === 'critical').length === 0,
-      blocker:
-        !phase0.singleVaultPresent || !phase0.deferredPresent
-          ? 'Live LM missing singleVaultJackpotOnly / deferredVrfQueueLength — pre-remediation bytecode; deploy post-#687 LM before claiming full Phase 0 harden'
-          : null,
+        phase0.boostManagerZero &&
+        phase0.vaultGaugeZero &&
+        phase0.oracleGuards &&
+        canarySafety.safe &&
+        readiness.violations.filter((v) => v.severity === 'critical').length === 0,
+      blocker: canarySafety.blocker,
     },
   }
 

@@ -1329,6 +1329,7 @@ describe('PR 6b — burn-then-submit pre-flight reader', () => {
       // debit, so neither should fire on this error.
       expect(insertPendingMock).not.toHaveBeenCalled()
       expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+      expect(consumeAmoeNonceForSubmitMock).not.toHaveBeenCalled()
       // Reader was called with the parsed signupId (from profileId mock
       // = PROFILE_ID = 42) and the body's spendRefId.
       expect(readSnapshotForBurn).toHaveBeenCalledTimes(1)
@@ -1375,6 +1376,7 @@ describe('PR 6b — burn-then-submit pre-flight reader', () => {
       expect(Number(retryAfter)).toBeGreaterThanOrEqual(60)
       expect(insertPendingMock).not.toHaveBeenCalled()
       expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+      expect(consumeAmoeNonceForSubmitMock).not.toHaveBeenCalled()
     } finally {
       restoreBurnFlag()
       restoreSubmit()

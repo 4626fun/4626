@@ -19,6 +19,7 @@ import {
   type AlfaClubLiquidityPoolSummary,
   type AlfaClubSudoswapMarketConfig,
 } from '@/hooks/useAlfaClubLiquidityPools'
+import { basescanAddressHref } from '@/features/status/statusShared'
 import {
   ALFACLUB_EXPLORE_POOLS_PATH,
   ALFACLUB_EXPLORE_ROOMS_PATH,
@@ -218,8 +219,19 @@ export function PoolCard({
           <dt className="text-[10px] uppercase tracking-wide text-zinc-600">
             Pair
           </dt>
-          <dd className="mt-1 font-mono text-[11px] text-zinc-400">
-            {shortAddress(pool.pool)}
+          <dd className="mt-1">
+            <a
+              href={basescanAddressHref(pool.pool)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="font-mono text-[11px] text-sky-200/90 underline-offset-2 hover:underline"
+            >
+              {shortAddress(pool.pool)}
+            </a>
+            <div className="mt-1 text-[10px] text-zinc-600">
+              Official Sudoswap ERC-1155 / ERC-20
+            </div>
           </dd>
         </div>
       </dl>
@@ -516,8 +528,8 @@ export function AlfaClubLiquidityPools() {
                 Key markets
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
-                Creator Coin and FriendKey secondary markets on official
-                Sudoswap v2 pairs.
+                Secondary FriendKey trading settles in-app on official Sudoswap
+                v2 ERC-1155 / ERC-20 pairs — not Uniswap token swap.
               </p>
               <p className="mt-2 text-xs text-zinc-600">
                 Looking for rooms?{' '}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ALFACLUB_EXPLORE_KEYS_PATH,
+  ALFACLUB_EXPLORE_POOLS_PATH,
   ALFACLUB_KEYS_PATH,
   buildAlfaClubAbsoluteUrl,
   buildAlfaClubRedirectLocation,
@@ -9,9 +10,10 @@ import {
 } from '@/lib/alfaclub/hostPaths'
 
 describe('AlfaClub key path migration', () => {
-  it('maps only legacy room paths to key paths', () => {
+  it('maps legacy room paths and canonical key/market surfaces', () => {
     expect(resolveAlfaClubCanonicalPath('/rooms')).toBe(ALFACLUB_KEYS_PATH)
     expect(resolveAlfaClubCanonicalPath('/explore/rooms')).toBe(ALFACLUB_EXPLORE_KEYS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/explore/pools')).toBe(ALFACLUB_EXPLORE_POOLS_PATH)
     expect(resolveAlfaClubCanonicalPath('/arena')).toBeNull()
     expect(resolveAlfaClubCanonicalPath('/inverseakita')).toBeNull()
     expect(resolveAlfaClubCanonicalPath('/h')).toBeNull()

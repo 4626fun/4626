@@ -18,6 +18,11 @@ import {
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
 import { alfaclubRoomPrimaryTitle } from '@/lib/alfaclub/roomLabel'
+import {
+  ALFACLUB_EXPLORE_POOLS_PATH,
+  ALFACLUB_KEYS_PATH,
+} from '@/lib/alfaclub/hostPaths'
+import { ALFACLUB_EXECUTABLE_KEY_ID } from '@/lib/swap/alfaclubRoomTokens'
 import { cn } from '@/lib/shared/utils'
 
 type RoomTypeFilter = 'all' | AlfaClubRoomDirectoryItem['roomType']
@@ -173,8 +178,23 @@ export function AlfaClubExploreRooms() {
             Explore keys
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
-            Browse AlfaClub keys by price, volume, fund size, and PnL. Rooms are optional chat venues, not the asset.
+            Browse AlfaClub keys by price, volume, fund size, and PnL. Secondary FriendKey trading for the official market settles in-app on Sudoswap.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link
+              to={ALFACLUB_EXPLORE_POOLS_PATH}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-sky-500 px-4 text-xs font-semibold text-white transition hover:bg-sky-400"
+            >
+              Browse key markets
+              <ArrowRight className="size-3.5" aria-hidden />
+            </Link>
+            <Link
+              to={`${ALFACLUB_KEYS_PATH}?keyId=${ALFACLUB_EXECUTABLE_KEY_ID.toString()}&tab=liquidity`}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-white/[0.06] px-4 text-xs font-medium text-zinc-200 ring-1 ring-white/[0.1] transition hover:bg-white/[0.1]"
+            >
+              Trade Key #{ALFACLUB_EXECUTABLE_KEY_ID.toString()} market
+            </Link>
+          </div>
           <dl className="mt-6 grid max-w-xl grid-cols-3 gap-px overflow-hidden rounded-xl bg-white/[0.08] ring-1 ring-white/[0.08]">
             <Metric label="All keys" value={rooms.length} />
             <Metric label="Trading" value={tradingCount} />
@@ -358,10 +378,14 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
   const tierRing = roomCurveTierRingClassName(room)
   const typeTone = room.roomType === 'social' ? 'social' : 'trading'
   const typeLabel = room.roomType === 'social' ? 'Social' : 'Trading'
+  const isOfficialMarket = room.roomId === ALFACLUB_EXECUTABLE_KEY_ID.toString()
+  const href = isOfficialMarket
+    ? `${ALFACLUB_KEYS_PATH}?keyId=${encodeURIComponent(room.roomId)}&tab=liquidity`
+    : `${ALFACLUB_KEYS_PATH}?keyId=${encodeURIComponent(room.roomId)}`
 
   return (
     <Link
-      to={`/keys?keyId=${encodeURIComponent(room.roomId)}`}
+      to={href}
       className="group grid grid-cols-[minmax(260px,2.2fr)_minmax(128px,1fr)_minmax(96px,0.85fr)_minmax(96px,0.85fr)_minmax(132px,1.1fr)_72px] items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3.5">
@@ -386,6 +410,7 @@ function RoomRow({ room }: { room: AlfaClubRoomDirectoryItem }) {
               {title}
             </span>
             {room.featured ? <RoomMetaChip tone="featured">Featured</RoomMetaChip> : null}
+            {isOfficialMarket ? <RoomMetaChip tone="featured">Official market</RoomMetaChip> : null}
           </span>
           <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="font-mono text-[10px] tabular-nums text-zinc-600">#{room.roomId}</span>

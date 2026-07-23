@@ -133,6 +133,7 @@ function App() {
         {/* Canonical AlfaClub key surfaces live on app.4626.fun. */}
         <Route path="/keys" element={<AlfaClubHostApp />} />
         <Route path="/explore/keys" element={<AlfaClubHostApp />} />
+        <Route path="/explore/pools" element={<AlfaClubHostApp />} />
         <Route path="/rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/explore/rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/alfaclub" element={<LegacyAlfaClubRedirect />} />

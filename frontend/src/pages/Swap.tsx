@@ -113,7 +113,7 @@ function KeySwapSurface(props: {
   return (
     <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2 text-[10px] text-vault-subtext">
-        <span>Official AlfaClub key market</span>
+        <span>Official Sudoswap ERC-1155 key market</span>
         <span className="rounded-md border border-sky-300/20 bg-sky-500/[0.07] px-2 py-1 font-medium text-sky-100">Key</span>
       </div>
       <div className="space-y-3">
@@ -131,7 +131,7 @@ function KeySwapSurface(props: {
                   <span className="max-w-[8rem] truncate text-[16px] font-semibold text-white">{assetLabel}</span>
                 </button>
               </div>
-              {isKey ? <div className="mt-1 text-xs text-sky-100/70">ERC-1155 Key #{key.keyId}</div> : <div className="mt-1 text-xs text-zinc-500">Creator coin · AKITA</div>}
+              {isKey ? <div className="mt-1 text-xs text-sky-100/70">ERC-1155 Key #{key.keyId} · Sudoswap</div> : <div className="mt-1 text-xs text-zinc-500">Creator coin · AKITA</div>}
             </div>
           )
         })}

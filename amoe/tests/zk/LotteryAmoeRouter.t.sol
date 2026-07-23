@@ -225,69 +225,10 @@ contract LotteryAmoeRouterTest is Test {
     // tests for audit §4.2 (Slither `timestamp`, miner-drift hardening).
     // ---------------------------------------------------------------------
 
-    function test_submitAmoeEntry_rejectsExpiredDeadline() public {
-        // deadline already in the past -> DeadlineExpired
-        vm.warp(1_000);
+    function test_submitAmoeEntry_legacyPathDisabled() public {
+        // ODA-461-18: unused-signature ECDSA path is disabled; ZK is the live path.
         vm.prank(publisher);
-        vm.expectRevert(LotteryAmoeRouter.DeadlineExpired.selector);
-        router.submitAmoeEntry(
-            buyer,
-            coin,
-            keccak256("nonce-A"),
-            999, // strictly < block.timestamp
-            ""
-        );
-    }
-
-    function test_submitAmoeEntry_rejectsDeadlineInsideMinerDrift() public {
-        // deadline equal to block.timestamp passes the strict-greater check
-        // but is well inside the 60s miner-drift floor.
-        vm.warp(1_000_000);
-        vm.prank(publisher);
-        vm.expectRevert(LotteryAmoeRouter.DeadlineTooSoon.selector);
-        router.submitAmoeEntry(
-            buyer,
-            coin,
-            keccak256("nonce-B"),
-            1_000_000, // equal to now
-            ""
-        );
-
-        // 30s in the future: also inside the floor.
-        vm.prank(publisher);
-        vm.expectRevert(LotteryAmoeRouter.DeadlineTooSoon.selector);
-        router.submitAmoeEntry(
-            buyer,
-            coin,
-            keccak256("nonce-C"),
-            1_000_030,
-            ""
-        );
-
-        // 59s in the future: still inside (boundary exclusive).
-        vm.prank(publisher);
-        vm.expectRevert(LotteryAmoeRouter.DeadlineTooSoon.selector);
-        router.submitAmoeEntry(
-            buyer,
-            coin,
-            keccak256("nonce-D"),
-            1_000_059,
-            ""
-        );
-    }
-
-    function test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary() public {
-        // deadline exactly MIN_DEADLINE_BUFFER seconds in the future passes.
-        vm.warp(1_000_000);
-        uint256 deadline = 1_000_000 + router.MIN_DEADLINE_BUFFER();
-        vm.prank(publisher);
-        uint256 entryId = router.submitAmoeEntry(
-            buyer,
-            coin,
-            keccak256("nonce-E"),
-            deadline,
-            ""
-        );
-        assertGt(entryId, 0);
+        vm.expectRevert(LotteryAmoeRouter.LegacyAmoeDisabled.selector);
+        router.submitAmoeEntry(buyer, coin, keccak256("nonce-A"), block.timestamp + 1 hours, "");
     }
 }

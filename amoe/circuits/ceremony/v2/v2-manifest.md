@@ -40,7 +40,7 @@ drifted since this manifest was signed and contributors should not proceed.
 | Source | `https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_14.ptau` |
 | Power | 14 (max 16,384 constraints; 11,367 fits) |
 | Phase-1 ceremony | Hermez community ceremony, 2022, 175+ contributors |
-| File SHA-256 | _PIN at ceremony start: `sha256sum pot14_final.ptau`_ |
+| File SHA-256 | `489be9e5ac65d524f7b1685baac8a183c6e77924fdb73d2b8105e335f277895d` |
 
 This file's toxic waste is shared with every project that built on top of
 the Hermez phase-1 ceremony (Tornado, Polygon zkEVM, Aztec, Iden3, etc.).

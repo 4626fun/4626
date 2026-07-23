@@ -55,6 +55,14 @@ async function findVerifiedPrivyProfileId(db: Db, wallet: `0x${string}`): Promis
       AND p.privy_user_id IS NOT NULL
       AND p.merged_into_profile_id IS NULL
       AND p.email_verified = TRUE
+      AND EXISTS (
+        SELECT 1
+        FROM account_linked_methods alm
+        WHERE alm.privy_user_id = p.privy_user_id
+          AND alm.type = 'email'
+          AND alm.verified = TRUE
+          AND LOWER(alm.value) = LOWER(p.email)
+      )
       AND NOT (
         LOWER(COALESCE(p.email, '')) LIKE '%@wallet.4626.fun'
         OR LOWER(COALESCE(p.email, '')) LIKE '%@noemail.4626.fun'

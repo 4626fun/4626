@@ -17,6 +17,7 @@ BUILD="$ROOT/amoe/circuits/build"
 # match the hash snarkjs prints below, the circuit has drifted since the
 # manifest was tagged — STOP.
 EXPECTED_R1CS_HASH_HEAD="b93497b0 68d1b96b fec84a90 be154a55"
+EXPECTED_PTAU_SHA256="489be9e5ac65d524f7b1685baac8a183c6e77924fdb73d2b8105e335f277895d"
 
 command -v snarkjs >/dev/null || { echo "snarkjs required (npm i -g snarkjs)"; exit 1; }
 
@@ -35,6 +36,15 @@ if [ ! -f "$BUILD/pot14_final.ptau" ]; then
     exit 1
 fi
 
+ACTUAL_PTAU_SHA256="$(sha256sum "$BUILD/pot14_final.ptau" | cut -d' ' -f1)"
+if [ "$ACTUAL_PTAU_SHA256" != "$EXPECTED_PTAU_SHA256" ]; then
+    echo "ERR: phase-1 ptau SHA-256 mismatch."
+    echo "  expected: $EXPECTED_PTAU_SHA256"
+    echo "  actual:   $ACTUAL_PTAU_SHA256"
+    echo "Refusing to use unpinned trusted-setup input."
+    exit 1
+fi
+
 if [ -f "$BUILD/amoe_v2_0000.zkey" ]; then
     echo "WARN: $BUILD/amoe_v2_0000.zkey already exists."
     echo "      If this is a re-run, move the old file aside first."
@@ -44,6 +54,7 @@ fi
 
 echo "[setup] R1CS:  $BUILD/amoe_eligibility.r1cs"
 echo "[setup] ptau:  $BUILD/pot14_final.ptau"
+echo "[setup] ptau SHA-256 verified: $ACTUAL_PTAU_SHA256"
 echo
 
 # Capture the snarkjs output so we can extract the circuit hash and check it.

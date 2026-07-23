@@ -12,9 +12,11 @@ describe('normalizeAmoeWallet', () => {
 
 describe('resolveAmoePointsProfile', () => {
   it('returns verified privy profile when policy requires it', async () => {
+    const queries: string[] = []
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase()
+        queries.push(text)
         if (text.includes('p.email_verified = true')) {
           return { rows: [{ profile_id: 42 }] }
         }
@@ -24,6 +26,9 @@ describe('resolveAmoePointsProfile', () => {
 
     const result = await resolveAmoePointsProfile(db, '0x00000000000000000000000000000000000000aa', 'verified_privy_only')
     expect(result).toEqual({ signupId: 42, kind: 'verified_privy' })
+    expect(queries[0]).toContain('from account_linked_methods alm')
+    expect(queries[0]).toContain('alm.verified = true')
+    expect(queries[0]).toContain('lower(alm.value) = lower(p.email)')
   })
 
   it('creates synthetic profile for lottery ledger when unlinked', async () => {

@@ -20,6 +20,8 @@ const checkDurableRateLimitMock = vi.fn()
 const verifyPrivyForAccountsMock = vi.fn()
 const extractTweetIdFromInputMock = vi.fn()
 const verifyTweetForAmoeMock = vi.fn()
+const getDbMock = vi.fn()
+const resolvePrimaryProfileIdForPrivyUserMock = vi.fn()
 const PROTOCOL_AMOE_CREATOR_COIN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
 vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
@@ -55,6 +57,14 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', async (importOriginal)
 vi.mock('../../server/twitter/verifyTweet.js', () => ({
   extractTweetIdFromInput: extractTweetIdFromInputMock,
   verifyTweetForAmoe: verifyTweetForAmoeMock,
+}))
+
+vi.mock('../../server/_lib/db/postgres.js', () => ({
+  getDb: getDbMock,
+}))
+
+vi.mock('../../server/_lib/identity/profileIdForPrivyUser.js', () => ({
+  resolvePrimaryProfileIdForPrivyUser: resolvePrimaryProfileIdForPrivyUserMock,
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -304,7 +314,11 @@ describe('AMOE credits handler', () => {
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, remaining: 5, resetAt: Date.now() + 60_000 })
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
-    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: null,
+    })
     getAmoeCreditSnapshotMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
       credits: 77,
@@ -461,7 +475,13 @@ describe('AMOE daily Twitter checkin handler', () => {
       ip: '127.0.0.1',
       auth: { type: 'session', address: '0x000000000000000000000000000000000000cafe' },
     })
-    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: null,
+    })
+    getDbMock.mockResolvedValue({ sql: vi.fn() })
+    resolvePrimaryProfileIdForPrivyUserMock.mockResolvedValue(42)
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test',
       privyUser: {
@@ -564,6 +584,20 @@ describe('AMOE daily Twitter checkin handler', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(403)
     expect(res.body?.error).toBe('twitter_not_linked')
+  })
+
+  it('rejects a linked Twitter identity from a different Privy profile', async () => {
+    resolvePrimaryProfileIdForPrivyUserMock.mockResolvedValueOnce(99)
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'POST', body: { tweetId: '1899868323524294692' } })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.error).toBe('wallet_privy_identity_mismatch')
+    expect(verifyTweetForAmoeMock).not.toHaveBeenCalled()
+    expect(claimDailyTwitterCheckinMock).not.toHaveBeenCalled()
   })
 })
 

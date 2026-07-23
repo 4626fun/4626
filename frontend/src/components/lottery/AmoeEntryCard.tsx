@@ -87,10 +87,73 @@ type SubmitResponse = {
 
 type BurnCreditsResponse = {
   spendRefId: string
+  burnedAt: string
+  burnEpoch: string | number
+  eligibleSubmitAfterUnixSec: number
   consumed: number
   creditsRemaining: number
   creditsPerEntry: number
   entriesAvailable: number
+}
+
+export type PendingAmoeEntry = {
+  wallet: Address
+  creatorCoin: Address
+  pointsBurned: number
+  twitterHandle: string
+  spendRefId: string
+  eligibleSubmitAfterUnixSec: number
+}
+
+const PENDING_AMOE_ENTRY_STORAGE_KEY = '4626:amoe:pending-entry:v1'
+
+function isPendingAmoeEntry(value: unknown): value is PendingAmoeEntry {
+  if (!value || typeof value !== 'object') return false
+  const row = value as Partial<PendingAmoeEntry>
+  return (
+    typeof row.wallet === 'string' &&
+    /^0x[a-fA-F0-9]{40}$/.test(row.wallet) &&
+    typeof row.creatorCoin === 'string' &&
+    /^0x[a-fA-F0-9]{40}$/.test(row.creatorCoin) &&
+    typeof row.pointsBurned === 'number' &&
+    Number.isSafeInteger(row.pointsBurned) &&
+    row.pointsBurned >= AMOE_MIN_POINTS &&
+    row.pointsBurned <= AMOE_MAX_POINTS &&
+    typeof row.twitterHandle === 'string' &&
+    row.twitterHandle.length > 0 &&
+    typeof row.spendRefId === 'string' &&
+    row.spendRefId.length > 0 &&
+    row.spendRefId.length <= 190 &&
+    typeof row.eligibleSubmitAfterUnixSec === 'number' &&
+    Number.isSafeInteger(row.eligibleSubmitAfterUnixSec) &&
+    row.eligibleSubmitAfterUnixSec > 0
+  )
+}
+
+function readPendingAmoeEntry(): PendingAmoeEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(PENDING_AMOE_ENTRY_STORAGE_KEY) ?? 'null')
+    return isPendingAmoeEntry(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function writePendingAmoeEntry(entry: PendingAmoeEntry | null): void {
+  if (typeof window === 'undefined') return
+  if (entry) {
+    window.localStorage.setItem(PENDING_AMOE_ENTRY_STORAGE_KEY, JSON.stringify(entry))
+  } else {
+    window.localStorage.removeItem(PENDING_AMOE_ENTRY_STORAGE_KEY)
+  }
+}
+
+export function isPendingAmoeEntryReady(
+  entry: PendingAmoeEntry,
+  nowUnixSec = Math.floor(Date.now() / 1000),
+): boolean {
+  return nowUnixSec >= entry.eligibleSubmitAfterUnixSec + 15 * 60
 }
 
 type CheckinResponse = {
@@ -169,6 +232,8 @@ function openXPost() {
 export const __testHooks = {
   buildAmoeShareText,
   buildXIntentUrl,
+  isPendingAmoeEntry,
+  isPendingAmoeEntryReady,
 }
 
 export function AmoeEntryCard(props: {
@@ -197,6 +262,7 @@ export function AmoeEntryCard(props: {
   const [txHash, setTxHash] = useState<Hex | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [pendingEntry, setPendingEntry] = useState<PendingAmoeEntry | null>(() => readPendingAmoeEntry())
   // PR 2 — user-selected points to burn. Defaults to the floor (100 pts =
   // $1 = 0.0004% pre-boost) so a one-click entry stays cheap. The slider
   // and numeric input are kept in sync via this single source of truth.
@@ -322,9 +388,23 @@ export function AmoeEntryCard(props: {
     setTxHash(null)
 
     try {
+      const pending = readPendingAmoeEntry()
+      if (pending && walletAddress && pending.wallet.toLowerCase() !== walletAddress.toLowerCase()) {
+        throw new Error('Switch to the wallet that created the pending AMOE entry to finish it')
+      }
+      if (pending && creatorCoin && pending.creatorCoin.toLowerCase() !== creatorCoin.toLowerCase()) {
+        throw new Error('Finish the pending AMOE entry before starting one for another creator')
+      }
+      if (pending && !isPendingAmoeEntryReady(pending)) {
+        const readyAt = new Date((pending.eligibleSubmitAfterUnixSec + 15 * 60) * 1000)
+        setPendingEntry(pending)
+        setStatusMessage(`Points burned safely. Return after ${readyAt.toLocaleString()} to sign and finalize the entry.`)
+        return
+      }
+
       const nonceParams = new URLSearchParams()
-      if (walletAddress) nonceParams.set('wallet', walletAddress)
-      if (creatorCoin) nonceParams.set('creatorCoin', creatorCoin)
+      if (pending?.wallet ?? walletAddress) nonceParams.set('wallet', pending?.wallet ?? walletAddress!)
+      if (pending?.creatorCoin ?? creatorCoin) nonceParams.set('creatorCoin', pending?.creatorCoin ?? creatorCoin!)
       const nonceRes = await apiFetch(`/api/v1/lottery/amoe/nonce?${nonceParams.toString()}`, {
         method: 'GET',
         withCredentials: true,
@@ -344,11 +424,11 @@ export function AmoeEntryCard(props: {
       // the freshly fetched balance and the protocol caps. If they don't
       // have enough points for even the floor (100), surface a clear error.
       const liveBalance = Number(nonceData.credits ?? 0)
-      if (liveBalance < AMOE_MIN_POINTS) {
+      if (!pending && liveBalance < AMOE_MIN_POINTS) {
         throw new Error(`Need at least ${AMOE_MIN_POINTS} points to enter (you have ${liveBalance})`)
       }
-      const requestedPoints = clampPoints(pointsBurned, liveBalance)
-      if (requestedPoints !== pointsBurned) {
+      const requestedPoints = pending?.pointsBurned ?? clampPoints(pointsBurned, liveBalance)
+      if (!pending && requestedPoints !== pointsBurned) {
         // Reflect the clamp in the UI before submitting so the user knows
         // exactly what was sent.
         setPointsBurned(requestedPoints)
@@ -358,35 +438,57 @@ export function AmoeEntryCard(props: {
         message: nonceData.message,
       })) as Hex
 
-      const twitterHandle = deriveAmoeTwitterHandleFallback(nonceData.wallet)
-      const spendRefId = `amoe-ui:${nonceData.creatorCoin}:${nonceData.nonce}`
+      const twitterHandle = pending?.twitterHandle ?? deriveAmoeTwitterHandleFallback(nonceData.wallet)
+      const spendRefId = pending?.spendRefId ?? `amoe-ui:${nonceData.creatorCoin}:${nonceData.nonce}`
 
-      // ZK flow phase A: burn points and register burn intent.
-      // If the endpoint is disabled in an environment, we still attempt
-      // submit-zk below so legacy single-call mode can continue to work.
-      const burnRes = await apiFetch('/api/v1/lottery/amoe/burn-credits', {
-        method: 'POST',
-        withCredentials: true,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorCoin: nonceData.creatorCoin,
-          message: nonceData.message,
-          signature,
-          pointsBurned: requestedPoints,
-          nonce: nonceData.nonce,
-          twitterHandle,
-          spendRefId,
-        }),
-      })
-      const burnJson = parseJsonSafe<BurnCreditsResponse>(await burnRes.json().catch(() => null))
-      if (!burnRes.ok) {
-        const burnError = burnJson?.error || 'Burn credits failed'
-        if (burnError !== 'burn_credits_disabled') {
-          throw new Error(burnError)
+      if (!pending) {
+        // Phase A is intentionally asynchronous: the burn must appear in a
+        // confirmed ledger snapshot before a proof can be built. Persist only
+        // the bounded intent metadata (never the signature) and ask the user
+        // for a fresh nonce/signature when the snapshot is ready.
+        const burnRes = await apiFetch('/api/v1/lottery/amoe/burn-credits', {
+          method: 'POST',
+          withCredentials: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creatorCoin: nonceData.creatorCoin,
+            message: nonceData.message,
+            signature,
+            pointsBurned: requestedPoints,
+            nonce: nonceData.nonce,
+            twitterHandle,
+            spendRefId,
+          }),
+        })
+        const burnJson = parseJsonSafe<BurnCreditsResponse>(await burnRes.json().catch(() => null))
+        if (!burnRes.ok || !burnJson?.success || !burnJson.data) {
+          throw new Error(burnJson?.error || 'Burn credits failed')
         }
+        const burned = burnJson.data
+        const nextPending: PendingAmoeEntry = {
+          wallet: nonceData.wallet,
+          creatorCoin: nonceData.creatorCoin,
+          pointsBurned: requestedPoints,
+          twitterHandle,
+          spendRefId: burned.spendRefId,
+          eligibleSubmitAfterUnixSec: Number(burned.eligibleSubmitAfterUnixSec),
+        }
+        if (!isPendingAmoeEntry(nextPending)) {
+          throw new Error('Burn response did not include a valid submission schedule')
+        }
+        writePendingAmoeEntry(nextPending)
+        setPendingEntry(nextPending)
+        setCredits(Number(burned.creditsRemaining ?? 0))
+        setCreditsPerEntry(Number(burned.creditsPerEntry ?? 100))
+        setEntriesAvailable(Number(burned.entriesAvailable ?? 0))
+        const readyAt = new Date((nextPending.eligibleSubmitAfterUnixSec + 15 * 60) * 1000)
+        setStatusMessage(`Points burned safely. Return after ${readyAt.toLocaleString()} to sign and finalize the entry.`)
+        return
       }
 
-      // ZK flow phase B: submit proof-backed entry.
+      // Phase B always uses a fresh, short-lived nonce/signature. This keeps
+      // the 10-minute replay window intact even though the ledger snapshot
+      // normally becomes ready in the next daily epoch.
       const submitRes = await apiFetch('/api/v1/lottery/amoe/submit-zk', {
         method: 'POST',
         withCredentials: true,
@@ -403,10 +505,14 @@ export function AmoeEntryCard(props: {
       })
       const submitJson = parseJsonSafe<SubmitResponse>(await submitRes.json().catch(() => null))
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
+        // Preserve pending burn intent on `amoe_burn_not_found` — projection
+        // can lag briefly; clearing localStorage would drop retry state.
         throw new Error(submitJson?.error || 'Failed to submit AMOE ZK entry')
       }
 
       const tx = submitJson.data
+      writePendingAmoeEntry(null)
+      setPendingEntry(null)
       const hash = tx.txHash
       setTxHash(hash)
       setStatusMessage('AMOE ZK entry relayed by protocol. Waiting for confirmation…')
@@ -452,9 +558,10 @@ export function AmoeEntryCard(props: {
     setPointsBurned((prev) => clampPoints(prev, sliderMax))
   }, [sliderMax])
 
+  const hasPendingEntry = Boolean(pendingEntry)
   const canEnter = Boolean(
     (walletAddress || protocolEntryMode) &&
-      hasEnoughForFloor &&
+      (hasEnoughForFloor || hasPendingEntry) &&
       !entryBusy &&
       !checkinBusy,
   )
@@ -565,7 +672,7 @@ export function AmoeEntryCard(props: {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {hasEnoughForFloor ? (
+          {hasEnoughForFloor || hasPendingEntry ? (
             <button
               type="button"
               onClick={() => void handleEnterForFree()}
@@ -575,7 +682,11 @@ export function AmoeEntryCard(props: {
               {entryBusy ? (
                 <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Submitting…</span>
               ) : (
-                `Submit free jackpot entry (${selectedPoints.toLocaleString()} pts)`
+                hasPendingEntry
+                  ? isPendingAmoeEntryReady(pendingEntry!)
+                    ? `Finalize pending entry (${pendingEntry!.pointsBurned.toLocaleString()} pts)`
+                    : `Pending entry (${pendingEntry!.pointsBurned.toLocaleString()} pts)`
+                  : `Submit free jackpot entry (${selectedPoints.toLocaleString()} pts)`
               )}
             </button>
           ) : null}

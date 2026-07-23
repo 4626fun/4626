@@ -79,14 +79,17 @@ describe('AlfaClubLiquidityPools write gate', () => {
     }
 
     render(
-      <MemoryRouter initialEntries={['/rooms?roomId=1659&tab=liquidity']}>
+      <MemoryRouter initialEntries={['/keys?keyId=1659&tab=liquidity']}>
         <AccessContext.Provider value={access}>
           <AlfaClubLiquidityPools />
         </AccessContext.Provider>
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Room markets')).toBeTruthy()
+    expect(screen.getByText('Key markets')).toBeTruthy()
+    expect(
+      screen.getByText(/Secondary FriendKey trading settles in-app on official Sudoswap/i),
+    ).toBeTruthy()
     expect(screen.getByTestId('eth-to-room-route')).toBeTruthy()
     expect(screen.getByText('ETH funding path (planned)')).toBeTruthy()
     expect(screen.getByText('FriendKey #1659')).toBeTruthy()
@@ -103,7 +106,7 @@ describe('AlfaClubLiquidityPools write gate', () => {
         .getByRole('link', { name: /Sign in to trade/i })
         .getAttribute('href'),
     ).toBe(
-      'https://4626.fun/waitlist?continue=alfaclub&returnPath=%2Frooms%3FroomId%3D1659%26tab%3Dliquidity',
+      'https://4626.fun/waitlist?continue=alfaclub&returnPath=%2Fkeys%3FkeyId%3D1659%26tab%3Dliquidity',
     )
     expect(screen.queryByTestId('market-console')).toBeNull()
   })

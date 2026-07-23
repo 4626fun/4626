@@ -20,6 +20,7 @@
 // Design doc: `docs/security/amoe-pr4-replay-store-design.md` \u00a76.
 
 import {
+  consumeAmoeCreditsForEntry,
   buildAmoeEntryZKCall,
   AMOE_PLONK_PUB_INPUT_SLOT,
   AMOE_PLONK_PROOF_LEN,
@@ -28,6 +29,7 @@ import {
 import {
   findById,
   markAbandonedEpochRolled,
+  markBroadcasting,
   markManagerDeclined,
   markRejectedChain,
   markSettled,
@@ -182,6 +184,7 @@ async function executeRetry(
   })
 
   let txHash: `0x${string}`
+  await markBroadcasting(row.id, {})
   try {
     txHash = await params.relay({ to: call.to, callData: call.callData })
   } catch (relayErr) {
@@ -206,15 +209,26 @@ async function executeRetry(
     return { kind: 'rejected_chain', reason }
   }
 
+  const requiredCredits = Number(row.pointsBurned)
+  if (!Number.isSafeInteger(requiredCredits) || requiredCredits <= 0) {
+    throw new AmoeServerError('amoe_retry_points_burned_invalid')
+  }
+  // Match submit-zk ordering: mark settled BEFORE the trailing debit so a
+  // debit throw cannot strand the row in `broadcast` after a successful
+  // relay (same invariant as `_amoeSubmitZk.ts` §11).
   await markSettled(row.id, {
     txHash,
     blockNumber: 0n, // PR 5 publisher backfills these from chain.
     managerEntryId: null,
   })
-  // Best-effort: the original submit handler already debited credits
-  // on the first successful settle, so a retry that finally settles
-  // does NOT re-debit. The replay-store's terminal `settled` state is
-  // the audit-time source of truth.
+  // Retry settles must still be backed by the original spend_ref_id. This is
+  // idempotent when phase A already burned credits, and charges exactly once
+  // when a historical manager_declined row reaches its first real settle.
+  await consumeAmoeCreditsForEntry({
+    wallet: row.wallet,
+    requiredCredits,
+    refId: row.spendRefId,
+  })
   // Audit pubInputs slot occupied to silence unused-var warnings while
   // documenting that `pubInputs` IS the binding the chain just accepted.
   void AMOE_PLONK_PUB_INPUT_SLOT

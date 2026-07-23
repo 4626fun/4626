@@ -44,6 +44,11 @@ const NAV_ITEMS_ALFACLUB: NavItem[] = [
     activePrefixes: ['/explore/keys', '/keys'],
   },
   {
+    label: 'Markets',
+    to: '/explore/pools',
+    activePrefixes: ['/explore/pools', '/pools'],
+  },
+  {
     label: 'InverseAKITA',
     to: '/inverseakita',
   },

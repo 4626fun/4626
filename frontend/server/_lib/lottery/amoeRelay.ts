@@ -1,11 +1,5 @@
 import type { Address, Hex } from 'viem'
 
-import {
-  readProtocolCswOwnerIndexEnv,
-  readProtocolCswPrivyWalletIdEnv,
-  resolveServerAgentCswAddress,
-} from '../wallet/canonicalCswEnv.js'
-
 declare const process: { env: Record<string, string | undefined> }
 
 function isAddressLike(value: string): value is `0x${string}` {
@@ -32,64 +26,30 @@ function readAmoeRelayOwnerPrivateKey(): `0x${string}` | null {
   return null
 }
 
-function readAmoeRelaySmartWallet(): `0x${string}` {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_SMART_WALLET,
-    process.env.KPR_ERC4337_SMART_WALLET,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (isAddressLike(value)) return value.toLowerCase() as `0x${string}`
-  }
-  return resolveServerAgentCswAddress()
+function readAmoeRelaySmartWallet(): `0x${string}` | null {
+  const value = String(process.env.LOTTERY_AMOE_RELAY_SMART_WALLET ?? '').trim()
+  return isAddressLike(value) ? (value.toLowerCase() as `0x${string}`) : null
 }
 
 function readAmoeRelayOwnerIndexHint(): number | null {
-  const raw = readProtocolCswOwnerIndexEnv()
+  const raw = String(process.env.LOTTERY_AMOE_RELAY_OWNER_INDEX ?? '').trim()
   const parsed = raw ? Number(raw) : Number.NaN
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null
 }
 
 function readAmoeRelayBundlerUrl(): string | null {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL,
-    process.env.CDP_PAYMASTER_URL,
-    process.env.CDP_PAYMASTER_AND_BUNDLER_URL,
-    process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT,
-    process.env.KPR_ERC4337_BUNDLER_URL,
-    process.env.PAYMASTER_URL,
-    process.env.BUNDLER_URL,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (value) return value
-  }
-  return null
+  const value = String(process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL ?? '').trim()
+  return value || null
 }
 
 function readAmoeRelayPrivyWalletId(): string | null {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_PRIVY_WALLET_ID,
-    process.env.KPR_ERC4337_PRIVY_WALLET_ID,
-    readProtocolCswPrivyWalletIdEnv(),
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (value) return value
-  }
-  return null
+  const value = String(process.env.LOTTERY_AMOE_RELAY_PRIVY_WALLET_ID ?? '').trim()
+  return value || null
 }
 
 function readAmoeRelayOwnerAddress(): `0x${string}` | null {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_OWNER,
-    process.env.KPR_ERC4337_OWNER,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (isAddressLike(value)) return value.toLowerCase() as `0x${string}`
-  }
-  return null
+  const value = String(process.env.LOTTERY_AMOE_RELAY_OWNER ?? '').trim()
+  return isAddressLike(value) ? (value.toLowerCase() as `0x${string}`) : null
 }
 
 export type AmoeRelayRequest = {

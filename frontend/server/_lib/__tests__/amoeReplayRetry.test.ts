@@ -27,22 +27,27 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const {
   findByIdMock,
   markAbandonedEpochRolledMock,
+  markBroadcastingMock,
   markManagerDeclinedMock,
   markRejectedChainMock,
   markSettledMock,
   buildAmoeEntryZKCallMock,
+  consumeAmoeCreditsForEntryMock,
 } = vi.hoisted(() => ({
   findByIdMock: vi.fn(),
   markAbandonedEpochRolledMock: vi.fn(),
+  markBroadcastingMock: vi.fn(),
   markManagerDeclinedMock: vi.fn(),
   markRejectedChainMock: vi.fn(),
   markSettledMock: vi.fn(),
   buildAmoeEntryZKCallMock: vi.fn(),
+  consumeAmoeCreditsForEntryMock: vi.fn(),
 }))
 
 vi.mock('../lottery/amoeReplayStore.js', () => ({
   findById: findByIdMock,
   markAbandonedEpochRolled: markAbandonedEpochRolledMock,
+  markBroadcasting: markBroadcastingMock,
   markManagerDeclined: markManagerDeclinedMock,
   markRejectedChain: markRejectedChainMock,
   markSettled: markSettledMock,
@@ -50,6 +55,7 @@ vi.mock('../lottery/amoeReplayStore.js', () => ({
 
 vi.mock('../lottery/lotteryAmoe.js', () => ({
   buildAmoeEntryZKCall: buildAmoeEntryZKCallMock,
+  consumeAmoeCreditsForEntry: consumeAmoeCreditsForEntryMock,
   AMOE_PLONK_PUB_INPUT_SLOT: {
     walletAddrCommit: 0,
     creatorCoinAddr: 1,
@@ -140,6 +146,13 @@ beforeEach(() => {
   buildAmoeEntryZKCallMock.mockResolvedValue({
     to: ROUTER,
     callData: ('0x' + 'aa'.repeat(200)) as `0x${string}`,
+  })
+  markBroadcastingMock.mockResolvedValue(undefined)
+  consumeAmoeCreditsForEntryMock.mockResolvedValue({
+    consumed: 500,
+    creditsRemaining: 0,
+    creditsPerEntry: 100,
+    entriesAvailable: 0,
   })
 })
 
@@ -263,7 +276,7 @@ describe('retrySubmissionById — outcomes', () => {
     expect(relay).not.toHaveBeenCalled()
   })
 
-  it('relay succeeds → markSettled, returns settled with txHash', async () => {
+  it('relay succeeds → markSettled then debit, returns settled with txHash', async () => {
     findByIdMock.mockResolvedValueOnce(buildRow())
     markSettledMock.mockResolvedValueOnce(buildRow({ state: 'settled' }))
 
@@ -276,11 +289,21 @@ describe('retrySubmissionById — outcomes', () => {
       relay,
     })
     expect(out).toEqual({ kind: 'settled', txHash: TX_HASH })
+    expect(markBroadcastingMock).toHaveBeenCalledWith(SUBMISSION_ID, {})
     expect(markSettledMock).toHaveBeenCalledWith(SUBMISSION_ID, {
       txHash: TX_HASH,
       blockNumber: 0n,
       managerEntryId: null,
     })
+    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledWith({
+      wallet: '0x1111111111111111111111111111111111111111',
+      requiredCredits: 500,
+      refId: `zk:${SUBMISSION_ID}`,
+    })
+    // Settled must precede debit so a debit throw cannot strand `broadcast`.
+    expect(markSettledMock.mock.invocationCallOrder[0]!).toBeLessThan(
+      consumeAmoeCreditsForEntryMock.mock.invocationCallOrder[0]!,
+    )
     expect(buildAmoeEntryZKCallMock).toHaveBeenCalledTimes(1)
     // Verify the orchestrator passed proof + pubInputs as bigints with
     // correct lengths (mirrors blobToBigints contract).

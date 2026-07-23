@@ -22,6 +22,7 @@ const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
   '/explore/rooms': { pathname: ALFACLUB_EXPLORE_KEYS_PATH },
   [ALFACLUB_KEYS_PATH]: { pathname: ALFACLUB_KEYS_PATH },
   [ALFACLUB_EXPLORE_KEYS_PATH]: { pathname: ALFACLUB_EXPLORE_KEYS_PATH },
+  [ALFACLUB_EXPLORE_POOLS_PATH]: { pathname: ALFACLUB_EXPLORE_POOLS_PATH },
 }
 
 function normalizePathname(pathname: string): string {

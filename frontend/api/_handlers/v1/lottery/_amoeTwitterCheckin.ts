@@ -13,6 +13,8 @@ import {
 
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
 import { verifyPrivyForAccounts } from '../../../../server/_lib/identity/accountsIdentity.js'
+import { resolvePrimaryProfileIdForPrivyUser } from '../../../../server/_lib/identity/profileIdForPrivyUser.js'
+import { getDb } from '../../../../server/_lib/db/postgres.js'
 import {
   extractTweetIdFromInput,
   verifyTweetForAmoe,
@@ -116,6 +118,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
   const effectiveWallet = resolvedWallet.value.wallet
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Database unavailable' })
+  }
+  const privyProfileId = await resolvePrimaryProfileIdForPrivyUser(
+    db as never,
+    privyContext.privyUserId,
+  )
+  if (
+    !privyProfileId ||
+    !resolvedWallet.value.profileId ||
+    privyProfileId !== resolvedWallet.value.profileId
+  ) {
+    return res.status(403).json({ success: false, error: 'wallet_privy_identity_mismatch' })
+  }
 
   const ip = getClientIp(req as any)
   const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'twitter-checkin', ip, effectiveWallet), {

@@ -9,8 +9,9 @@
 //
 // Authentication: caller must own the `signup_id` on the row. The
 // server-side credit account is the same one that funded the original
-// pending row, so we don't need to re-collect (or re-debit) credits
-// here — the original `_amoeSubmitZk` debits at `markSettled` time.
+// pending row. Retry settle reuses the original `spend_ref_id`, so the
+// debit is idempotent when phase A already burned credits and charges
+// exactly once when a legacy `manager_declined` row settles later.
 //
 // Design doc: `docs/security/amoe-pr4-replay-store-design.md` §6.
 
