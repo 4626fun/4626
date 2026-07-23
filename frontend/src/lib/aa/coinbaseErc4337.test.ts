@@ -9,6 +9,9 @@ import {
   replayExecuteBatchPerLeg,
   resetOwnerIndexCacheForTests,
   resolvePriorPendingUserOpForSubmit,
+  readPendingUserOpHash,
+  readAnyPendingUserOpHashForWallet,
+  clearAllPendingUserOpHashesForWallet,
   sendCoinbaseSmartWalletUserOperation,
   shouldAbortUserOpGasLadder,
   simulateSmartWalletCalls,
@@ -512,13 +515,13 @@ describe('coinbaseErc4337 nonce mismatch helpers', () => {
     ).toBe(false)
   })
 
-  it('resolvePriorPendingUserOpForSubmit prefers session storage then confirming hash', () => {
+  it('resolvePriorPendingUserOpForSubmit prefers durable local storage then confirming hash', () => {
     const wallet = SMART_WALLET as `0x${string}`
     const sessionHash = `0x${'c'.repeat(64)}` as const
     const confirmingHash = `0x${'d'.repeat(64)}` as const
     const store = new Map<string, string>()
     vi.stubGlobal('window', {})
-    vi.stubGlobal('sessionStorage', {
+    vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => {
         store.set(key, value)
@@ -531,6 +534,16 @@ describe('coinbaseErc4337 nonce mismatch helpers', () => {
         return store.size
       },
       clear: () => store.clear(),
+    })
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+      key: () => null,
+      get length() {
+        return 0
+      },
+      clear: () => {},
     })
     store.set(`cv:canonical4337:pending:${wallet.toLowerCase()}:18`, sessionHash)
     expect(
@@ -552,6 +565,52 @@ describe('coinbaseErc4337 nonce mismatch helpers', () => {
         confirmingUserOpHash: null,
       }),
     ).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
+  it('migrates legacy sessionStorage pending UserOp markers into localStorage', () => {
+    const wallet = SMART_WALLET as `0x${string}`
+    const sessionHash = `0x${'e'.repeat(64)}` as const
+    const localStore = new Map<string, string>()
+    const sessionStore = new Map<string, string>()
+    const makeStorage = (store: Map<string, string>) => ({
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size
+      },
+      clear: () => store.clear(),
+    })
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('localStorage', makeStorage(localStore))
+    vi.stubGlobal('sessionStorage', makeStorage(sessionStore))
+    const key = `cv:canonical4337:pending:${wallet.toLowerCase()}:18`
+    sessionStore.set(key, sessionHash)
+
+    expect(readPendingUserOpHash(wallet, 18)).toBe(sessionHash)
+    expect(localStore.get(key)).toBe(sessionHash)
+    expect(sessionStore.has(key)).toBe(false)
+
+    sessionStore.set(`cv:canonical4337:pending:${wallet.toLowerCase()}:7`, `0x${'f'.repeat(64)}`)
+    expect(readAnyPendingUserOpHashForWallet(wallet)).toBe(`0x${'e'.repeat(64)}`)
+    // After local hit, clear and ensure session-only migrate via readAny
+    localStore.clear()
+    sessionStore.clear()
+    const onlySession = `0x${'a'.repeat(64)}` as const
+    sessionStore.set(key, onlySession)
+    expect(readAnyPendingUserOpHashForWallet(wallet)).toBe(onlySession)
+    expect(localStore.get(key)).toBe(onlySession)
+    expect(sessionStore.has(key)).toBe(false)
+
+    clearAllPendingUserOpHashesForWallet(wallet)
+    expect(localStore.size).toBe(0)
+    expect(sessionStore.size).toBe(0)
     vi.unstubAllGlobals()
   })
 })

@@ -331,6 +331,7 @@ function isSwapRouterHeavyCall(call: { to: Address; data?: Hex }): boolean {
   ) {
     return true
   }
+  // Uniswap Trading API wrap+approve+proxy batches use this selector.
   return dataPrefix === SWAP_PROXY_EXECUTE_SELECTOR
 }
 
@@ -774,42 +775,78 @@ function pendingUserOpStorageKey(smartWallet: Address, ownerIndex: number): stri
   return `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:${ownerIndex}`
 }
 
-function storePendingUserOpHash(smartWallet: Address, ownerIndex: number, userOpHash: Hex): void {
-  if (typeof window === 'undefined') return
+function migratePendingUserOpHashFromSession(key: string): string | null {
   try {
-    // RACE-002: Use localStorage instead of sessionStorage so pending UserOp
-    // hashes are shared across tabs for the same smart wallet, preventing
-    // cross-tab concurrent swaps with conflicting nonces.
-    localStorage.setItem(pendingUserOpStorageKey(smartWallet, ownerIndex), userOpHash)
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.removeItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
-  } catch {
-    // ignore
-  }
-}
-
-/** Last submitted UserOp hash for wallet + owner-index nonce lane (browser session). */
-export function readPendingUserOpHash(smartWallet: Address, ownerIndex: number): Hex | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
-    if (!raw || !raw.startsWith('0x')) return null
-    return raw as Hex
+    const raw = sessionStorage.getItem(key)
+    if (!raw?.startsWith('0x')) return null
+    try {
+      localStorage.setItem(key, raw)
+      sessionStorage.removeItem(key)
+    } catch {
+      // Keep reading the session value even if migration write fails.
+    }
+    return raw
   } catch {
     return null
   }
 }
 
+function readPendingUserOpHashFromStores(key: string): string | null {
+  try {
+    const fromLocal = localStorage.getItem(key)
+    if (fromLocal?.startsWith('0x')) return fromLocal
+  } catch {
+    // ignore
+  }
+  return migratePendingUserOpHashFromSession(key)
+}
+
+function clearPendingUserOpHashFromStores(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+}
+
+function storePendingUserOpHash(smartWallet: Address, ownerIndex: number, userOpHash: Hex): void {
+  if (typeof window === 'undefined') return
+  const key = pendingUserOpStorageKey(smartWallet, ownerIndex)
+  try {
+    // RACE-002: Use localStorage instead of sessionStorage so pending UserOp
+    // hashes are shared across tabs for the same smart wallet, preventing
+    // cross-tab concurrent swaps with conflicting nonces.
+    localStorage.setItem(key, userOpHash)
+  } catch {
+    // ignore quota / private mode
+  }
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+}
+
+function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void {
+  if (typeof window === 'undefined') return
+  clearPendingUserOpHashFromStores(pendingUserOpStorageKey(smartWallet, ownerIndex))
+}
+
+/** Last submitted UserOp hash for wallet + owner-index nonce lane (durable local + session migrate). */
+export function readPendingUserOpHash(smartWallet: Address, ownerIndex: number): Hex | null {
+  if (typeof window === 'undefined') return null
+  const raw = readPendingUserOpHashFromStores(pendingUserOpStorageKey(smartWallet, ownerIndex))
+  return raw?.startsWith('0x') ? (raw as Hex) : null
+}
+
 /**
  * Prior UserOp to wait on before a new canonical swap (Permit2 nonce / on-chain state).
- * Prefers session storage; falls back to a confirming swap still polling for txHash.
+ * Prefers durable local (migrating legacy session markers); falls back to confirming hash.
  */
 export function resolvePriorPendingUserOpForSubmit(params: {
   smartWallet: Address
@@ -822,16 +859,26 @@ export function resolvePriorPendingUserOpForSubmit(params: {
   return null
 }
 
-/** Any in-session pending UserOp for this smart wallet (owner-index lane storage). */
-export function readAnyPendingUserOpHashForWallet(smartWallet: Address): Hex | null {
-  if (typeof window === 'undefined') return null
-  const prefix = `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:`
+function readAnyPendingUserOpHashFromStorage(
+  storage: Storage,
+  prefix: string,
+  migrateToLocal: boolean,
+): Hex | null {
   try {
-    for (let i = 0; i < sessionStorage.length; i += 1) {
-      const key = sessionStorage.key(i)
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i)
       if (!key?.startsWith(prefix)) continue
-      const raw = sessionStorage.getItem(key)
-      if (raw?.startsWith('0x')) return raw as Hex
+      const raw = storage.getItem(key)
+      if (!raw?.startsWith('0x')) continue
+      if (migrateToLocal) {
+        try {
+          localStorage.setItem(key, raw)
+          sessionStorage.removeItem(key)
+        } catch {
+          // ignore migration failure; still return the in-flight hash
+        }
+      }
+      return raw as Hex
     }
   } catch {
     // ignore
@@ -839,16 +886,27 @@ export function readAnyPendingUserOpHashForWallet(smartWallet: Address): Hex | n
   return null
 }
 
+/** Any pending UserOp for this smart wallet (localStorage, with sessionStorage migrate). */
+export function readAnyPendingUserOpHashForWallet(smartWallet: Address): Hex | null {
+  if (typeof window === 'undefined') return null
+  const prefix = `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:`
+  const fromLocal = readAnyPendingUserOpHashFromStorage(localStorage, prefix, false)
+  if (fromLocal) return fromLocal
+  return readAnyPendingUserOpHashFromStorage(sessionStorage, prefix, true)
+}
+
 export function clearAllPendingUserOpHashesForWallet(smartWallet: Address): void {
   if (typeof window === 'undefined') return
   const prefix = `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:`
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
-      const key = sessionStorage.key(i)
-      if (key?.startsWith(prefix)) sessionStorage.removeItem(key)
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      for (let i = storage.length - 1; i >= 0; i -= 1) {
+        const key = storage.key(i)
+        if (key?.startsWith(prefix)) storage.removeItem(key)
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
 }
 
@@ -1848,7 +1906,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
       preflightDirectCallSucceeded =
         simResult.directCallResult?.success === true ||
-        (attributedCalls.length > 1 && simResult.success) ||
         (simResult.success &&
           attributedCalls.length === 1 &&
           isZoraUniversalRouterTarget(attributedCalls[0]?.to))
@@ -2727,9 +2784,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         estimatedMaxGasCost: estimatedMaxGasCostWei?.toString() ?? null,
         requiredWei: prefund.requiredWei.toString(),
       })
+      const paymasterDenial = getErrorDiagnosticMessage(lastError).trim()
+      const denialSuffix =
+        paymasterDenial && !/gas sponsorship was declined/i.test(paymasterDenial)
+          ? ` Paymaster: ${paymasterDenial.slice(0, 220)}`
+          : ''
       throw new Error(
         'Gas sponsorship was declined and your smart wallet balance cannot cover this swap plus gas without sponsorship. ' +
-          'Reduce the swap amount to keep gas headroom, or add ETH to the smart wallet.',
+          'Reduce the swap amount to keep gas headroom, or add ETH to the smart wallet.' +
+          denialSuffix,
       )
     }
     attemptedWithoutPaymaster = true
@@ -3125,7 +3188,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (!waitForOnChainReceipt) {
-    clearAllPendingUserOpHashesForWallet(smartWallet)
+    // Bundler acceptance is not on-chain settlement. Keep the durable pending
+    // marker until a receipt poll confirms success/failure so a subsequent
+    // Permit2 swap cannot sign against the stale on-chain nonce.
     telemetryStatus = 'success'
     return {
       userOpHash,

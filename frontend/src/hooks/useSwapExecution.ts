@@ -4,6 +4,7 @@ import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 
 import {
+  clearAllPendingUserOpHashesForWallet,
   pollCanonicalUserOpTransactionHash,
   readAnyPendingUserOpHashForWallet,
   simulateSmartWalletCalls,
@@ -41,6 +42,7 @@ import {
   SWAP_AUTO_SLIPPAGE_ESCALATION_CAP_PCT,
 } from '@/lib/swap/swapAutoSlippage'
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
+import { assertRefreshedSwapPreservesReview } from '@/lib/swap/swapReviewBinding'
 import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
 import { refreshWalletClientSession } from '@/lib/wallet/refreshWalletClientSession'
 import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
@@ -1467,6 +1469,7 @@ export function useSwapExecution(params: {
         executionAddress: params.executionAddress,
         walletClient: signer,
         publicClient: params.publicClient as any,
+        expectedTokenAddress: effectiveTokenIn,
       })
       setPermitSignaturePending(false)
       setPermitSignatureReady(true)
@@ -1477,7 +1480,7 @@ export function useSwapExecution(params: {
       setPermitSignatureReady(false)
       throw error
     }
-  }, [params.walletClient, params.signerAddress, params.executionAddress, params.executionMode, params.publicClient])
+  }, [effectiveTokenIn, params.walletClient, params.signerAddress, params.executionAddress, params.executionMode, params.publicClient])
 
   const finalizeZoraQuoteIfNeeded = useCallback(
     async (nextQuote: TradeQuoteResponse, amount: string): Promise<TradeQuoteResponse> => {
@@ -2305,6 +2308,13 @@ export function useSwapExecution(params: {
         effectiveParsedSlippage,
         readZoraQuotedSlippagePct(quote) ?? 0,
       )
+      const confirmedSlippageCapPct = Math.min(
+        slippageEscalationCapPct,
+        effectiveParsedSlippage,
+      )
+      if (activeSlippagePct > confirmedSlippageCapPct + 1e-9) {
+        throw new Error('The active quote exceeds the reviewed slippage tolerance. Review a new quote.')
+      }
       if (strictCanonicalWrappedEthLane && quote && isCdpProviderQuote(quote)) {
         throw new Error('Canonical wrapped-ETH swaps are locked to Zora/Uniswap Permit2 routing. Refresh quote and retry.')
       }
@@ -2335,10 +2345,12 @@ export function useSwapExecution(params: {
             )
           }
           if (priorStatus === 'failed') {
+            clearAllPendingUserOpHashesForWallet(getAddress(params.executionAddress))
             throw new Error(
               'Your previous swap did not confirm. Refresh the quote and try again.',
             )
           }
+          clearAllPendingUserOpHashesForWallet(getAddress(params.executionAddress))
         }
         setStatus(SWAP_PREPARE_STATUS)
         // Mirror the CLI quote->confirm->buy pattern: refresh a submit-time quote so
@@ -2350,6 +2362,12 @@ export function useSwapExecution(params: {
         if (!isZoraProviderQuote(submitQuote)) {
           throw new Error('Submit-time quote did not return Zora routing. Refresh quote and retry.')
         }
+        assertRefreshedSwapPreservesReview({
+          reviewedInputAmount: amount,
+          refreshedInputAmount: readQuoteInputAmount(submitQuote),
+          reviewedOutputAmount: getNestedAmountOut(pickQuote(quote) ?? quote),
+          refreshedOutputAmount: getNestedAmountOut(pickQuote(submitQuote) ?? submitQuote),
+        })
         setQuote(submitQuote)
         setQuoteUpdatedAt(Date.now())
         syncPermitRequirement(submitQuote)
@@ -2361,8 +2379,7 @@ export function useSwapExecution(params: {
           amountIn: amount,
           sender: params.executionAddress,
           slippagePct: zoraPrepareSlippagePct,
-          slippageEscalationCapPct,
-          allowAmountDownshiftOnSlippage: true,
+          slippageEscalationCapPct: confirmedSlippageCapPct,
           signerAddress: params.signerAddress!,
           executionAddress: params.executionAddress,
           walletClient: params.walletClient as {
@@ -2377,6 +2394,12 @@ export function useSwapExecution(params: {
         if (!selectedQuote) {
           throw new Error('Zora quote does not contain executable swap payload.')
         }
+        assertRefreshedSwapPreservesReview({
+          reviewedInputAmount: amount,
+          refreshedInputAmount: readQuoteInputAmount(executableQuote),
+          reviewedOutputAmount: getNestedAmountOut(pickQuote(quote) ?? quote),
+          refreshedOutputAmount: getNestedAmountOut(pickQuote(executableQuote) ?? executableQuote),
+        })
         const built = await buildSwap({
           quote: selectedQuote,
           permit2Disabled: true,
@@ -2454,6 +2477,12 @@ export function useSwapExecution(params: {
           bundledApprovalTx: bundledApprovalTx,
           onStatus: setStatus,
         })
+        assertRefreshedSwapPreservesReview({
+          reviewedInputAmount: amount,
+          refreshedInputAmount: readQuoteInputAmount(prepared.quote),
+          reviewedOutputAmount: getNestedAmountOut(pickQuote(quote) ?? quote),
+          refreshedOutputAmount: getNestedAmountOut(pickQuote(prepared.quote) ?? prepared.quote),
+        })
         swapTxForSend = prepared.swapTx
         setSwapTx(prepared.swapTx)
         setQuote(prepared.quote)
@@ -2514,7 +2543,7 @@ export function useSwapExecution(params: {
               activeSlippagePct,
               slippageAuto: Boolean(params.slippageAuto),
               parsedSlippage: params.parsedSlippage,
-              slippageEscalationCapPct,
+              slippageEscalationCapPct: confirmedSlippageCapPct,
               pickNext: pickNextZoraBundlerRetrySlippagePct,
               sendError,
               isRetryable: isZoraBundlerSendRetryable,
@@ -2527,7 +2556,7 @@ export function useSwapExecution(params: {
               if (
                 forcedNext != null &&
                 forcedNext > activeSlippagePct + 1e-9 &&
-                forcedNext <= slippageEscalationCapPct + 1e-9
+                forcedNext <= confirmedSlippageCapPct + 1e-9
               ) {
                 retrySlippagePct = forcedNext
                 setStatus(`Canonical retry escalating slippage to ${forcedNext}% for Zora fill reliability…`)
@@ -2549,8 +2578,7 @@ export function useSwapExecution(params: {
               amountIn: amount,
               sender: params.executionAddress,
               slippagePct: retrySlippagePct,
-              slippageEscalationCapPct,
-              allowAmountDownshiftOnSlippage: true,
+              slippageEscalationCapPct: confirmedSlippageCapPct,
               signerAddress: params.signerAddress!,
               executionAddress: params.executionAddress,
               walletClient: params.walletClient as {
@@ -2563,6 +2591,12 @@ export function useSwapExecution(params: {
             })
             const selectedQuote = pickSwapQuote(executableQuote)
             if (!selectedQuote) throw sendError
+            assertRefreshedSwapPreservesReview({
+              reviewedInputAmount: amount,
+              refreshedInputAmount: readQuoteInputAmount(executableQuote),
+              reviewedOutputAmount: getNestedAmountOut(pickQuote(activeQuoteForRetry) ?? activeQuoteForRetry),
+              refreshedOutputAmount: getNestedAmountOut(pickQuote(executableQuote) ?? executableQuote),
+            })
             const built = await buildSwap({
               quote: selectedQuote,
               permit2Disabled: true,
@@ -2597,7 +2631,7 @@ export function useSwapExecution(params: {
               activeSlippagePct,
               slippageAuto: Boolean(params.slippageAuto),
               parsedSlippage: params.parsedSlippage,
-              slippageEscalationCapPct,
+              slippageEscalationCapPct: confirmedSlippageCapPct,
               pickNext: pickNextSwapSlippageEscalationPct,
               sendError,
               isRetryable: isSwapPreflightSimulationRetryable,
@@ -2610,7 +2644,7 @@ export function useSwapExecution(params: {
               if (
                 forcedNext != null &&
                 forcedNext > activeSlippagePct + 1e-9 &&
-                forcedNext <= slippageEscalationCapPct + 1e-9
+                forcedNext <= confirmedSlippageCapPct + 1e-9
               ) {
                 retrySlippagePct = forcedNext
                 setStatus(`Canonical retry escalating slippage to ${forcedNext}% for fill reliability…`)
@@ -2676,6 +2710,12 @@ export function useSwapExecution(params: {
               parsedDeadlineMinutes: params.parsedDeadlineMinutes,
               bundledApprovalTx: bundledApprovalTx,
               onStatus: setStatus,
+            })
+            assertRefreshedSwapPreservesReview({
+              reviewedInputAmount: amount,
+              refreshedInputAmount: readQuoteInputAmount(prepared.quote),
+              reviewedOutputAmount: getNestedAmountOut(pickQuote(activeQuoteForRetry) ?? activeQuoteForRetry),
+              refreshedOutputAmount: getNestedAmountOut(pickQuote(prepared.quote) ?? prepared.quote),
             })
             activeSwapTx = prepared.swapTx
             swapTxForSend = prepared.swapTx
@@ -2780,6 +2820,9 @@ export function useSwapExecution(params: {
         })
           .then((confirmedTxHash) => {
             if (pollController.signal.aborted) return
+            if (activityWallet && isAddress(activityWallet)) {
+              clearAllPendingUserOpHashesForWallet(getAddress(activityWallet))
+            }
             setTxHash(confirmedTxHash)
             setSwapCompletion((prev) =>
               prev ? { ...prev, txHash: confirmedTxHash, userOpHash: prev.userOpHash ?? userOpHash } : prev,

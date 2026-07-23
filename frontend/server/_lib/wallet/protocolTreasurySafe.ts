@@ -207,6 +207,7 @@ export type CharmAutomationAuthorization =
   | { authorized: true; lane: 'protocol_automation_manager' }
   | { authorized: true; lane: 'protocol_treasury_manager' }
   | { authorized: true; lane: 'keeper_direct' }
+  | { authorized: true; lane: 'delegate_csw_owner_check_required' }
   | { authorized: false; reason: string }
 
 export function resolveCharmAutomationAuthorization(params: {
@@ -226,6 +227,17 @@ export function resolveCharmAutomationAuthorization(params: {
 
   if (params.delegateAddress && isSameAddress(params.delegateAddress, params.keeperAddress)) {
     return { authorized: true, lane: 'keeper_direct' }
+  }
+
+  // Legacy vaults may delegate to a Coinbase Smart Wallet owned by the keeper
+  // EOA. Do not reject that lane based on unrelated keeper()/owner() slots;
+  // the executor performs the authoritative on-chain CSW owner scan before it
+  // sends a UserOperation.
+  if (
+    params.delegateAddress &&
+    !isSameAddress(params.delegateAddress, ZERO_ADDRESS)
+  ) {
+    return { authorized: true, lane: 'delegate_csw_owner_check_required' }
   }
 
   if (params.charmKeeper && !isSameAddress(params.charmKeeper, params.keeperAddress)) {

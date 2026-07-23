@@ -28,7 +28,7 @@ describe('cookie origin guard', () => {
     return `${COOKIE_SESSION}=${encodeURIComponent(token)}`
   }
 
-  it('allows unsafe requests with cookie session from the marketing origin when app origin is separate', () => {
+  it('blocks cookie-authenticated writes from the marketing origin when app origin is separate', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
@@ -40,9 +40,9 @@ describe('cookie origin guard', () => {
 
     const handled = enforceCookieSessionTrustedOrigin(req, res)
 
-    expect(handled).toBe(false)
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toBeUndefined()
+    expect(handled).toBe(true)
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({ success: false, error: 'Forbidden' })
   })
 
   it('allows unsafe requests with cookie session from canonical app origin even when APP_ORIGIN is stale', () => {

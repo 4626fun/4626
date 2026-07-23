@@ -61,6 +61,7 @@ import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { submitOwnerViaPreparedCallsWithEoaOwner } from '@/lib/wallet/eoaOwnerPreparedCalls'
 import type { PreparedOwnerTxRequest } from '@/lib/wallet/zoraAddOwnerApi'
 import { buildOwnerWalletConnectList, mapOwnerWalletConnectError } from './ownerWalletConnectOptions'
@@ -78,9 +79,7 @@ import type {
 } from './types'
 
 function resolveDirectPreparedCallsPaymasterUrl(): string | null {
-  const direct = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
-  if (/^https?:\/\//i.test(direct)) return direct
-  return null
+  return resolveCdpPaymasterUrl(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? null)
 }
 
 function parseChainId(value: string | number | null | undefined): number | null {
@@ -159,6 +158,13 @@ export function shouldRefreshAccountsOnForeground(input: {
   })
 }
 
+export function shouldReloadAccountForAuthIdentity(
+  lastLoadedIdentity: string | null,
+  currentIdentity: string,
+): boolean {
+  return lastLoadedIdentity !== currentIdentity
+}
+
 export function readOptionalZoraStatus(params: {
   responseOk: boolean
   payload: ApiEnvelope<ZoraLinkStatusResponse> | null
@@ -185,7 +191,6 @@ export function useAccountSetupController(params: {
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
-  const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
   const pendingOwnerInstallHashRef = useRef<string | null>(null)
 
@@ -253,6 +258,15 @@ export function useAccountSetupController(params: {
   }, [ensureEmbeddedWallet])
 
   const privyAuthed = Boolean(privy?.authenticated)
+  const privyUserIdentity = privy?.user as
+    | { id?: unknown; email?: { address?: unknown } | null }
+    | null
+    | undefined
+  const privyIdentityKey = privyAuthed
+    ? String(privyUserIdentity?.id ?? privyUserIdentity?.email?.address ?? 'authenticated')
+    : 'signed-out'
+  const privyIdentityKeyRef = useRef(privyIdentityKey)
+  privyIdentityKeyRef.current = privyIdentityKey
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
   const getAccessToken = useMemo(
     () =>
@@ -347,8 +361,16 @@ export function useAccountSetupController(params: {
     [getAccessToken],
   )
 
+  const loadedAuthIdentityRef = useRef<string | null>(
+    params.initialData ? privyIdentityKey : null,
+  )
+
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
+      // Capture identity for this load; discard updates if auth identity changes mid-flight.
+      const loadIdentity = privyIdentityKeyRef.current
+      const isCurrentLoad = () => privyIdentityKeyRef.current === loadIdentity
+
       // Read unstable objects via refs so the callback does not need them in its dependency array.
       const privyAuthedNow = Boolean(privyRef.current?.authenticated)
       const getAccessTokenNow = typeof privyRef.current?.getAccessToken === 'function'
@@ -357,16 +379,18 @@ export function useAccountSetupController(params: {
       const ensureEmbeddedWalletNow = ensureEmbeddedWalletRef.current
 
       if (!privyAuthedNow) {
+        if (!isCurrentLoad()) return
         setMeGuarded(null)
         setZoraStatus(null)
         setLoadingGuarded(false)
+        loadedAuthIdentityRef.current = loadIdentity
         return
       }
 
       if (options?.showSpinner !== false) {
-        setLoadingGuarded(true)
+        if (isCurrentLoad()) setLoadingGuarded(true)
       }
-      setErrorGuarded(null)
+      if (isCurrentLoad()) setErrorGuarded(null)
       try {
         const token = await readPrivyAccessTokenOrNull({
           read: getAccessTokenNow,
@@ -387,6 +411,7 @@ export function useAccountSetupController(params: {
             privyToken: token,
           })
         }
+        if (!isCurrentLoad()) return
         const actionableDelegationFlags = deriveOwnerDelegationFlags(canonicalization.flags)
         setOwnerDelegationFlags(actionableDelegationFlags)
 
@@ -404,12 +429,14 @@ export function useAccountSetupController(params: {
           fetchBootstrapExecutionSignals(getAccessTokenNow),
           apiFetch('/api/zora/link/status', { method: 'POST', headers, body: JSON.stringify({}) }),
         ])
+        if (!isCurrentLoad()) return
         if (meResult.status !== 'fulfilled') {
           throw meResult.reason instanceof Error ? meResult.reason : new Error('Failed to load account state.')
         }
         const meRes = meResult.value
 
         const mePayload = (await meRes.json().catch(() => null)) as ApiEnvelope<AccountSetupMe> | null
+        if (!isCurrentLoad()) return
         if (!meRes.ok || !mePayload?.success || !mePayload.data) {
           throw new Error(readApiError(mePayload, 'Failed to load account state.'))
         }
@@ -421,6 +448,7 @@ export function useAccountSetupController(params: {
         const mergedMe = bootstrapSignals
           ? mergeBootstrapSignals(mePayload.data, bootstrapSignals)
           : mePayload.data
+        if (!isCurrentLoad()) return
         setMeGuarded(mergedMe)
         if (zoraResult.status !== 'fulfilled') {
           setZoraStatus(null)
@@ -428,10 +456,12 @@ export function useAccountSetupController(params: {
           const zoraPayload = (await zoraResult.value.json().catch(() => null)) as ApiEnvelope<ZoraLinkStatusResponse> | null
           setZoraStatus(readOptionalZoraStatus({ responseOk: zoraResult.value.ok, payload: zoraPayload }))
         }
+        loadedAuthIdentityRef.current = loadIdentity
       } catch (loadError: any) {
+        if (!isCurrentLoad()) return
         setErrorGuarded(typeof loadError?.message === 'string' ? loadError.message : 'Failed to load account state.')
       } finally {
-        setLoadingGuarded(false)
+        if (isCurrentLoad()) setLoadingGuarded(false)
       }
     },
     // Intentionally stable — all external objects are read via refs inside the callback.
@@ -453,9 +483,10 @@ export function useAccountSetupController(params: {
   })
 
   useEffect(() => {
-    if (hasInitialDataRef.current) return
+    if (!shouldReloadAccountForAuthIdentity(loadedAuthIdentityRef.current, privyIdentityKey)) return
+    // Mark loaded only after loadMe succeeds so a failed load can retry for the same identity.
     void loadMe({ showSpinner: true })
-  }, [loadMe])
+  }, [loadMe, privyIdentityKey])
 
   useEffect(() => {
     if (!shouldRefreshAccountsOnForeground({ privyAuthed, ownerDelegationFlags, advancedBusy })) return
@@ -939,7 +970,7 @@ export function useAccountSetupController(params: {
       const paymasterUrl = resolveDirectPreparedCallsPaymasterUrl()
       if (!paymasterUrl) {
         throw new Error(
-          'Sponsored owner approval requires `VITE_CDP_SENDCALLS_PAYMASTER_URL` to be set to a direct CDP RPC URL.',
+          'Sponsored owner approval requires `VITE_CDP_SENDCALLS_PAYMASTER_URL` to be configured.',
         )
       }
 

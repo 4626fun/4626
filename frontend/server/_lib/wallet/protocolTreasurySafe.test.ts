@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { privateKeyToAccount } from 'viem/accounts'
 
-import { resolveProtocolAjnaKeeperAddress } from './protocolTreasurySafe.js'
+import {
+  resolveCharmAutomationAuthorization,
+  resolveProtocolAjnaKeeperAddress,
+} from './protocolTreasurySafe.js'
 
 describe('resolveProtocolAjnaKeeperAddress', () => {
   it('prefers explicit PROTOCOL_AJNA_KEEPER', () => {
@@ -34,5 +37,20 @@ describe('resolveProtocolAjnaKeeperAddress', () => {
       PRIVATE_KEY: adminPrivateKey,
     })
     expect(resolved).toBeNull()
+  })
+})
+
+describe('resolveCharmAutomationAuthorization', () => {
+  it('defers a legacy delegate CSW to the executor owner check', () => {
+    expect(resolveCharmAutomationAuthorization({
+      managerAddress: null,
+      delegateAddress: '0x3333333333333333333333333333333333333333',
+      charmKeeper: '0x4444444444444444444444444444444444444444',
+      charmOwner: '0x5555555555555555555555555555555555555555',
+      keeperAddress: '0x2222222222222222222222222222222222222222',
+    })).toEqual({
+      authorized: true,
+      lane: 'delegate_csw_owner_check_required',
+    })
   })
 })

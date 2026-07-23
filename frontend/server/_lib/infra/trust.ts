@@ -13,11 +13,6 @@ const LOCAL_ORIGINS = new Set<string>([
   'http://127.0.0.1:3000',
 ])
 
-const DEFAULT_MARKETING_ORIGINS = new Set<string>([
-  'https://4626.fun',
-  'https://www.4626.fun',
-])
-
 const DEFAULT_APP_ORIGINS = new Set<string>([
   'https://app.4626.fun',
 ])
@@ -132,25 +127,14 @@ function getOriginsFromEnvVar(name: string): string[] {
     .filter((origin): origin is string => Boolean(origin))
 }
 
-function getExplicitMarketingOrigin(): string | null {
-  return (
-    normalizeOrigin(String(process.env.MARKETING_ORIGIN ?? '').trim()) ??
-    normalizeOrigin(String(process.env.VITE_MARKETING_ORIGIN ?? '').trim())
-  )
-}
-
 export function getTrustedRequestOrigins(req?: VercelRequest): Set<string> {
   const out = new Set<string>()
 
   const canonical = normalizeOrigin(String(process.env.APP_ORIGIN ?? '').trim())
   if (canonical) out.add(canonical)
 
-  for (const origin of DEFAULT_MARKETING_ORIGINS) out.add(origin)
   for (const origin of DEFAULT_APP_ORIGINS) out.add(origin)
   for (const origin of DEFAULT_ALFACLUB_ORIGINS) out.add(origin)
-
-  const marketing = getExplicitMarketingOrigin()
-  if (marketing) out.add(marketing)
 
   const alfaclub =
     normalizeOrigin(String(process.env.ALFACLUB_ORIGIN ?? '').trim()) ??
