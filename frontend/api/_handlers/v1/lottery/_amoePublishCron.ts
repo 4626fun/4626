@@ -67,6 +67,7 @@ import {
 } from '../../../../server/_lib/lottery/amoeLedgerPublisher.js'
 import {
   isAmoeAllowlistPublisherEnabled,
+  pickNextAllowlistEpochToPublish,
   publishAllowlistEpoch,
   type PublishAllowlistOutcome,
 } from '../../../../server/_lib/lottery/amoeAllowlistPublisher.js'
@@ -176,19 +177,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
 
   let allowlistOutcome: PublishAllowlistOutcome | null = null
+  let allowlistError: string | null = null
 
   if (targetEpoch === null) {
     if (isAmoeAllowlistPublisherEnabled()) {
       try {
+        const allowlistTarget =
+          (await pickNextAllowlistEpochToPublish(db, { latestClosedEpoch })) ??
+          latestClosedEpoch
         allowlistOutcome = await publishAllowlistEpoch({
           db,
-          epoch: latestClosedEpoch,
+          epoch: allowlistTarget,
           lotteryAmoeRouter,
           publisherVersion,
         })
       } catch (allowErr) {
+        allowlistError =
+          (allowErr instanceof Error ? allowErr.message : String(allowErr)).slice(0, 500)
         console.warn('[amoe-publish-cron] allowlist publish failed', allowErr)
       }
+    }
+    if (allowlistError !== null) {
+      return res.status(500).json({
+        ok: false,
+        tick: 'allowlist_errored',
+        latestClosedEpoch: latestClosedEpoch.toString(),
+        reclaimedCount,
+        allowlistOutcome: null,
+        error: allowlistError,
+      })
     }
     // Ledger horizon is caught up; allowlist may still have unpublished roots.
     return res.status(200).json({
@@ -242,8 +259,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         publisherVersion,
       })
     } catch (allowErr) {
+      allowlistError =
+        (allowErr instanceof Error ? allowErr.message : String(allowErr)).slice(0, 500)
       console.warn('[amoe-publish-cron] allowlist publish failed', allowErr)
     }
+  }
+
+  if (allowlistError !== null) {
+    return res.status(500).json({
+      ok: false,
+      tick: 'allowlist_errored',
+      epoch: targetEpoch.toString(),
+      reclaimedCount,
+      allowlistOutcome: null,
+      error: allowlistError,
+      outcome:
+        outcome === null
+          ? null
+          : {
+              kind: outcome.kind,
+              ...(outcome.kind === 'finished' && {
+                rootHex: outcome.rootHex,
+                txHash: outcome.txHash,
+              }),
+              ...(outcome.kind === 'finished_no_op' && { reason: outcome.reason }),
+              ...(outcome.kind === 'in_flight' && { phase: outcome.phase }),
+              ...(outcome.kind === 'errored' && {
+                phase: outcome.phase,
+                message: outcome.message,
+              }),
+            },
+    })
   }
 
   return res.status(200).json({

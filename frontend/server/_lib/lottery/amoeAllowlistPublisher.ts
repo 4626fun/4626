@@ -14,8 +14,17 @@ import {
   readAmoeLedgerPublisherPrivyWalletId,
   readAmoeLedgerPublisherSmartWallet,
   readBaseRpcUrlForPublisher,
+  BACKFILL_LOOKBACK_EPOCHS,
 } from './amoeLedgerPublisher.js'
-import { requireAllowlistPublisherMatchesSender } from './amoePublisherRoleGuard.js'
+import {
+  AMOE_ALLOWLIST_ROOT_MISMATCH,
+  AMOE_ON_CHAIN_RECONCILED_TX,
+  AMOE_ZERO_ROOT,
+  isZeroRoot,
+  normalizeRootHex,
+  readAllowlistRootOf,
+  requireAllowlistPublisherMatchesSender,
+} from './amoePublisherRoleGuard.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -161,6 +170,67 @@ export type PublishAllowlistOutcome =
   | { kind: 'finished_no_op'; epoch: bigint }
   | { kind: 'no_publisher_key_configured' }
   | { kind: 'already_confirmed'; epoch: bigint }
+  | { kind: 'already_on_chain'; epoch: bigint; rootHex: `0x${string}` }
+
+export type ReadAllowlistRootOf = (args: {
+  lotteryAmoeRouter: `0x${string}`
+  epoch: bigint
+}) => Promise<`0x${string}`>
+
+async function defaultReadAllowlistRootOf(args: {
+  lotteryAmoeRouter: `0x${string}`
+  epoch: bigint
+}): Promise<`0x${string}`> {
+  const [{ createPublicClient, http }, { base }] = await Promise.all([
+    import('viem'),
+    import('viem/chains'),
+  ])
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(readBaseRpcUrlForPublisher(), { timeout: 30_000 }),
+  })
+  return readAllowlistRootOf({
+    publicClient,
+    lotteryAmoeRouter: args.lotteryAmoeRouter,
+    epoch: args.epoch,
+  })
+}
+
+/**
+ * Oldest closed epoch in the lookback window with a non-zero DB root and
+ * no `publish_tx_hash` yet. Reconcile-on-chain will clear already-published
+ * rows without a UserOp on the next publish attempt.
+ */
+export async function pickNextAllowlistEpochToPublish(
+  db: AmoeAllowlistBuilderDb,
+  args: {
+    latestClosedEpoch: bigint
+    lookbackEpochs?: bigint
+  },
+): Promise<bigint | null> {
+  const lookback = args.lookbackEpochs ?? BACKFILL_LOOKBACK_EPOCHS
+  if (args.latestClosedEpoch < 0n) return null
+  const horizonStart =
+    args.latestClosedEpoch - lookback + 1n < 0n
+      ? 0n
+      : args.latestClosedEpoch - lookback + 1n
+
+  const pending = await db.sql`
+    SELECT epoch
+    FROM amoe_wallet_allowlist_snapshots
+    WHERE epoch >= ${horizonStart.toString()}::bigint
+      AND epoch <= ${args.latestClosedEpoch.toString()}::bigint
+      AND publish_tx_hash IS NULL
+      AND publish_confirmed_at IS NULL
+      AND root_hex IS NOT NULL
+      AND lower(root_hex) <> ${AMOE_ZERO_ROOT}
+    ORDER BY epoch ASC
+    LIMIT 1
+  `
+  const row = (pending.rows ?? [])[0] as { epoch?: number | string | bigint } | undefined
+  if (row?.epoch === undefined || row.epoch === null) return null
+  return BigInt(row.epoch as string | number | bigint)
+}
 
 export async function publishAllowlistEpoch(args: {
   db: AmoeAllowlistBuilderDb
@@ -168,8 +238,10 @@ export async function publishAllowlistEpoch(args: {
   lotteryAmoeRouter: `0x${string}`
   publisherVersion: string
   broadcast?: typeof defaultBroadcastSetAllowlistRoot
+  readOnChainRoot?: ReadAllowlistRootOf
 }): Promise<PublishAllowlistOutcome> {
   const broadcast = args.broadcast ?? defaultBroadcastSetAllowlistRoot
+  const readOnChainRoot = args.readOnChainRoot ?? defaultReadAllowlistRootOf
 
   const confirmed = await args.db.sql`
     SELECT epoch, root_hex, publish_confirmed_at
@@ -226,22 +298,43 @@ export async function publishAllowlistEpoch(args: {
     }
   }
 
-  if (rootHex === '0x' + '0'.repeat(64)) {
+  if (isZeroRoot(rootHex)) {
     return { kind: 'finished_no_op', epoch: args.epoch }
+  }
+
+  const expectedRoot = normalizeRootHex(rootHex)
+  const onChainRoot = normalizeRootHex(
+    await readOnChainRoot({
+      lotteryAmoeRouter: args.lotteryAmoeRouter,
+      epoch: args.epoch,
+    }),
+  )
+  if (onChainRoot === expectedRoot) {
+    await args.db.sql`
+      UPDATE amoe_wallet_allowlist_snapshots
+      SET publish_tx_hash = ${AMOE_ON_CHAIN_RECONCILED_TX}
+      WHERE epoch = ${args.epoch.toString()}::bigint AND publish_tx_hash IS NULL
+    `
+    return { kind: 'already_on_chain', epoch: args.epoch, rootHex: expectedRoot }
+  }
+  if (!isZeroRoot(onChainRoot)) {
+    throw new Error(
+      `${AMOE_ALLOWLIST_ROOT_MISMATCH} epoch=${args.epoch.toString()} onChain=${onChainRoot} expected=${expectedRoot}`,
+    )
   }
 
   try {
     const { txHash } = await broadcast({
       lotteryAmoeRouter: args.lotteryAmoeRouter,
       epoch: args.epoch,
-      rootHex,
+      rootHex: expectedRoot,
     })
     await args.db.sql`
       UPDATE amoe_wallet_allowlist_snapshots
       SET publish_tx_hash = ${txHash}
       WHERE epoch = ${args.epoch.toString()}::bigint AND publish_tx_hash IS NULL
     `
-    return { kind: 'finished', epoch: args.epoch, rootHex, txHash }
+    return { kind: 'finished', epoch: args.epoch, rootHex: expectedRoot, txHash }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('no_allowlist_publisher_key_configured')) {
