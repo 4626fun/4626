@@ -4329,11 +4329,15 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
   // Forward to CDP if validation passed.
   const supportedEntryPointsProbe = isSupportedEntryPointsProbe(requests)
   const firstRequestId = getFirstRequestId(requests)
+  // Prefer the normalized request objects (fee-field injection lives on
+  // `requests[i].params`). For a single-object body, `requests[0]` is the same
+  // reference as `body`; for batch arrays, `requests` is `body`.
+  const upstreamPayload = isRequestArray(body) ? requests : requests[0]
   try {
     const upstream = await fetch(cdpEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(upstreamPayload),
     })
     const text = await upstream.text()
 
