@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/favicon.ico?v=21" sizes="any" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#020204">
+  <title>Friend.tech v1 withdraw | 4626.fun</title>
+  <meta name="description" content="One-click sell of Friend.tech v1 shares on Base. Connect the holding wallet and withdraw ETH from the bonding curve.">
+  <link rel="canonical" href="https://4626.fun/ft">
+  <link rel="stylesheet" href="/trust-page.css">
+  <style>
+    .ft-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+    .ft-actions button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: #f5f7fb;
+      border-radius: 10px;
+      padding: 0.7rem 1.1rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .ft-actions button.primary {
+      background: #1e59ff;
+      border-color: #1e59ff;
+    }
+    .ft-actions button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .ft-meta {
+      display: grid;
+      gap: 0.55rem;
+      margin: 1rem 0 1.5rem;
+      padding: 1rem 1.1rem;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .ft-meta div {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      font-size: 0.95rem;
+    }
+    .ft-meta span.label {
+      color: #aab2c2;
+      min-width: 7.5rem;
+    }
+    .ft-meta code,
+    table code {
+      font-size: 0.86rem;
+      word-break: break-all;
+    }
+    #status {
+      margin: 0.75rem 0 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #status[data-kind="ok"] { border-color: rgba(80, 200, 120, 0.45); }
+    #status[data-kind="warn"] { border-color: rgba(255, 209, 47, 0.45); }
+    #status[data-kind="err"] { border-color: rgba(255, 90, 90, 0.5); }
+    #gasHint {
+      color: #ffd12f;
+      margin: 0.5rem 0 0;
+      font-size: 0.95rem;
+    }
+    .ft-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+    }
+    table.ft-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    table.ft-table th,
+    table.ft-table td {
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      vertical-align: top;
+    }
+    table.ft-table th {
+      color: #aab2c2;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    table.ft-table tr.stuck td {
+      opacity: 0.55;
+    }
+    #log {
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      min-height: 4rem;
+      margin: 1rem 0 0;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #c5cddc;
+    }
+    .fineprint {
+      color: #aab2c2;
+      font-size: 0.92rem;
+      max-width: 52rem;
+    }
+  </style>
+</head>
+<body data-trust-page="ft">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/ft" aria-current="page">FT withdraw</a>
+    </nav>
+  </header>
+
+  <main id="main" class="wrap">
+    <section class="page-hero">
+      <p class="eyebrow">Utility</p>
+      <h1>Friend.tech v1 withdraw</h1>
+      <p class="lede">Sell Friend.tech v1 shares back into the bonding curve and receive ETH. There is no contract-wide withdraw — each subject is sold via <code>sellShares</code> from the holding wallet.</p>
+    </section>
+
+    <p class="fineprint">
+      Contract: <a id="ft" href="#" target="_blank" rel="noopener">—</a>.
+      Candidate subjects are baked from historical buys/sells for the listed wallet, then balances are read live on Base.
+      Last remaining share of a subject cannot be sold (protocol rule).
+    </p>
+
+    <div class="ft-meta" aria-label="Session">
+      <div><span class="label">Network</span> <span id="chain">—</span></div>
+      <div><span class="label">Wallet</span> <code id="wallet">—</code></div>
+      <div><span class="label">Gas balance</span> <span id="gas">—</span></div>
+      <div><span class="label">Baked for</span> <code id="bakedFor">—</code></div>
+      <div><span class="label">Candidates</span> <span id="subjectCount">—</span></div>
+      <div><span class="label">Held / sellable</span> <span><span id="countHeld">0</span> / <span id="countSellable">0</span></span></div>
+      <div><span class="label">Est. out</span> <span id="totalEst">0 ETH</span></div>
+    </div>
+
+    <p id="gasHint" hidden></p>
+    <p id="status" data-kind="info">Loading…</p>
+
+    <div class="ft-actions">
+      <button type="button" class="primary" id="connectBtn">Connect wallet</button>
+      <button type="button" id="refreshBtn" disabled>Refresh balances</button>
+      <button type="button" class="primary" id="withdrawBtn" disabled>Withdraw all</button>
+    </div>
+
+    <div class="ft-table-wrap">
+      <table class="ft-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>Bal</th>
+            <th>Sell</th>
+            <th>Supply</th>
+            <th>Est. ETH</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <pre id="log" aria-label="Withdraw log"></pre>
+  </main>
+
+  <footer class="site-footer">
+    <p><a href="/">4626.fun</a> · Friend.tech v1 utility · not affiliated with Friend.tech</p>
+  </footer>
+
+  <script src="/ft/app.js" defer></script>
+</body>
+</html>
