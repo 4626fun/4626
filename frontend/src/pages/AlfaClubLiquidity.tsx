@@ -22,7 +22,6 @@ import { SwapCard } from "@/components/swap/SwapCard";
 import { TokenAvatar } from "@/components/swap/TokenAvatar";
 import { toast } from "@/components/ui/Toast";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
-import { ALFACLUB_ORIGIN } from "@/lib/env/host";
 import { CONTRACTS } from "@/config/contracts";
 import {
   ALFACLUB,
@@ -228,6 +227,8 @@ type AlfaClubLiquidityProps = {
   initialKeyLabel?: string | null;
   onOpenTokenSelector?: (side: "input" | "output") => void;
   onSwitchTokens?: () => void;
+  /** Prefer Swap's Privy embedded canonical signer client when provided. */
+  walletClientOverride?: unknown;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   forcePrimaryActionEnabled?: boolean;
@@ -243,6 +244,7 @@ export function AlfaClubLiquidity({
   initialKeyLabel = null,
   onOpenTokenSelector,
   onSwitchTokens,
+  walletClientOverride = null,
   primaryActionLabel: primaryActionLabelOverride,
   onPrimaryAction,
   forcePrimaryActionEnabled,
@@ -252,7 +254,10 @@ export function AlfaClubLiquidity({
   const account = useAccount();
   const accountContext = useAccountContext();
   const publicClient = usePublicClient({ chainId: base.id });
-  const { data: walletClient } = useWalletClient({ chainId: base.id });
+  const { data: connectedWalletClient } = useWalletClient({ chainId: base.id });
+  const walletClient =
+    (walletClientOverride as typeof connectedWalletClient | null) ??
+    connectedWalletClient;
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
 
   const [mode, setMode] = useState<Mode>(() => {
@@ -1402,7 +1407,7 @@ export function AlfaClubLiquidity({
               </p>
               <p className="flex max-w-full items-center gap-1.5 truncate text-[11px] text-zinc-600">
                 <a
-                  href={ALFACLUB_ORIGIN}
+                  href="https://alfaclub.app"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex min-w-0 items-center gap-1.5 truncate transition-colors hover:text-zinc-300"

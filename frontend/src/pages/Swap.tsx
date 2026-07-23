@@ -104,6 +104,7 @@ function KeySwapSurface(props: {
   selection: KeySwapSelection
   onSwitch: () => void
   onOpenPicker: (side: 'input' | 'output') => void
+  walletClientOverride?: unknown
 }) {
   const sellingKey = props.selection.side === 'input'
   const key = props.selection.key
@@ -119,6 +120,7 @@ function KeySwapSurface(props: {
       initialKeyLabel={key.label}
       onOpenTokenSelector={props.onOpenPicker}
       onSwitchTokens={props.onSwitch}
+      walletClientOverride={props.walletClientOverride}
       embedded
     />
   )
@@ -1132,6 +1134,7 @@ export function Swap() {
                         selection={keySwapSelection}
                         onSwitch={handleSwitchTokens}
                         onOpenPicker={openTokenSelector}
+                        walletClientOverride={executionWalletClient}
                       />
                     ) : <SwapCard
                       tokenInDisplay={tokenInDisplay}

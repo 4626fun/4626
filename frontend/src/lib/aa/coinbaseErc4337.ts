@@ -20,6 +20,7 @@ import {
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
+import { CONTRACTS } from '@/config/contracts'
 import {
   assertZoraRouterCallExecutesFromCsw,
   buildZoraBundlerSimulationMismatchError,
@@ -317,15 +318,26 @@ const SWAP_ROUTER_BATCH_CALL_GAS_LIMIT = 5_500_000n
 const ZORA_SEND_CALL_GAS_BUFFER_NUMERATOR = 150n
 const ZORA_SEND_CALL_GAS_BUFFER_DENOMINATOR = 100n
 
+function resolveAlfaClubUniversalRouterAddress(): string | null {
+  const configured = CONTRACTS.alfaClubUniversalRouter
+  if (!configured || !isAddress(configured)) return null
+  const normalized = getAddress(configured).toLowerCase()
+  if (normalized === '0x0000000000000000000000000000000000000000') return null
+  return normalized
+}
+
 export function isZoraUniversalRouterTarget(to: Address | undefined): boolean {
   return String(to ?? '').toLowerCase() === ZORA_UNIVERSAL_ROUTER_ADDRESS
 }
 
-function isSwapRouterHeavyCall(call: { to: Address; data?: Hex }): boolean {
+/** Zora / AlfaClub Universal Router execute calls need a callGas floor when bundler estimate noise fails. */
+export function isSwapRouterHeavyCall(call: { to: Address; data?: Hex }): boolean {
   const dataPrefix = String(call.data ?? '').slice(0, 10).toLowerCase()
   const target = String(call.to ?? '').toLowerCase()
+  const alfaClubRouter = resolveAlfaClubUniversalRouterAddress()
   if (
-    target === ZORA_UNIVERSAL_ROUTER_ADDRESS &&
+    (target === ZORA_UNIVERSAL_ROUTER_ADDRESS ||
+      (alfaClubRouter !== null && target === alfaClubRouter)) &&
     (dataPrefix === ZORA_SWAP_EXECUTE_SELECTOR ||
       dataPrefix === UNISWAP_UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
   ) {
