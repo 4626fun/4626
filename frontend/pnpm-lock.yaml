@@ -61,7 +61,7 @@ overrides:
   linkify-it: 5.0.2
   body-parser@^1: 1.20.6
   body-parser@^2: 2.3.0
-  bigint-buffer: file:../kpr/vendor/bigint-buffer
+  bigint-buffer: file:./vendor/bigint-buffer
   sharp: 0.35.3
 
 patchedDependencies:
@@ -4729,8 +4729,8 @@ packages:
   big.js@6.2.2:
     resolution: {integrity: sha512-y/ie+Faknx7sZA5MfGA2xKlu0GDv8RWrXGsmlteyJQ2lvoKv9GBK/fpRMc2qlSoBAgNxrixICFCBefIq8WCQpQ==}
 
-  bigint-buffer@file:../kpr/vendor/bigint-buffer:
-    resolution: {directory: ../kpr/vendor/bigint-buffer, type: directory}
+  bigint-buffer@file:vendor/bigint-buffer:
+    resolution: {directory: vendor/bigint-buffer, type: directory}
     engines: {node: '>=10.0.0'}
 
   bignumber.js@9.0.1:
@@ -13143,7 +13143,7 @@ snapshots:
     dependencies:
       '@solana/buffer-layout': 4.0.1
       '@solana/web3.js': 1.95.8(bufferutil@4.1.0)(encoding@0.1.13)(utf-8-validate@5.0.10)
-      bigint-buffer: file:../kpr/vendor/bigint-buffer
+      bigint-buffer: file:vendor/bigint-buffer
       bignumber.js: 9.3.1
     transitivePeerDependencies:
       - bufferutil
@@ -13154,7 +13154,7 @@ snapshots:
     dependencies:
       '@solana/buffer-layout': 4.0.1
       '@solana/web3.js': 1.95.8(bufferutil@4.1.0)(encoding@0.1.13)(utf-8-validate@5.0.10)
-      bigint-buffer: file:../kpr/vendor/bigint-buffer
+      bigint-buffer: file:vendor/bigint-buffer
       bignumber.js: 9.3.1
     transitivePeerDependencies:
       - bufferutil
@@ -14042,7 +14042,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@solana/buffer-layout': 4.0.1
       agentkeepalive: 4.6.0
-      bigint-buffer: file:../kpr/vendor/bigint-buffer
+      bigint-buffer: file:vendor/bigint-buffer
       bn.js: 5.2.3
       borsh: 0.7.0
       bs58: 4.0.1
@@ -16703,7 +16703,7 @@ snapshots:
 
   big.js@6.2.2: {}
 
-  bigint-buffer@file:../kpr/vendor/bigint-buffer: {}
+  bigint-buffer@file:vendor/bigint-buffer: {}
 
   bignumber.js@9.0.1: {}
 
