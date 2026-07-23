@@ -1289,7 +1289,7 @@ export function AlfaClubLiquidity({
                 <img
                   src="/brands/sudoswap.png"
                   alt=""
-                  className="h-3.5 w-3.5 rounded-[3px] object-cover"
+                  className="h-3.5 w-3.5 rounded-full object-cover"
                   loading="lazy"
                 />
                 <span>Sudoswap market</span>

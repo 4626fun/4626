@@ -89,7 +89,7 @@ export function SwapCard(props: SwapCardProps) {
             <img
               src="/brands/sudoswap.png"
               alt="Sudoswap"
-              className="h-3.5 w-3.5 rounded-[3px] object-cover"
+              className="h-3.5 w-3.5 rounded-full object-cover"
               loading="lazy"
             />
           ) : (
