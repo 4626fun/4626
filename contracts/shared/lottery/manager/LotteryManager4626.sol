@@ -46,8 +46,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
-import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
-import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {ITradeFeeCollector4626} from
     "@4626/shared/interfaces/revenue/ITradeFeeCollector4626.sol";
 import {IShareOFT4626} from "@4626/shared/interfaces/vault/IShareOFT4626.sol";
@@ -665,18 +663,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (tokenIn == address(0)) revert ZeroAddress();
         if (amountIn == 0) revert InvalidAmount();
 
-        // Derive lane token from tokenIn (■TOKEN)
-        address token = registry.getTokenForShareOFT(tokenIn);
+        address token = _activeLaneToken(tokenIn);
         if (token == address(0)) {
-            // Silently skip unregistered tokens (no lottery entry)
             // ODA-426-F4: refund any attached native fee on early-return paths.
-            if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
-            return 0;
-        }
-
-        // Verify lane token is registered AND active
-        if (!registry.isTokenActive(token)) {
-            // Silently skip inactive/unregistered tokens (no lottery entry)
             if (msg.value > 0) _refundCallerFeeOrRevert(msg.value);
             return 0;
         }
@@ -730,7 +719,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         );
 
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
-            if (callerFeeValue != 0) revert InvalidAmount();
+            if (callerFeeValue != 0) _refundCallerFeeOrRevert(callerFeeValue);
             entryId = _requestLocalVRF(token, buyer, swapValueUSD, boostedWinChance);
         } else {
             entryId = _requestCrossChainVRF(token, buyer, swapValueUSD, boostedWinChance, callerFeeValue);
@@ -982,12 +971,20 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             emit InvalidPayloadReceived(srcEid, payload.length);
             return;
         }
-        uint256 msgType;
-        assembly { msgType := calldataload(payload.offset) }
-        if (msgType != MSG_TYPE_LOTTERY_ENTRY) {
+        (
+            uint16 msgType,
+            ,
+            ,
+            ,
+            ,
+            ,
+            bytes32 sourceEventId
+        ) = abi.decode(payload, (uint16, address, address, uint256, uint32, uint256, bytes32));
+        if (msgType != MSG_TYPE_LOTTERY_ENTRY || sourceEventId == bytes32(0)) {
             emit InvalidPayloadReceived(srcEid, payload.length);
             return;
         }
+
         _handleLotteryEntry(srcEid, originSender, payload);
     }
 
@@ -1003,14 +1000,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         VRFRequest memory request = vrfRequests[requestId];
         if (request.user == address(0)) return;
 
-        // FIX: CLM-02 — reject stale VRF results that arrive after grace period
-        if (vrfResultGracePeriod > 0 && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
-            delete vrfRequests[requestId];
-            emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
-            return;
-        }
-
-        // If paused, defer settlement and preserve the request for later FIFO flush.
+        // Defer while paused before applying the grace-period discard so a
+        // callback received during a pause survives until the FIFO flush.
         // M2-07 / H-02: enqueue once so unpause-time settlement cannot cherry-pick.
         // ODA-426-F6: admin flush sets `_settlingDeferredVrf` to settle without re-enqueue.
         if (paused() && !_settlingDeferredVrf) {
@@ -1020,6 +1011,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                 _pushDeferredVrf(requestId);
                 emit VrfResultDeferred(requestId, randomWords[0]);
             }
+            return;
+        }
+
+        // FIX: CLM-02 — reject stale VRF results that arrive after grace period
+        if (vrfResultGracePeriod > 0 && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
+            delete vrfRequests[requestId];
+            emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
             return;
         }
 
@@ -1108,45 +1106,23 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         address vault,
         uint256 swapAmountUSD,
         uint256 baseWinChance
-    )
-        internal
-        view
-        returns (uint256 boostedWinChance)
-    {
-        boostedWinChance = baseWinChance;
-
-        // STEP 1: Curve quoted boost BPS [10_000, 25_000] (position-aware). Requires covered Share USD.
-        // Managers must implement calculateBoostForPosition (DeployRewardsEcosystem wiring).
+    ) internal view returns (uint256) {
+        uint256 totalShareUSD;
         if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
-            uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
-            try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
-            returns (uint256 boostBPS) {
-                if (boostBPS > BASIS_POINTS) {
-                    uint256 coveredUSD =
-                        shareBalanceAmount < swapAmountUSD ? shareBalanceAmount : swapAmountUSD;
-                    uint256 coverageBPS = FullMath.mulDiv(coveredUSD, BASIS_POINTS, swapAmountUSD);
-                    uint256 coveredUpliftBPS =
-                        FullMath.mulDiv(boostBPS - BASIS_POINTS, coverageBPS, BASIS_POINTS);
-                    boostedWinChance =
-                        FullMath.mulDiv(baseWinChance, BASIS_POINTS + coveredUpliftBPS, BASIS_POINTS);
-                }
-            } catch {}
+            totalShareUSD = _totalShareUsd(token, shareBalanceToken);
         }
-
-        // STEP 2: Add vault gauge boost (vote-directed budget).
-        // Scale by swap size so tiny swaps cannot fully consume gauge probability budget.
-        if (address(ve4626GaugeVoting) != address(0) && vault != address(0)) {
-            try ve4626GaugeVoting.getVaultProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
-                if (gaugeBoostPPM > 0) {
-                    boostedWinChance += _scaleGaugeBoostBySwapSize(gaugeBoostPPM, swapAmountUSD);
-                }
-            } catch {}
-        }
-
-        // Cap at maximum
-        if (boostedWinChance > lotteryConfig.maxWinChance) {
-            boostedWinChance = lotteryConfig.maxWinChance;
-        }
+        return LotteryManager4626PricingLib.applyBoost(
+            address(boostManager),
+            address(ve4626GaugeVoting),
+            user,
+            shareBalanceAmount,
+            vault,
+            swapAmountUSD,
+            baseWinChance,
+            totalShareUSD,
+            lotteryConfig.maxWinChance,
+            lotteryConfig.minSwapAmount
+        );
     }
 
     /// @dev Value full ShareOFT supply in USD for Curve pool size L. Zero if unreadable.
@@ -1159,17 +1135,6 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 supply = abi.decode(data, (uint256));
         if (supply == 0) return 0;
         (totalShareUSD,,) = _calculateTokenUSD(token, shareBalanceToken, supply);
-    }
-
-    function _scaleGaugeBoostBySwapSize(uint256 gaugeBoostPPM, uint256 swapAmountUSD) internal view returns (uint256) {
-        uint256 minSwap = lotteryConfig.minSwapAmount;
-        if (swapAmountUSD <= minSwap) return 0;
-
-        uint256 scaledAmount = swapAmountUSD - minSwap;
-        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
-        if (scaledAmount >= maxScale) return gaugeBoostPPM;
-
-        return (gaugeBoostPPM * scaledAmount) / maxScale;
     }
 
     /**
@@ -1187,8 +1152,16 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         tokenStats[token].winners++;
         emit LotteryWinner(token, user, swapAmountUSD, 0, requestId);
 
-        // All wins are paid from hub vaults
-        uint256 localPayout = _payoutLocalJackpot(token, user, uint16(lotteryConfig.rewardPercentage));
+        // Isolate payout so a pathological multi-vault iteration cannot strand
+        // the VRF settlement frame.
+        uint256 localPayout;
+        try this.payoutLocalJackpotExternal(token, user, uint16(lotteryConfig.rewardPercentage)) returns (
+            uint256 paid
+        ) {
+            localPayout = paid;
+        } catch {
+            emit JackpotPayoutFailed(token, user, 0);
+        }
 
         // If the trade originated on a remote chain, send a winner callback
         // so the user gets notified on the chain they traded on.
@@ -1216,6 +1189,14 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _sendWinnerCallback(dstEid, winner, token, totalSharesPaid);
     }
 
+    function payoutLocalJackpotExternal(address triggeringCoin, address winner, uint16 payoutBps)
+        external
+        returns (uint256)
+    {
+        if (msg.sender != address(this)) revert Unauthorized();
+        return _payoutLocalJackpot(triggeringCoin, winner, payoutBps);
+    }
+
     // ================================
     // CROSS-CHAIN MESSAGING (Hub-Centric)
     // ================================
@@ -1230,18 +1211,20 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         _requireNotPaused();
 
-        // Verify sender is an authorized remote OFT
-        if (!authorizedRemoteOFTs[_origin.srcEid][_origin.sender]) revert Unauthorized();
-
-        // Decode message type
-        if (_payload.length < 32) revert InvalidAmount();
+        // Malformed or unauthorized messages must not brick the LayerZero lane.
+        if (!authorizedRemoteOFTs[_origin.srcEid][_origin.sender] || _payload.length < 32) {
+            emit InvalidPayloadReceived(_origin.srcEid, _payload.length);
+            return;
+        }
         uint256 msgType;
-        assembly { msgType := calldataload(_payload.offset) }
+        assembly {
+            msgType := calldataload(_payload.offset)
+        }
 
         if (msgType == MSG_TYPE_LOTTERY_ENTRY) {
             _handleLotteryEntry(_origin.srcEid, _origin.sender, _payload);
         } else {
-            revert InvalidAmount();
+            emit InvalidPayloadReceived(_origin.srcEid, _payload.length);
         }
     }
 
@@ -1259,43 +1242,52 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 buyerCurrentShareBalance;
         bytes32 sourceEventId;
 
-        if (_payload.length != 224 && _payload.length != 192 && _payload.length != 160) {
+        if (_payload.length == 224) {
+            (, // msgType (already checked)
+                buyer,
+                tokenIn,
+                amount,
+                sourceChainId,
+                buyerCurrentShareBalance,
+                sourceEventId
+            ) = abi.decode(_payload, (uint16, address, address, uint256, uint32, uint256, bytes32));
+        } else if (_payload.length == 192) {
+            (, // msgType (already checked)
+                buyer,
+                tokenIn,
+                amount,
+                sourceChainId,
+                buyerCurrentShareBalance
+            ) = abi.decode(_payload, (uint16, address, address, uint256, uint32, uint256));
+        } else if (_payload.length == 160) {
+            (, // msgType (already checked)
+                buyer,
+                tokenIn,
+                amount,
+                sourceChainId
+            ) = abi.decode(_payload, (uint16, address, address, uint256, uint32));
+        } else {
             // FIX: CLM-09 — emit event instead of reverting to avoid bricking the LZ inbound lane
             emit InvalidPayloadReceived(srcEid, _payload.length);
             return;
         }
 
-        // The first five ABI words are shared by all supported payload versions.
-        // Read them directly after validating their canonical ABI widths; this
-        // avoids carrying three full tuple decoders into the main runtime.
-        uint256 malformed;
-        assembly {
-            let ptr := _payload.offset
-            let buyerWord := calldataload(add(ptr, 32))
-            let tokenWord := calldataload(add(ptr, 64))
-            let sourceWord := calldataload(add(ptr, 128))
-            malformed := or(or(shr(160, buyerWord), shr(160, tokenWord)), shr(32, sourceWord))
-            buyer := and(buyerWord, 0xffffffffffffffffffffffffffffffffffffffff)
-            tokenIn := and(tokenWord, 0xffffffffffffffffffffffffffffffffffffffff)
-            amount := calldataload(add(ptr, 96))
-            sourceChainId := and(sourceWord, 0xffffffff)
-            if gt(_payload.length, 160) { buyerCurrentShareBalance := calldataload(add(ptr, 160)) }
-            if eq(_payload.length, 224) { sourceEventId := calldataload(add(ptr, 192)) }
-        }
-        if (malformed != 0) {
-            emit InvalidPayloadReceived(srcEid, _payload.length);
+        // Every V3 forwarder lane requires a replay identifier.
+        if (_payload.length == 224 && sourceEventId == bytes32(0)) {
             return;
         }
-
-        if (srcEid == SOLANA_LZ_EID && sourceEventId == bytes32(0)) return;
+        if (srcEid == SOLANA_LZ_EID && _payload.length != 224) {
+            return;
+        }
         bytes32 sourceEventKey;
         if (sourceEventId != bytes32(0)) {
-            assembly {
-                mstore(0, sourceEventId)
-                mstore(32, _processedRemoteLotterySourceEvents.slot)
-                sourceEventKey := keccak256(0, 64)
-                if sload(sourceEventKey) { return(0, 0) }
-            }
+            sourceEventKey = keccak256(abi.encode(srcEid, originSender, sourceEventId));
+            // Check the legacy bare key as well so previously consumed events
+            // remain rejected across this replay-key migration.
+            if (
+                _processedRemoteLotterySourceEvents[sourceEventKey]
+                    || _processedRemoteLotterySourceEvents[sourceEventId]
+            ) return;
         }
 
         if (buyer == address(0) || tokenIn == address(0) || amount == 0) return;
@@ -1303,10 +1295,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         totalRemoteLotteryEntries++;
         emit RemoteLotteryEntryReceived(srcEid, buyer, tokenIn, amount, sourceChainId);
 
-        // Derive lane token from tokenIn (■ creator or ◆ agent token etc.)
-        address token = registry.getTokenForShareOFT(tokenIn);
+        address token = _activeLaneToken(tokenIn);
         if (token == address(0)) return;
-        if (!registry.isTokenActive(token)) return;
 
         // Calculate USD value using per-lane oracle (plus reference price for circuit breakers)
         (uint256 swapValueUSD, uint256 oraclePriceUSD1e18,) = _calculateTokenUSD(token, tokenIn, amount);
@@ -1349,7 +1339,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         // processed — including sponsorship/VRF skips (entryId == 0). Prevents LZ
         // redelivery from requesting VRF later. Early rejects above do not mark.
         if (sourceEventId != bytes32(0)) {
-            assembly { sstore(sourceEventKey, 1) }
+            _processedRemoteLotterySourceEvents[sourceEventKey] = true;
         }
 
         if (entryId > 0) {
@@ -1510,8 +1500,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                         if (curOriginCount > 0) vrfSponsoredCountByOrigin[originKey] = curOriginCount - 1;
                     }
                 }
-                if (useCallerFunds && nativeFee > 0) {
-                    // If the caller provided the fee, never trap value on failure.
+                if (useCallerFunds) {
                     _refundCallerFeeOrRevert(callerFeeValue);
                 } else if (nativeFee > 0) {
                     _rollbackSponsoredSpend(vrfSponsorshipPolicy, nativeFee);
@@ -1693,6 +1682,21 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (!success) revert ETHRefundFailed();
     }
 
+    /// @dev Registry lookups fail closed without reverting an enclosing swap.
+    function _activeLaneToken(address tokenIn) internal view returns (address token) {
+        try registry.getTokenForShareOFT(tokenIn) returns (address resolved) {
+            token = resolved;
+        } catch {
+            return address(0);
+        }
+        if (token == address(0)) return address(0);
+        try registry.isTokenActive(token) returns (bool active) {
+            if (!active) return address(0);
+        } catch {
+            return address(0);
+        }
+    }
+
     /// @dev Cap coverage balance to tokens that cannot be explained by this purchase alone.
     ///      Prefer caller-reported eligible balance (block-start snapshot from ShareOFT) when stricter.
     function _coverageShareBalance(
@@ -1705,19 +1709,23 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (shareOFT.code.length == 0) {
             return reportedEligible;
         }
-        uint256 live = IERC20(shareOFT).balanceOf(buyer);
+        (bool ok, bytes memory data) =
+            shareOFT.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, buyer));
+        if (!ok || data.length < 32) return 0;
+        uint256 live = abi.decode(data, (uint256));
         uint256 maxPreBuy = live > amountIn ? live - amountIn : 0;
         coverageBal = reportedEligible;
         if (coverageBal > maxPreBuy) coverageBal = maxPreBuy;
         if (coverageBal > live) coverageBal = live;
     }
 
-    /// @dev Read ShareOFT block-start eligible balance when available; else live balance.
+    /// @dev Read ShareOFT block-start eligible balance; fail closed on an
+    ///      unavailable snapshot rather than falling back to a flashable live balance.
     function _eligibleShareBalance(address shareOFT, address buyer) internal view returns (uint256) {
         try IShareOFT4626(shareOFT).balanceEligibleForLotteryCoverage(buyer) returns (uint256 eligible) {
             return eligible;
         } catch {
-            return IERC20(shareOFT).balanceOf(buyer);
+            return 0;
         }
     }
 
@@ -1847,14 +1855,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     // ================================
 
     function _delegateAdmin() internal {
-        address module = _adminModule;
-        assembly {
-            let size := calldatasize()
-            calldatacopy(0, 0, size)
-            let ok := delegatecall(gas(), module, 0, size, 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            if iszero(ok) { revert(0, returndatasize()) }
-            return(0, returndatasize())
+        (bool ok, bytes memory data) = _adminModule.delegatecall(msg.data);
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
         }
     }
 
@@ -1862,11 +1867,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setLocalVRFConsumer(address) external {
+    function setLocalVRFConsumer(address _consumer) external {
+        _consumer;
         _delegateAdmin();
     }
 
-    function queueLocalVRFConsumerChange(address) external {
+    function queueLocalVRFConsumerChange(address _consumer) external {
+        _consumer;
         _delegateAdmin();
     }
 
@@ -1878,11 +1885,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setSingleVaultJackpotOnly(bool) external {
+    function setSingleVaultJackpotOnly(bool onlyTrigger) external {
+        onlyTrigger;
         _delegateAdmin();
     }
 
-    function queueAmoeRelayerChange(address) external {
+    function queueAmoeRelayerChange(address _relayer) external {
+        _relayer;
         _delegateAdmin();
     }
 
@@ -1902,19 +1911,39 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setUseLocalVRF(bool) external {
+    function setUseLocalVRF(bool _useLocal) external {
+        _useLocal;
         _delegateAdmin();
     }
 
-    function setSponsoredVrfMinSwapAmountUSD(uint256) external {
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external {
+        _minSwapAmountUSD;
         _delegateAdmin();
     }
 
-    function setVrfSponsorshipPolicy(bool, uint256, uint256, uint256) external {
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external {
+        enabled;
+        maxFeePerMessage;
+        budgetPerEpoch;
+        epochDuration;
         _delegateAdmin();
     }
 
-    function setCallbackSponsorshipPolicy(bool, uint256, uint256, uint256) external {
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external {
+        enabled;
+        maxFeePerMessage;
+        budgetPerEpoch;
+        epochDuration;
         _delegateAdmin();
     }
 
@@ -1922,32 +1951,47 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Configure sponsorship anti-spam rate limits (count-based per epoch).
      * @dev A value of 0 means unlimited.
      */
-    function setSponsorshipRateLimits(uint32, uint32, uint32, uint32) external {
+    function setSponsorshipRateLimits(
+        uint32 _vrfMaxPerBuyerPerEpoch,
+        uint32 _vrfMaxPerOriginPerEpoch,
+        uint32 _callbackMaxPerBuyerPerEpoch,
+        uint32 _callbackMaxPerOriginPerEpoch
+    ) external {
+        _vrfMaxPerBuyerPerEpoch;
+        _vrfMaxPerOriginPerEpoch;
+        _callbackMaxPerBuyerPerEpoch;
+        _callbackMaxPerOriginPerEpoch;
         _delegateAdmin();
     }
 
-    function setBoostManager(address) external {
+    function setBoostManager(address _manager) external {
+        _manager;
         _delegateAdmin();
     }
 
     /**
      * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
+     * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
      */
-    function setve4626GaugeVoting(address) external {
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external {
+        _ve4626GaugeVoting;
         _delegateAdmin();
     }
 
     // PR 1 — AMOE Linear Parity admin stubs.
-    function setAuthorizedAmoeRelayer(address) external {
+    function setAuthorizedAmoeRelayer(address _relayer) external {
+        _relayer;
         _delegateAdmin();
     }
 
-    function setBaseCeilingPPM(uint256) external {
+    function setBaseCeilingPPM(uint256 _ceilingPPM) external {
+        _ceilingPPM;
         _delegateAdmin();
     }
 
     // PR 3 — Boost-source timelock admin stubs. Bodies live in the admin module.
-    function proposeBoostManager(address) external {
+    function proposeBoostManager(address _manager) external {
+        _manager;
         _delegateAdmin();
     }
 
@@ -1959,7 +2003,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function proposeve4626GaugeVoting(address) external {
+    function proposeve4626GaugeVoting(address _gauge) external {
+        _gauge;
         _delegateAdmin();
     }
 
@@ -1979,63 +2024,92 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setLotteryConfig(uint256, uint256, bool, uint256, uint256, uint256) external {
+    function setLotteryConfig(
+        uint256 _minSwap,
+        uint256 _rewardPercentage,
+        bool _isActive,
+        uint256 _baseWinChance,
+        uint256 _maxWinChance,
+        uint256 _usdMultiplierBps
+    ) external {
+        _minSwap;
+        _rewardPercentage;
+        _isActive;
+        _baseWinChance;
+        _maxWinChance;
+        _usdMultiplierBps;
         _delegateAdmin();
     }
 
     /// @notice Delegate arbitrary admin-module calldata (ODA-426-F3 queue/execute/cancel).
     /// @dev Keeps named queue/execute/cancel off the main runtime to stay under EIP-170.
     ///      Admin module enforces `onlyOwner` / `onlyDelegateCall`.
-    function adminModuleCall(bytes calldata data) external {
-        address module = _adminModule;
-        assembly {
-            let size := data.length
-            calldatacopy(0, data.offset, size)
-            let ok := delegatecall(gas(), module, 0, size, 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            if iszero(ok) { revert(0, returndatasize()) }
-            return(0, returndatasize())
+    function adminModuleCall(bytes calldata data) external onlyOwner {
+        (bool ok, bytes memory ret) = _adminModule.delegatecall(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
         }
     }
 
-    function setOracleMaxStaleness(uint256) external {
+    function setOracleMaxStaleness(uint256 _maxStaleness) external {
+        _maxStaleness;
         _delegateAdmin();
     }
 
     // FIX: CLM-02 — allow owner to configure VRF result grace period
-    function setVrfResultGracePeriod(uint256) external {
+    function setVrfResultGracePeriod(uint256 _gracePeriod) external {
+        _gracePeriod;
         _delegateAdmin();
     }
 
-    function setOracleDeviationGuard(uint256, uint256) external {
+    function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external {
+        _maxDeviationBps;
+        _deviationWindow;
         _delegateAdmin();
     }
 
     /**
      * @notice Set enforced options for winner callback messages
      */
-    function setCallbackOptions(uint32, uint128, uint128) external {
+    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external {
+        dstEid;
+        gasLimit;
+        msgValue;
         _delegateAdmin();
     }
 
     /**
      * @notice Authorize a remote OFT as a valid lottery entry sender
+     * @param srcEid The source chain EID
+     * @param sender The bytes32-encoded address of the remote OFT
+     * @param authorized Whether to authorize or deauthorize
      */
-    function setAuthorizedRemoteOFT(uint32, bytes32, bool) external {
+    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external {
+        srcEid;
+        sender;
+        authorized;
         _delegateAdmin();
     }
 
     /**
      * @notice Batch authorize remote OFTs
      */
-    function batchSetAuthorizedRemoteOFTs(uint32[] calldata, bytes32[] calldata, bool) external {
+    function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
+        external
+    {
+        srcEids;
+        senders;
+        authorized;
         _delegateAdmin();
     }
 
     /**
      * @notice Set the gas limit for winner callback messages
      */
-    function setCallbackGasLimit(uint128) external {
+    function setCallbackGasLimit(uint128 _gasLimit) external {
+        _gasLimit;
         _delegateAdmin();
     }
 
@@ -2045,6 +2119,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     function unpause() external {
         _delegateAdmin();
+    }
+
+    /// @notice Renouncing would permanently brick pause recovery and deferred settlement.
+    function renounceOwnership() public pure override {
+        revert Unauthorized();
     }
 
     // ================================
@@ -2069,7 +2148,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     // ================================
 
     // FIX: CLM-12 — only allow emergency withdraw when paused to prevent draining active sponsorship funds
-    function emergencyWithdraw(address, uint256) external {
+    function emergencyWithdraw(address token, uint256 amount) external {
+        token;
+        amount;
         _delegateAdmin();
     }
 

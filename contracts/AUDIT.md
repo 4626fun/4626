@@ -1,12 +1,14 @@
-# Audit scope map — 2026-07-22 (slim)
+# Audit scope map — 2026-07-23 (slim, remediated)
 
 Pin auditors to:
 
 - **Repo:** https://github.com/4626fun/4626
-- **Tag:** `audit/oda-2026-07-22`
+- **Tag / branch:** `audit/oda-2026-07-23-remediated`
 - **Path root:** `contracts/`
 
 Do **not** fall back to `github.com/wenakita/CreatorVault`.
+
+Prior pin (immutable historical scope): [`audit/oda-2026-07-22` @ `423e0e3`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-22/contracts).
 
 One tight system per $1 engagement. Files present in this slice:
 
@@ -74,3 +76,4 @@ Live Base: `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2`.
 
 - External deps (OZ, LZ, Uniswap, …) are not vendored here; review first-party logic in the listed files.
 - Interfaces and non-scoped packages (agent lane, shareoft-mesh, aux batchers, recovery, etc.) are intentionally omitted from this public slice.
+- Remediation delta vs `423e0e3`: see [REMEDIATIONS.md](./REMEDIATIONS.md).

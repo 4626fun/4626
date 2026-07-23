@@ -199,6 +199,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     error NoPendingUpdate();
     /// @notice Root was published but has not matured yet (ODA-426-F3).
     error RootTimelockActive(uint256 effectiveAt);
+    /// @notice Legacy ECDSA `submitAmoeEntry` is disabled; use ZK path (ODA-461-18).
+    error LegacyAmoeDisabled();
 
     // -------------------------------------------------------------------------
     // Constants
@@ -500,48 +502,15 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     // ECDSA is the compatibility path until clients ship the prover.
     // -------------------------------------------------------------------------
 
-    /// @notice Settle an ECDSA / EIP-1271 verified AMOE entry. Caller MUST be
-    ///         the trusted relayer (today: same key as `allowlistPublisher`).
+    /// @notice Legacy ECDSA path — disabled. ZK (`submitAmoeEntryZK`) is the live path.
+    /// @dev Signature was unused (ODA-461-18); keep ABI surface but fail closed.
     function submitAmoeEntry(
-        address buyer,
-        address creatorCoin,
-        bytes32 nonce,
-        uint256 deadline,
-        bytes calldata /* signature */
-    ) external returns (uint256 entryId) {
-        if (msg.sender != allowlistPublisher) revert NotPublisher();
-        // Reject deadlines that have already passed.
-        if (block.timestamp > deadline) revert DeadlineExpired();
-        // Reject deadlines that are too close to `now` to be safe under
-        // miner timestamp drift (see MIN_DEADLINE_BUFFER above). Using
-        // unchecked subtraction is safe because we just verified that
-        // `deadline >= block.timestamp`.
-        unchecked {
-            if (deadline - block.timestamp < MIN_DEADLINE_BUFFER) {
-                revert DeadlineTooSoon();
-            }
-        }
-
-        bytes32 nonceCommit = keccak256(abi.encode(nonce, buyer, creatorCoin));
-        if (usedNonceCommit[nonceCommit]) revert NonceReplayed();
-        usedNonceCommit[nonceCommit] = true;
-
-        unchecked {
-            entryId = ++nextEntryId;
-        }
-        // epoch is unknown on the legacy path; pass 0 and let downstream resolve
-        emit AmoeEntryRecorded(
-            entryId,
-            buyer,
-            creatorCoin,
-            0,
-            nonceCommit,
-            bytes32(0),
-            EntryPath.ECDSA
-        );
-
-        if (address(consumer) != address(0)) {
-            consumer.recordAmoeEntry(buyer, creatorCoin, 0, entryId);
-        }
+        address,
+        address,
+        bytes32,
+        uint256,
+        bytes calldata
+    ) external pure returns (uint256) {
+        revert LegacyAmoeDisabled();
     }
 }

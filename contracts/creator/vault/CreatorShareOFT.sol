@@ -883,7 +883,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) revert HubNotConfigured();
 
         (bytes memory payload, bytes memory options, MessagingFee memory fee) =
-            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
+            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue, entryId);
 
         if (msg.value < fee.nativeFee) {
             revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
@@ -911,21 +911,27 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (entry.buyer == address(0)) return MessagingFee(0, 0);
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) return MessagingFee(0, 0);
 
-        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
+        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue, entryId);
     }
 
-    function _prepareLotteryEntryMessage(address buyer, uint256 amount, uint256 buyerCurrentShareBalance)
-        internal
-        view
-        returns (bytes memory payload, bytes memory options, MessagingFee memory fee)
-    {
+    function _prepareLotteryEntryMessage(
+        address buyer,
+        uint256 amount,
+        uint256 buyerCurrentShareBalance,
+        uint256 entryId
+    ) internal view returns (bytes memory payload, bytes memory options, MessagingFee memory fee) {
+        // ODA-481-[2] / LM forwarder: V3 224-byte payload with non-zero replay id.
+        // Bind uniqueness to (chain, oft, entryId, buyer, amount) so retries cannot collide.
+        bytes32 sourceEventId =
+            keccak256(abi.encode(block.chainid, address(this), entryId, buyer, amount, buyerCurrentShareBalance));
         payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
             buyer,
             address(this), // tokenIn (this ShareOFT)
             amount,
             uint32(block.chainid), // sourceChainId metadata (callback routing uses _origin.srcEid on hub)
-            buyerCurrentShareBalance // coverage input on the hub lottery manager
+            buyerCurrentShareBalance, // coverage input on the hub lottery manager
+            sourceEventId
         );
 
         options = _lzReceiveOptions(lotteryEntryGasLimit, 0);
@@ -1088,14 +1094,39 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         return true;
     }
 
+    /// @dev ODA-481-[2]: only accept V3 ABI lottery-entry payloads (224 bytes).
+    ///      Reject packed OFT wire formats that can collide on length + low-16 msgType alone
+    ///      (e.g. SEND_AND_CALL with crafted sendTo / compose padding). Mirror the winner-callback
+    ///      structural checks: ABI address/uint32 padding + non-zero sourceEventId.
     function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
-        if (message.length != 160 && message.length != 192 && message.length != 224) return false;
+        if (message.length != 224) return false;
+
         uint256 word0;
+        uint256 word1;
+        uint256 word2;
+        uint256 word4;
+        uint256 word6;
         assembly {
             word0 := calldataload(message.offset)
+            word1 := calldataload(add(message.offset, 0x20))
+            word2 := calldataload(add(message.offset, 0x40))
+            word4 := calldataload(add(message.offset, 0x80))
+            word6 := calldataload(add(message.offset, 0xc0))
         }
+
+        // word0: ABI uint16 msgType
         if (word0 >> 16 != 0) return false;
-        return uint16(word0) == MSG_TYPE_LOTTERY_ENTRY;
+        if (uint16(word0) != MSG_TYPE_LOTTERY_ENTRY) return false;
+        // word1/word2: ABI addresses (buyer, tokenIn)
+        if (word1 >> 160 != 0) return false;
+        if (word2 >> 160 != 0) return false;
+        if (uint160(word1) == 0 || uint160(word2) == 0) return false;
+        // word4: ABI uint32 sourceChainId
+        if (word4 >> 32 != 0) return false;
+        // word6: V3 replay id (required by LotteryManager forwarder)
+        if (word6 == 0) return false;
+
+        return true;
     }
 
     /**

@@ -46,6 +46,9 @@ interface Ive4626 {
     error BoostManagerNotConfigured();
     error NoPendingBoostManagerUpdate();
     error BoostManagerTimelockNotExpired(uint256 executeAfter);
+    error OwnershipRenounceDisabled();
+    error NoPendingVaultUpdate();
+    error VaultTimelockNotExpired(uint256 executeAfter);
 
     // Events
     event Locked(address indexed user, address indexed token, uint256 amount, uint256 lockEnd, uint256 votingPower);
@@ -90,6 +93,10 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
     /// @notice Vault for calculating underlying value
     address public vault;
+    /// @notice ODA-468-M2: queued vault pointer rewiring (48h, first set instant).
+    address public pendingVault;
+    uint256 public vaultTimelockExpiry;
+    uint256 public constant VAULT_TIMELOCK_DURATION = 48 hours;
 
     /// @notice Boost manager address
     address public boostManager;
@@ -242,6 +249,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         if (newEnd > block.timestamp + MAX_LOCK_DURATION) revert InvalidLockDuration();
         newEnd = _weekFloor(newEnd);
         if (newEnd <= userLock.end) revert LockDurationTooShort();
+        // ODA-468-L14: revived/extended locks must still meet MIN_LOCK_DURATION from now.
+        if (newEnd < block.timestamp + MIN_LOCK_DURATION) revert InvalidLockDuration();
 
         uint256 oldEnd = userLock.end;
         uint256 oldPower = balanceOf(msg.sender);
@@ -295,9 +304,11 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         // Recalculate voting power
         newVotingPower = _calculateVotingPower(userLock.amount, userLock.end);
 
-        // Mint additional ve4626
+        // ODA-468-L3: mint or burn so ERC20 balance tracks recalculated power (mirror extendLock).
         if (newVotingPower > oldPower) {
             _mint(msg.sender, newVotingPower - oldPower);
+        } else if (newVotingPower < oldPower) {
+            _burn(msg.sender, oldPower - newVotingPower);
         }
 
         _checkpointUserSlope(msg.sender, userLock.amount, userLock.end);
@@ -574,8 +585,29 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // ADMIN
     // ================================
 
+    event VaultUpdateQueued(address indexed vault, uint256 executeAfter);
+    event VaultUpdated(address indexed vault);
+
     function setVault(address _vault) external onlyOwner {
-        vault = _vault;
+        // ODA-468-M2: first set instant; rewires are 48h-timelocked.
+        if (vault == address(0)) {
+            vault = _vault;
+            emit VaultUpdated(_vault);
+            return;
+        }
+        pendingVault = _vault;
+        vaultTimelockExpiry = block.timestamp + VAULT_TIMELOCK_DURATION;
+        emit VaultUpdateQueued(_vault, vaultTimelockExpiry);
+    }
+
+    function executeVaultUpdate() external onlyOwner {
+        if (vaultTimelockExpiry == 0) revert NoPendingVaultUpdate();
+        if (block.timestamp < vaultTimelockExpiry) revert VaultTimelockNotExpired(vaultTimelockExpiry);
+        address next = pendingVault;
+        pendingVault = address(0);
+        vaultTimelockExpiry = 0;
+        vault = next;
+        emit VaultUpdated(next);
     }
 
     event BoostManagerUpdateQueued(address indexed boostManager, uint256 executeAfter);
@@ -619,6 +651,16 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
     function approve(address, uint256) public pure override returns (bool) {
         revert("ve4626: non-transferable");
+    }
+
+    /// @notice ODA-468-L18: permit would set a phantom allowance via `_approve` — revert like approve.
+    function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) public pure override {
+        revert("ve4626: non-transferable");
+    }
+
+    /// @notice ODA-468-L11: owner-critical ops have no alternate path — disable renounce.
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     // Required overrides
@@ -781,4 +823,3 @@ interface IVault {
 interface IBoostManager {
     function updateBalanceTracking(address user) external;
 }
-

@@ -464,6 +464,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     event MaxImpairmentChallengesPerEpochUpdated(uint8 newMax);
     event ImpairmentChallengeBondSlashed(uint256 indexed epochId, address indexed challenger, uint256 amount, address indexed to);
     event ImpairmentChallengeBondRefunded(uint256 indexed epochId, address indexed challenger, uint256 amount);
+    event ImpairmentChallengeBondRefundFailed(uint256 indexed epochId, address indexed challenger, uint256 amount);
     event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
@@ -2250,16 +2251,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     /**
-     * @dev Track the latest share acquisition block for delay enforcement.
-     *      - Mint: receiver gets current block.
-     *      - Transfer: does NOT update cooldown state (prevents griefing via dust transfers).
-     *      - Burn: no update needed.
+     * @dev Enforce withdrawal cooldown on share transfers out.
+     *      Cooldown *writes* happen in CoreModule `deposit`/`mint` (not here): module mints
+     *      go through `__moduleUpdate` self-call where `msg.sender == address(this)`, so this
+     *      hook cannot see the true depositor. Transfer recipients are intentionally not
+     *      refreshed (prevents dust-transfer griefing).
      */
     function _update(address from, address to, uint256 value) internal override {
-        // Enforce the withdrawal cooldown on share transfers out.
-        //
-        // Without this, removing transfer-based cooldown inheritance would allow
-        // `deposit -> transfer -> withdraw` to bypass the delay across addresses.
+        // Without transfer cooldown, `deposit -> transfer -> withdraw` bypasses the delay.
         if (withdrawDelayBlocks != 0 && from != address(0) && to != address(0) && from != address(this)) {
             uint256 requiredBlock = lastDepositBlock[from] + withdrawDelayBlocks;
             if (block.number < requiredBlock) {
@@ -2268,19 +2267,6 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         }
 
         super._update(from, to, value);
-
-        if (to == address(0)) {
-            return;
-        }
-
-        if (from == address(0)) {
-            // Do not track internal mints (eg profit locking shares minted to this vault),
-            // otherwise vault-internal transfers (eg queued withdrawal cancellations) could be blocked.
-            if (to != address(this)) {
-                lastDepositBlock[to] = block.number;
-            }
-            return;
-        }
     }
 
     // =================================

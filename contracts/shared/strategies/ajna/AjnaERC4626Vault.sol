@@ -332,7 +332,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function moveFromBuffer(uint256 toIndex, uint256 assets)
         external
-        onlySwapperOrKeeper
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 movedAssets, uint256 mintedBucketLp)
@@ -391,7 +391,10 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
         bucketLp[fromIndex] -= fromBucketLp;
         bucketLp[toIndex] += toBucketLp;
-        _trackBucket(toIndex);
+        // ODA-466 low: only track destination when move minted LP (mirror moveFromBuffer).
+        if (toBucketLp > 0) {
+            _trackBucket(toIndex);
+        }
         _untrackBucketIfEmpty(fromIndex);
 
         emit BucketMoved(fromIndex, toIndex, fromBucketLp, toBucketLp);

@@ -96,6 +96,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 indexed epochId, address indexed challenger, uint256 amount, address indexed to
     );
     event ImpairmentChallengeBondRefunded(uint256 indexed epochId, address indexed challenger, uint256 amount);
+    /// @notice ODA-480-[1]: refund call failed; ETH retained in vault so liveness paths never revert.
+    event ImpairmentChallengeBondRefundFailed(uint256 indexed epochId, address indexed challenger, uint256 amount);
     event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
@@ -379,7 +381,15 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         }
 
         _pullCreatorCoinExact(msg.sender, assets);
+        // ODA-480-[3] + Codex flash-loan fix: refresh cooldown for self-deposits, and
+        // for first-time receivers (zero prior shares) so `deposit(assets, attackerWallet)`
+        // cannot mint immediately-redeemable shares. Do not refresh an existing holder's
+        // clock via third-party `deposit(assets, victim)`.
+        uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
+        if (receiver == msg.sender || receiverSharesBefore == 0) {
+            lastDepositBlock[receiver] = block.number;
+        }
 
         if (!isFirstDeposit) {
             uint256 priceAfter = pricePerShare();
@@ -425,7 +435,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         }
 
         _pullCreatorCoinExact(msg.sender, assets);
+        // ODA-480-[3] + Codex flash-loan fix: mirror deposit policy.
+        uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
+        if (receiver == msg.sender || receiverSharesBefore == 0) {
+            lastDepositBlock[receiver] = block.number;
+        }
 
         if (!isFirstDeposit) {
             uint256 priceAfter = pricePerShare();
@@ -1105,6 +1120,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     /// @dev `refundChallenger=true` returns bond to challenger; false slashes to fee recipient/owner.
+    ///      ODA-480-[1]: refund failure must NOT revert — otherwise a griefing challenger contract
+    ///      that rejects ETH permanently bricks `clearStaleImpairmentTrip` / false-alarm reset.
     function _settleImpairmentChallengeBond(uint256 epochId, bool refundChallenger) internal {
         uint256 held = impairmentChallengeBondHeld[epochId];
         address challenger = impairmentRootChallenger[epochId];
@@ -1114,8 +1131,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         if (refundChallenger) {
             (bool ok,) = payable(challenger).call{value: held}("");
-            if (!ok) revert ImpairmentChallengeBondTransferFailed();
-            emit ImpairmentChallengeBondRefunded(epochId, challenger, held);
+            if (ok) {
+                emit ImpairmentChallengeBondRefunded(epochId, challenger, held);
+            } else {
+                // Retain ETH in the vault (same retention pattern as slash when recipient cannot receive).
+                emit ImpairmentChallengeBondRefundFailed(epochId, challenger, held);
+            }
             return;
         }
 
