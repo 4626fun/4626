@@ -18,6 +18,7 @@ import {
 } from "wagmi";
 
 import { SwapCard } from "@/components/swap/SwapCard";
+import { TokenAvatar } from "@/components/swap/TokenAvatar";
 import { toast } from "@/components/ui/Toast";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { CONTRACTS } from "@/config/contracts";
@@ -1194,21 +1195,11 @@ export function AlfaClubLiquidity({
           tokenOutDisplay={sellingKeys ? creatorDisplay : keyDisplay}
           tokenInIdentityLoading={!snapshot && snapshotQuery.isLoading}
           tokenOutIdentityLoading={!snapshot && snapshotQuery.isLoading}
-          // Buy mode quotes keys→coin cost: edit key qty on the Buy side,
-          // show the creator-coin payment quote on the Sell side.
-          amountInUnits={
-            sellingKeys
-              ? keyAmountInput
-              : quotedCoinAmount === "--"
-                ? ""
-                : quotedCoinAmount
-          }
+          // Key qty is always the edited amount; coin quote is the estimated side.
+          // SwapCard amountEditSide remaps which row is editable (sell vs buy).
+          amountInUnits={keyAmountInput}
           estimatedOut={
-            sellingKeys
-              ? quotedCoinAmount === "--"
-                ? ""
-                : quotedCoinAmount
-              : keyAmountInput
+            quotedCoinAmount === "--" ? "" : quotedCoinAmount
           }
           buyQuoteLoading={Boolean(keyAmount) && quoteQuery.isFetching && !quote}
           estimatedOutUsd={null}
@@ -1292,13 +1283,25 @@ export function AlfaClubLiquidity({
         />
 
         <section className="min-w-0 space-y-3 border-t border-white/[0.06] px-0.5 pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium tracking-[0.01em] text-zinc-300">
-                Sudoswap market
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.01em] text-zinc-300">
+                <img
+                  src="/brands/sudoswap.png"
+                  alt=""
+                  className="h-3.5 w-3.5 rounded-full object-cover"
+                  loading="lazy"
+                />
+                <span>Sudoswap market</span>
               </p>
-              <p className="mt-0.5 truncate text-[11px] text-zinc-600">
-                Official AlfaClub pool
+              <p className="flex max-w-full items-center gap-1.5 truncate text-[11px] text-zinc-600">
+                <img
+                  src="/protocols/alfaclub.svg"
+                  alt=""
+                  className="h-3.5 w-3.5 shrink-0 object-contain"
+                  loading="lazy"
+                />
+                <span className="truncate">Official AlfaClub pool</span>
               </p>
             </div>
             <span className="shrink-0 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium tabular-nums text-zinc-400">
@@ -1316,45 +1319,89 @@ export function AlfaClubLiquidity({
               ))}
             </div>
           ) : (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-              <div className="min-w-0">
-                <dt className="text-zinc-600">Pool keys</dt>
-                <dd className="mt-1 truncate tabular-nums text-zinc-200">
-                  {snapshot?.pairKeyBalance.toString() ?? "—"}
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-zinc-600">Pool {creatorSymbol}</dt>
-                <dd className="mt-1 truncate tabular-nums text-zinc-200">
-                  {formatTokenAmount(snapshot?.pairCreatorCoinBalance, decimals)}
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-zinc-600">Virtual keys</dt>
-                <dd className="mt-1 truncate tabular-nums text-zinc-200">
-                  {snapshot?.delta.toString() ?? "—"}
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-zinc-600">Virtual {creatorSymbol}</dt>
-                <dd className="mt-1 truncate tabular-nums text-zinc-200">
-                  {formatTokenAmount(snapshot?.spotPrice, decimals)}
-                </dd>
-              </div>
-            </dl>
-          )}
+            <div className="space-y-2.5">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1.5 text-zinc-500">
+                    <TokenAvatar
+                      token={{
+                        address: ALFACLUB.friendKey,
+                        symbol: keyChipSymbol,
+                        logoUrl: keyImageUrl ?? undefined,
+                      }}
+                      symbol={keyChipSymbol}
+                      size={14}
+                    />
+                    ERC-1155
+                  </dt>
+                  <dd className="mt-1 truncate tabular-nums text-zinc-200">
+                    {snapshot?.pairKeyBalance.toString() ?? "—"}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1.5 text-zinc-500">
+                    <TokenAvatar
+                      token={{
+                        address: ROOM_1659_CREATOR_COIN,
+                        symbol: creatorSymbol,
+                        logoUrl: logoUrl ?? undefined,
+                      }}
+                      symbol={creatorSymbol}
+                      size={14}
+                    />
+                    ERC-20
+                  </dt>
+                  <dd className="mt-1 truncate tabular-nums text-zinc-200">
+                    {formatTokenAmount(snapshot?.pairCreatorCoinBalance, decimals)}
+                  </dd>
+                </div>
+              </dl>
 
-          {quotePreview ? (
-            <p className="text-[11px] leading-relaxed text-zinc-500">
-              <span className="text-zinc-400">1 {keySymbol}</span>
-              {" · "}
-              {sellingKeys ? "sell" : "buy"} ≈{" "}
-              <span className="tabular-nums text-zinc-300">
-                {formatTokenAmount(quotePreview.effectiveUnitPrice, decimals)}{" "}
-                {creatorSymbol}
-              </span>
-            </p>
-          ) : null}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-2.5 py-2.5 text-xs">
+                <div className="col-span-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-600">
+                  Virtual reserves
+                </div>
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1.5 text-zinc-600">
+                    <span className="opacity-55">
+                      <TokenAvatar
+                        token={{
+                          address: ALFACLUB.friendKey,
+                          symbol: keyChipSymbol,
+                          logoUrl: keyImageUrl ?? undefined,
+                        }}
+                        symbol={keyChipSymbol}
+                        size={14}
+                      />
+                    </span>
+                    ERC-1155
+                  </dt>
+                  <dd className="mt-1 truncate tabular-nums text-zinc-400">
+                    {snapshot?.delta.toString() ?? "—"}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1.5 text-zinc-600">
+                    <span className="opacity-55">
+                      <TokenAvatar
+                        token={{
+                          address: ROOM_1659_CREATOR_COIN,
+                          symbol: creatorSymbol,
+                          logoUrl: logoUrl ?? undefined,
+                        }}
+                        symbol={creatorSymbol}
+                        size={14}
+                      />
+                    </span>
+                    ERC-20
+                  </dt>
+                  <dd className="mt-1 truncate tabular-nums text-zinc-400">
+                    {formatTokenAmount(snapshot?.spotPrice, decimals)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
         </section>
       </div>
     );

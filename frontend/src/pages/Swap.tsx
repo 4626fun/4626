@@ -107,46 +107,20 @@ function KeySwapSurface(props: {
 }) {
   const sellingKey = props.selection.side === 'input'
   const key = props.selection.key
-  const sellLabel = sellingKey ? key.label : 'AKITA'
-  const buyLabel = sellingKey ? 'AKITA' : key.label
-  const keyIsSell = sellingKey
+  // Single interactive surface: embedded AlfaClubLiquidity already renders SwapCard.
+  // Do not wrap another Sell/Buy chrome around it (that double-stacked the modal).
   return (
-    <div className="bv-panel border-0 vault-hover-lift p-4">
-      <div className="mb-3 flex items-center justify-between gap-2 text-[10px] text-vault-subtext">
-        <span>Official Sudoswap ERC-1155 key market</span>
-        <span className="rounded-md border border-sky-300/20 bg-sky-500/[0.07] px-2 py-1 font-medium text-sky-100">Key</span>
-      </div>
-      <div className="space-y-3">
-        {(['Sell', 'Buy'] as const).map((label) => {
-          const isSell = label === 'Sell'
-          const isKey = isSell ? keyIsSell : !keyIsSell
-          const assetLabel = isSell ? sellLabel : buyLabel
-          return (
-            <div key={label} className="rounded-[20px] border border-white/[0.08] bg-[rgb(var(--vault-card-raised)/0.72)] p-4">
-              <span className="text-[14px] font-medium leading-none text-zinc-400">{label}</span>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-[24px] font-medium text-zinc-500">{isSell ? 'Enter amount below' : 'Live quote below'}</span>
-                <button type="button" onClick={() => props.onOpenPicker(isSell ? props.selection.side : (props.selection.side === 'input' ? 'output' : 'input'))} className="inline-flex h-11 items-center gap-2 rounded-full bg-[rgb(var(--vault-card)/0.95)] px-3 py-2 transition-colors hover:bg-white/[0.08]" aria-label={`Select ${label.toLowerCase()} asset`}>
-                  <span className={isKey ? 'flex h-6 w-6 items-center justify-center rounded-lg border border-sky-300/30 bg-sky-500/[0.08] text-xs text-sky-100' : 'flex h-6 w-6 items-center justify-center rounded-full bg-brand-primary/15 text-[10px] font-bold text-brand-100'}>{isKey ? '⌘' : 'A'}</span>
-                  <span className="max-w-[8rem] truncate text-[16px] font-semibold text-white">{assetLabel}</span>
-                </button>
-              </div>
-              {isKey ? <div className="mt-1 text-xs text-sky-100/70">ERC-1155 Key #{key.keyId} · Sudoswap</div> : <div className="mt-1 text-xs text-zinc-500">Creator coin · AKITA</div>}
-            </div>
-          )
-        })}
-        <button type="button" onClick={props.onSwitch} className="mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[rgb(var(--vault-card-raised)/0.95)] text-zinc-200" aria-label="Switch key market direction">↕</button>
-      </div>
-      <div className="mt-3 border-t border-white/8 pt-3">
-        <AlfaClubLiquidity
-          key={`${key.keyId}-${props.selection.side}`}
-          initialCreatorCoin={AKITA_DEFAULTS.token}
-          initialTokenId={BigInt(key.keyId)}
-          initialMode={sellingKey ? 'sell' : 'buy'}
-          embedded
-        />
-      </div>
-    </div>
+    <AlfaClubLiquidity
+      key={`${key.keyId}-${props.selection.side}`}
+      initialCreatorCoin={AKITA_DEFAULTS.token}
+      initialTokenId={BigInt(key.keyId)}
+      initialMode={sellingKey ? 'sell' : 'buy'}
+      initialImageUrl={key.imageUrl}
+      initialKeyLabel={key.label}
+      onOpenTokenSelector={props.onOpenPicker}
+      onSwitchTokens={props.onSwitch}
+      embedded
+    />
   )
 }
 
@@ -1102,7 +1076,7 @@ export function Swap() {
           onClick={() => setActivePanel(panel)}
           className={`min-h-10 rounded-xl px-3 text-sm font-semibold transition ${
             activePanel === panel
-              ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/15'
+              ? 'bg-brand-primary text-white shadow-lg shadow-[rgb(var(--brand-primary)/0.28)]'
               : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
           }`}
         >

@@ -188,12 +188,6 @@ export function SwapDetails({
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
             <div className="space-y-0.5 border-t border-[rgb(var(--vault-border-strong)/0.35)] pt-2">
-              {exchangeRate ? (
-                <DetailRow label="Exchange rate">
-                  <span className="app-meta-value text-vault-text">{exchangeRate}</span>
-                </DetailRow>
-              ) : null}
-
               {networkCost ? (
                 <DetailRow label="Network cost">
                   <span className="inline-flex items-center gap-1.5">

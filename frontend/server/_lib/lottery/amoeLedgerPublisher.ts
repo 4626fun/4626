@@ -69,7 +69,14 @@ import {
   type ProjectAmoeBurnsToLedgerResult,
 } from './amoeLedgerProjector.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
-import { requirePointsLedgerPublisherMatchesSender } from './amoePublisherRoleGuard.js'
+import {
+  AMOE_LEDGER_ROOT_MISMATCH,
+  AMOE_ON_CHAIN_RECONCILED_TX,
+  isZeroRoot,
+  normalizeRootHex,
+  readPointsLedgerRootOf,
+  requirePointsLedgerPublisherMatchesSender,
+} from './amoePublisherRoleGuard.js'
 import {
   readProtocolCswOwnerIndexEnv,
   readProtocolCswPrivyWalletIdEnv,
@@ -677,6 +684,36 @@ export async function publishEpoch(
     let txHash: `0x${string}`
     if (liveSnapshot.publishTxHash === null) {
       await setPhase(db, runId, 'broadcasting')
+      // Reconcile: if the on-chain root already matches, stamp DB and skip
+      // UserOp (avoids EpochAlreadyPublished → opaque userop_submission_failed).
+      const [{ createPublicClient, http }, { base }] = await Promise.all([
+        import('viem'),
+        import('viem/chains'),
+      ])
+      const publicClient = createPublicClient({
+        chain: base,
+        transport: http(readBaseRpcUrlForPublisher(), { timeout: 30_000 }),
+      })
+      const onChainRoot = normalizeRootHex(
+        await readPointsLedgerRootOf({
+          publicClient,
+          lotteryAmoeRouter: args.lotteryAmoeRouter,
+          epoch,
+        }),
+      )
+      const expectedRoot = normalizeRootHex(snapshotRoot)
+      if (onChainRoot === expectedRoot) {
+        txHash = AMOE_ON_CHAIN_RECONCILED_TX as `0x${string}`
+        await markSnapshotBroadcast(db, epoch, txHash)
+        await markSnapshotConfirmed(db, epoch, 0n)
+        await markTerminal(db, runId, 'finished', { snapshotEpoch: epoch })
+        return { kind: 'finished', epoch, rootHex: snapshotRoot, txHash }
+      }
+      if (!isZeroRoot(onChainRoot)) {
+        throw new Error(
+          `${AMOE_LEDGER_ROOT_MISMATCH} epoch=${epoch.toString()} onChain=${onChainRoot} expected=${expectedRoot}`,
+        )
+      }
       const broadcastResult = await args.broadcast({
         lotteryAmoeRouter: args.lotteryAmoeRouter,
         epoch,
@@ -686,6 +723,15 @@ export async function publishEpoch(
       await markSnapshotBroadcast(db, epoch, txHash)
     } else {
       txHash = liveSnapshot.publishTxHash as `0x${string}`
+    }
+
+    // Reconciled sentinel has no receipt to wait for.
+    if (txHash === AMOE_ON_CHAIN_RECONCILED_TX) {
+      if (liveSnapshot.publishConfirmedAt === null) {
+        await markSnapshotConfirmed(db, epoch, 0n)
+      }
+      await markTerminal(db, runId, 'finished', { snapshotEpoch: epoch })
+      return { kind: 'finished', epoch, rootHex: snapshotRoot, txHash }
     }
 
     // ----------------------------------------------------------------

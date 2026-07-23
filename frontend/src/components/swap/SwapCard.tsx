@@ -85,6 +85,13 @@ export function SwapCard(props: SwapCardProps) {
           <span>Powered by</span>
           {showUniswapBranding ? (
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
+          ) : props.swapProviderLabel === 'Sudoswap' ? (
+            <img
+              src="/brands/sudoswap.png"
+              alt="Sudoswap"
+              className="h-3.5 w-3.5 rounded-full object-cover"
+              loading="lazy"
+            />
           ) : (
             <span className="font-semibold text-vault-text">{props.swapProviderLabel}</span>
           )}

@@ -35,6 +35,9 @@ const {
   defaultConfirmMock,
   defaultLookupBurnContextMock,
   requirePublisherDbMock,
+  isAmoeAllowlistPublisherEnabledMock,
+  publishAllowlistEpochMock,
+  pickNextAllowlistEpochToPublishMock,
 } = vi.hoisted(() => ({
   publishEpochMock: vi.fn(),
   reclaimStrandedPublisherRunsMock: vi.fn(),
@@ -45,6 +48,9 @@ const {
   defaultConfirmMock: vi.fn(),
   defaultLookupBurnContextMock: vi.fn(),
   requirePublisherDbMock: vi.fn(),
+  isAmoeAllowlistPublisherEnabledMock: vi.fn(),
+  publishAllowlistEpochMock: vi.fn(),
+  pickNextAllowlistEpochToPublishMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/lottery/amoeLedgerPublisher.js', () => ({
@@ -57,6 +63,12 @@ vi.mock('../../server/_lib/lottery/amoeLedgerPublisher.js', () => ({
   defaultConfirmTransactionReceipt: defaultConfirmMock,
   defaultLookupBurnContext: defaultLookupBurnContextMock,
   requirePublisherDb: requirePublisherDbMock,
+}))
+
+vi.mock('../../server/_lib/lottery/amoeAllowlistPublisher.js', () => ({
+  isAmoeAllowlistPublisherEnabled: isAmoeAllowlistPublisherEnabledMock,
+  publishAllowlistEpoch: publishAllowlistEpochMock,
+  pickNextAllowlistEpochToPublish: pickNextAllowlistEpochToPublishMock,
 }))
 
 import {
@@ -113,9 +125,15 @@ describe('lottery/amoe/publish-cron handler', () => {
     defaultConfirmMock.mockReset()
     defaultLookupBurnContextMock.mockReset()
     requirePublisherDbMock.mockReset()
+    isAmoeAllowlistPublisherEnabledMock.mockReset()
+    publishAllowlistEpochMock.mockReset()
+    pickNextAllowlistEpochToPublishMock.mockReset()
 
     // Defaults: enabled, valid db, sane reclaim count.
     isAmoeLedgerPublisherEnabledMock.mockReturnValue(true)
+    isAmoeAllowlistPublisherEnabledMock.mockReturnValue(false)
+    pickNextAllowlistEpochToPublishMock.mockResolvedValue(null)
+    publishAllowlistEpochMock.mockResolvedValue({ kind: 'finished_no_op', epoch: 5n })
     readPublisherClaimedByMock.mockReturnValue('test-pod-1')
     requirePublisherDbMock.mockResolvedValue(fakeDb())
     reclaimStrandedPublisherRunsMock.mockResolvedValue(0)
@@ -480,5 +498,63 @@ describe('lottery/amoe/publish-cron handler', () => {
     })
     // Crucially, publishEpoch is NOT called when there's nothing to do.
     expect(publishEpochMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 500 allowlist_errored when allowlist publish throws on nothing_to_publish', async () => {
+    pickNextEpochToPublishMock.mockResolvedValue(null)
+    isAmoeAllowlistPublisherEnabledMock.mockReturnValue(true)
+    pickNextAllowlistEpochToPublishMock.mockResolvedValue(4n)
+    publishAllowlistEpochMock.mockRejectedValue(new Error('amoe_publisher_role_mismatch'))
+    __setAmoePublishCronHandlerHooksForTest({
+      db: fakeDb(),
+      nowSec: NOW_FOR_EPOCH_5_TARGET,
+    })
+    const handler = await getV1ApiHandler('lottery/amoe/publish-cron')
+    const req = createMockReq({
+      method: 'GET',
+      headers: { authorization: `Bearer ${VALID_SECRET}` },
+    })
+    const res = createMockRes()
+    await handler!(req, res)
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toMatchObject({
+      ok: false,
+      tick: 'allowlist_errored',
+      error: 'amoe_publisher_role_mismatch',
+    })
+    expect(publishAllowlistEpochMock).toHaveBeenCalledWith(
+      expect.objectContaining({ epoch: 4n }),
+    )
+  })
+
+  it('allowlist backfill: picks pending allowlist epoch when ledger caught up', async () => {
+    pickNextEpochToPublishMock.mockResolvedValue(null)
+    isAmoeAllowlistPublisherEnabledMock.mockReturnValue(true)
+    pickNextAllowlistEpochToPublishMock.mockResolvedValue(3n)
+    publishAllowlistEpochMock.mockResolvedValue({
+      kind: 'already_on_chain',
+      epoch: 3n,
+      rootHex: '0x' + '11'.repeat(32),
+    })
+    __setAmoePublishCronHandlerHooksForTest({
+      db: fakeDb(),
+      nowSec: NOW_FOR_EPOCH_5_TARGET,
+    })
+    const handler = await getV1ApiHandler('lottery/amoe/publish-cron')
+    const req = createMockReq({
+      method: 'GET',
+      headers: { authorization: `Bearer ${VALID_SECRET}` },
+    })
+    const res = createMockRes()
+    await handler!(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({
+      ok: true,
+      tick: 'nothing_to_publish',
+      allowlistOutcome: 'already_on_chain',
+    })
+    expect(publishAllowlistEpochMock).toHaveBeenCalledWith(
+      expect.objectContaining({ epoch: 3n }),
+    )
   })
 })
