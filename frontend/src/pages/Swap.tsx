@@ -1076,7 +1076,7 @@ export function Swap() {
           onClick={() => setActivePanel(panel)}
           className={`min-h-10 rounded-xl px-3 text-sm font-semibold transition ${
             activePanel === panel
-              ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/15'
+              ? 'bg-brand-primary text-white shadow-lg shadow-[rgb(var(--brand-primary)/0.28)]'
               : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
           }`}
         >

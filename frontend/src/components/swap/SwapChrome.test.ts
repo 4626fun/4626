@@ -89,6 +89,50 @@ describe('Swap chrome', () => {
     expect(html).not.toContain('Coinbase Smart Wallet')
   })
 
+  it('renders the Sudoswap mark for Sudoswap-powered swaps', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SwapCard, {
+        tokenInDisplay: { symbol: 'akita', name: 'Akita', logoUrl: null, logoUrls: [] },
+        tokenOutDisplay: { symbol: 'AKITA', name: 'AKITA key', logoUrl: null, logoUrls: [] },
+        tokenInIdentityLoading: false,
+        tokenOutIdentityLoading: false,
+        amountInUnits: '1',
+        estimatedOut: '100',
+        estimatedOutUsd: null,
+        tokenInSymbol: 'akita',
+        tokenOutSymbol: 'AKITA',
+        isConnected: true,
+        isReady: true,
+        busy: null,
+        status: null,
+        error: null,
+        quoteUpdatedAt: null,
+        approvalRequired: false,
+        tokenInAddress: '0x1111111111111111111111111111111111111111',
+        tokenOutAddress: '0x2222222222222222222222222222222222222222',
+        routeSummary: 'Sudoswap v2',
+        gasEstimateLabel: null,
+        priceImpactLabel: null,
+        selectedChainId: 8453,
+        walletChainId: 8453,
+        onSelectChain: vi.fn(),
+        slippagePct: '1',
+        onOpenTokenSelector: vi.fn(),
+        onAmountChange: vi.fn(),
+        onQuickPercent: vi.fn(),
+        onSwitchTokens: vi.fn(),
+        onReviewTrade: vi.fn(),
+        onSetSlippagePct: vi.fn(),
+        executionMode: 'canonical',
+        fallbackActive: false,
+        swapProviderLabel: 'Sudoswap',
+      }),
+    )
+
+    expect(html).toContain('/brands/sudoswap.png')
+    expect(html).not.toContain('>Sudoswap<')
+  })
+
   it('does not render the extra kicker above the swap title', () => {
     const html = renderToStaticMarkup(
       React.createElement(SwapPageLayout, {
