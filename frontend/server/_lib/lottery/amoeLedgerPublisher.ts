@@ -69,6 +69,7 @@ import {
   type ProjectAmoeBurnsToLedgerResult,
 } from './amoeLedgerProjector.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
+import { requirePointsLedgerPublisherMatchesSender } from './amoePublisherRoleGuard.js'
 import {
   readProtocolCswOwnerIndexEnv,
   readProtocolCswPrivyWalletIdEnv,
@@ -847,6 +848,11 @@ export async function defaultBroadcastSetPointsLedgerRoot(args: {
   const privyWalletId = readAmoeLedgerPublisherPrivyWalletId()
   const expectedOwnerAddress = readAmoeLedgerPublisherOwnerAddress()
   if (smartWallet && bundlerUrl && privyWalletId && expectedOwnerAddress) {
+    await requirePointsLedgerPublisherMatchesSender({
+      publicClient,
+      lotteryAmoeRouter: args.lotteryAmoeRouter,
+      expectedSender: smartWallet,
+    })
     const {
       resolvePrivyCoinbaseSmartWalletOwnerContext,
       sendPrivyCoinbaseSmartWalletUserOperation,
@@ -880,8 +886,14 @@ export async function defaultBroadcastSetPointsLedgerRoot(args: {
   // publisher key.)
   const directPk = readAmoeLedgerPublisherPrivateKey()
   if (directPk) {
+    const account = privateKeyToAccount(directPk)
+    await requirePointsLedgerPublisherMatchesSender({
+      publicClient,
+      lotteryAmoeRouter: args.lotteryAmoeRouter,
+      expectedSender: account.address,
+    })
     const wallet = createWalletClient({
-      account: privateKeyToAccount(directPk),
+      account,
       chain: base,
       transport: http(readBaseRpcUrlForPublisher(), { timeout: 30_000 }),
     })

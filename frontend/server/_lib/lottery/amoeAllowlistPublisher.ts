@@ -15,6 +15,7 @@ import {
   readAmoeLedgerPublisherSmartWallet,
   readBaseRpcUrlForPublisher,
 } from './amoeLedgerPublisher.js'
+import { requireAllowlistPublisherMatchesSender } from './amoePublisherRoleGuard.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -94,13 +95,18 @@ export async function defaultBroadcastSetAllowlistRoot(args: {
     transport: http(rpc, { timeout: 30_000 }),
   })
 
-  // Production router.allowlistPublisher is the canonical CSW — mirror the
+  // Production router.allowlistPublisher is PROTOCOL_CSW — mirror the
   // ledger publisher's Privy 4337 path before falling back to a direct EOA.
   const smartWallet = readAmoeLedgerPublisherSmartWallet()
   const bundlerUrl = readAmoeLedgerPublisherBundlerUrl()
   const privyWalletId = readAmoeLedgerPublisherPrivyWalletId()
   const expectedOwnerAddress = readAmoeLedgerPublisherOwnerAddress()
   if (smartWallet && bundlerUrl && privyWalletId && expectedOwnerAddress) {
+    await requireAllowlistPublisherMatchesSender({
+      publicClient,
+      lotteryAmoeRouter: args.lotteryAmoeRouter,
+      expectedSender: smartWallet,
+    })
     const {
       resolvePrivyCoinbaseSmartWalletOwnerContext,
       sendPrivyCoinbaseSmartWalletUserOperation,
@@ -128,8 +134,15 @@ export async function defaultBroadcastSetAllowlistRoot(args: {
   const pk = readAmoeAllowlistPublisherPrivateKey()
   if (!pk) throw new Error('no_allowlist_publisher_key_configured')
 
+  const account = privateKeyToAccount(pk)
+  await requireAllowlistPublisherMatchesSender({
+    publicClient,
+    lotteryAmoeRouter: args.lotteryAmoeRouter,
+    expectedSender: account.address,
+  })
+
   const wallet = createWalletClient({
-    account: privateKeyToAccount(pk),
+    account,
     chain: base,
     transport: http(rpc, { timeout: 30_000 }),
   })
