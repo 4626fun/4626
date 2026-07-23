@@ -174,6 +174,22 @@ describe('/api/v1/alfaclub/chat-token', () => {
     expect(res.body?.data?.activeSource).toBe('db')
   })
 
+  it('POST rejects CRON_SECRET-only callers without an admin session', async () => {
+    getSessionAddressMock.mockReturnValue(null)
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer cron-secret' },
+      body: { jwt: 'header.payload.signature' },
+      rawBody: JSON.stringify({ jwt: 'header.payload.signature' }),
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(upsertAlfaClubChatTokenMock).not.toHaveBeenCalled()
+  })
+
   it('DELETE clears the db token', async () => {
     const req = createMockReq({ method: 'DELETE' })
     const res = createMockRes()
@@ -253,4 +269,3 @@ describe('/api/v1/alfaclub/chat-token', () => {
     expect(res.body?.data?.refresherBootstrapped).toEqual({ access: true, refresh: true })
   })
 })
-

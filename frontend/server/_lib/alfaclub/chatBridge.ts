@@ -98,7 +98,6 @@ declare const process: { env: Record<string, string | undefined> }
 const DEFAULT_WS_URL = 'wss://ws.alfaclub.app'
 const DEFAULT_POLL_INTERVAL_MS = 6_000
 const DEFAULT_HISTORY_LIMIT = 20
-const DEFAULT_CRON_HISTORY_LIMIT = 12
 const DEFAULT_SEND_TIMEOUT_MS = 10_000
 const DEFAULT_HTTP_TIMEOUT_MS = 8_000
 const DEFAULT_WS_LIVE_FALLBACK_ENABLED = true
@@ -596,14 +595,12 @@ function aggregateBridgeTickResults(
 
 export function readAlfaClubChatBridgeFlagsForCronTick(): AlfaClubChatBridgeFlags {
   const flags = readAlfaClubChatBridgeFlags()
-  const cronLimit = parsePositiveInt(
-    process.env.ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT,
-    DEFAULT_CRON_HISTORY_LIMIT,
-    MAX_HISTORY_LIMIT,
-  )
   return {
     ...flags,
-    historyLimit: Math.min(flags.historyLimit, cronLimit),
+    // Stateless cron has no persistent websocket cursor. Always fetch the
+    // upstream-bounded maximum so ordinary chatter cannot cheaply push a
+    // command outside the polling window.
+    historyLimit: MAX_HISTORY_LIMIT,
   }
 }
 
@@ -2231,6 +2228,16 @@ function isRoomHistoryAuthError(error: unknown): boolean {
     message === 'room_history_read_bot_failed:401' ||
     message === 'room_history_read_bot_failed:403' ||
     message.startsWith('room_history_read_bot_failed:401:') ||
+    message.startsWith('room_history_read_bot_failed:403:')
+  )
+}
+
+function isRoomHistoryPermissionDenied(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return (
+    message === 'room_history_failed:403' ||
+    message.startsWith('room_history_failed:403:') ||
+    message === 'room_history_read_bot_failed:403' ||
     message.startsWith('room_history_read_bot_failed:403:')
   )
 }
@@ -3928,13 +3935,33 @@ async function runBridgeTick(
       const now = Date.now()
       warnRoomHistoryCfChallenge({ roomId, now, error: historyError })
       recordBridgeCfChallenge(new Date(now).toISOString(), bridgeAuthState.cfChallengeSustainedFlagged)
-      applySocketBackoff(now)
       bridgeState.liveFallbackActive = true
+      // An HTTP/WAF challenge says nothing about websocket health. Do not
+      // poison socket backoff; activate the independently authenticated live
+      // lane and process anything it has already queued.
+      if (shouldConnectLiveWebSocket(options, flags, ingestJwt)) {
+        ensureLiveCommandSocket({
+          websocketUrl: flags.websocketUrl,
+          roomId,
+          jwt: ingestJwt as string,
+          flags,
+        })
+      }
+      bridgeState.seededRoomIds.add(roomId)
+      const liveCommands = drainLiveCommands()
+      const liveBatch = await executeCommandBatch({
+        commands: liveCommands,
+        flags,
+        roomId,
+        jwt,
+      })
       return earlyTickResult({
         roomId,
         historyError,
-        processed: 0,
-        replied: 0,
+        unseen: liveCommands.length,
+        processed: liveBatch.processed,
+        replied: liveBatch.replied,
+        errors: liveBatch.errors,
       })
     }
 
@@ -3972,7 +3999,13 @@ async function runBridgeTick(
       }
     }
 
-    const canUseLiveFallback = flags.wsLiveFallbackEnabled && kind === 'auth'
+    // A 403 is an explicit room authorization denial. It may justify one
+    // retry with an independently configured JWT, but must never activate the
+    // websocket command lane after that retry also fails.
+    const canUseLiveFallback =
+      flags.wsLiveFallbackEnabled &&
+      kind === 'auth' &&
+      !isRoomHistoryPermissionDenied(historyError)
     if (!canUseLiveFallback) {
       logger.warn('[alfaclub-chat] room_history_failed:no_fallback', {
         roomId,
@@ -4163,12 +4196,18 @@ async function runBridgeTick(
   }
 
   // First tick in long-running mode seeds the dedupe window and intentionally
-  // avoids replaying historical commands sent before the bridge started.
-  // In one-shot cron mode we continue so newly ingested commands are handled
-  // on the same invocation. Seed is per-room so room 1043 cannot unlock a
-  // full history replay for room 1659 on the next poll.
+  // avoids replaying historical commands sent before the bridge started
+  // (except a short recent window). Seed is per-room so room 1043 cannot
+  // unlock a full history replay for room 1659 on the next poll.
+  //
+  // Vercel cron (seedHistoryOnlyOnFirstTick=false): every invocation is a cold
+  // start, so mark the room seeded and fall through. Newly inserted IDs from
+  // this tick still execute; pre-existing history is excluded via the
+  // newlyIngestedHistoryIds filter below.
+  let seededThisTick = false
   if (!bridgeState.seededRoomIds.has(roomId)) {
     bridgeState.seededRoomIds.add(roomId)
+    seededThisTick = true
     if (seedHistoryOnlyOnFirstTick) {
       const recentCutoffMs = Date.now() - FIRST_TICK_RECENT_COMMAND_WINDOW_MS
       const recentMessages = unseenMessages.filter((message) => {
@@ -4226,9 +4265,9 @@ async function runBridgeTick(
   // Long-running in-process bridge: `unseenMessages` + `bridgeState.seenMessageIds`
   // prevent replay within the same process.
   // Vercel cron (seedHistoryOnlyOnFirstTick=false): stateless — only execute
-  // slash commands for history rows that were *inserted* this tick (not every
-  // ON CONFLICT update), otherwise /gmeow is re-run every minute and spams chat.
-  const commandSourceMessages = seedHistoryOnlyOnFirstTick
+  // for history rows that were *inserted* this tick (not every ON CONFLICT
+  // update), otherwise /gmeow is re-run every minute and spams chat.
+  const executionSourceMessages = seedHistoryOnlyOnFirstTick
     ? unseenMessages
     : newlyIngestedHistoryIds === null
       ? []
@@ -4238,7 +4277,7 @@ async function runBridgeTick(
 
   const commands = canBridgeExecuteCommandsInRoom(flags, roomId)
     ? collectAlfaClubCommandMessages({
-        messages: commandSourceMessages,
+        messages: executionSourceMessages,
         seenMessageIds: new Set<string>(),
         selfAddress: CANONICAL_CSW_ADDRESS,
       })
@@ -4261,12 +4300,12 @@ async function runBridgeTick(
   const inverseChatMarkets = isInverseAkitaChatReactionRoom(
     roomId,
     flags.inverseAkitaChatReactionRoomIds,
-  ) && unseenMessages.length > 0
+  ) && executionSourceMessages.length > 0
     ? await loadInverseAkitaChatReactionMarkets()
     : null
   const inverseChatIntents = await collectInverseAkitaChatTradeIntents({
     roomId,
-    messages: unseenMessages as InverseAkitaChatHistoryMessage[],
+    messages: executionSourceMessages as InverseAkitaChatHistoryMessage[],
     availableMarkets: inverseChatMarkets ?? undefined,
   })
   if (inverseChatIntents.length > 0) {
@@ -4284,7 +4323,7 @@ async function runBridgeTick(
   })
 
   return {
-    seeded: false,
+    seeded: seededThisTick,
     roomId,
     fetched: fetchedMessages.length,
     unseen: unseenMessages.length,
@@ -4498,6 +4537,10 @@ export function startAlfaClubChatBridge(opts?: {
 
 export function _isRoomHistoryAuthErrorForTests(error: unknown): boolean {
   return isRoomHistoryAuthError(error)
+}
+
+export function _isRoomHistoryPermissionDeniedForTests(error: unknown): boolean {
+  return isRoomHistoryPermissionDenied(error)
 }
 
 export function _isCloudflareChallengeErrorForTests(error: unknown): boolean {

@@ -24,7 +24,6 @@ import { runArenaTrade } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { CounterTradeRuntimeConfig, CounterTradeSide } from './counterTradeConfig.js'
-import { isAssetAllowlisted } from '../arena/arenaPairPolicy.js'
 import { computeLegLiqDistancePct, computeLegMarkApprox, type CounterWalletPositionLeg } from './counterTradeEngine.js'
 import {
   COUNTER_TRADE_DEFENSE_ALERT_REASON,
@@ -246,8 +245,6 @@ export function deriveCounterTradeDefenseActions(params: {
     if (leg.positionValue == null || !Number.isFinite(leg.positionValue) || leg.positionValue <= 0) continue
     const coin = String(leg.coin ?? '').trim()
     if (!coin) continue
-    if (!isAssetAllowlisted(coin, params.assetAllowlist)) continue
-
     const liqDistancePct = computeLegLiqDistancePct(leg)
     const unrealizedRoiPct = computeLegRoiPct(leg)
 

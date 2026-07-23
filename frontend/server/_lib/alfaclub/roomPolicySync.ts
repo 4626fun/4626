@@ -146,6 +146,7 @@ export async function syncCreatorRoomPoliciesFromSnapshot(params?: {
       poolAddress: candidate.poolAddress,
       enabled: false,
       actorAddress: null,
+      insertOnly: true,
     })
     upserted += 1
   }

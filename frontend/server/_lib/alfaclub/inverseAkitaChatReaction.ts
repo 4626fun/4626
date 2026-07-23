@@ -48,16 +48,10 @@ import {
   readInverseAkitaChatSelfSenderAddresses,
 } from './inverseAkitaChatSelfSenders.js'
 import {
-  isAlfaClubChipUsername,
   isAlfaClubTradeCompletedSender,
   parseInverseAkitaChatTradeEvent,
   resolveInverseAkitaTradeEventAuthor,
 } from './inverseAkitaChatTradeEvent.js'
-import {
-  CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS,
-  listRecentHexChatSpeakersForRoom,
-} from './chatIngestStore.js'
-import { readRoomLabelStatus } from './roomLabelCache.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -697,9 +691,7 @@ function shouldSkipInverseChatReactionHistoryMessage(params: {
   /** Structured Chip / `trade-completed` posts are attributed later. */
   allowTradeCompletedSender?: boolean
 }): boolean {
-  const looksLikeChip =
-    isAlfaClubTradeCompletedSender(params.senderLower)
-    || isAlfaClubChipUsername(params.username)
+  const looksLikeChip = isAlfaClubTradeCompletedSender(params.senderLower)
   const tradeCompleted = params.allowTradeCompletedSender === true && looksLikeChip
   // Chip trade cards may be flagged isBot — still ingest them.
   if (params.isBot === true && !looksLikeChip) return true
@@ -718,18 +710,6 @@ function shouldSkipInverseChatReactionHistoryMessage(params: {
   if (isInverseAkitaBotAuthoredChatText(params.text)) return true
   if (isRegisteredInverseAkitaBotOutboundText(params.text)) return true
   return false
-}
-
-async function resolveRoomCreatorAddress(roomId: string): Promise<string | null> {
-  try {
-    const rows = await readRoomLabelStatus([roomId])
-    const creator = String(rows[0]?.creatorAddress ?? '')
-      .trim()
-      .toLowerCase()
-    return isHexAddress(creator) ? creator : null
-  } catch {
-    return null
-  }
 }
 
 function isCommandLikeChatText(text: string): boolean {
@@ -756,7 +736,6 @@ export async function collectInverseAkitaChatTradeIntents(params: {
   const self = String(params.selfAddress ?? '').trim().toLowerCase()
   const classifyOpinion = params.classifyOpinion ?? classifyInverseAkitaChatOpinion
   const out: InverseAkitaChatTradeIntentMessage[] = []
-  let roomCreatorAddress: string | null | undefined
   const selfSenders = [
     self,
     ...readInverseAkitaChatSelfSenderAddresses(),
@@ -768,8 +747,7 @@ export async function collectInverseAkitaChatTradeIntents(params: {
     const text = String(message.text ?? '').trim()
     if (!id || !text || isCommandLikeChatText(text)) continue
 
-    const chipSystem =
-      isAlfaClubTradeCompletedSender(senderRaw) || isAlfaClubChipUsername(message.username)
+    const chipSystem = isAlfaClubTradeCompletedSender(senderRaw)
     const tradeEvent = chipSystem ? parseInverseAkitaChatTradeEvent(text) : null
 
     if (
@@ -801,55 +779,21 @@ export async function collectInverseAkitaChatTradeIntents(params: {
 
     if (tradeEvent) {
       const messageDate = Number(message.date)
-      // Prefer in-batch speakers, then durable chat_ingest speakers, then room creator.
-      // Do not jump to creator first — creator may not be the Chip trader / staker.
-      let attributed = resolveInverseAkitaTradeEventAuthor({
+      // A nearby speaker or the room creator did not necessarily authorize the
+      // trade. Fail closed unless the system payload binds the event to a wallet.
+      const attributed = resolveInverseAkitaTradeEventAuthor({
         payloadAddress: tradeEvent.userAddress,
         roomCreatorAddress: null,
         messageDate,
         excludeAddresses: selfSenders,
-        priorSpeakers: params.messages.map((message) => ({
-          sender: message.sender,
-          date: message.date == null ? null : Number(message.date),
-        })),
+        priorSpeakers: [],
       })
-      if (!attributed) {
-        const dbSpeakers = await listRecentHexChatSpeakersForRoom({
-          roomId: params.roomId,
-          atOrBeforeDateMs: Number.isFinite(messageDate) ? messageDate : null,
-          lookbackMs: CHIP_ATTRIBUTION_SPEAKER_LOOKBACK_MS,
-          limit: 40,
-        })
-        attributed = resolveInverseAkitaTradeEventAuthor({
-          payloadAddress: tradeEvent.userAddress,
-          roomCreatorAddress: null,
-          messageDate,
-          excludeAddresses: selfSenders,
-          priorSpeakers: dbSpeakers.map((entry) => ({
-            sender: entry.sender,
-            date: entry.dateMs,
-          })),
-        })
-      }
-      if (!attributed) {
-        if (roomCreatorAddress === undefined) {
-          roomCreatorAddress = await resolveRoomCreatorAddress(params.roomId)
-        }
-        attributed = resolveInverseAkitaTradeEventAuthor({
-          payloadAddress: tradeEvent.userAddress,
-          roomCreatorAddress,
-          messageDate,
-          excludeAddresses: selfSenders,
-          priorSpeakers: [],
-        })
-      }
       if (!attributed) {
         logger.warn('inverse_akita.chip_attribution_failed', {
           roomId: params.roomId,
           messageId: id,
           pair: tradeEvent.pair,
           userSide: tradeEvent.userSide,
-          hasRoomCreator: Boolean(roomCreatorAddress),
         })
         continue
       }
@@ -913,19 +857,7 @@ export function summarizeInverseTradeFailureDetail(
   run: { error?: string; stderr?: string; stdout?: string } | undefined | null,
 ): string | null {
   if (!run) return null
-  const lines: string[] = []
-  for (const part of [run.error, run.stderr, run.stdout]) {
-    for (const line of String(part ?? '').split('\n')) {
-      const trimmed = line.trim()
-      if (trimmed && !lines.includes(trimmed)) lines.push(trimmed)
-    }
-  }
-  if (lines.length === 0) return null
-  // Node's exec error message ("Command failed: npx tsx ...") carries no
-  // signal — prefer the underlying tool output when present.
-  const informative = lines.filter((line) => !/^command failed:/i.test(line))
-  const detail = (informative[0] ?? lines[0])!
-  return detail.length > 160 ? `${detail.slice(0, 157)}...` : detail
+  return 'Subprocess failed; inspect restricted service logs for diagnostics.'
 }
 
 export function formatInverseAkitaChatReactionReply(params: {

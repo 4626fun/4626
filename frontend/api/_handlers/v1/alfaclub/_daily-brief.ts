@@ -15,25 +15,10 @@ import {
   readInverseAkitaTradeJournalFlags,
   runInverseAkitaTradeJournal,
 } from '../../../../server/_lib/alfaclub/inverseAkitaTradeJournal.js'
-
-declare const process: { env: Record<string, string | undefined> }
-
-function readCronSecret(req: VercelRequest): string {
-  const header = req.headers['x-cron-secret']
-  if (Array.isArray(header)) return String(header[0] ?? '')
-  if (typeof header === 'string' && header.trim().length > 0) return header.trim()
-
-  const auth = req.headers.authorization
-  if (typeof auth === 'string') {
-    const m = auth.match(/^Bearer\s+(.+)$/i)
-    if (m?.[1]) return m[1].trim()
-  }
-  return ''
-}
-
-function readConfiguredCronSecret(): string {
-  return (process.env.CRON_SECRET ?? '').trim()
-}
+import {
+  isCronSecretAuthorized,
+  readConfiguredCronSecret,
+} from '../../../../server/_lib/alfaclub/alfaclubCronAuth.js'
 
 function readForceSendQuery(req: VercelRequest): boolean {
   const raw = req.query?.forceSend
@@ -51,19 +36,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const configuredSecret = readConfiguredCronSecret()
-  if (!configuredSecret) {
-    return res.status(503).json({
-      success: false,
-      error: 'CRON_SECRET is not configured',
-    })
-  }
-
-  const providedSecret = readCronSecret(req)
-  if (!providedSecret || providedSecret !== configuredSecret) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' })
-  }
-
   const limiter = await checkDurableRateLimit(
     rateLimitKey('alfaclub-daily-brief', getClientIp(req)),
     RATE_LIMITS.adminAction,
@@ -72,6 +44,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
+  if (!readConfiguredCronSecret()) {
+    return res.status(503).json({
+      success: false,
+      error: 'CRON_SECRET is not configured',
+    })
+  }
+  if (!isCronSecretAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
 
   try {

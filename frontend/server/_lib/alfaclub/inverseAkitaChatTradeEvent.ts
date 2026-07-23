@@ -3,7 +3,7 @@
  *
  * UI label is often "Chip"; the websocket sender is usually `trade-completed`
  * (empty username). Directional HL opens become InverseAKITA fades once we
- * attribute a wallet: payload address → recent human speaker → room creator.
+ * attribute a wallet only from the authenticated trade payload.
  */
 
 import type { CounterTradeSide } from './counterTradeConfig.js'
@@ -172,16 +172,13 @@ export function isAlfaClubChipSystemMessage(params: {
   sender?: string | null
   username?: string | null
 }): boolean {
-  return (
-    isAlfaClubTradeCompletedSender(params.sender) || isAlfaClubChipUsername(params.username)
-  )
+  return isAlfaClubTradeCompletedSender(params.sender)
 }
 
 /**
- * Attribute a Chip trade to a wallet for stake gating:
- * 1) payload userAddress
- * 2) most recent human hex speaker at/before the trade (any staker can trade)
- * 3) room creator fallback
+ * Attribute a Chip trade to a wallet for stake gating. Nearby chat speakers
+ * and room ownership do not prove who authorized a system trade card, so only
+ * an address carried by the trade payload is accepted.
  */
 export function resolveInverseAkitaTradeEventAuthor(params: {
   payloadAddress?: string | null
@@ -191,31 +188,11 @@ export function resolveInverseAkitaTradeEventAuthor(params: {
   priorSpeakers: ReadonlyArray<{ sender?: string | null; date?: number | null }>
 }): string | null {
   const fromPayload = normalizeHexAddress(params.payloadAddress)
-  if (fromPayload) return fromPayload
-
+  if (!fromPayload) return null
   const excluded = new Set(
     (params.excludeAddresses ?? [])
       .map((value) => normalizeHexAddress(value))
       .filter((value): value is string => Boolean(value)),
   )
-  const messageDate = Number(params.messageDate)
-  const dated = Number.isFinite(messageDate) ? messageDate : Number.POSITIVE_INFINITY
-
-  const candidates = params.priorSpeakers
-    .map((entry) => ({
-      sender: normalizeHexAddress(entry.sender),
-      date: Number(entry.date),
-    }))
-    .filter(
-      (entry): entry is { sender: string; date: number } =>
-        Boolean(entry.sender) && Number.isFinite(entry.date) && entry.date <= dated,
-    )
-    .sort((a, b) => b.date - a.date)
-
-  for (const candidate of candidates) {
-    if (excluded.has(candidate.sender)) continue
-    return candidate.sender
-  }
-
-  return normalizeHexAddress(params.roomCreatorAddress)
+  return excluded.has(fromPayload) ? null : fromPayload
 }

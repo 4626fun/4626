@@ -35,6 +35,23 @@ export const ROOM_1659_CREATOR_COIN = getAddress(
 export const ROOM_1659_TOKEN_ID = 1659n;
 export const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n;
 
+/** Repo-pinned Base defaults — keep in sync with `BASE_DEFAULTS` in contracts.defaults.ts. */
+export const DEFAULT_ALFACLUB_UNIVERSAL_ROUTER = getAddress(
+  "0x14c0e8840A3B7caE49EbdA899C7101A827598e9f",
+);
+export const DEFAULT_ALFACLUB_SUDOSWAP_ADAPTER = getAddress(
+  "0x961b113FF5E3547e8198758900b8f4Fa552A3Fe5",
+);
+export const DEFAULT_SUDOSWAP_PAIR_FACTORY = getAddress(
+  "0x605145D263482684590f630E9e581B21E4938eb8",
+);
+export const DEFAULT_SUDOSWAP_XYK_CURVE = getAddress(
+  "0xd0A2f4ae5E816ec09374c67F6532063B60dE037B",
+);
+export const DEFAULT_ROOM_1659_SUDOSWAP_PAIR = getAddress(
+  "0x4a1bD15948A6a61DbE5dfD1e57d5982fD1285766",
+);
+
 const ERC20_ABI = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function transfer(address recipient, uint256 amount) returns (bool)",
@@ -299,27 +316,27 @@ export function resolveAlfaClubLpPolicyConfig(
   }
 
   return {
-    router: readConfiguredAddress(
-      env.ALFACLUB_UNIVERSAL_ROUTER ?? env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
-      "alfaclub_sudoswap_router_not_configured",
-    ),
-    adapter: readConfiguredAddress(
-      env.ALFACLUB_SUDOSWAP_ADAPTER ?? env.VITE_ALFACLUB_SUDOSWAP_ADAPTER,
-      "alfaclub_sudoswap_adapter_not_configured",
-    ),
-    pair: readConfiguredAddress(
-      env.ALFACLUB_ROOM_1659_SUDOSWAP_PAIR ??
-        env.VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR,
-      "alfaclub_sudoswap_pair_not_configured",
-    ),
-    factory: readConfiguredAddress(
-      env.SUDOSWAP_PAIR_FACTORY ?? env.VITE_SUDOSWAP_PAIR_FACTORY,
-      "alfaclub_sudoswap_factory_not_configured",
-    ),
-    xykCurve: readConfiguredAddress(
-      env.SUDOSWAP_XYK_CURVE ?? env.VITE_SUDOSWAP_XYK_CURVE,
-      "alfaclub_sudoswap_curve_not_configured",
-    ),
+    router:
+      optionalConfiguredAddress(
+        env.ALFACLUB_UNIVERSAL_ROUTER ?? env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
+      ) ?? DEFAULT_ALFACLUB_UNIVERSAL_ROUTER,
+    adapter:
+      optionalConfiguredAddress(
+        env.ALFACLUB_SUDOSWAP_ADAPTER ?? env.VITE_ALFACLUB_SUDOSWAP_ADAPTER,
+      ) ?? DEFAULT_ALFACLUB_SUDOSWAP_ADAPTER,
+    pair:
+      optionalConfiguredAddress(
+        env.ALFACLUB_ROOM_1659_SUDOSWAP_PAIR ??
+          env.VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR,
+      ) ?? DEFAULT_ROOM_1659_SUDOSWAP_PAIR,
+    factory:
+      optionalConfiguredAddress(
+        env.SUDOSWAP_PAIR_FACTORY ?? env.VITE_SUDOSWAP_PAIR_FACTORY,
+      ) ?? DEFAULT_SUDOSWAP_PAIR_FACTORY,
+    xykCurve:
+      optionalConfiguredAddress(
+        env.SUDOSWAP_XYK_CURVE ?? env.VITE_SUDOSWAP_XYK_CURVE,
+      ) ?? DEFAULT_SUDOSWAP_XYK_CURVE,
     permit2:
       optionalConfiguredAddress(env.PERMIT2 ?? env.VITE_PERMIT2) ??
       CANONICAL_PERMIT2,
@@ -803,7 +820,14 @@ async function validateAlfaClubLiquidityManagementCalls(params: {
     client: params.client,
     config: params.config,
   });
+  // Sudoswap inventory transfers mint no LP receipt. Restrict deposits to the
+  // pair owner just like withdrawals/configuration so sponsored callers cannot
+  // donate assets or consume paymaster budget on someone else's pool.
+  if (owner !== params.sender)
+    throw new Error("alfaclub_sudoswap_pair_owner_mismatch");
   const selectors = params.calls.map((call) => selector(call.data));
+  if (owner !== params.sender)
+    throw new Error("alfaclub_sudoswap_pair_owner_mismatch");
   const isDeposit = selectors.every(
     (value) =>
       value === TRANSFER_SELECTOR ||
@@ -867,8 +891,6 @@ async function validateAlfaClubLiquidityManagementCalls(params: {
         throw new Error("alfaclub_sudoswap_deposit_key_balance_insufficient");
     }
   } else {
-    if (owner !== params.sender)
-      throw new Error("alfaclub_sudoswap_pair_owner_mismatch");
     if (params.calls.some((call) => call.target !== params.config.pair)) {
       throw new Error("alfaclub_sudoswap_management_target_mismatch");
     }
@@ -988,33 +1010,19 @@ export async function validateAlfaClubLpCalls(params: {
   env: Record<string, string | undefined>;
   nowSeconds?: bigint;
 }): Promise<AlfaClubLpPolicyResult | null> {
-  const configuredRouter = optionalConfiguredAddress(
-    params.env.ALFACLUB_UNIVERSAL_ROUTER ??
-      params.env.VITE_ALFACLUB_UNIVERSAL_ROUTER,
-  );
-  const hasRouterCall = Boolean(
-    configuredRouter &&
-      params.calls.some((call) => call.target === configuredRouter),
+  const config = resolveAlfaClubLpPolicyConfig(params.env);
+  const hasRouterCall = params.calls.some(
+    (call) => call.target === config.router,
   );
   if (!hasRouterCall) {
-    const configuredPair = optionalConfiguredAddress(
-      params.env.ALFACLUB_ROOM_1659_SUDOSWAP_PAIR ??
-        params.env.VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR,
-    );
     const looksLikeManagement = params.calls.some(
       (call) =>
         MANAGEMENT_SELECTORS.has(selector(call.data)) &&
-        (call.target === configuredPair ||
+        (call.target === config.pair ||
           call.target === ALFACLUB_FRIEND_KEY ||
-          call.target ===
-            (optionalConfiguredAddress(params.env.ALFACLUB_LP_CREATOR_COIN) ??
-              ROOM_1659_CREATOR_COIN)),
+          call.target === config.creatorCoin),
     );
     if (!looksLikeManagement) return null;
-  }
-
-  const config = resolveAlfaClubLpPolicyConfig(params.env);
-  if (!hasRouterCall) {
     return validateAlfaClubLiquidityManagementCalls({
       calls: params.calls,
       sender: params.sender,

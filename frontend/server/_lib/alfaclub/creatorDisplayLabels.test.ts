@@ -6,6 +6,12 @@ import {
 } from './creatorDisplayLabels.js'
 import { readCachedCreatorLabels } from './roomLabelCache.js'
 
+const dbSqlMock = vi.hoisted(() => vi.fn(async (..._args: any[]) => ({ rows: [] })))
+
+vi.mock('../db/postgres.js', () => ({
+  getDb: vi.fn(async () => ({ sql: dbSqlMock })),
+}))
+
 vi.mock('./roomLabelCache.js', () => ({
   readCachedCreatorLabels: vi.fn(async () => new Map()),
 }))
@@ -63,5 +69,17 @@ describe('pickCreatorDisplayLabel', () => {
     expect(labels.get('0xf39b0d1f2c31b3832ac0cb3ae4334c16272bd37e')).toBe(
       'Clean Slate Protocol',
     )
+  })
+
+  it('never correlates outbound creator labels from chat_ingest usernames', async () => {
+    dbSqlMock.mockClear()
+    await readCreatorLabels([
+      { address: '0x1111111111111111111111111111111111111111', tokenId: '1' },
+    ])
+
+    const renderedSql = dbSqlMock.mock.calls
+      .map((call) => Array.from(call[0] as TemplateStringsArray).join(' '))
+      .join('\n')
+    expect(renderedSql).not.toContain('chat_ingest')
   })
 })

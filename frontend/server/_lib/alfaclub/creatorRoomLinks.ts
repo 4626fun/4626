@@ -138,59 +138,10 @@ async function loadCreatorRoomIdFromRoomsSnapshot(
   return out
 }
 
-async function loadCreatorRoomIdFromChatActivity(
-  hints: CreatorRoomLinkHint[],
-): Promise<Map<string, string>> {
-  const operationalRoomIds = readOperationalAlfaClubRoomIds()
-  const normalized = [
-    ...new Set(
-      hints
-        .map((hint) => hint.address.trim().toLowerCase())
-        .filter((address) => address.length > 0),
-    ),
-  ]
-  const out = new Map<string, string>()
-  if (normalized.length === 0) return out
-
-  const db = await getDb()
-  if (!db) return out
-  await ensureAlfaClubVigilanteSchema()
-
-  const excludedRoomIds = [...operationalRoomIds]
-  try {
-    const result = await db.sql`
-      SELECT DISTINCT ON (addr)
-        addr,
-        room_id
-      FROM (
-        SELECT
-          LOWER(sender_address) AS addr,
-          room_id,
-          COUNT(*)::bigint AS msg_count
-        FROM alfaclub.chat_ingest
-        WHERE LOWER(sender_address) = ANY(${normalized})
-          AND room_id IS NOT NULL
-          AND LENGTH(TRIM(room_id)) > 0
-          AND NOT (room_id = ANY(${excludedRoomIds}))
-        GROUP BY 1, 2
-      ) ranked
-      ORDER BY addr, msg_count DESC;
-    `
-    const rows = (result.rows ?? []) as Array<{ addr: string | null; room_id: string | null }>
-    for (const row of rows) {
-      const address = typeof row.addr === 'string' ? row.addr : ''
-      const roomId = typeof row.room_id === 'string' ? row.room_id.trim() : ''
-      if (address && roomId && !operationalRoomIds.has(roomId)) out.set(address, roomId)
-    }
-  } catch {
-    // Chat fallback is last resort only.
-  }
-  return out
-}
-
 /**
  * Resolve creator → AlfaClub room URL targets.
- * Order: room_access_policies → alfaclub_rooms_snapshot (canonical) → non-ops chat activity.
+ * Order: enabled room_access_policies → canonical room snapshot → token-id hint.
+ * Private chat activity is never treated as evidence that a room is public.
  */
 export async function resolveCreatorRoomLinks(
   input: string[] | CreatorRoomLinkHint[],
@@ -204,14 +155,6 @@ export async function resolveCreatorRoomLinks(
   if (unresolvedHints.length > 0) {
     const fromSnapshot = await loadCreatorRoomIdFromRoomsSnapshot(unresolvedHints)
     for (const [address, roomId] of fromSnapshot) {
-      if (!merged.has(address)) merged.set(address, roomId)
-    }
-  }
-
-  const stillUnresolved = hints.filter((hint) => !merged.has(hint.address.toLowerCase()))
-  if (stillUnresolved.length > 0) {
-    const fromChat = await loadCreatorRoomIdFromChatActivity(stillUnresolved)
-    for (const [address, roomId] of fromChat) {
       if (!merged.has(address)) merged.set(address, roomId)
     }
   }
@@ -253,6 +196,7 @@ export async function loadCreatorRoomIdByCoinAddress(
       SELECT LOWER(creator_coin_address) AS creator_coin_address, room_id
       FROM alfaclub.room_access_policies
       WHERE LOWER(creator_coin_address) = ANY(${normalized})
+        AND enabled = TRUE
         AND room_id IS NOT NULL
         AND LENGTH(TRIM(room_id)) > 0;
     `

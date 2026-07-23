@@ -11,7 +11,6 @@ import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
 import { LoadingInline } from '@/components/ui/LoadingState'
-import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
 import { useResolvedDmPeer } from './useResolvedDmPeer'
 
@@ -96,10 +95,6 @@ function ConversationItem({
             initials(displayName)
           )}
         </div>
-        <EthosAvatarScoreForAddress
-          address={peerAddress}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2"
-        />
       </div>
 
       <div className="flex-1 min-w-0">

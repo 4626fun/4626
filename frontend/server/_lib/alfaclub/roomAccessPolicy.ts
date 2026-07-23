@@ -284,6 +284,8 @@ export async function upsertAlfaClubRoomAccessPolicy(params: {
   graceHours?: number | null
   enabled?: boolean
   actorAddress?: `0x${string}` | null
+  /** Snapshot/link sync may create placeholders but must never overwrite an existing gate. */
+  insertOnly?: boolean
 }): Promise<AlfaClubRoomAccessPolicy> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
@@ -309,7 +311,39 @@ export async function upsertAlfaClubRoomAccessPolicy(params: {
   if (exitThresholdBps > enterThresholdBps) throw new Error('invalid_threshold_bps')
   const graceHours = Math.max(0, Math.min(720, Math.floor(params.graceHours ?? 24)))
 
-  await db.sql`
+  if (params.insertOnly) {
+    await db.sql`
+      INSERT INTO alfaclub.room_access_policies (
+        room_id,
+        token_id,
+        creator_coin_address,
+        pool_address,
+        key_amount_raw,
+        enter_threshold_bps,
+        exit_threshold_bps,
+        grace_hours,
+        enabled,
+        created_by,
+        updated_by,
+        updated_at
+      ) VALUES (
+        ${roomId},
+        ${params.tokenId},
+        ${creatorCoinAddress},
+        ${poolAddress},
+        ${keyAmountRaw},
+        ${enterThresholdBps},
+        ${exitThresholdBps},
+        ${graceHours},
+        ${params.enabled ?? false},
+        ${params.actorAddress ?? null},
+        ${params.actorAddress ?? null},
+        NOW()
+      )
+      ON CONFLICT (room_id) DO NOTHING;
+    `
+  } else {
+    await db.sql`
     INSERT INTO alfaclub.room_access_policies (
       room_id,
       token_id,
@@ -348,7 +382,8 @@ export async function upsertAlfaClubRoomAccessPolicy(params: {
       enabled = EXCLUDED.enabled,
       updated_by = EXCLUDED.updated_by,
       updated_at = NOW();
-  `
+    `
+  }
 
   const policy = await readAlfaClubRoomAccessPolicy(roomId)
   if (!policy) throw new Error('policy_upsert_failed')

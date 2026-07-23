@@ -30,6 +30,7 @@ import {
   isInverseAkitaChatReactionRoom,
   readInverseAkitaChatReactionRoomIds,
   resolveInverseAkitaChatAuthorAccess,
+  setInverseAkitaRuntimeReactionRoomIds,
 } from './inverseAkitaChatReactionPolicy.js'
 
 const STAKER = '0x1111111111111111111111111111111111111111'
@@ -49,6 +50,7 @@ describe('inverseAkitaChatReactionPolicy', () => {
   })
 
   afterEach(() => {
+    setInverseAkitaRuntimeReactionRoomIds([])
     vi.unstubAllEnvs()
   })
 
@@ -77,14 +79,8 @@ describe('inverseAkitaChatReactionPolicy', () => {
     },
   )
 
-  it('allows a sender staked in another configured room (cross-room unlock)', async () => {
-    // Message in 1484 with 0 stake there; ≥1 stake in 1659.
-    mockReadUserStakedKeys
-      .mockResolvedValueOnce(0) // 1484
-      .mockResolvedValueOnce(0) // 1660
-      .mockResolvedValueOnce(0) // 2
-      .mockResolvedValueOnce(0) // 1043
-      .mockResolvedValueOnce(2) // 1659
+  it('requires stake in the message room, not another configured room', async () => {
+    mockReadUserStakedKeys.mockResolvedValueOnce(0)
 
     await expect(
       resolveInverseAkitaChatAuthorAccess({
@@ -92,10 +88,9 @@ describe('inverseAkitaChatReactionPolicy', () => {
         senderAddress: STAKER,
       }),
     ).resolves.toEqual({
-      eligible: true,
-      reason: 'staker',
-      stakedKeys: 2,
-      stakeRoomId: '1659',
+      eligible: false,
+      reason: 'insufficient_stake',
+      stakedKeys: 0,
     })
   })
 
@@ -134,5 +129,22 @@ describe('inverseAkitaChatReactionPolicy', () => {
       stakedKeys: 0,
     })
     expect(mockResolveStakingPoolAddress).toHaveBeenCalled()
+  })
+
+  it('treats auto-discovered rooms as listen-only unless allowlisted for trade', async () => {
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1659')
+    setInverseAkitaRuntimeReactionRoomIds(['7777'])
+
+    await expect(
+      resolveInverseAkitaChatAuthorAccess({
+        roomId: '7777',
+        senderAddress: STAKER,
+        configuredRoomIds: readInverseAkitaChatReactionRoomIds(),
+      }),
+    ).resolves.toEqual({
+      eligible: false,
+      reason: 'room_listen_only',
+      stakedKeys: null,
+    })
   })
 })

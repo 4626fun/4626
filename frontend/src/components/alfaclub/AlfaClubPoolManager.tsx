@@ -217,6 +217,18 @@ export function AlfaClubPoolManager() {
           error: "The configured pair failed live invariant checks",
         };
       }
+      if (!ownerMatches) {
+        return {
+          plan: null,
+          error: `Only the pair owner ${shortAddress(pool.owner)} can ${
+            mode === "deposit"
+              ? "add inventory"
+              : mode === "withdraw"
+                ? "withdraw inventory"
+                : "change curve settings"
+          }.`,
+        };
+      }
       if (mode === "deposit") {
         return {
           plan: buildSudoswapFundPoolPlan({
@@ -229,14 +241,6 @@ export function AlfaClubPoolManager() {
             erc20Amount: coinAmount,
           }),
           error: null,
-        };
-      }
-      if (!ownerMatches) {
-        return {
-          plan: null,
-          error: `Only the pair owner ${shortAddress(pool.owner)} can ${
-            mode === "withdraw" ? "withdraw inventory" : "change curve settings"
-          }.`,
         };
       }
       if (mode === "withdraw") {

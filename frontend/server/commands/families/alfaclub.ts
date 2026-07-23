@@ -1115,6 +1115,9 @@ export async function executeAlfaclubCommandFamily(params: {
     return { ok: true, response: formatHelp() }
   }
   if (parsed.sub === 'brief') {
+    if (!flags.readEnabled) {
+      return { ok: false, response: 'AlfaClub reads are disabled by operator policy.' }
+    }
     const built = await buildAlfaClubBriefContext({ fetchMarkets: true })
     if (!built.ok) {
       const hint =
@@ -1167,6 +1170,9 @@ export async function executeAlfaclubCommandFamily(params: {
   }
 
   const limit = parsed.limit ?? flags.topN
+  if (!flags.readEnabled) {
+    return { ok: false, response: 'AlfaClub reads are disabled by operator policy.' }
+  }
   const built = await buildAlfaClubBriefContext({
     topRows: limit,
     fetchMarkets: false,

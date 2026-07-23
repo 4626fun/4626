@@ -17,20 +17,16 @@ import { ensureAlfaClubVigilanteSchema } from './schema.js'
 /**
  * Extract a redacted error fingerprint suitable for logs.
  * Never includes any value from `params.value`/`params.jwt` — only
- * pg error code, message, and constraint metadata. Production logs
+ * non-value-bearing pg error code and constraint metadata. Production logs
  * for the token store must remain free of token material so they
  * can ship to general observability backends.
  */
 function describeDbError(err: unknown): Record<string, unknown> {
   const anyErr = err as Record<string, unknown> | null | undefined
   const code = anyErr && typeof anyErr.code === 'string' ? anyErr.code : undefined
-  const message =
-    err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? '')
   return {
     code,
-    message: message.slice(0, 200),
     constraint: anyErr && typeof anyErr.constraint === 'string' ? anyErr.constraint : undefined,
-    detail: anyErr && typeof anyErr.detail === 'string' ? anyErr.detail.slice(0, 200) : undefined,
     routine: anyErr && typeof anyErr.routine === 'string' ? anyErr.routine : undefined,
   }
 }
@@ -429,4 +425,3 @@ export async function clearAlfaClubChatToken(params?: {
     return null
   }
 }
-

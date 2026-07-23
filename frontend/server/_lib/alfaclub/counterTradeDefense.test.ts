@@ -181,6 +181,16 @@ describe('deriveCounterTradeDefenseActions', () => {
     expect(actions[0].liqDistancePct!).toBeLessThanOrEqual(RUNTIME.defendLiqDistancePct)
   })
 
+  it('still reduces an existing leg after the asset leaves the entry allowlist', () => {
+    const actions = deriveCounterTradeDefenseActions({
+      state: makeState({ legs: [LOSING_SHORT_DEFEND] }),
+      runtime: RUNTIME,
+      assetAllowlist: new Set(['ETH']),
+    })
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({ type: 'defend_reduce', coin: 'BTC' })
+  })
+
   it('escalates the reduce fraction when inside half the defend threshold', () => {
     const actions = deriveCounterTradeDefenseActions({
       state: makeState({ legs: [LOSING_SHORT_ESCALATED] }),

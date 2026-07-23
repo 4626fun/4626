@@ -34,7 +34,6 @@ import { fetchZoraProfile } from '@/lib/zora/client'
 import { useAccountContext } from '@/wallet/accountContext'
 import { Spinner } from '@/components/ui/Spinner'
 import { getAgentIdentity } from './agentIdentity'
-import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
 import { useResolvedDmPeer } from './useResolvedDmPeer'
 import {
@@ -144,14 +143,12 @@ const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 56
 function ChatHeaderAvatar({
   avatar,
   initialsValue,
-  addressValue,
   interactive,
   onOpenProfile,
   className = '',
 }: {
   avatar: string | null
   initialsValue: string
-  addressValue: string | null
   interactive: boolean
   onOpenProfile?: (event?: { stopPropagation?: () => void }) => void
   className?: string
@@ -164,9 +161,6 @@ function ChatHeaderAvatar({
         ) : (
           initialsValue
         )}
-      </span>
-      <span className="absolute left-1/2 top-[34px] z-10 -translate-x-1/2">
-        <EthosAvatarScoreForAddress address={addressValue} />
       </span>
     </>
   )
@@ -1123,7 +1117,6 @@ export function ChatWindow({
         <ChatHeaderAvatar
           avatar={headerAvatar}
           initialsValue={headerInitials}
-          addressValue={copyablePeerAddress}
           interactive={false}
           className="scale-[0.9]"
         />
@@ -1225,7 +1218,6 @@ export function ChatWindow({
           <ChatHeaderAvatar
             avatar={headerAvatar}
             initialsValue={headerInitials}
-            addressValue={copyablePeerAddress}
             interactive={Boolean(peerProfileHref)}
             onOpenProfile={handleOpenPeerProfile}
           />
@@ -1253,7 +1245,6 @@ export function ChatWindow({
             <ChatHeaderAvatar
               avatar={headerAvatar}
               initialsValue={headerInitials}
-              addressValue={copyablePeerAddress}
               interactive={Boolean(peerProfileHref)}
               onOpenProfile={handleOpenPeerProfile}
             />
@@ -1333,7 +1324,6 @@ export function ChatWindow({
               <ChatHeaderAvatar
                 avatar={headerAvatar}
                 initialsValue={headerInitials}
-                addressValue={copyablePeerAddress}
                 interactive={Boolean(peerProfileHref)}
                 onOpenProfile={handleOpenPeerProfile}
               />

@@ -439,7 +439,6 @@ function ConversationUserRow(props: {
         name={name}
         imageUrl={avatar}
         status="conversation"
-        ethosAddress={peerAddress ?? resolvedPeerAddress}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

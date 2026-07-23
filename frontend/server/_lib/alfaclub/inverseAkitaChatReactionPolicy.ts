@@ -25,6 +25,7 @@ export type InverseAkitaChatAuthorAccessReason =
   | 'insufficient_stake'
   | 'stake_read_failed'
   | 'invalid_sender'
+  | 'room_listen_only'
   | 'wrong_room'
 
 export type InverseAkitaChatAuthorAccess = {
@@ -95,13 +96,30 @@ export function setInverseAkitaRuntimeReactionRoomIds(roomIds: string[]): void {
   runtimeRoomIdsOverride = normalizeRoomIds(roomIds)
 }
 
-export function readInverseAkitaChatReactionRoomIds(): string[] {
+function readConfiguredInverseAkitaChatReactionRoomIds(): string[] {
   const configured = String(
     process.env.ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS ?? '',
   ).trim()
-  const configuredRoomIds = configured
+  return configured
     ? normalizeRoomIds(configured.split(','))
     : [INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID]
+}
+
+function readDiscoveredTradeAllowlistRoomIds(): string[] {
+  return normalizeRoomIds(
+    String(process.env.ALFACLUB_INVERSE_AKITA_DISCOVERED_TRADE_ROOM_IDS ?? '').split(','),
+  )
+}
+
+function isInverseAkitaTradeEnabledRoom(roomId: string): boolean {
+  const normalizedRoomId = normalizeRoomId(roomId)
+  if (!normalizedRoomId) return false
+  if (readConfiguredInverseAkitaChatReactionRoomIds().includes(normalizedRoomId)) return true
+  return readDiscoveredTradeAllowlistRoomIds().includes(normalizedRoomId)
+}
+
+export function readInverseAkitaChatReactionRoomIds(): string[] {
+  const configuredRoomIds = readConfiguredInverseAkitaChatReactionRoomIds()
   return normalizeRoomIds([...configuredRoomIds, ...runtimeRoomIdsOverride])
 }
 
@@ -164,9 +182,8 @@ async function readStakedKeysInRoom(
 }
 
 /**
- * Eligible when the sender has ≥1 FriendKey staked in **any** configured
- * reaction room (message room checked first). Accidental opinions from
- * stakers count — there is no room-owner gate.
+ * Eligible when the sender has ≥1 FriendKey staked in the message room.
+ * Auto-discovered rooms are listen-only unless explicitly allowlisted for trade.
  */
 export async function resolveInverseAkitaChatAuthorAccess(params: {
   roomId: string | null | undefined
@@ -184,37 +201,26 @@ export async function resolveInverseAkitaChatAuthorAccess(params: {
   if (!sender) {
     return { eligible: false, reason: 'invalid_sender', stakedKeys: null }
   }
-
-  const roomsToCheck = [
-    roomId,
-    ...configuredRoomIds.filter((candidate) => candidate !== roomId),
-  ]
-
-  let sawSuccessfulRead = false
-  let maxStakedKeys = 0
-
-  for (const candidate of roomsToCheck) {
-    const stakedKeys = await readStakedKeysInRoom(sender, candidate)
-    if (stakedKeys == null) continue
-    sawSuccessfulRead = true
-    if (stakedKeys >= MIN_STAKED_KEYS) {
-      return {
-        eligible: true,
-        reason: 'staker',
-        stakedKeys,
-        stakeRoomId: candidate,
-      }
-    }
-    if (stakedKeys > maxStakedKeys) maxStakedKeys = stakedKeys
+  if (!isInverseAkitaTradeEnabledRoom(roomId)) {
+    return { eligible: false, reason: 'room_listen_only', stakedKeys: null }
   }
 
-  if (sawSuccessfulRead) {
+  const stakedKeys = await readStakedKeysInRoom(sender, roomId)
+  if (stakedKeys == null) {
+    return { eligible: false, reason: 'stake_read_failed', stakedKeys: null }
+  }
+  if (stakedKeys >= MIN_STAKED_KEYS) {
     return {
-      eligible: false,
-      reason: 'insufficient_stake',
-      stakedKeys: maxStakedKeys,
+      eligible: true,
+      reason: 'staker',
+      stakedKeys,
+      stakeRoomId: roomId,
     }
   }
 
-  return { eligible: false, reason: 'stake_read_failed', stakedKeys: null }
+  return {
+    eligible: false,
+    reason: 'insufficient_stake',
+    stakedKeys,
+  }
 }

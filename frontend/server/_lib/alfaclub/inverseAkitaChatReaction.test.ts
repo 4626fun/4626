@@ -568,13 +568,13 @@ describe('inverseAkitaChatReaction', () => {
     expect(reply).toMatch(/long|ETH|failed|no/i)
   })
 
-  it('appends the real failure detail instead of a bare Command failed line', () => {
+  it('does not expose subprocess output in public failure replies', () => {
     expect(
       summarizeInverseTradeFailureDetail({
         error: 'Command failed: npx tsx scripts/trade.ts open --pair BTC --side short',
-        stdout: 'Failed to sign with ACP CLI. Make sure acp-cli is configured:\n  acp configure',
+        stdout: 'API_TOKEN=secret-value',
       }),
-    ).toBe('Failed to sign with ACP CLI. Make sure acp-cli is configured:')
+    ).toBe('Subprocess failed; inspect restricted service logs for diagnostics.')
     expect(summarizeInverseTradeFailureDetail(null)).toBeNull()
 
     const reply = formatInverseAkitaChatReactionReply({

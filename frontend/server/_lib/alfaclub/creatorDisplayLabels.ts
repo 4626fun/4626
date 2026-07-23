@@ -45,37 +45,6 @@ export function pickCreatorDisplayLabel(params: {
   return null
 }
 
-async function readChatUsernames(addresses: string[]): Promise<Map<string, string>> {
-  const labels = new Map<string, string>()
-  const normalized = [...new Set(addresses.map((value) => value.toLowerCase()))]
-  if (normalized.length === 0) return labels
-
-  const db = await getDb()
-  if (!db) return labels
-
-  try {
-    const result = await db.sql`
-      SELECT DISTINCT ON (LOWER(sender_address))
-        LOWER(sender_address) AS sender_address,
-        username
-      FROM alfaclub.chat_ingest
-      WHERE LOWER(sender_address) = ANY(${normalized})
-        AND username IS NOT NULL
-        AND LENGTH(TRIM(username)) > 0
-      ORDER BY LOWER(sender_address), COALESCE(message_date, ingested_at) DESC, ingested_at DESC;
-    `
-    const rows = (result.rows ?? []) as Array<{ sender_address: string; username: string | null }>
-    for (const row of rows) {
-      const username = typeof row.username === 'string' ? normalizeUsername(row.username) : ''
-      if (username) labels.set(String(row.sender_address).toLowerCase(), username)
-    }
-  } catch {
-    // Best-effort enrichment.
-  }
-
-  return labels
-}
-
 async function readRoomSnapshotLabels(
   hints: CreatorLabelHint[],
 ): Promise<Map<string, { twitterUsername: string | null; roomName: string | null; roomSn: string | null }>> {
@@ -176,17 +145,14 @@ export async function readCreatorLabels(hints: CreatorLabelHint[]): Promise<Crea
     }
   }
 
-  const addresses = normalizedHints.map((hint) => hint.address)
-  const [chatLabels, roomSnapshotLabels] = await Promise.all([
-    readChatUsernames(addresses),
-    readRoomSnapshotLabels(normalizedHints),
-  ])
+  // Only labels explicitly published as room metadata or public reverse
+  // records are eligible for outbound digests. Private chat usernames must
+  // never be correlated with a wallet across rooms.
+  const roomSnapshotLabels = await readRoomSnapshotLabels(normalizedHints)
 
   for (const hint of normalizedHints) {
-    const chatUsername = chatLabels.get(hint.address) ?? null
     const snapshot = roomSnapshotLabels.get(hint.address)
     const label = pickCreatorDisplayLabel({
-      chatUsername,
       twitterUsername: snapshot?.twitterUsername ?? null,
       roomName: snapshot?.roomName ?? snapshot?.roomSn ?? null,
     })

@@ -96,8 +96,19 @@ function normalizeSharedSecret(value: unknown): string {
   return normalized
 }
 
-function isAllowedPath(pathname: string, allowed: string[]): boolean {
-  return allowed.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}?`) || pathname.startsWith(`${prefix}/`))
+export function isAllowedRequest(pathname: string, method: string, allowed: string[]): boolean {
+  const normalizedMethod = method.toUpperCase()
+  for (const configuredPath of allowed) {
+    if (configuredPath === '/api/room') {
+      if (normalizedMethod !== 'POST') continue
+      if (/^\/api\/room\/[^/]+\/message$/.test(pathname)) return true
+      continue
+    }
+    // All other configured API entries are exact endpoints. Never let a
+    // shared-secret holder expand them into arbitrary descendant routes.
+    if (pathname === configuredPath) return true
+  }
+  return false
 }
 
 function buildUpstreamHeaders(req: Request): Headers {
@@ -161,7 +172,7 @@ export default {
 
     // Path allowlist.
     const allowed = (env.ALLOWED_PATH_PREFIXES ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    if (!isAllowedPath(url.pathname, allowed)) {
+    if (!isAllowedRequest(url.pathname, req.method, allowed)) {
       return jsonResponse(404, { error: 'path_not_allowed', path: url.pathname })
     }
 

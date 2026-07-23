@@ -170,6 +170,7 @@ import {
   _executeInverseAkitaChatReactionBatchForTests,
   _getBridgeAuthStateForTests,
   _ingestLiveMessagesForTests,
+  _isRoomHistoryPermissionDeniedForTests,
   _resetAlfaClubChatBridgeStateForTests,
   _resolveTrustedCommandSenderWalletForTests,
   _runAlfaClubChatBridgeTickForTests,
@@ -354,6 +355,36 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     ;(globalThis as { WebSocket?: unknown }).WebSocket = FakeWebSocket
     _resetBridgeAuthHealthForTests()
     _resetAlfaClubChatBridgeStateForTests()
+  })
+
+  it('treats room-history 403 responses as explicit permission denials', () => {
+    expect(_isRoomHistoryPermissionDeniedForTests(new Error('room_history_failed:403'))).toBe(true)
+    expect(
+      _isRoomHistoryPermissionDeniedForTests(
+        new Error('room_history_failed:403:cf-ray=redacted'),
+      ),
+    ).toBe(true)
+    expect(_isRoomHistoryPermissionDeniedForTests(new Error('room_history_failed:401'))).toBe(false)
+  })
+
+  it('activates the live websocket lane when HTTP history is Cloudflare-challenged', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response('<title>Just a moment...</title>', {
+        status: 403,
+        headers: {
+          'content-type': 'text/html',
+          'cf-mitigated': 'challenge',
+        },
+      }),
+    ) as unknown as typeof fetch
+
+    const result = await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({ wsIngestAllRoomsEnabled: true }),
+    )
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(result.errors[0]?.error).toContain('room_history_failed:403')
+    expect(readBridgeAuthHealthSnapshot().suppressedSocketAttempts).toBe(0)
   })
 
   afterEach(() => {
@@ -857,7 +888,7 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(commands[0]?.text).toBe('/halp')
   })
 
-  it('cron mode does not re-run /gmeow when ingest upsert is an update (not a new row)', async () => {
+  it('cron mode executes newly ingested commands on the first cold-start poll', async () => {
     const nowMs = Date.now()
     mockHistoryMessages([
       {
@@ -885,9 +916,33 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
       seedHistoryOnlyOnFirstTick: false,
     })
 
+    expect(first.seeded).toBe(true)
     expect(first.processed).toBe(1)
+    expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
     expect(second.processed).toBe(0)
     expect(executeDeterministicCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('cron mode skips pre-existing history that is not newly inserted', async () => {
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-gmeow-history',
+        date: nowMs - 10_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+    // ON CONFLICT update path: upsert returns no newly inserted rows.
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([])
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
+      seedHistoryOnlyOnFirstTick: false,
+    })
+
+    expect(result.seeded).toBe(true)
+    expect(result.processed).toBe(0)
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
   })
 
   it('command reply ledger skips commands that were already answered', async () => {
@@ -931,6 +986,33 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
     expect(result.seeded).toBe(true)
     expect(result.processed).toBe(1)
+  })
+
+  it('cron mode seeds the first poll without replaying historical inverse trade intents', async () => {
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-chip-first-poll',
+        date: nowMs - 10_000,
+        sender: 'trade-completed',
+        username: 'Chip',
+        text: JSON.stringify({ coin: 'ETH', dir: 'Open Short', sz: '0.1' }),
+      },
+    ])
+
+    const result = await _runAlfaClubChatBridgeTickForTests(
+      makeFlags({
+        roomId: '1484',
+        inverseAkitaChatReactionRoomIds: ['1484', '1659'],
+      }),
+      {
+        seedHistoryOnlyOnFirstTick: false,
+      },
+    )
+
+    expect(result.seeded).toBe(true)
+    expect(result.processed).toBe(0)
+    expect(executeInverseAkitaChatReactionMock).not.toHaveBeenCalled()
   })
 
   it('reports ws_proxy_http when websocket send goes through the HTTP proxy lane', async () => {
@@ -1356,12 +1438,12 @@ describe('AlfaClub chat bridge cron helpers', () => {
     expect(readAlfaClubCronSkipLiveWebSocket()).toBe(true)
   })
 
-  it('readAlfaClubChatBridgeFlagsForCronTick caps history limit', () => {
+  it('readAlfaClubChatBridgeFlagsForCronTick uses the maximum bounded history window', () => {
     restoreEnv = applyEnv({
       ALFACLUB_CHAT_HISTORY_LIMIT: '40',
       ALFACLUB_BRIDGE_CRON_HISTORY_LIMIT: '8',
     })
-    expect(readAlfaClubChatBridgeFlagsForCronTick().historyLimit).toBe(8)
+    expect(readAlfaClubChatBridgeFlagsForCronTick().historyLimit).toBe(100)
   })
 
   it('unions command and opinion rooms without widening command authority', () => {

@@ -5,7 +5,7 @@
  *
  * Methods:
  * - GET:    Read token metadata (admin session only; never returns raw JWT)
- * - POST:   Upsert a new AlfaClub Privy triplet (admin session OR CRON_SECRET)
+ * - POST:   Upsert a new AlfaClub Privy triplet (admin session only)
  * - DELETE: Clear the DB-backed JWT (admin session only)
  */
 
@@ -32,12 +32,9 @@ import {
   upsertAlfaClubPrivyAccessToken,
   upsertAlfaClubPrivyRefreshToken,
 } from '../../../../server/_lib/alfaclub/chatTokenStore.js'
-import { isCronSecretAuthorized } from '../../../../server/_lib/alfaclub/alfaclubCronAuth.js'
 import { assertRefreshTokenSeedAllowed } from '../../../../server/_lib/alfaclub/refreshTokenRetirement.js'
 
 declare const process: { env: Record<string, string | undefined> }
-
-const CRON_BOOTSTRAP_WRITER = 'cron-token-bootstrap' as const
 
 type ChatTokenUpdateBody = {
   jwt?: string
@@ -79,15 +76,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const cronBootstrap = req.method === 'POST' && isCronSecretAuthorized(req)
   const admin = getSessionAddress(req)
   const adminAuthorized = Boolean(admin && isAdminAddress(admin))
 
   if (req.method === 'POST') {
-    if (!cronBootstrap && !admin) {
+    if (!admin) {
       return res.status(401).json({ success: false, error: 'Sign in required' })
     }
-    if (!cronBootstrap && admin && !isAdminAddress(admin)) {
+    if (!isAdminAddress(admin)) {
       return res.status(403).json({ success: false, error: 'Admin only' })
     }
   } else {
@@ -99,9 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const rateLimitIdentity = cronBootstrap
-    ? 'cron-bootstrap'
-    : (admin ?? 'unknown').toLowerCase()
+  const rateLimitIdentity = (admin ?? 'unknown').toLowerCase()
   const limiter = await checkDurableRateLimit(
     rateLimitKey('alfaclub-chat-token', rateLimitIdentity, getClientIp(req)),
     RATE_LIMITS.adminAction,
@@ -194,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const writer = cronBootstrap ? CRON_BOOTSTRAP_WRITER : admin!.toLowerCase()
+  const writer = admin!.toLowerCase()
 
   const saved = await upsertAlfaClubChatToken({
     jwt: candidate,
@@ -228,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenFingerprint: fingerprintJwt(candidate),
       refresherBootstrapped,
       writer,
-      authMode: cronBootstrap ? 'cron_secret' : 'admin_session',
+      authMode: 'admin_session',
     },
   })
 }

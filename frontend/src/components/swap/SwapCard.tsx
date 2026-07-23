@@ -53,8 +53,10 @@ type SwapCardProps = {
   onSetSlippagePct: (pct: string) => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
-  swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora'
-  quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora'
+  swapProviderLabel: 'Uniswap' | 'CDP' | 'Zora' | 'Sudoswap'
+  quoteAggregatorLabel?: 'Uniswap' | 'CDP' | 'Zora' | 'Sudoswap'
+  /** Which side owns the editable amount. Default sell (token-in). */
+  amountEditSide?: 'sell' | 'buy'
   primaryActionLabel?: string
   onPrimaryAction?: () => void
   forcePrimaryActionEnabled?: boolean
@@ -69,6 +71,7 @@ export function SwapCard(props: SwapCardProps) {
   const primaryAction = props.onPrimaryAction ?? props.onReviewTrade
   const defaultPrimaryDisabled = !props.isReady || !props.isConnected || props.busy !== null
   const primaryDisabled = props.forcePrimaryActionEnabled ? props.busy !== null : defaultPrimaryDisabled
+  const editBuySide = props.amountEditSide === 'buy'
   return (
     <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -100,14 +103,15 @@ export function SwapCard(props: SwapCardProps) {
           label="Sell"
           amount={props.amountInUnits}
           amountUsd={props.amountInUsd || undefined}
+          amountLoading={editBuySide ? props.buyQuoteLoading : false}
           token={props.tokenInDisplay}
           tokenAddress={props.tokenInAddress}
           isLoadingToken={props.tokenInIdentityLoading}
           tokenIdentityLoading={props.tokenInIdentityLoading}
-          readOnly={false}
-          onAmountChange={props.onAmountChange}
+          readOnly={editBuySide}
+          onAmountChange={editBuySide ? () => {} : props.onAmountChange}
           onSelectToken={() => props.onOpenTokenSelector('input')}
-          onQuickPercent={props.onQuickPercent}
+          onQuickPercent={editBuySide ? undefined : props.onQuickPercent}
           balanceLabel={props.tokenInBalanceLabel}
           inputAriaLabel="Amount to sell"
         />
@@ -130,16 +134,17 @@ export function SwapCard(props: SwapCardProps) {
         <TokenInput
           label="Buy"
           amount={props.estimatedOut}
-          readOnly
-          amountLoading={props.buyQuoteLoading}
+          readOnly={!editBuySide}
+          amountLoading={editBuySide ? false : props.buyQuoteLoading}
           amountUsd={props.estimatedOutUsd || undefined}
           balanceLabel={props.tokenOutBalanceLabel}
           token={props.tokenOutDisplay}
           tokenAddress={props.tokenOutAddress}
           isLoadingToken={props.tokenOutIdentityLoading}
           tokenIdentityLoading={props.tokenOutIdentityLoading}
-          onAmountChange={() => {}}
+          onAmountChange={editBuySide ? props.onAmountChange : () => {}}
           onSelectToken={() => props.onOpenTokenSelector('output')}
+          onQuickPercent={editBuySide ? props.onQuickPercent : undefined}
           inputAriaLabel="Amount to receive"
         />
       </div>

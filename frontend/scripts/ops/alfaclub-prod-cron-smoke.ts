@@ -92,6 +92,20 @@ function redactBody(text: string, max = 280): string {
   return trimmed.replace(jwtLike, '<jwt>').slice(0, max)
 }
 
+function requireTrustedProductionOrigin(value: string): string {
+  const parsed = new URL(value)
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.username ||
+    parsed.password ||
+    parsed.port ||
+    parsed.hostname.toLowerCase() !== 'app.4626.fun'
+  ) {
+    throw new Error('Cron smoke origin must be exactly https://app.4626.fun.')
+  }
+  return parsed.origin
+}
+
 async function callCron(
   origin: string,
   path: string,
@@ -130,7 +144,9 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  const origin = (readArg('origin') ?? process.env.ALFACLUB_SMOKE_ORIGIN ?? 'https://app.4626.fun').trim()
+  const origin = requireTrustedProductionOrigin(
+    (readArg('origin') ?? process.env.ALFACLUB_SMOKE_ORIGIN ?? 'https://app.4626.fun').trim(),
+  )
 
   const steps: Array<{ path: string; method: 'GET' | 'POST' }> = [
     { path: '/api/v1/alfaclub/chat-auth-health', method: 'GET' },

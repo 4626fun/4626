@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useIdentity } from '@/hooks/useIdentity'
-import { getBasenameProfileByName } from '@/lib/basename/basename-api'
 import { fetchZoraProfile } from '@/lib/zora/client'
-import { getBasenameAutocompleteCandidate } from '@/lib/xmtp/socialIdentity'
 
 type ChatIdentitySource = 'zora' | 'basename' | 'ens' | 'address'
 
@@ -75,20 +73,6 @@ export function resolveZoraAvatar(profile: Awaited<ReturnType<typeof fetchZoraPr
   return null
 }
 
-function resolveBasenameLabelFromProfile(
-  profile: Awaited<ReturnType<typeof getBasenameProfileByName>> | null | undefined,
-): string | null {
-  const rawName = String(profile?.name ?? '').trim()
-  if (!rawName) return null
-  const displayName = String(profile?.displayName ?? '').trim()
-  if (displayName) return displayName
-  if (rawName.toLowerCase().endsWith('.base.eth')) {
-    const shortHandle = rawName.replace(/\.base\.eth$/i, '').trim()
-    if (shortHandle) return shortHandle
-  }
-  return rawName
-}
-
 export function useChatIdentity(
   address: string | null | undefined,
   options: UseChatIdentityOptions = {},
@@ -96,7 +80,6 @@ export function useChatIdentity(
   const normalizedAddress = normalizeAddress(address)
   const identity = useIdentity(normalizedAddress)
   const meaningfulFallbackName = resolveMeaningfulFallbackName(options.fallbackName)
-  const basenameHandle = meaningfulFallbackName ? getBasenameAutocompleteCandidate(meaningfulFallbackName) : null
 
   const zoraProfile = useQuery({
     queryKey: ['chatIdentityZoraProfile', normalizedAddress],
@@ -108,34 +91,23 @@ export function useChatIdentity(
     staleTime: 5 * 60_000,
   })
 
-  const basenameProfileByName = useQuery({
-    queryKey: ['chatIdentityBasenameProfileByName', basenameHandle],
-    queryFn: async () => {
-      if (!basenameHandle) return null
-      return getBasenameProfileByName(basenameHandle)
-    },
-    enabled: Boolean(basenameHandle),
-    staleTime: 5 * 60_000,
-  })
-
   return useMemo(() => {
     const fallbackAddress = normalizedAddress ? shortAddress(normalizedAddress) : 'XMTP contact'
     const fallbackName = meaningfulFallbackName ?? fallbackAddress
     const zoraName = resolveZoraDisplayName(zoraProfile.data)
     const zoraAvatar = resolveZoraAvatar(zoraProfile.data)
-    const basenameFromFallbackName = resolveBasenameLabelFromProfile(basenameProfileByName.data)
-    const basenameFromFallbackAvatar = String(basenameProfileByName.data?.avatar ?? '').trim() || null
-    const basenameName = identity.basenameDisplayName ?? identity.basename ?? basenameFromFallbackName
+    // Only reverse-resolved identity bound to normalizedAddress may be shown as
+    // a Basename. Conversation/group labels are untrusted display text.
+    const basenameName = identity.basenameDisplayName ?? identity.basename
     const ensName = identity.ensName
     const addressName = fallbackAddress
-    const loading = Boolean(normalizedAddress && identity.loading) || zoraProfile.isLoading || basenameProfileByName.isLoading
+    const loading = Boolean(normalizedAddress && identity.loading) || zoraProfile.isLoading
 
     const avatarFromFallbacks =
       zoraAvatar ??
       identity.basenameAvatar ??
       identity.avatar ??
       options.fallbackAvatar ??
-      basenameFromFallbackAvatar ??
       null
 
     if (zoraName) {
@@ -195,8 +167,6 @@ export function useChatIdentity(
       loading,
     }
   }, [
-    basenameProfileByName.data,
-    basenameProfileByName.isLoading,
     identity.avatar,
     identity.basename,
     identity.basenameAvatar,

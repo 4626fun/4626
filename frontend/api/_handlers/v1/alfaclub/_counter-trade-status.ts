@@ -20,8 +20,6 @@ import {
 } from '../../../../server/_lib/alfaclub/counterTradeStore.js'
 import { getUserFillsByTimeDetailed } from '../../../../server/_lib/alfaclub/hyperliquid.js'
 import { resolveRoom1659HyperliquidUserForSnapshot } from '../../../../server/_lib/alfaclub/room1659Market.js'
-import { readArenaConfig } from '../../../../server/_lib/arena/arenaConfig.js'
-import { resolveArenaIdentityForContext } from '../../../../server/_lib/arena/arenaIdentityMappingStore.js'
 
 function setPublicCors(req: VercelRequest, res: VercelResponse) {
   const originHeader = req.headers.origin
@@ -129,9 +127,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const optIn = selected.optIn
   const recentActions = selected.recentActions
 
-  // Optional harvest accounting (?harvest=1): realized PnL, fees, gross
-  // volume, and round-trip counts for the countered wallet and the bot
-  // wallet, computed live from Hyperliquid fills over a 7-day window.
+  // Optional harvest accounting is scoped to the authenticated user's wallet.
+  // Never expose the room/default agent wallet or its operational PnL mapping.
   let harvest: {
     windowDays: number
     userWallet: HarvestWalletSummary | null
@@ -141,29 +138,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (String(req.query.harvest ?? '').trim() === '1') {
     const windowDays = 7
     try {
-      const identity = await resolveArenaIdentityForContext({
-        roomId,
-        senderAddress: selected.address,
-        baseConfig: readArenaConfig(),
-      })
       const userWallet =
         roomId === '1659'
           ? resolveRoom1659HyperliquidUserForSnapshot(selected.address)
-          : identity.hlApiWalletAddress ?? selected.address
-      const botWallet = identity.agentWalletAddress
+          : selected.address
       const sinceMs = Date.now() - windowDays * 24 * 60 * 60_000
 
-      const [userFills, botFills] = await Promise.all([
-        getUserFillsByTimeDetailed(userWallet, sinceMs),
-        botWallet ? getUserFillsByTimeDetailed(botWallet, sinceMs) : Promise.resolve(null),
-      ])
+      const userFills = await getUserFillsByTimeDetailed(userWallet, sinceMs)
 
       harvest = {
         windowDays,
         userWallet: summarizeHarvestFills({ walletAddress: userWallet, fills: userFills }),
-        botWallet: botWallet
-          ? summarizeHarvestFills({ walletAddress: botWallet, fills: botFills })
-          : null,
+        botWallet: null,
       }
     } catch (error) {
       harvest = {
@@ -194,4 +180,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
   })
 }
-

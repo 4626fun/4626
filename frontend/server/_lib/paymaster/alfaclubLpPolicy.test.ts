@@ -377,6 +377,25 @@ describe("AlfaClub Sudoswap paymaster policy", () => {
     });
   });
 
+  it("rejects sponsored inventory donations from a non-owner", async () => {
+    await expect(
+      validate(
+        [
+          {
+            target: ROOM_1659_CREATOR_COIN,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: "transfer",
+              args: [PAIR, 1_000n],
+            }),
+          },
+        ],
+        { owner: OTHER },
+      ),
+    ).rejects.toThrow("alfaclub_sudoswap_pair_owner_mismatch");
+  });
+
   it("rejects inventory deposits bound to another pair or token ID", async () => {
     await expect(
       validate([
@@ -405,6 +424,21 @@ describe("AlfaClub Sudoswap paymaster policy", () => {
         },
       ]),
     ).rejects.toThrow("alfaclub_sudoswap_deposit_erc1155_invalid");
+  });
+
+  it("rejects non-owner inventory donations from the sponsored sender", async () => {
+    const deposit: AlfaClubLpInnerCall = {
+      target: ROOM_1659_CREATOR_COIN,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "transfer",
+        args: [PAIR, 100n],
+      }),
+    };
+    await expect(validate([deposit], { owner: OTHER })).rejects.toThrow(
+      "alfaclub_sudoswap_pair_owner_mismatch",
+    );
   });
 
   it("accepts pair-owner withdrawals and exact Room 1659 curve changes", async () => {

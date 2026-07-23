@@ -26,6 +26,8 @@ export function formatInverseOpinionSkipReply(reasonCode: string): string | null
       return 'wanted to invert your take but InverseAKITA has no executor wallet mapped yet.'
     case 'insufficient_stake':
       return 'wanted to invert your take, but this pilot requires the room 1659 stake gate.'
+    case 'room_listen_only':
+      return 'wanted to invert your take but this discovered room is listen-only unless explicitly allowlisted for trading.'
     case 'stake_read_failed':
     case 'authority_check_failed':
       return 'wanted to invert your take but the room 1659 stake check failed. retry in a moment.'

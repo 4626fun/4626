@@ -19,13 +19,17 @@ describe('resolveAlfaClubKeys', () => {
   it('uses the FriendKey ERC-1155 contract and token id, never a creator coin', () => {
     const [resolved] = resolveAlfaClubKeys({ rooms: [key({ roomId: '1659', roomName: 'AKITA' })] })
     expect(resolved).toMatchObject({
-      assetKind: 'erc1155-key', contractAddress: ALFACLUB.friendKey, keyId: '1659', label: 'Key #1659',
+      assetKind: 'erc1155-key', contractAddress: ALFACLUB.friendKey, keyId: '1659', label: 'AKITA',
     })
   })
 
-  it('keeps Key #1659 available before the directory loads', () => {
-    expect(resolveAlfaClubKeys({ rooms: [] })[0]).toMatchObject({
-      assetKind: 'erc1155-key', keyId: '1659', label: 'Key #1659',
+  it('keeps #1659 available before the directory loads', () => {
+    const fallback = resolveAlfaClubKeys({ rooms: [] })[0]
+    expect(fallback).toBeDefined()
+    if (!fallback) throw new Error('expected_alfaclub_key_fallback')
+    expect(fallback).toMatchObject({
+      assetKind: 'erc1155-key', keyId: '1659', label: 'AKITA',
     })
+    expect(fallback.imageUrl).toBeTruthy()
   })
 })

@@ -77,7 +77,7 @@ describe("AlfaClub official Sudoswap market readiness", () => {
       getAlfaClubLiquidityDisabledReason(
         ready({ requestedMarketMatches: false }),
       ),
-    ).toBe("No official Sudoswap market is configured for this room");
+    ).toBe("No official Sudoswap market is configured for this key");
   });
 
   it("requires a live OK quote", () => {
@@ -100,7 +100,7 @@ describe("AlfaClub official Sudoswap market readiness", () => {
 
   it("keeps key quantity and slippage inside the sponsored policy envelope", () => {
     expect(getAlfaClubLiquidityDisabledReason(ready({ keyAmount: 101n }))).toBe(
-      "Room key amount exceeds the supported maximum of 100",
+      "Key amount exceeds the supported maximum of 100",
     );
     expect(parseSlippageBps("5")).toBe(500n);
     expect(parseSlippageBps("50")).toBe(500n);

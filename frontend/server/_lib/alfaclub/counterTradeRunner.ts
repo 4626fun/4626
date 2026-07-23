@@ -363,7 +363,8 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         newEvents += 1
 
         const fillCoin = String(fill.coin ?? '').trim()
-        if (!isAssetAllowlisted(fillCoin, assetAllowlist)) {
+        const fillAction = classifyCounterTradeFillAction(fill)
+        if (fillAction === 'entry' && !isAssetAllowlisted(fillCoin, assetAllowlist)) {
           skipped += 1
           await recordCounterTradeAction({
             roomId: runtime.roomId,
@@ -394,8 +395,6 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // of) a pair, close the bot's position on that pair. Risk-reducing, so
         // it runs before cooldown/hourly/daily gates and the LLM gate; dedupe
         // and the env/DB kill switches above still apply.
-        const fillAction = classifyCounterTradeFillAction(fill)
-
         // Chat reaction owns OPEN fades for InverseAKITA room 1659. Skip ticker
         // entry so Chip/chat OPEN and fill-mirror OPEN never double-execute.
         if (runtime.roomId === INVERSE_AKITA_ROOM_ID && fillAction === 'entry') {
@@ -810,4 +809,3 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
     failed,
   }
 }
-

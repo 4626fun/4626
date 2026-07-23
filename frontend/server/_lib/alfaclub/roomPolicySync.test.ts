@@ -101,6 +101,7 @@ describe('syncCreatorRoomPoliciesFromSnapshot', () => {
       poolAddress: pair,
       enabled: false,
       actorAddress: null,
+      insertOnly: true,
     })
   })
 

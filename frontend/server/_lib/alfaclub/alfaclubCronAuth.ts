@@ -1,4 +1,5 @@
 import type { VercelRequest } from '@vercel/node'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -23,5 +24,8 @@ export function isCronSecretAuthorized(req: VercelRequest): boolean {
   const configured = readConfiguredCronSecret()
   if (!configured) return false
   const provided = readCronSecretFromRequest(req)
-  return Boolean(provided) && provided === configured
+  if (!provided) return false
+  const providedDigest = createHash('sha256').update(provided).digest()
+  const configuredDigest = createHash('sha256').update(configured).digest()
+  return timingSafeEqual(providedDigest, configuredDigest)
 }

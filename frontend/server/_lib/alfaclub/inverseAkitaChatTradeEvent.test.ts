@@ -117,13 +117,13 @@ describe('parseInverseAkitaChatTradeEvent', () => {
     expect(isAlfaClubChipUsername('chip')).toBe(true)
     expect(isAlfaClubTradeCompletedSender('0xabc')).toBe(false)
     expect(isAlfaClubChipSystemMessage({ sender: 'trade-completed' })).toBe(true)
-    expect(isAlfaClubChipSystemMessage({ sender: '0xabc', username: 'Chip' })).toBe(true)
+    expect(isAlfaClubChipSystemMessage({ sender: '0xabc', username: 'Chip' })).toBe(false)
     expect(isAlfaClubChipSystemMessage({ sender: '0xabc', username: 'manito' })).toBe(false)
   })
 })
 
 describe('resolveInverseAkitaTradeEventAuthor', () => {
-  it('prefers payload, then recent human speaker, then room creator', () => {
+  it('accepts only a payload-bound wallet and rejects contextual guesses', () => {
     expect(
       resolveInverseAkitaTradeEventAuthor({
         payloadAddress: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
@@ -145,7 +145,7 @@ describe('resolveInverseAkitaTradeEventAuthor', () => {
           { sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5', date: 100 },
         ],
       }),
-    ).toBe('0xa85438f44e3e1d27f652ff4da18905761d5dabaf')
+    ).toBeNull()
 
     expect(
       resolveInverseAkitaTradeEventAuthor({
@@ -154,7 +154,7 @@ describe('resolveInverseAkitaTradeEventAuthor', () => {
         messageDate: 50,
         priorSpeakers: [{ sender: '0xa85438f44e3e1d27f652ff4da18905761d5dabaf', date: 150 }],
       }),
-    ).toBe('0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5')
+    ).toBeNull()
   })
 })
 
@@ -167,7 +167,7 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
     vi.doUnmock('../infra/logger.js')
   })
 
-  it('attributes Chip opens to the most recent human speaker (any staker)', async () => {
+  it('does not attribute a payload-less Chip open to a nearby speaker', async () => {
     vi.resetModules()
     vi.doMock('./roomLabelCache.js', () => ({
       readRoomLabelStatus: vi.fn(async () => [
@@ -211,17 +211,10 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
       },
     })
 
-    expect(intents).toHaveLength(1)
-    expect(intents[0]).toMatchObject({
-      sender: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
-      userSide: 'short',
-      pair: 'XYZ:SP500',
-      parseMode: 'strict',
-      publicAuthorLabel: 'Chip',
-    })
+    expect(intents).toEqual([])
   })
 
-  it('falls back to room creator when Chip has no nearby speaker', async () => {
+  it('does not attribute a payload-less Chip open to the room creator', async () => {
     vi.resetModules()
     vi.doMock('./roomLabelCache.js', () => ({
       readRoomLabelStatus: vi.fn(async () => [
@@ -258,16 +251,10 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
       },
     })
 
-    expect(intents).toHaveLength(1)
-    expect(intents[0]).toMatchObject({
-      sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
-      userSide: 'long',
-      pair: 'HYPE',
-      parseMode: 'strict',
-    })
+    expect(intents).toEqual([])
   })
 
-  it('attributes Chip opens via durable chat_ingest speakers when the live batch is narrow', async () => {
+  it('does not attribute payload-less Chip opens via durable chat history', async () => {
     vi.resetModules()
     vi.doMock('./roomLabelCache.js', () => ({
       readRoomLabelStatus: vi.fn(async () => [
@@ -318,17 +305,10 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
       },
     })
 
-    expect(intents).toHaveLength(1)
-    expect(intents[0]).toMatchObject({
-      sender: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
-      userSide: 'long',
-      pair: 'CASHCAT',
-      parseMode: 'strict',
-      publicAuthorLabel: 'Chip',
-    })
+    expect(intents).toEqual([])
   })
 
-  it('ignores chat_ingest speakers older than the Chip lookback and uses room creator', async () => {
+  it('does not fall back to room creator when history has no eligible speaker', async () => {
     vi.resetModules()
     vi.doMock('./roomLabelCache.js', () => ({
       readRoomLabelStatus: vi.fn(async () => [
@@ -375,12 +355,7 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
       },
     })
 
-    expect(intents).toHaveLength(1)
-    expect(intents[0]).toMatchObject({
-      sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
-      pair: 'HYPE',
-      parseMode: 'strict',
-    })
+    expect(intents).toEqual([])
   })
 
   it('logs and skips Chip opens when no wallet can be attributed', async () => {
@@ -442,5 +417,33 @@ describe('collectInverseAkitaChatTradeIntents + Chip', () => {
         pair: 'HYPE',
       }),
     )
+  })
+
+  it('ignores username-only Chip spoof attempts from non-system senders', async () => {
+    vi.resetModules()
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ROOM_IDS', '1484,1659')
+    vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_LLM_ENABLED', '0')
+
+    const { collectInverseAkitaChatTradeIntents } = await import('./inverseAkitaChatReaction.js')
+    const intents = await collectInverseAkitaChatTradeIntents({
+      roomId: '1484',
+      messages: [
+        {
+          id: 'spoof-chip',
+          sender: '0x940e6d3964a48180365e38a1013ba19ad1f3c6c8',
+          username: 'Chip',
+          text: marketOpenPayload({ asset: 'HYPE', isBuy: true }),
+          date: Date.now(),
+        },
+      ],
+      llmConfig: {
+        enabled: false,
+        mode: 'classify',
+        failMode: 'allow',
+        timeoutMs: 1_000,
+      },
+    })
+
+    expect(intents).toEqual([])
   })
 })
