@@ -40,12 +40,12 @@ contract Registry4626CanonicalWalletTest is Test {
     }
 
     function test_SetCanonicalWallet_RevertsOnCollision() public {
-        // Victim claims their canonical wallet.
-        vm.prank(victimCreator);
+        // ODA-465-3: wallet itself (or owner) must set; creator alone cannot bind arbitrary wallets.
+        vm.prank(victimWallet);
         registry.setCanonicalWallet(tokenVictim, victimWallet);
 
-        // Attacker attempts to hijack the victim's wallet via reverse lookup.
-        vm.prank(attackerCreator);
+        // Same wallet cannot be claimed for another token (owner override still uniqueness-checked).
+        vm.prank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(Registry4626.CanonicalWalletAlreadyInUse.selector, victimWallet, tokenVictim)
         );
@@ -55,12 +55,25 @@ contract Registry4626CanonicalWalletTest is Test {
         assertEq(registry.canonicalWalletToToken(victimWallet), tokenVictim);
     }
 
-    function test_SetCanonicalWallet_UpdatesReverseMapping() public {
+    function test_SetCanonicalWallet_CreatorAloneCannotSetArbitraryWallet() public {
         vm.prank(victimCreator);
+        vm.expectRevert(Registry4626.NotAuthorized.selector);
+        registry.setCanonicalWallet(tokenVictim, victimWallet);
+    }
+
+    function test_SetCanonicalWallet_OwnerCanOverride() public {
+        vm.prank(owner);
+        registry.setCanonicalWallet(tokenVictim, victimWallet);
+        assertEq(registry.getTokenInfo(tokenVictim).canonicalWallet, victimWallet);
+        assertEq(registry.canonicalWalletToToken(victimWallet), tokenVictim);
+    }
+
+    function test_SetCanonicalWallet_UpdatesReverseMapping() public {
+        vm.prank(victimWallet);
         registry.setCanonicalWallet(tokenVictim, victimWallet);
         assertEq(registry.canonicalWalletToToken(victimWallet), tokenVictim);
 
-        vm.prank(victimCreator);
+        vm.prank(victimWallet2);
         registry.setCanonicalWallet(tokenVictim, victimWallet2);
 
         assertEq(registry.canonicalWalletToToken(victimWallet), address(0));
@@ -68,4 +81,3 @@ contract Registry4626CanonicalWalletTest is Test {
         assertEq(registry.getTokenForCanonicalWallet(victimWallet2), tokenVictim);
     }
 }
-

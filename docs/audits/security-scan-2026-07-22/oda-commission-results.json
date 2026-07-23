@@ -1,0 +1,75 @@
+[
+  {
+    "id": "probe",
+    "title": "Probe (accidental Node18 diag)",
+    "ok": true,
+    "jobId": 460,
+    "jobUrl": "https://onedollaraudit.com/audit/460",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/460",
+    "note": "Weak description; do not treat as core lottery job"
+  },
+  {
+    "id": "lottery",
+    "title": "Lottery stack",
+    "ok": true,
+    "jobId": 461,
+    "jobUrl": "https://onedollaraudit.com/audit/461",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/461"
+  },
+  {
+    "id": "vault",
+    "title": "CreatorOVault + CoreModule",
+    "ok": true,
+    "jobId": 462,
+    "jobUrl": "https://onedollaraudit.com/audit/462",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/462"
+  },
+  {
+    "id": "shareoft",
+    "title": "CreatorShareOFT + Wrapper",
+    "ok": true,
+    "jobId": 463,
+    "jobUrl": "https://onedollaraudit.com/audit/463",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/463"
+  },
+  {
+    "id": "batcher",
+    "title": "DeploymentBatcher",
+    "ok": true,
+    "jobId": 464,
+    "jobUrl": "https://onedollaraudit.com/audit/464",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/464"
+  },
+  {
+    "id": "registry",
+    "title": "Registry4626",
+    "ok": true,
+    "jobId": 465,
+    "jobUrl": "https://onedollaraudit.com/audit/465",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/465"
+  },
+  {
+    "id": "strategies",
+    "title": "Charm + Ajna strategies",
+    "ok": true,
+    "jobId": 466,
+    "jobUrl": "https://onedollaraudit.com/audit/466",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/466"
+  },
+  {
+    "id": "gauge",
+    "title": "CreatorGaugeController",
+    "ok": true,
+    "jobId": 467,
+    "jobUrl": "https://onedollaraudit.com/audit/467",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/467"
+  },
+  {
+    "id": "ve4626",
+    "title": "ve4626 + bribes",
+    "ok": true,
+    "jobId": 468,
+    "jobUrl": "https://onedollaraudit.com/audit/468",
+    "statusUrl": "https://onedollaraudit.com/api/jobs/468"
+  }
+]

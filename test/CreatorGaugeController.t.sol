@@ -124,10 +124,15 @@ contract MockToken is IERC20 {
         MockToken public immutable vaultToken;
         MockToken public immutable oftToken;
         uint256 public constant NORMALIZATION = 1000;
+        bool public revertUnwrap;
 
         constructor(address vault_, address oft_) {
             vaultToken = MockToken(vault_);
             oftToken = MockToken(oft_);
+        }
+
+        function setRevertUnwrap(bool v) external {
+            revertUnwrap = v;
         }
 
         function vaultShares() external view returns (address) {
@@ -142,6 +147,7 @@ contract MockToken is IERC20 {
         }
 
         function unwrap(uint256 amount) external returns (uint256) {
+            if (revertUnwrap) revert("InsufficientLocked");
             oftToken.transferFrom(msg.sender, address(this), amount);
             uint256 out = amount * NORMALIZATION;
             vaultToken.mint(msg.sender, out);
@@ -441,6 +447,71 @@ contract MockToken is IERC20 {
             gauge.distribute();
             assertEq(gauge.pendingFees(), 0);
             assertEq(gauge.lastDistribution(), block.timestamp);
+        }
+
+        /// ODA-467-[1]: bridged OFT burn-slice unwrap failure must not brick distribute/intake.
+        function test_bridgedFees_unwrapFailureFoldsBurnSliceIntoJackpot() public {
+            wrapper.setRevertUnwrap(true);
+            vm.warp(block.timestamp + gauge.distributionInterval());
+
+            uint256 bridged = 1_000e18;
+            shareOFT.mint(address(gauge), bridged);
+
+            uint256 jackpotBefore = gauge.jackpotReserve();
+            gauge.receiveBridgedFees();
+
+            // Auto-distribute ran; burn slice folded to jackpot instead of reverting.
+            assertEq(gauge.pendingFees(), 0, "pending must clear");
+            assertGt(gauge.jackpotReserve(), jackpotBefore, "burn slice should land in jackpot");
+
+            // Intake remains live for a second bridged credit (no permanent brick).
+            vm.warp(block.timestamp + gauge.distributionInterval());
+            shareOFT.mint(address(gauge), bridged);
+            gauge.receiveBridgedFees();
+            assertEq(gauge.pendingFees(), 0, "second distribute must also succeed");
+        }
+
+        function test_setLotteryManager_zeroRevokesImmediatelyAndCancelsPending() public {
+            address first = makeAddr("lottery1");
+            address second = makeAddr("lottery2");
+
+            gauge.setLotteryManager(first);
+            gauge.setLotteryManager(second);
+            assertEq(address(gauge.lotteryManager()), first);
+            assertEq(address(gauge.pendingLotteryManager()), second);
+            assertGt(gauge.pendingLotteryManagerAt(), 0);
+
+            // ODA-467-2: address(0) revokes instantly and clears the queue.
+            gauge.setLotteryManager(address(0));
+            assertEq(address(gauge.lotteryManager()), address(0));
+            assertEq(address(gauge.pendingLotteryManager()), address(0));
+            assertEq(gauge.pendingLotteryManagerAt(), 0);
+        }
+
+        function test_setOracleConfig_rejectsBelowMinTwap() public {
+            vm.expectRevert(CreatorGaugeController.InvalidTwapDuration.selector);
+            gauge.setOracleConfig(60, true);
+
+            gauge.setOracleConfig(1800, true);
+            assertEq(gauge.oracleTwapDuration(), 1800);
+        }
+
+        function test_setSwapConfig_whitelistsFeeTiers() public {
+            gauge.setSwapConfig(100, 100);
+            gauge.setSwapConfig(500, 100);
+            gauge.setSwapConfig(3000, 100);
+            gauge.setSwapConfig(10000, 100);
+
+            vm.expectRevert(CreatorGaugeController.InvalidFeeTier.selector);
+            gauge.setSwapConfig(1234, 100);
+        }
+
+        function test_setDistributionInterval_capsAt30Days() public {
+            gauge.setDistributionInterval(30 days);
+            assertEq(gauge.distributionInterval(), 30 days);
+
+            vm.expectRevert(CreatorGaugeController.InvalidDistributionInterval.selector);
+            gauge.setDistributionInterval(30 days + 1);
         }
 
         function _depositPendingWeth(uint256 amount) internal {

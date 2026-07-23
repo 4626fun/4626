@@ -70,6 +70,13 @@ contract LotteryAmoeRouterScanM2Test is Test {
         assertEq(router.nextEntryId(), 0);
     }
 
+    /// @notice ODA-461-18: unused-signature ECDSA path is disabled; ZK is the live path.
+    function test_submitAmoeEntry_legacyPathDisabled() public {
+        vm.prank(publisher);
+        vm.expectRevert(LotteryAmoeRouter.LegacyAmoeDisabled.selector);
+        router.submitAmoeEntry(buyer, coin, keccak256("nonce"), block.timestamp + 1 hours, "");
+    }
+
     function test_submitAmoeEntryZK_revertsAfterTimelockedUnset() public {
         ScanM2MockManager managerMock = new ScanM2MockManager();
         vm.prank(owner);

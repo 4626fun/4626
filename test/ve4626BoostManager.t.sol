@@ -77,6 +77,8 @@ contract ve4626BoostManagerMathTest is Test {
         vm.startPrank(owner);
         manager.setUtility(address(utility));
         manager.setMinVotingPower(0);
+        vm.warp(block.timestamp + manager.BOOST_TIMELOCK_DURATION());
+        manager.executeMinVotingPowerUpdate();
         vm.stopPrank();
         vm.prank(address(ve));
         manager.updateBalanceTracking(user);

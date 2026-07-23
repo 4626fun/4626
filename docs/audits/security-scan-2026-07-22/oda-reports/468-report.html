@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ve4626 Governance + Bribes (Curve-style vote-escrow, gauge voting, boost, bribe depot) — LeftClaw Services</title>
+<meta name="description" content="Smart contract audit report for leftclaw.services job #468">
+<style>
+  :root {
+    --bg: #fffdf9;
+    --bg-soft: #fdf3e8;
+    --bg-softer: #f9e2c8;
+    --ink: #2c1408;
+    --ink-soft: #6b5648;
+    --primary: #c93a1e;
+    --rule: #ecd9c0;
+    --code-bg: #faf2e6;
+    --code-ink: #4a2c14;
+    --pill-critical-bg: #7a1010; --pill-critical-ink: #ffe3e3;
+    --pill-high-bg: #e03030;     --pill-high-ink: #ffffff;
+    --pill-medium-bg: #e8a020;   --pill-medium-ink: #2c1408;
+    --pill-low-bg: #4a90d9;      --pill-low-ink: #ffffff;
+    --pill-info-bg: #d8cbb8;     --pill-info-ink: #2c1408;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1410;
+      --bg-soft: #150e0a;
+      --bg-softer: #2a1c12;
+      --ink: #ffe8d8;
+      --ink-soft: #b89a86;
+      --primary: #e8431f;
+      --rule: #3d2a1c;
+      --code-bg: #150e0a;
+      --code-ink: #f4d9c2;
+      --pill-info-bg: #4a382a; --pill-info-ink: #ffe8d8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .band { height: 6px; background: var(--primary); }
+
+  .page { max-width: 880px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead { padding: 36px 0 24px; border-bottom: 2px solid var(--rule); }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+  }
+  .brand .claw { font-size: 20px; }
+  .brand a { color: inherit; }
+  header.masthead h1.doc-title {
+    margin: 14px 0 4px; font-size: 34px; line-height: 1.2; letter-spacing: -.01em;
+  }
+  .job-sub { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; padding: 5px 12px; border-radius: 999px;
+    background: var(--bg-soft); border: 1px solid var(--rule); color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip b { font-weight: 600; }
+  a.chip:hover { text-decoration: none; border-color: var(--primary); }
+
+  /* ---------- severity strip ---------- */
+  .sev-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+  .sev-card {
+    flex: 1 1 90px; min-width: 90px; text-align: center;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 10px 6px 8px;
+    background: var(--bg-soft);
+  }
+  .sev-card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .sev-card .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+  .sev-card.critical .n { color: var(--pill-critical-bg); }
+  .sev-card.high .n { color: var(--pill-high-bg); }
+  .sev-card.medium .n { color: var(--pill-medium-bg); }
+  .sev-card.low .n { color: var(--pill-low-bg); }
+  .sev-card.info .n { color: var(--ink-soft); }
+  @media (prefers-color-scheme: dark) {
+    .sev-card.critical .n { color: #ff8a8a; }
+  }
+
+  /* ---------- severity pills ---------- */
+  .pill {
+    display: inline-block; font-size: 12px; font-weight: 700; line-height: 1;
+    padding: 4px 10px; border-radius: 999px; letter-spacing: .04em;
+    text-transform: uppercase; vertical-align: baseline;
+  }
+  .pill.critical { background: var(--pill-critical-bg); color: var(--pill-critical-ink); }
+  .pill.high     { background: var(--pill-high-bg);     color: var(--pill-high-ink); }
+  .pill.medium   { background: var(--pill-medium-bg);   color: var(--pill-medium-ink); }
+  .pill.low      { background: var(--pill-low-bg);      color: var(--pill-low-ink); }
+  .pill.info     { background: var(--pill-info-bg);     color: var(--pill-info-ink); }
+
+  /* ---------- table of contents ---------- */
+  nav.toc {
+    margin: 28px 0 8px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 10px;
+  }
+  nav.toc .toc-title {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700; margin-bottom: 8px;
+  }
+  nav.toc .toc-cols { display: flex; gap: 36px; }
+  nav.toc ol { margin: 0; padding-left: 20px; flex: 1 1 0; }
+  nav.toc li { font-size: 14px; margin: 3px 0; }
+  @media (max-width: 640px) { nav.toc .toc-cols { flex-direction: column; gap: 0; } }
+
+  /* ---------- report body ---------- */
+  main.report { padding-top: 8px; }
+  main.report h1 { display: none; } /* masthead already shows the title */
+  main.report h2 {
+    font-size: 24px; line-height: 1.3; margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--rule);
+    letter-spacing: -.01em;
+  }
+  main.report h3 { font-size: 19px; margin: 30px 0 10px; }
+  main.report h4 { font-size: 16px; margin: 24px 0 8px; }
+  main.report p { margin: 12px 0; }
+  main.report li { margin: 5px 0; }
+  main.report hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+  main.report strong { font-weight: 650; }
+  main.report blockquote {
+    margin: 16px 0; padding: 10px 18px; border-left: 4px solid var(--primary);
+    background: var(--bg-soft); border-radius: 0 8px 8px 0; color: var(--ink-soft);
+  }
+
+  main.report code {
+    font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--rule);
+  }
+  main.report pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 16px 0;
+  }
+  main.report pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 10px; }
+  main.report table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  main.report th, main.report td {
+    text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  main.report thead th {
+    background: var(--bg-soft); font-size: 12px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); border-bottom: 2px solid var(--rule);
+  }
+  main.report tbody tr:last-child td { border-bottom: none; }
+  main.report tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+
+  /* ---------- footer ---------- */
+  footer.colophon {
+    margin-top: 64px; padding-top: 20px; border-top: 2px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft);
+  }
+  footer.colophon p { margin: 6px 0; }
+  footer.colophon code { font-size: 12px; word-break: break-all; }
+
+  /* ---------- print ---------- */
+  @media print {
+    :root { --bg: #ffffff; --bg-soft: #f6f6f6; --rule: #dddddd; }
+    .band { display: none; }
+    .page { max-width: none; padding: 0; }
+    nav.toc ol { columns: 2; }
+    main.report pre, main.report .table-wrap { break-inside: avoid; }
+    main.report h2 { break-after: avoid; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="band"></div>
+<div class="page">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="claw">🦞</span>
+      <a href="https://leftclaw.services">LeftClaw Services</a>
+      <span>·</span>
+      <span>Smart Contract Audit</span>
+    </div>
+    <h1 class="doc-title">ve4626 Governance + Bribes (Curve-style vote-escrow, gauge voting, boost, bribe depot)</h1>
+    <p class="job-sub">Job #468 · completed on-chain · report pinned to IPFS</p>
+    <div class="meta-chips">
+      <a class="chip" href="https://leftclaw.services/jobs/468"><b>Job page</b> #468</a>
+      <a class="chip" href="https://bafkreia3hbdlzupry7k7mnresq4gmlqp77i5sxhgniws2fzr42f55ktsya.ipfs.community.bgipfs.com/"><b>Canonical report</b> IPFS</a>
+      <span class="chip"><b>Generated</b> 2026-07-22</span>
+    </div>
+
+  </header>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <div class="toc-cols">
+    <ol>
+      <li><a href="#reconciliation-summary">Reconciliation Summary</a></li>
+      <li><a href="#access-control-inventory-from-phase-0">Access-Control Inventory (from Phase 0)</a></li>
+      <li><a href="#threat-model-from-phase-0-resolved">Threat Model (from Phase 0, resolved)</a></li>
+    </ol>
+    <ol start="4">
+      <li><a href="#findings">Findings</a></li>
+      <li><a href="#coverage-gate">Coverage Gate</a></li>
+      <li><a href="#scope-note">Scope Note</a></li>
+    </ol>
+    </div>
+  </nav>
+
+  <main class="report">
+<h1>🔐 Security Review — ve4626 Governance + Bribes (Curve-style vote-escrow, gauge voting, boost, bribe depot)</h1>
+<p><strong>Target</strong>: <code>contracts/shared/governance/{ve4626.sol, ve4626GaugeVoting.sol, ve4626BoostManager.sol, ve4626Utility.sol, bribes/BribeDepot4626.sol}</code><br><strong>Repo</strong>: <code>github.com/4626fun/4626</code> — tag <code>audit/oda-2026-07-22</code><br><strong>Commit (pinned)</strong>: <code>423e0e3a607884de6e60bccd06f722a8aba770ee</code><br><strong>Out of scope (explicit)</strong>: <code>github.com/wenakita/CreatorVault</code>, private <code>wenakita/4626</code> — confirmed no cross-contamination from these in the audited files.<br><strong>Methodology</strong>: three-phase hybrid audit — Phase 0 (context: protocol map, access-control inventory, threat catalog, opus) → Phase 1 (breadth: 8 domain checklist agents, opus) → Phase 2 (depth: 12 attacker-mindset agents, opus, blind to Phase 1 findings) → Phase 3 (reconciliation + coverage gate, this document).</p>
+<hr>
+<h2 id="reconciliation-summary">Reconciliation Summary</h2>
+<p><strong>Overlap: 12 · Phase-1-only: 17 · Phase-2-only: 4 · Re-examined leads kept: 4, demoted: 1 · Coverage holes closed: 0</strong></p>
+<ul>
+<li>40 raw findings/leads from 8 Phase-1 domain agents deduped to 29 unique (Contract, function, bug-class) items.</li>
+<li>~40 raw findings/leads from 12 Phase-2 attacker agents (blind) deduped to 16 unique items (3 promoted findings + 13 leads).</li>
+<li>Cross-phase merge: 12 Phase-2 items independently converged on Phase-1 items (strong corroboration — some items were found by 6–10 independent agents across both phases). 4 Phase-2 items were genuinely new and were each targeted-re-read against source to confirm before inclusion (all 4 confirmed and kept). 1 Phase-2 lead (<code>calculateBoost</code> &quot;legacy&quot; boost with no position clamp) was demoted on re-read: its own natspec (ve4626BoostManager.sol:144-147) explicitly documents it as UI-only/legacy and states the real consumer must use <code>calculateBoostForPosition</code> — this is by-design, not a defect.</li>
+<li><strong>Confidence floor</strong>: findings below confidence 50 are listed as Leads, not Findings. Two headline items (governance-reset timing, quorum-supply staleness) carry full numeric proofs and are reported as Findings at confidence 65–90; the remainder of the corroborated items are dust-bounded, self-recoverable, or contingent on out-of-scope/future integrations and are reported as Leads for transparency.</li>
+<li><strong>Coverage gate</strong>: 43/43 external/public state-changing entrypoints in source addressed (examined by ≥1 phase, or explicitly noted clean). All threat-catalog rows answered. 0 coverage holes required a first-time re-read in this reconciliation pass (both phases already covered the full surface independently).</li>
+</ul>
+<p>No Critical or High severity findings. <strong>3 Medium</strong>, <strong>19 Low</strong>, <strong>10 Info/positive-confirmation</strong> items below.</p>
+<hr>
+<h2 id="access-control-inventory-from-phase-0">Access-Control Inventory (from Phase 0)</h2>
+<p>43 external/public state-changing functions across 5 files. All privilege is single-owner OZ <code>Ownable</code> (5 independent owner slots, one per contract) plus one hardcoded non-owner check (<code>ve4626BoostManager.updateBalanceTracking</code> requires <code>msg.sender == address(ve4626)</code>). No <code>AccessControl</code>/roles anywhere.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Timelocked (48h, first-set-instant-then-timelocked)</td>
+<td><code>ve4626.boostManager</code>, <code>ve4626GaugeVoting.utility</code>, <code>ve4626BoostManager.utility</code> + boost params</td>
+</tr>
+<tr>
+<td>Instant, no timelock</td>
+<td><code>setVault</code>, all whitelist/registry setters, <code>setMinVotingPower</code>, <code>setRolloverGraceEpochs</code>, <code>setGaugeVoting</code>, <code>setAutoClaimVeLottery</code></td>
+</tr>
+<tr>
+<td>Permissionless, arbitrary-target</td>
+<td><code>ve4626.burnExpiredLock(user)</code>, <code>ve4626Utility.sync(user)</code>, <code>BribeDepot4626.rolloverZeroVoteEpoch(epoch,token)</code>, <code>ve4626GaugeVoting.checkpoint()</code></td>
+</tr>
+<tr>
+<td>Owner-only, high-impact</td>
+<td><code>emergencyResetAllVotes</code>, <code>rolloverExpiredEpoch</code>, <code>executeBoostManagerUpdate</code>/<code>executeUtilityUpdate</code> (×2), <code>executeBoostParameterUpdate</code></td>
+</tr>
+<tr>
+<td>Ownership transfer</td>
+<td>Single-step <code>Ownable</code> on all 5 contracts (no <code>Ownable2Step</code>)</td>
+</tr>
+</tbody></table></div>
+<p>Full per-function table: see Phase-0 appendix (<code>appendix-access-control.md</code>, retained in the audit working directory).</p>
+<h2 id="threat-model-from-phase-0-resolved">Threat Model (from Phase 0, resolved)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Actor → Entrypoint → Asset</th>
+<th>Resolution</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Any address → <code>burnExpiredLock</code>/<code>sync</code>/<code>rolloverZeroVoteEpoch</code> → third-party state</td>
+<td>Invariant holds for burn/sync (bounded to genuinely-unbacked/expired state); <code>rolloverZeroVoteEpoch</code> redirection risk → <strong>Finding L5</strong></td>
+</tr>
+<tr>
+<td>Voter → <code>vote()</code> reentrancy via state-changing <code>utility.sync</code> → double-counted power</td>
+<td>Invariant holds — independent <code>nonReentrant</code> guards on both contracts, verified by 3+ Phase-2 agents</td>
+</tr>
+<tr>
+<td>Owner (any timelock contract) → first-set-instant bootstrap → bypass 48h delay</td>
+<td>Invariant holds for the delay itself; transparency gap only → <strong>Finding (Lead) timelock re-arm</strong></td>
+</tr>
+<tr>
+<td>Voter → weight normalization/dust routing → disproportionate vault credit</td>
+<td>Invariant holds — sum-preserving, verified by precision-math agent</td>
+</tr>
+<tr>
+<td>Any bribe-token address → <code>bribe()</code> → hostile token accounting</td>
+<td>Invariant holds — balance-delta accounting, <code>nonReentrant</code></td>
+</tr>
+<tr>
+<td>Claimant → <code>claim()</code> after <code>emergencyResetAllVotes</code> → stale-weight claim</td>
+<td>Invariant holds for the bribe-claim path (generation-gated); the <em>reset itself</em> has a timing flaw → <strong>Finding #1 (Medium)</strong></td>
+</tr>
+<tr>
+<td>LotteryManager4626 (external) → <code>calculateBoostForPosition</code> → out-of-bounds boost</td>
+<td>Invariant holds — hard-clamped <code>[1x, maxBoost]</code> regardless of caller-supplied USD inputs, verified by 4+ agents including adversarial extremes</td>
+</tr>
+<tr>
+<td>Owner → <code>rolloverExpiredEpoch</code> → confiscate late claims</td>
+<td>Documented tradeoff, grace-floor bounded → <strong>Finding L9</strong></td>
+</tr>
+<tr>
+<td>Owner (any) → instant eligibility/parameter setters → reshape outcomes with no notice</td>
+<td>→ <strong>Finding #2 (Medium)</strong></td>
+</tr>
+<tr>
+<td>Owner → <code>ve4626Utility</code> constructor → utility-token ownership handoff</td>
+<td>→ <strong>Finding #3 (Medium)</strong></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="findings">Findings</h2>
+<h3 id="medium">Medium</h3>
+<p><strong>[M-1] <code>emergencyResetAllVotes</code> shares an identical cutoff with the vote-freeze window — owner reset leaves ~1 second, not the documented window, for voters to re-cast</strong></p>
+<p><code>ve4626GaugeVoting.emergencyResetAllVotes()</code> / <code>vote()</code> · Confidence: 90 · <code>[both — Phase 1: governance-1; Phase 2: trust-gap agent, verified]</code></p>
+<p><strong>Description</strong>: The reset guard and the vote guard use the identical cutoff expression:</p>
+<pre><code class="language-solidity">// L289 (vote):
+if (epochEnd &gt; block.timestamp &amp;&amp; epochEnd - block.timestamp &lt;= VOTE_FREEZE_WINDOW) { ... }
+// L688 (emergencyResetAllVotes):
+if (epochEnd &gt; block.timestamp &amp;&amp; epochEnd - block.timestamp &lt;= VOTE_FREEZE_WINDOW) { ... }
+</code></pre>
+<p>The ODA-433-F3 design intent (per the code&#39;s own comments) is that the owner must reset <em>before</em> the freeze window so voters have a chance to re-cast before the epoch closes. Because both guards trip at the exact same instant, the latest legal reset timestamp is the same timestamp voting freezes at — the enforced re-cast margin is ~1 second, not the intended <code>VOTE_FREEZE_WINDOW</code> (1 hour). An owner (or any unprivileged racer, satisfying Gate 3&#39;s &quot;race&quot; amplifier) can reset at <code>epochEnd - VOTE_FREEZE_WINDOW - 1</code> and cast a replacement vote one second later while the epoch&#39;s other voters have no practical chance to react — reshaping the epoch&#39;s live gauge probability (<code>getVaultProbabilityBoostPPM</code> reads current-epoch weights) and redirecting the other voters&#39; bribe entitlements (their <code>getUserVoteWeightAtEpoch</code> now reads 0 due to the generation bump) to whoever re-votes in the window. Bribes stranded from the reset voters are later sweepable into a future epoch via the permissionless <code>rolloverZeroVoteEpoch</code>.</p>
+<p><strong>Proof of Concept</strong>: Users A and B vote vault V (weight 100 each) in epoch E; a briber deposits 1000 USDC for V. At <code>block.timestamp = epochEnd - 3601</code> (1 second before the freeze boundary, <code>VOTE_FREEZE_WINDOW = 1 hours = 3600</code>), owner calls <code>emergencyResetAllVotes()</code> — passes (<code>3601 &gt; 3600</code>). One second later, at <code>epochEnd - 3600</code>, a party with an eligible lock calls <code>vote([V],[w])</code> — this is the exact same boundary at which <code>vote()</code> itself would revert <code>VoteFreezeWindow</code> one second later, so it is the <em>last possible</em> re-vote. A and B, with no realistic reaction time, never re-cast. At epoch close: <code>getUserVoteWeightAtEpoch(E,{A,B},V) = 0</code> (stale generation), <code>getUserVoteWeightAtEpoch(E,C,V) = w</code>. C claims the entire 1000 USDC bribe pool.</p>
+<p><strong>Recommendation</strong>:</p>
+<pre><code class="language-diff">- if (epochEnd &gt; block.timestamp &amp;&amp; epochEnd - block.timestamp &lt;= VOTE_FREEZE_WINDOW) revert EmergencyResetInFreezeWindow();
++ if (epochEnd &gt; block.timestamp &amp;&amp; epochEnd - block.timestamp &lt;= 2 * VOTE_FREEZE_WINDOW) revert EmergencyResetInFreezeWindow();
+</code></pre>
+<p>Banning reset in the last <code>2 * VOTE_FREEZE_WINDOW</code> guarantees voters a full un-frozen <code>VOTE_FREEZE_WINDOW</code> to react and re-cast after any reset.</p>
+<hr>
+<p><strong>[M-2] Vote/bribe eligibility and boost parameters are instantly owner-settable — inconsistent with the 48h-timelocked dependency-pointer pattern used elsewhere</strong></p>
+<p><code>ve4626GaugeVoting.setVaultWhitelist</code>/<code>batchSetVaultWhitelist</code>/<code>setSurfaceRegistry</code>/<code>setUseSurfaceRegistry</code>/<code>setRegistry</code>/<code>setUseRegistryWhitelist</code>; <code>ve4626BoostManager.setMinVotingPower</code>/<code>setveLotteryToken</code>; <code>ve4626.setVault</code>; <code>BribeDepot4626.setRolloverGraceEpochs</code> · Confidence: 80 · <code>[Phase 1 only — access-control-3, governance-2]</code></p>
+<p><strong>Description</strong>: The protocol applies a 48h timelock to <code>boostManager</code>/<code>utility</code> pointer rewiring and boost-parameter changes, but the functions that determine <em>which vaults are eligible for votes and bribes</em>, <em>which registry decides eligibility</em>, and <em>the boost-eligibility floor</em> are single-step, instant <code>Ownable</code> setters. Mid-epoch, the owner can delist a vault (its weight is burned from the budget per natspec), swap the entire eligibility source, or shift <code>minVotingPower</code> — with zero reaction window for users, on the same trust surface the timelock elsewhere protects.</p>
+<p><strong>Proof of Concept</strong>: Owner observes a lottery draw approaching and calls <code>setVaultWhitelist(rivalVault, false)</code> (or <code>setUseSurfaceRegistry(true)</code> pointing at an owner-controlled registry) instantly — <code>getVaultProbabilityBoostPPM(rivalVault)</code> returns 0 for the rest of the epoch, with no on-chain recourse for voters who backed it.</p>
+<p><strong>Recommendation</strong>: Apply the same 48h queue/execute timelock to eligibility-policy and boost-parameter setters, for consistency with the pointer-rewiring pattern already used for <code>boostManager</code>/<code>utility</code>.</p>
+<hr>
+<p><strong>[M-3] <code>ve4626Utility</code> constructor hands ownership of the ve33/veLottery mint tokens to the same key that operates the rest of the protocol</strong></p>
+<p><code>ve4626Utility</code> constructor (deploys <code>ve33</code>/<code>veLottery</code>, sets minter to self, then <code>transferOwnership(owner_)</code> on both) · Confidence: 70 (contingent on out-of-scope <code>ve4626UtilityToken.setMinter</code> being owner-gated — plausible given the constructor calls it, but the token source is not in the audited scope) · <code>[Phase 1 only — access-control-1]</code></p>
+<p><strong>Description</strong>: <code>ve33</code> drives gauge vote weight (and gates every <code>BribeDepot4626</code> bribe claim); <code>veLottery</code> drives lottery boost. Both tokens are owned by the protocol owner, the same key operating every other privileged function in scope. If the out-of-scope <code>ve4626UtilityToken</code> exposes an owner-gated <code>setMinter</code> (implied — the constructor itself calls <code>ve33.setMinter(address(this))</code>), a compromised or malicious owner could re-point the minter to itself and mint unlimited ve33/veLottery, manufacturing arbitrary gauge votes (draining every bribe pool) and arbitrary lottery boost, bypassing any ve-lock entirely.</p>
+<p><strong>Proof of Concept</strong>: Owner key compromised → attacker (as ve33 owner) calls <code>ve33.setMinter(attacker)</code> → <code>ve33.mint(attacker, huge)</code> → attacker claims the full bribe pool of every vault and forces <code>maxBoost</code>. Precondition: owner compromise + owner-gated <code>setMinter</code> in the out-of-scope token (plausible, not independently verified in this scope).</p>
+<p><strong>Recommendation</strong>: Do not transfer utility-token ownership to the operational owner key. Keep minter authority permanently bound to the Utility contract (renounce token ownership after <code>setMinter</code>, or make the minter immutable in the token), or place token ownership behind a separate, higher-security multisig/timelock.</p>
+<hr>
+<h3 id="low">Low</h3>
+<p><strong>[L-1] <code>hasVotedThisEpoch</code> is not generation-aware — stays <code>true</code> after <code>emergencyResetAllVotes</code>, temporarily blocking ve33 forfeit</strong></p>
+<p><code>ve4626GaugeVoting.hasVotedThisEpoch()</code> (L532-535) / <code>ve4626Utility._requireNoActiveVoteEscrow()</code> · Confidence: 75 (lead-promoted: 7 independent agents across both phases converged on this exact defect) · <code>[both — Phase 1: general-3; Phase 2: access-control, execution-trace, invariant, periphery, flow-gap, first-principles, all independently]</code></p>
+<pre><code class="language-solidity">function hasVotedThisEpoch(address user) external view returns (bool) {
+    uint256 epoch = currentEpoch();
+    return _epochUserVotedVaults[epoch][user].length() &gt; 0;   // no generation check
+}
+</code></pre>
+<p>Contrast the sibling <code>getUserVoteWeightAtEpoch</code> (L541-545), which <em>does</em> check <code>_userVoteGeneration[epoch][user] != _epochResetGeneration[epoch]</code>. <code>emergencyResetAllVotes</code> bumps the generation and zeroes vote-weight aggregates, but never clears the per-user <code>_epochUserVotedVaults</code> set, so a reset user&#39;s <code>hasVotedThisEpoch</code> stays <code>true</code>, causing <code>forfeitVe33</code>/<code>forfeitAll</code> to revert <code>ActiveVoteEscrow</code> for the rest of the epoch despite the user&#39;s vote weight being 0. Self-recoverable: calling <code>resetVotes()</code> first clears the per-user set.</p>
+<p><strong>Recommendation</strong>: Gate <code>hasVotedThisEpoch</code> on the same generation check <code>getUserVoteWeightAtEpoch</code> already uses.</p>
+<hr>
+<p><strong>[L-2] <code>getPastTotalSupply</code> is frozen at the last lock mutation while <code>getPastVotes</code> decays continuously to the query timestamp — quorum denominator can disagree with the sum of votes</strong></p>
+<p><code>ve4626.getPastTotalSupply()</code> (L746-769) vs <code>getPastVotes()</code> (L733-739) · Confidence: 65 · <code>[Phase 2 only — invariant agent, verified via re-read]</code></p>
+<p><strong>Description</strong>: <code>getPastVotes(user, t)</code> recomputes <code>amount·(end-t)/MAX</code> decayed exactly to <code>t</code> via <code>_votingPowerAt</code>. <code>getPastTotalSupply(t)</code> instead binary-searches <code>_totalSupplyCheckpoints</code> and returns <code>_totalSupplyCheckpoints[lo-1].supply</code> verbatim (confirmed at ve4626.sol:767-768) — the raw value checkpointed at the last lock <em>mutation</em>, never decayed forward through quiet periods to <code>t</code>. Ironically, the code&#39;s own comment (L741-745) states this function was fixed (H-06, superseding G-07) specifically to prevent quorum manipulation via lock changes between snapshot and vote — but the fix left a continuous-vs-stepwise mismatch between the two historical accessors.</p>
+<p><strong>Proof of Concept</strong>: Single locker, <code>amount=1e18</code>, 4-year lock, no further mutations after creation at <code>t0</code>. <code>_totalVotingSupply</code> is checkpointed>1e18</code> at <code>t0</code>. At <code>t1 = t0 + 2 years</code> (no intervening mutation): <code>getPastVotes(user, t1) = 1e18 * 0.5 = 0.5e18</code>, but <code>getPastTotalSupply(t1) = 1e18</code> (frozen at <code>t0</code>). The sole voter, holding 100% of real voting power, reads as only 50% of the reported total — any quorum threshold above 50% becomes unreachable even with unanimous turnout. Direction is conservative (denominator over-stated, never under-stated relative to the true decayed total), so it cannot force a proposal through with insufficient real support — only block legitimate ones. <strong>No in-repo Governor consumes this yet</strong> — the ERC20Votes surface (<code>clock</code>, <code>CLOCK_MODE</code>, <code>permit</code>) is explicitly built to serve a future external one, so impact is real and provable but contingent on that future integration.</p>
+<p><strong>Recommendation</strong>: Apply the same forward Curve-decay walk (<code>_decayStateAt</code>) to the checkpointed supply, decaying it from the checkpoint&#39;s timestamp to the queried <code>timepoint</code>, so the denominator decays identically to the per-user numerator.</p>
+<hr>
+<p><strong>[L-3] <code>increaseLock</code> never burns when recalculated power is lower than the stale minted balance</strong></p>
+<p><code>ve4626.increaseLock()</code> (L298-301) · Confidence: 70 · <code>[both — Phase 1: general-1, defi-staking-1; Phase 2: economic-security, periphery, first-principles, asymmetry, boundary]</code></p>
+<p><code>extendLock</code> adjusts the ve ERC20 balance in both directions (L257-262: mint OR burn). <code>increaseLock</code> only mints (L298-300, confirmed no <code>else</code> branch): a small top-up made long after the original lock, where the shrinking remaining duration makes <code>newVotingPower &lt; oldPower</code>, leaves <code>balanceOf</code> inflated above true decayed power. The dual-decay checkpoint (<code>_checkpointUserSlope</code>) is updated correctly regardless — only the raw ERC20 <code>balanceOf</code>/current <code>getVotes</code> diverges. No in-scope consumer reads raw <code>balanceOf</code> for power math.</p>
+<p><strong>Recommendation</strong>:</p>
+<pre><code class="language-diff">  if (newVotingPower &gt; oldPower) {
+      _mint(msg.sender, newVotingPower - oldPower);
++ } else if (newVotingPower &lt; oldPower) {
++     _burn(msg.sender, oldPower - newVotingPower);
+  }
+</code></pre>
+<hr>
+<p><strong>[L-4] <code>getVotes()</code>/delegation ignore the decay model; inconsistent with the overridden <code>getPastVotes()</code></strong></p>
+<p><code>ve4626.sol</code> — inherited <code>getVotes</code>/<code>delegate</code>/<code>delegateBySig</code>; <code>getPastVotes()</code> override · Confidence: 60 · <code>[both — Phase 1: general-2, governance-3, defi-staking-1, signatures-2; Phase 2: boundary, execution-trace, periphery, first-principles, flow-gap, invariant]</code></p>
+<p><code>getPastVotes</code> is overridden to resolve the account&#39;s <em>own</em> decayed lock (ignoring delegation entirely); current <code>getVotes()</code> is not overridden and returns the raw, non-decaying ERC20Votes checkpoint balance. <code>delegate()</code>/<code>delegateBySig()</code> remain callable but have no effect on any decayed-power view. No in-scope contract reads <code>getVotes</code>/delegation (all internal consumers use <code>getVotingPower</code>/<code>getTotalVotingPower</code>/<code>getPastVotes</code>), so impact is confined to external integrators/governors.</p>
+<p><strong>Recommendation</strong>: Override <code>getVotes</code> to match the decayed semantics of <code>getPastVotes</code>, or disable <code>delegate</code>/<code>delegateBySig</code>/<code>permit</code> (revert, matching the non-transferable design) and document that only <code>getVotingPower</code>/<code>getPastVotes</code> are authoritative.</p>
+<hr>
+<p><strong>[L-5] <code>rolloverZeroVoteEpoch</code> lets a positioned voter redirect stranded/reset bribes to themselves</strong></p>
+<p><code>BribeDepot4626.bribe()</code>/<code>rolloverZeroVoteEpoch()</code> (L94-111, 154-177) interacting with <code>emergencyResetAllVotes</code> · Confidence: 55 · <code>[both — Phase 1: general-7, governance-6; Phase 2: trust-gap]</code></p>
+<p><code>bribe</code> records no depositor identity. Bribes for a vault that ends an epoch with zero vote weight (organically, or via owner reset per M-1) can only be recovered via the permissionless <code>rolloverZeroVoteEpoch</code>, which moves them into a <em>future</em> epoch&#39;s pool — never back to the original briber. Any address holding vote weight for that vault in the destination epoch, including the caller who triggers the rollover, can then claim a pro-rata share the original briber never intended for them. Owner-induced zero weight (via M-1&#39;s reset) is indistinguishable from organic zero weight to this permissionless check.</p>
+<p><strong>Recommendation</strong>: Record per-depositor contributions to enable a refund path, or make <code>rolloverZeroVoteEpoch</code> owner-only (matching <code>rolloverExpiredEpoch</code>), or explicitly document bribes as non-refundable/forfeit-to-future-voters.</p>
+<hr>
+<p><strong>[L-6] Deflationary/rebasing bribe tokens can strand claimants and desync cross-epoch rollover accounting</strong></p>
+<p><code>BribeDepot4626.claim()</code> (L118-148, <code>InsufficientBribeBalance</code> at L140), <code>rolloverExpiredEpoch</code>/<code>rolloverZeroVoteEpoch</code> · Confidence: 55 · <code>[both — Phase 1: dos-2, governance-5; Phase 2: execution-trace]</code></p>
+<p><code>bribe()</code> uses balance-delta accounting correctly, but <code>claim</code>&#39;s computed pro-rata <code>amount</code> is checked against the depot&#39;s <em>global</em>, cross-epoch-shared <code>balanceOf(address(this))</code>, not a per-epoch-segregated balance, and reverts (rather than caps) on shortfall. A deflationary/rebasing/pausable bribe token deposited into one epoch can pad or starve claims in a different epoch, and rollover moves the <em>recorded</em> (not measured) remainder forward, compounding the mismatch. Griefing is self-funded by whoever deposits the malicious token.</p>
+<p><strong>Recommendation</strong>: Document/enforce a bribe-token allowlist restricted to standard non-rebasing, non-fee-on-transfer, non-pausable ERC20s, or switch to available-balance-capped, cursor-based pro-rata accounting.</p>
+<hr>
+<p><strong>[L-7] Unbounded <code>_epochVotedVaults</code> growth can gas-DoS <code>emergencyResetAllVotes</code></strong></p>
+<p><code>ve4626GaugeVoting.vote()</code> (L352, adds to <code>_epochVotedVaults[epoch]</code>, never pruned), <code>emergencyResetAllVotes()</code> (L693-699, unbounded iteration, unlike <code>checkpoint()</code>&#39;s 52-cap) · Confidence: 40 (Lead-level; Phase 1&#39;s two agents disagreed on reachability — dos-1 rated Medium/attacker-reachable, governance-8 rated Info/unlikely under realistic whitelist size; re-examined here and kept as a Low lead given it requires either a large owner-set whitelist or many organic voters) · <code>[Phase 1 only — dos-1, governance-8]</code></p>
+<p><code>_clearUserVotes</code> never removes entries from the global per-epoch voted-vault set; a single attacker can add up to <code>MAX_VAULTS_PER_VOTE</code> (10) fresh entries per cheap re-vote transaction. If the set grows large enough, iterating it in <code>emergencyResetAllVotes</code> can exceed the block gas limit, bricking the emergency escape hatch for that epoch — but only under a large whitelist or many distinct voted vaults, bounding real-world reachability.</p>
+<p><strong>Recommendation</strong>: Prune <code>_epochVotedVaults</code> entries when a vault&#39;s aggregate weight reaches zero, or make the reset bounded/paginated across multiple calls.</p>
+<hr>
+<p><strong>[L-8] <code>BribeDepot4626.claim</code> transfers before marking <code>claimed</code> (CEI ordering)</strong></p>
+<p><code>BribeDepot4626.claim()</code> (L138-145) · Confidence: 30 (not exploitable under the current shared <code>nonReentrant</code> guard — defense-in-depth only) · <code>[Phase 1 only — governance-4, defi-staking-5]</code></p>
+<p>The bribe token is transferred before <code>claimed[...]=true</code>/<code>claimedAmount+=amount</code> are written. Currently safe: <code>claim</code>/<code>bribe</code>/<code>rolloverZeroVoteEpoch</code>/<code>rolloverExpiredEpoch</code> share one <code>nonReentrant</code> guard.</p>
+<p><strong>Recommendation</strong>: Set <code>claimed[...]=true</code> and increment <code>claimedAmount</code> before <code>safeTransfer</code>, for defense-in-depth against a future guard refactor.</p>
+<hr>
+<p><strong>[L-9] No two-step ownership transfer on any of the 5 contracts</strong></p>
+<p>All 5 files, plain OZ <code>Ownable</code> · Confidence: 40 · <code>[Phase 1 only — access-control-2]</code></p>
+<p>A <code>transferOwnership</code> to a mistyped/uncontrolled address is immediate and irrevocable. <strong>Recommendation</strong>: Use <code>Ownable2Step</code> across all 5 contracts.</p>
+<hr>
+<p><strong>[L-10] <code>rolloverExpiredEpoch</code> lets the owner confiscate late claimants&#39; unclaimed bribes after the grace window</strong></p>
+<p><code>BribeDepot4626.rolloverExpiredEpoch()</code> (L185-218) · Confidence: 35 (documented tradeoff, grace-floor bounded) · <code>[Phase 1 only — access-control-4]</code></p>
+<p>After <code>rolloverGraceEpochs</code> (floor <code>MIN_ROLLOVER_GRACE_EPOCHS = 2</code>, L53), the owner can roll a non-zero-vote epoch&#39;s unclaimed remainder forward, closing the source epoch — a legitimate but slow-to-claim voter permanently loses access. <strong>Recommendation</strong>: consider a longer/immutable grace floor, or a per-user pull-forward mechanism.</p>
+<hr>
+<p><strong>[L-11] <code>renounceOwnership</code> can permanently brick boost configuration, emergency reset, and rollover</strong></p>
+<p>All 5 contracts (inherited <code>Ownable.renounceOwnership</code>) · Confidence: 30 · <code>[Phase 1 only — access-control-5]</code></p>
+<p>E.g. renouncing before <code>BoostManager.setUtility</code>/<code>executeUtilityUpdate</code> is ever executed permanently reverts all boost calculation (<code>UtilityNotConfigured</code>), with no fallback. <strong>Recommendation</strong>: override <code>renounceOwnership</code> to revert, given owner-critical operational functions with no alternative path exist.</p>
+<hr>
+<p><strong>[L-12] Timelock &quot;instant-set&quot; branch is re-armable via a round-trip through <code>address(0)</code> — the delay itself holds, but the queued event doesn&#39;t name the eventual replacement</strong></p>
+<p><code>ve4626.setBoostManager</code>/<code>executeBoostManagerUpdate</code>; <code>ve4626GaugeVoting.setUtility</code>/<code>executeUtilityUpdate</code>; <code>ve4626BoostManager.setUtility</code>/<code>executeUtilityUpdate</code> · Confidence: 40 · <code>[both — Phase 1: access-control-6; Phase 2: periphery, with full re-arm trace]</code></p>
+<p>The instant branch is gated on <code>pointer == address(0)</code>, reachable only after the timelocked path zeroes the pointer — so the 48h delay is not bypassed. But to re-arm the instant path, the owner queues a set-to-zero, so the emitted <code>...UpdateQueued(address(0), ...)</code> event doesn&#39;t name the eventual malicious/new target the owner intends to instant-set right after. <strong>Recommendation</strong>: gate the instant branch on a one-time boolean set on first successful configuration (never cleared), rather than testing <code>== address(0)</code>, so all post-deploy changes go through queue+execute with the real target visible.</p>
+<hr>
+<p><strong>[L-13] <code>ve4626Utility.setGaugeVoting</code> wiring is optional at the type level — two distinct mechanisms let one ve position double-back a vote and a veLottery claim</strong></p>
+<p><code>ve4626Utility.setGaugeVoting()</code>, <code>_requireNoActiveVoteEscrow()</code> · Confidence: 45 · <code>[both, two distinct mechanisms for the same function]</code></p>
+<p><strong>Mechanism A</strong> (Phase 1 — access-control-7): the escrow no-ops entirely if <code>gaugeVoting</code> was never wired (<code>address(0)</code>), with no runtime enforcement that the wiring happened — only a natspec reminder on <code>setUtility</code>.<br><strong>Mechanism B</strong> (Phase 2 — access-control, economic-security leads): even when wired, the escrow only checks the <em>current</em> epoch&#39;s <code>hasVotedThisEpoch</code> — once the epoch rolls over, the escrow releases even though the epoch&#39;s bribe claim (settled on the frozen weight) is still outstanding, letting a user forfeit ve33 and repurpose the freed capacity into veLottery in the next epoch.</p>
+<p><strong>Recommendation (Option A — enforce wiring)</strong>: make the gauge-voting wire mandatory before votes are escrow-relevant, or revert forfeits when <code>gaugeVoting</code> is unset and any epoch vote exists.<br><strong>Recommendation (Option B — cross-epoch, if intended as one-position-one-purpose)</strong>: extend the escrow to also block forfeiture while an unclaimed bribe exists for any epoch the user voted in, not just the current epoch.</p>
+<hr>
+<p><strong>[L-14] <code>extendLock</code> is missing the <code>MIN_LOCK_DURATION</code> floor that <code>lock()</code> enforces when reviving an expired lock</strong></p>
+<p><code>ve4626.extendLock()</code> (L239-244) · Confidence: 35 · <code>[Phase 2 only — asymmetry agent, verified via re-read]</code></p>
+<pre><code class="language-solidity">function extendLock(uint256 newEnd) external override nonReentrant returns (uint256 newVotingPower) {
+    Lock storage userLock = _locks[msg.sender];
+    if (userLock.amount == 0) revert NoExistingLock();
+    if (newEnd &gt; block.timestamp + MAX_LOCK_DURATION) revert InvalidLockDuration();
+    newEnd = _weekFloor(newEnd);
+    if (newEnd &lt;= userLock.end) revert LockDurationTooShort();
+</code></pre>
+<p><code>lock()</code> enforces <code>lockEnd &gt;= block.timestamp + MIN_LOCK_DURATION</code> (L206). <code>extendLock</code> only checks the upper bound and <code>newEnd &gt; userLock.end</code> — since extend is explicitly allowed to revive expired locks (<code>userLock.end</code> may be in the past), a user can revive with <code>newEnd = weekFloor(now + &lt;7 days)</code>, which passes both checks and yields a live lock shorter than the protocol&#39;s stated minimum. Downstream gates (gauge vote requires lock age ≥1 epoch via <code>start</code>; boost requires a 7-day holding period keyed off <code>lastBalanceUpdateBlock</code>, both reset to <code>now</code> on every lock mutation) appear to neutralize any resulting gain from this specific gap — rated a consistency violation, not a verified exploit path.</p>
+<p><strong>Recommendation</strong>:</p>
+<pre><code class="language-diff">  if (newEnd &gt; block.timestamp + MAX_LOCK_DURATION) revert InvalidLockDuration();
++ if (newEnd &lt; block.timestamp + MIN_LOCK_DURATION) revert InvalidLockDuration();
+  newEnd = _weekFloor(newEnd);
+</code></pre>
+<hr>
+<p><strong>[L-15] Boost quote inflated by flooring the <code>tokenlessWorking</code> denominator</strong></p>
+<p><code>ve4626BoostManager.calculateBoostForPosition()</code> (L192, 208-210) · Confidence: 30 · <code>[Phase 1 only — precision-math-1]</code></p>
+<p><code>tokenlessWorking = floor(0.4·l)</code>; dividing by a floored divisor inflates the quoted boost slightly in the trader&#39;s favor, growing as <code>l</code> shrinks (negligible at realistic USD scaling, up to ~1-2.5% at small whole-unit <code>l</code>). Bounded within <code>[BOOST_PRECISION, maxBoost]</code> regardless. <strong>Recommendation</strong>: compute the ratio without the intermediate floor, or document a minimum-scale assumption for <code>l</code>.</p>
+<hr>
+<p><strong>[L-16] Curve dual-decay bias/slope rounding leaves a permanent, safe-direction residual in the global voting-power total</strong></p>
+<p><code>ve4626._checkpointUserSlope()</code>/<code>_decayStateAt()</code> (L444-470) · Confidence: 25 (dust-bounded at any realistic scale) · <code>[both — Phase 1: precision-math-2, precision-math-3, defi-staking-2; Phase 2: math-precision, economic-security, invariant, first-principles, asymmetry, boundary, numerical-gap, flow-gap — 10 independent agents total, the most heavily corroborated item in the entire audit]</code></p>
+<p>Global bias is added using the exact formula <code>_calculateVotingPower = amount*(end-now)/MAX</code> (L370-376) but decayed/removed using a floored slope <code>_userSlopeOf = floor(amount/MAX)</code> (L382-386), forced to <code>1</code> for dust locks where the floor is 0 (L468). Because add ≥ (slope·duration), a small residual (&lt; ~1.26e8 wei per lock, i.e. ~1.3e-10 tokens at 18 decimals) survives permanently after a lock fully expires — inflating the <code>Ve</code> boost denominator (shrinking everyone&#39;s boost share — safe direction) and inflating governance quorum denominators. The forced-slope-1 branch can also over-decay dust-lock contributions faster than their true rate, a symmetric-but-opposite-direction dust effect. Bounded to economically irrelevant amounts at any realistic scale (would require ~1e14+ dust-lock operations to move by a single token).</p>
+<p><strong>Recommendation</strong>: Derive the slope-change/removal from the same rounded basis used to add bias (Curve-style: derive <code>bias = slope*(end-now)</code> on both add and remove), or document as accepted drift.</p>
+<hr>
+<p><strong>[L-17] <code>MIN_HOLDING_BLOCKS</code> hardcodes a block count as a time proxy</strong></p>
+<p><code>ve4626BoostManager.MIN_HOLDING_BLOCKS</code> (L56 area), <code>_holdingPeriodSatisfied()</code> · Confidence: 20 · <code>[Phase 1 only — general-4]</code></p>
+<p><code>302_400</code> blocks, commented &quot;~7 days on Base L2&quot; — fixes the anti-flash holding window to Base&#39;s block time; redeploying elsewhere silently shrinks/extends the intended window. Not exploitable on Base as configured. <strong>Recommendation</strong>: derive from <code>block.timestamp</code> instead, or make it an owner-settable timelocked parameter.</p>
+<hr>
+<p><strong>[L-18] <code>permit()</code> remains live on a non-transferable token — dead functionality, consumes nonces for no effect</strong></p>
+<p><code>ve4626.sol</code> — inherited <code>ERC20Permit.permit()</code> · Confidence: 20 · <code>[Phase 1 only — signatures-1]</code></p>
+<p><code>permit()</code> sets allowances via internal <code>_approve</code>, bypassing the overridden public <code>approve</code> revert. The allowance is real but permanently unspendable — <code>transferFrom</code> reverts unconditionally, so non-transferability is confirmed NOT bypassed. Residual risk is integration confusion (a relying party burns a nonce for a phantom, unusable allowance). <strong>Recommendation</strong>: override <code>permit()</code> to revert as well, for a consistent surface.</p>
+<hr>
+<p><strong>[L-19] Lock amount recorded as requested, not measured — fee-on-transfer/rebasing wrapped share would desync accounting</strong></p>
+<p><code>ve4626.lock()</code> (L209, 215-221), <code>increaseLock()</code> (L287-290), <code>unlock()</code> (L335) · Confidence: 25 (contingent on the immutable, presumed-standard lock token&#39;s actual behavior — not independently verifiable in this scope) · <code>[both — Phase 1: defi-staking-4; Phase 2: boundary, economic-security, execution-trace]</code></p>
+<p>Unlike <code>BribeDepot4626.bribe</code> (measured balance-delta), <code>lock</code>/<code>increaseLock</code> credit the requested transfer amount without measuring received delta. A fee-on-transfer/rebasing <code>wrappedShareOFT</code> would cause over-crediting relative to actual holdings, eventually breaking a later unlocker&#39;s transfer. <strong>Recommendation</strong>: use measured balance-delta accounting (as <code>bribe</code> already does), or explicitly document/enforce that <code>wrappedShareOFT</code> must be standard, non-FoT, non-rebasing (it is immutable and presumed to be the protocol&#39;s own standard vault-share wrapper).</p>
+<hr>
+<h3 id="info-positive-confirmations">Info / Positive Confirmations</h3>
+<p><strong>[I-1]</strong> 255-week Curve decay walk (<code>_decayStateAt</code>) truncates safely given <code>MAX_LOCK_DURATION</code> (~208.5 weeks) <code>&lt; 255</code>; confirmed non-exploitable, one-time ~600k-gas cost only after ~5 years of total inactivity. <code>[both — general-5, dos-3; corroborated by numerical-gap, math-precision]</code></p>
+<p><strong>[I-2]</strong> <code>vote()</code>&#39;s dependency on <code>utility.sync</code>/<code>surfaceRegistry</code> (no try/catch) is an owner-controlled trust surface, not attacker-reachable; a misconfigured dependency causes protocol-wide voting DoS until owner re-wires. <code>[Phase 1 — dos-4]</code></p>
+<p><strong>[I-3]</strong> <code>underlyingValue</code> (from <code>IVault.previewRedeem</code>, flash-manipulable) is stored but not consumed by any in-scope voting/boost math — informational only. <code>[Phase 1 — flashloans-3]</code></p>
+<p><strong>[I-4]</strong> <strong>Positive confirmation</strong>: the lock-age vote gate and boost holding-period gate were both independently stress-tested for flash-loan bypass by multiple agents (flashloans, both Phase 1 and Phase 2) — confirmed robust. <code>extendLock</code>/<code>increaseLock</code> both re-season <code>start</code>/<code>lastBalanceUpdateBlock</code> to <code>now</code>, so reviving an expired lock or topping one up only ever delays eligibility, never shortcuts it. Combined with the 7-day minimum lock, expiry-gated <code>unlock</code>, and non-transferable ve, same-block flash-loan lock→vote and lock→boost are structurally impossible.</p>
+<p><strong>[I-5]</strong> <code>getTotalGaugeProbabilityBps</code> truncates 694.2 bps to 694 — pure display helper, no on-chain accounting depends on it. <code>[Phase 1 — precision-math-4]</code></p>
+<p><strong>[I-6]</strong> <code>nonReentrant</code> is not the first modifier on <code>rolloverExpiredEpoch</code> (<code>onlyOwner nonReentrant</code>) — harmless since <code>onlyOwner</code> makes no external call. <code>[Phase 1 — general-6]</code></p>
+<p><strong>[I-7]</strong> <code>getVaultProbabilityBoostPPM</code> exposes live, freely-mutable mid-epoch weights; if the out-of-scope <code>LotteryManager4626</code> reads this at draw time rather than a frozen snapshot, a large voter could vote immediately before a draw and reset after — unverifiable without visibility into the external consumer&#39;s read timing. <code>[Phase 1 — governance-7]</code></p>
+<p><strong>[I-8]</strong> Permissionless <code>burnExpiredLock</code>/<code>sync</code> are repeatable (no idempotency guard) and reset the boost holding clock, but only reachable against already-expired (0-power) locks — gas/event-spam griefing only, no principal/power impact. <code>[both — defi-staking-3; invariant]</code></p>
+<p><strong>[I-9]</strong> <code>ve4626Utility._sync</code>&#39;s burn of ve33/veLottery is sized from internal <code>userClaimed*</code> accounting, not <code>balanceOf</code>; if the out-of-scope <code>ve4626UtilityToken</code> is transferable, a user who moves tokens away could self-DoS their own <code>sync</code>/<code>vote</code>/<code>claim</code>/<code>forfeit</code> calls — confirmed no vote/boost inflation is possible via such transfers (all power reads use the internal accounting, never <code>balanceOf</code>). <code>[Phase 2 only — math-precision, economic-security]</code></p>
+<p><strong>[I-10]</strong> <code>getUserVotes</code> (view) returns stale, non-generation-checked per-user vote records after <code>emergencyResetAllVotes</code> — a UI/integrator-facing inconsistency distinct from L-1&#39;s <code>hasVotedThisEpoch</code>/escrow issue; the security-relevant path (<code>getUserVoteWeightAtEpoch</code>, bribe claims) is correctly generation-gated. <code>[Phase 2 only — invariant]</code></p>
+<p><strong>Verified clean, not a finding</strong>: <code>ve4626BoostManager.calculateBoost</code>/<code>calculateBoostWithProtection</code> (&quot;legacy&quot;) grant full <code>maxBoost</code> to any user above <code>minVotingPower</code> with no position-size clamp — but the function&#39;s own natspec (L144-147) explicitly documents this as &quot;UI / legacy&quot; and states &quot;Lottery must use <code>calculateBoostForPosition</code>&quot; — this is documented, by-design behavior, not a defect. A Phase 2 lead flagging this was demoted after re-read confirmed the natspec.</p>
+<hr>
+<h2 id="coverage-gate">Coverage Gate</h2>
+<ul>
+<li><strong>Entrypoints</strong>: 43/43 external/public state-changing functions in source addressed — every privileged/value-moving entrypoint maps to ≥1 finding above or an explicit &quot;examined, no issue&quot; note (Threat Model table).</li>
+<li><strong>Threat-catalog rows</strong>: 10/10 answered (Threat Model table above).</li>
+<li><strong>Holes closed this pass</strong>: 0 — both phases independently covered the full entrypoint/threat surface; this reconciliation pass performed 4 targeted re-reads (all against Phase-2-only leads, to confirm line numbers and correctness before promotion — L-2, L-14, I-9, I-10) and 1 demotion (the <code>calculateBoost</code> lead, confirmed by-design).</li>
+</ul>
+<hr>
+<h2 id="scope-note">Scope Note</h2>
+<p><code>ve4626UtilityToken.sol</code> (imported and instantiated by <code>ve4626Utility</code>, deploying <code>ve33</code>/<code>veLottery</code>) is referenced throughout this audit but is <strong>not</strong> among the 5 files named in scope and is not present in this repo checkout — its <code>mint</code>/<code>burn</code>/<code>setMinter</code> access control is assumed, not independently verified (see M-3, I-9). <code>LotteryManager4626</code>, <code>IRegistry4626VaultWhitelist</code>, <code>IGaugeSurfaceRegistryForVoting</code>, and <code>BribesFactory4626</code> are likewise out-of-scope external dependencies whose correctness is assumed per the Phase 0 protocol map.</p>
+<hr>
+<blockquote>
+<p>⚠️ This review was performed by an autonomous AI audit pipeline (3 context agents + 8 breadth agents + 12 depth agents, all opus, across 3 phases). AI analysis can never verify the complete absence of vulnerabilities and no guarantee of security is given. Independent human review, a bug bounty program, and on-chain monitoring are strongly recommended before mainnet deployment of governance/bribe logic controlling third-party funds.</p>
+</blockquote>
+
+  </main>
+
+  <footer class="colophon">
+    <p><strong>Canonical copy:</strong> this is a styled rendering of the immutable report delivered on IPFS —
+       <a href="https://bafkreia3hbdlzupry7k7mnresq4gmlqp77i5sxhgniws2fzr42f55ktsya.ipfs.community.bgipfs.com/"><code>https://bafkreia3hbdlzupry7k7mnresq4gmlqp77i5sxhgniws2fzr42f55ktsya.ipfs.community.bgipfs.com/</code></a>.
+       If the two ever differ, the IPFS copy is authoritative.</p>
+    <p>Audited by <a href="https://leftclaw.services">LeftClaw Services</a> 🦞 — job
+       <a href="https://leftclaw.services/jobs/468">#468</a> on Base. Rendered 2026-07-22.</p>
+  </footer>
+
+</div>
+</body>
+</html>

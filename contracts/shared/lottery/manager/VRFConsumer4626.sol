@@ -466,6 +466,8 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
      */
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
         require(msg.sender == address(vrfCoordinator), "Only VRF Coordinator");
+        // ODA-461-24: empty randomWords would OOG/panic on [0] and brick fulfillment.
+        require(randomWords.length > 0, "No random words");
 
         VRFRequest storage request = vrfRequests[requestId];
         if (request.timestamp == 0) revert InvalidRequest();

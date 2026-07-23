@@ -50,6 +50,18 @@ contract MockShareOftRegistry {
     }
 }
 
+contract MockAgentCooldownRecorder {
+    mapping(address => uint256) public cooldown;
+
+    function setCooldown(address account, uint256 blockNumber) external {
+        cooldown[account] = blockNumber;
+    }
+
+    function propagateCooldownOnTransfer(address from, address to, uint256) external {
+        if (cooldown[from] > cooldown[to]) cooldown[to] = cooldown[from];
+    }
+}
+
 contract LaneInterfaceSemantics4626Test is Test {
     address internal constant OWNER = address(0xB17C4);
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
@@ -101,6 +113,31 @@ contract LaneInterfaceSemantics4626Test is Test {
         assertTrue(agentOft.isHub());
     }
 
+    function testAgentShareOftPropagatesCooldownThroughSwapOnlyVenue() public {
+        (, AgentShareOFT agentOft) = _deployShareOfts();
+        MockAgentCooldownRecorder recorder = new MockAgentCooldownRecorder();
+        address alice = address(0xA11CE);
+        address venue = address(0xD3);
+        address bob = address(0xB0B);
+
+        vm.startPrank(OWNER);
+        agentOft.setWrapper(address(recorder));
+        agentOft.setMinter(OWNER, true);
+        agentOft.setFeesEnabled(false);
+        agentOft.setAddressType(venue, AgentShareOFT.OperationType.SwapOnly);
+        agentOft.mint(alice, 10 ether);
+        vm.stopPrank();
+
+        recorder.setCooldown(alice, block.number);
+        vm.prank(alice);
+        agentOft.transfer(venue, 10 ether);
+        assertEq(recorder.cooldown(venue), block.number, "venue inherits hot cooldown");
+
+        vm.prank(venue);
+        agentOft.transfer(bob, 10 ether);
+        assertEq(recorder.cooldown(bob), block.number, "venue cannot launder cooldown");
+    }
+
     function testLotteryManagerUpdatesAreTimelockedAfterFirstSet_BothLanes() public {
         MockShareOftToken share = new MockShareOftToken();
         AgentGaugeController agentGauge =
@@ -132,6 +169,19 @@ contract LaneInterfaceSemantics4626Test is Test {
         creatorGauge.executeLotteryManagerUpdate();
         assertEq(address(agentGauge.lotteryManager()), secondManager);
         assertEq(address(creatorGauge.lotteryManager()), secondManager);
+
+        // ODA-467-2: zero revokes immediately on both lanes and clears pending queues.
+        address thirdManager = address(0x3333);
+        ITradeFeeCollector4626(address(agentGauge)).setLotteryManager(thirdManager);
+        ITradeFeeCollector4626(address(creatorGauge)).setLotteryManager(thirdManager);
+        ITradeFeeCollector4626(address(agentGauge)).setLotteryManager(address(0));
+        ITradeFeeCollector4626(address(creatorGauge)).setLotteryManager(address(0));
+        assertEq(address(agentGauge.lotteryManager()), address(0));
+        assertEq(address(creatorGauge.lotteryManager()), address(0));
+        assertEq(address(agentGauge.pendingLotteryManager()), address(0));
+        assertEq(address(creatorGauge.pendingLotteryManager()), address(0));
+        assertEq(agentGauge.pendingLotteryManagerAt(), 0);
+        assertEq(creatorGauge.pendingLotteryManagerAt(), 0);
     }
 
     function testCreatorRouterKeepsSpendCapSurfaceAgentDoesNot() public pure {

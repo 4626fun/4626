@@ -1,0 +1,22 @@
+{
+  "resubmittedAt": "2026-07-23T05:41:15.920701Z",
+  "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "amountUsdcEach": 1,
+  "jobs": [
+    {
+      "replaces": 462,
+      "newJobId": 480,
+      "scope": "CreatorOVault + CoreModule",
+      "trackUrl": "https://onedollaraudit.com/audit/480",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/480"
+    },
+    {
+      "replaces": 463,
+      "newJobId": 481,
+      "scope": "CreatorShareOFT + Wrapper",
+      "trackUrl": "https://onedollaraudit.com/audit/481",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/481"
+    }
+  ],
+  "note": "Original 462/463 stuck stage=accepted ~20h; resubmitted same public pin 4626fun/4626@audit/oda-2026-07-22 (423e0e3)."
+}

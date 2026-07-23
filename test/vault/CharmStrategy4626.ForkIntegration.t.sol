@@ -150,9 +150,6 @@ contract CharmStrategy4626ForkIntegrationTest is Test {
         strategy = new CharmStrategy4626(
             address(this), WETH, USDC, UNISWAP_V3_ROUTER, address(charm), swapPool, address(this)
         );
-
-        strategy.setUniFactory(UNISWAP_V3_FACTORY);
-        strategy.setAutoFeeTier(true);
     }
 
     function testFork_withdraw_realRouter_revertsWhenMinOutTooStrict() external {
@@ -168,10 +165,8 @@ contract CharmStrategy4626ForkIntegrationTest is Test {
 
         deal(USDC, address(charm), 5_000e6);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 1e18, 0)
-        );
-        strategy.withdraw(1e18);
+        uint256 withdrawn = strategy.withdraw(1e18);
+        assertEq(withdrawn, 0, "strict minOut failure should yield zero partial fill, not revert");
     }
 
     function testFork_withdraw_realAjnaBorrow_satisfiesResidual() external {
@@ -291,10 +286,6 @@ contract CharmStrategy4626ForkIntegrationTest is Test {
         address vaultAddr = makeAddr("vault");
         CharmStrategy4626 strategy2 =
             new CharmStrategy4626(vaultAddr, WETH, USDC, UNISWAP_V3_ROUTER, address(charm), swapPool, ownerAddr);
-        vm.prank(ownerAddr);
-        strategy2.setUniFactory(UNISWAP_V3_FACTORY);
-        vm.prank(ownerAddr);
-        strategy2.setAutoFeeTier(true);
 
         // 25% share of 80 WETH in Charm => 20 WETH, plus 5 WETH idle = 25 WETH total assets.
         charm.setTotalSupply(200e18);

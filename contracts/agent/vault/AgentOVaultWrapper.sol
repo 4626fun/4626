@@ -253,11 +253,11 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        // 1. Take Agent token from user
-        agentToken.safeTransferFrom(msg.sender, address(this), amount);
+        // 1. Take Agent token from user and measure the wrapper's actual receipt.
+        uint256 received = _pullAgentTokenMeasured(msg.sender, amount);
 
         // 2. Deposit to vault → get vault shares
-        uint256 vaultShareAmount = vault.deposit(amount, address(this));
+        uint256 vaultShareAmount = vault.deposit(received, address(this));
 
         // 3. Wrap vault shares → ShareOFT (internal, no extra transfer)
         shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
@@ -268,7 +268,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
         lastWrapperDepositBlock[msg.sender] = block.number;
 
-        emit Deposited(msg.sender, amount, shareOFTOut);
+        emit Deposited(msg.sender, received, shareOFTOut);
     }
 
     /**
@@ -278,14 +278,14 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        agentToken.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 vaultShareAmount = vault.deposit(amount, address(this));
+        uint256 received = _pullAgentTokenMeasured(msg.sender, amount);
+        uint256 vaultShareAmount = vault.deposit(received, address(this));
         shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
 
         // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
         lastWrapperDepositBlock[msg.sender] = block.number;
 
-        emit Deposited(msg.sender, amount, shareOFTOut);
+        emit Deposited(msg.sender, received, shareOFTOut);
     }
 
     /**
@@ -303,15 +303,15 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        agentToken.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 vaultShareAmount = vault.deposit(amount, address(this));
+        uint256 received = _pullAgentTokenMeasured(msg.sender, amount);
+        uint256 vaultShareAmount = vault.deposit(received, address(this));
         shareOFTOut = _wrapInternal(vaultShareAmount, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
         // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
         lastWrapperDepositBlock[msg.sender] = block.number;
 
-        emit Deposited(beneficiary, amount, shareOFTOut);
+        emit Deposited(beneficiary, received, shareOFTOut);
     }
 
     /**
@@ -761,6 +761,17 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
     }
 
+    /// @dev Measure the first transfer-tax hop so the wrapper never asks the vault
+    ///      to pull more assets than this caller actually supplied.
+    function _pullAgentTokenMeasured(address from, uint256 requested) internal returns (uint256 received) {
+        uint256 beforeBalance = agentToken.balanceOf(address(this));
+        agentToken.safeTransferFrom(from, address(this), requested);
+        uint256 afterBalance = agentToken.balanceOf(address(this));
+        received = afterBalance - beforeBalance;
+        if (received == 0) revert ZeroAmount();
+        if (received > requested) revert SlippageExceeded();
+    }
+
     /**
      * @notice FIX: M-08 — propagate the wrapper cooldown on ShareOFT transfers.
      * @dev Called by AgentShareOFT._update on every non-mint/non-burn ERC20 movement
@@ -788,11 +799,6 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
         uint256 fromBlock = lastWrapperDepositBlock[from];
         if (fromBlock == 0) return;
-
-        // ODA-428-F3: only propagate onto fresh recipients (no prior ShareOFT).
-        // Hook runs after balance mutation → prior balance is `balanceOf(to) - amount`.
-        uint256 toBalance = IERC20(address(shareOFT)).balanceOf(to);
-        if (toBalance > amount) return;
 
         uint256 toBlock = lastWrapperDepositBlock[to];
         if (fromBlock > toBlock) {

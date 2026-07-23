@@ -104,5 +104,59 @@ contract CreatorOVaultWithdrawDelayTransferGriefingTest is Test {
         vm.prank(victim);
         vault.withdraw(1e18, victim, victim);
     }
+
+    /// ODA-480-[3]: `deposit(assets, victim)` by a third party must not refresh victim cooldown.
+    function test_depositToVictim_doesNotRefreshVictimLastDepositBlock() external {
+        (MockCreatorCoinCooldown coin, CreatorOVault vault) = _deploy();
+
+        uint256 bootstrap = vault.MINIMUM_FIRST_DEPOSIT();
+        uint256 smallDeposit = 10e18;
+
+        coin.mint(attacker, bootstrap + smallDeposit);
+        coin.mint(victim, smallDeposit);
+        _approve(attacker, coin, address(vault));
+        _approve(victim, coin, address(vault));
+
+        vm.prank(attacker);
+        vault.deposit(bootstrap, attacker);
+
+        vm.roll(block.number + 1);
+        vm.prank(victim);
+        vault.deposit(smallDeposit, victim);
+        uint256 victimLastDeposit = vault.lastDepositBlock(victim);
+
+        vm.roll(block.number + vault.withdrawDelayBlocks());
+        vm.prank(attacker);
+        vault.deposit(smallDeposit, victim);
+
+        assertEq(vault.lastDepositBlock(victim), victimLastDeposit, "third-party deposit-to must not grief cooldown");
+        vm.prank(victim);
+        vault.withdraw(1e18, victim, victim);
+    }
+
+    /// Codex: deposit-to an empty receiver must stamp cooldown (anti flash-loan).
+    function test_depositToEmptyReceiver_setsLastDepositBlock() external {
+        (MockCreatorCoinCooldown coin, CreatorOVault vault) = _deploy();
+
+        uint256 bootstrap = vault.MINIMUM_FIRST_DEPOSIT();
+        uint256 smallDeposit = 10e18;
+        address emptyReceiver = makeAddr("emptyReceiver");
+
+        coin.mint(attacker, bootstrap + smallDeposit);
+        _approve(attacker, coin, address(vault));
+
+        vm.prank(attacker);
+        vault.deposit(bootstrap, attacker);
+
+        vm.roll(block.number + vault.withdrawDelayBlocks());
+        vm.prank(attacker);
+        vault.deposit(smallDeposit, emptyReceiver);
+
+        assertEq(vault.lastDepositBlock(emptyReceiver), block.number, "empty receiver must get cooldown");
+
+        vm.prank(emptyReceiver);
+        vm.expectRevert();
+        vault.withdraw(1e18, emptyReceiver, emptyReceiver);
+    }
 }
 

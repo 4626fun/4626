@@ -114,6 +114,10 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
 
     /// @notice Freeze before epoch end: no new votes in the last window.
     uint256 public constant VOTE_FREEZE_WINDOW = 1 hours;
+    /// @notice ODA-468-M1: emergency reset blocked for 2× freeze so voters can re-cast.
+    uint256 public constant EMERGENCY_RESET_CUTOFF = 2 * VOTE_FREEZE_WINDOW;
+    /// @notice ODA-468-M2: whitelist policy changes use the same 48h queue after arming.
+    uint256 public constant WHITELIST_TIMELOCK_DURATION = 48 hours;
 
     /// @notice Genesis epoch start (first Thursday 00:00 UTC after deployment)
     uint256 public immutable genesisEpochStart;
@@ -153,6 +157,12 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
 
     /// @notice Set of all whitelisted vaults
     EnumerableSet.AddressSet private _whitelistedVaults;
+
+    /// @notice ODA-468-M2: when armed, whitelist toggles require 48h queue/execute.
+    /// @dev Left false so deploy bootstrap / tests can set eligibility instantly; arm in prod.
+    bool public whitelistTimelockArmed;
+    mapping(address => bool) public pendingWhitelistStatus;
+    mapping(address => uint256) public whitelistTimelockExpiry;
 
     // ================================
     // VOTE STORAGE (PER-EPOCH)
@@ -206,12 +216,17 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     error UtilityNotConfigured();
     error NoPendingUtilityUpdate();
     error UtilityTimelockNotExpired(uint256 executeAfter);
-    /// @notice ODA-433-F3 — emergency reset must leave time for voters to re-cast.
+    /// @notice ODA-433-F3 / ODA-468-M1 — emergency reset must leave time for voters to re-cast.
     error EmergencyResetInFreezeWindow();
+    error NoPendingWhitelistUpdate();
+    error WhitelistTimelockNotExpired(uint256 executeAfter);
+    error OwnershipRenounceDisabled();
 
     event Ve33TokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
     event UtilityUpdateQueued(address indexed utility, uint256 executeAfter);
+    event WhitelistTimelockArmed();
+    event VaultWhitelistUpdateQueued(address indexed vault, bool status, uint256 executeAfter);
 
     // ================================
     // CONSTRUCTOR
@@ -531,6 +546,8 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
      */
     function hasVotedThisEpoch(address user) external view returns (bool) {
         uint256 epoch = currentEpoch();
+        // ODA-468-L1: generation-gate so emergencyReset clears the escrow lock.
+        if (_userVoteGeneration[epoch][user] != _epochResetGeneration[epoch]) return false;
         return _epochUserVotedVaults[epoch][user].length() > 0;
     }
 
@@ -649,8 +666,34 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
         emit UseSurfaceRegistryUpdated(enabled);
     }
 
+    /// @notice Arm 48h timelock for subsequent whitelist toggles (ODA-468-M2). One-way.
+    function armWhitelistTimelock() external onlyOwner {
+        whitelistTimelockArmed = true;
+        emit WhitelistTimelockArmed();
+    }
+
     function setVaultWhitelist(address vault, bool status) external onlyOwner {
         if (vault == address(0)) revert ZeroAddress();
+        if (!whitelistTimelockArmed) {
+            _applyVaultWhitelist(vault, status);
+            return;
+        }
+        pendingWhitelistStatus[vault] = status;
+        whitelistTimelockExpiry[vault] = block.timestamp + WHITELIST_TIMELOCK_DURATION;
+        emit VaultWhitelistUpdateQueued(vault, status, whitelistTimelockExpiry[vault]);
+    }
+
+    function executeVaultWhitelistUpdate(address vault) external onlyOwner {
+        uint256 executeAfter = whitelistTimelockExpiry[vault];
+        if (executeAfter == 0) revert NoPendingWhitelistUpdate();
+        if (block.timestamp < executeAfter) revert WhitelistTimelockNotExpired(executeAfter);
+        bool status = pendingWhitelistStatus[vault];
+        delete pendingWhitelistStatus[vault];
+        whitelistTimelockExpiry[vault] = 0;
+        _applyVaultWhitelist(vault, status);
+    }
+
+    function _applyVaultWhitelist(address vault, bool status) internal {
         isWhitelistedVault[vault] = status;
         status ? _whitelistedVaults.add(vault) : _whitelistedVaults.remove(vault);
         emit VaultWhitelisted(vault, status);
@@ -660,9 +703,13 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
         if (vaults.length != statuses.length) revert ArrayLengthMismatch();
         for (uint256 i = 0; i < vaults.length; i++) {
             if (vaults[i] == address(0)) revert ZeroAddress();
-            isWhitelistedVault[vaults[i]] = statuses[i];
-            statuses[i] ? _whitelistedVaults.add(vaults[i]) : _whitelistedVaults.remove(vaults[i]);
-            emit VaultWhitelisted(vaults[i], statuses[i]);
+            if (!whitelistTimelockArmed) {
+                _applyVaultWhitelist(vaults[i], statuses[i]);
+            } else {
+                pendingWhitelistStatus[vaults[i]] = statuses[i];
+                whitelistTimelockExpiry[vaults[i]] = block.timestamp + WHITELIST_TIMELOCK_DURATION;
+                emit VaultWhitelistUpdateQueued(vaults[i], statuses[i], whitelistTimelockExpiry[vaults[i]]);
+            }
         }
     }
 
@@ -679,13 +726,12 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     // ================================
 
     /// @notice Emergency wipe of the current epoch's votes.
-    /// @dev ODA-433-F3: cannot run inside the end-of-epoch vote freeze — that would strand
-    ///      bribes with zero user recourse. Owner must reset before the freeze so voters can
-    ///      re-cast before the epoch closes.
+    /// @dev ODA-433-F3 / ODA-468-M1: blocked within 2× VOTE_FREEZE_WINDOW of epoch end so
+    ///      voters have a full freeze-length window to re-cast after a reset.
     function emergencyResetAllVotes() external onlyOwner {
         uint256 epoch = currentEpoch();
         uint256 epochEnd = epochEndTime(epoch);
-        if (epochEnd > block.timestamp && epochEnd - block.timestamp <= VOTE_FREEZE_WINDOW) {
+        if (epochEnd > block.timestamp && epochEnd - block.timestamp <= EMERGENCY_RESET_CUTOFF) {
             revert EmergencyResetInFreezeWindow();
         }
 
@@ -702,5 +748,9 @@ contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
         // and getUserVoteWeightAtEpoch returns 0 until re-vote.
         _epochResetGeneration[epoch]++;
     }
-}
 
+    /// @notice ODA-468-L11: owner-critical ops have no alternate path — disable renounce.
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
+    }
+}

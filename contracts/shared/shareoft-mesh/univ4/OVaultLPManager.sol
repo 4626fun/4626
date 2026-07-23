@@ -310,6 +310,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     function seedRebalance() external nonReentrant onlyManager {
         _requireConfigured();
         if (!_positionsEmpty()) revert PositionsNotEmpty();
+        checkCanRebalance();
         _executeRebalance(true);
     }
 

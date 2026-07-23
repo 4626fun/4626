@@ -210,7 +210,7 @@ contract RegistryBootstrap4626 is Ownable {
         bool alreadyMatches = current.solanaEid == cfg.solanaEid && current.hubComposer == cfg.hubComposer
             && current.assetMeshToken == cfg.assetMeshToken && current.shareMeshToken == cfg.shareMeshToken
             && current.solanaAssetMint == cfg.solanaAssetMint && current.enabled == cfg.enabled;
-        if (!alreadyMatches) {
+        if (!alreadyMatches && !_hasNonZeroOmnichainMesh(current)) {
             registry.setOmnichainVaultMesh(token, cfg);
         }
     }
@@ -219,5 +219,10 @@ contract RegistryBootstrap4626 is Ownable {
         if (registry.getRemoteOFTPeerBytes32(token, solanaEid) != peer) {
             registry.setRemoteOFTPeerBytes32(token, solanaEid, peer);
         }
+    }
+
+    function _hasNonZeroOmnichainMesh(IRegistry4626.OmnichainVaultMeshConfig memory cfg) internal pure returns (bool) {
+        return cfg.solanaEid != 0 || cfg.hubComposer != address(0) || cfg.assetMeshToken != address(0)
+            || cfg.shareMeshToken != address(0) || cfg.solanaAssetMint != bytes32(0) || cfg.enabled;
     }
 }

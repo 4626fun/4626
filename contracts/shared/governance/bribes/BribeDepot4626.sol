@@ -78,6 +78,7 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
     error GraceBelowMinimum(uint256 provided, uint256 minimum);
     /// @notice Live token balance cannot cover this claim (rebasing/deflationary bribe).
     error InsufficientBribeBalance(uint256 needed, uint256 available);
+    error OwnershipRenounceDisabled();
 
     /// @param _owner Protocol/ops owner for rollover + grace (not the CREATE2 factory).
     constructor(address _vault, address _gaugeVoting, address _owner) Ownable(_owner) {
@@ -131,20 +132,23 @@ contract BribeDepot4626 is Ownable, ReentrancyGuard {
         amount = (totalAmount * userWeight) / totalWeight;
         if (amount == 0 && userWeight > 0) revert NoUserVotes();
 
-        // ODA-433-F6: transfer against live balance first, then mark claimed.
-        // Reject (do not silently cap) when inventory is short so a first claimant
-        // cannot drain a deflated pool while later voters are marked unclaimable /
-        // over-accounted in `claimedAmount` / rollover.
+        // ODA-468-L8: CEI — mark claimed before transfer so reentrancy cannot double-claim.
+        // ODA-433-F6: still reject (do not silently cap) when inventory is short.
+        claimed[epoch][token][msg.sender] = true;
+        claimedAmount[epoch][token] += amount;
+
         if (amount > 0) {
             uint256 available = IERC20(token).balanceOf(address(this));
             if (amount > available) revert InsufficientBribeBalance(amount, available);
             IERC20(token).safeTransfer(msg.sender, amount);
         }
 
-        claimed[epoch][token][msg.sender] = true;
-        claimedAmount[epoch][token] += amount;
-
         emit Claimed(msg.sender, token, amount, epoch);
+    }
+
+    /// @notice ODA-468-L11: owner-critical rollover path — disable renounce.
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     /**

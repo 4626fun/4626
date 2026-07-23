@@ -433,6 +433,21 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
         assertEq(shareOFT.setPeerCallCount(), callsBefore, "setPeer should not run when peer already matches");
     }
 
+    function test_ensureShareOftPeerWiring_revertsWhenRegisteredCreatorDiffersFromOwner() external {
+        address foreignCreator = makeAddr("foreignCreator");
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", foreignCreator, address(0), 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeploymentBatcherPhase2Module.RegistryCreatorMismatch.selector,
+                address(creatorToken),
+                foreignCreator,
+                ownerAddr
+            )
+        );
+        _runPeerWiring();
+    }
+
     function test_finalizePhase2Execution_bridgesThirtyPercentToConfiguredSolanaPeer() external {
         registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
         registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);

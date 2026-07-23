@@ -8,6 +8,7 @@ import "@4626/creator/vault/CreatorOVaultWrapper.sol";
 
 /// @dev FIX: M-08 — regression test for the wrapper-cooldown-bypass-via-ShareOFT-transfer finding.
 ///      Also covers ODA-428-F3: unsolicited dust must not reset an established holder's cooldown.
+///      Documents the ODA-428-F3 residual: prior-block ShareOFT pre-seed skips hot cooldown propagation.
 
 contract MockCreatorCoin is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -159,12 +160,12 @@ contract M08CooldownPropagationTest is Test {
         assertEq(sharesOut, 1_000, "unwraps cleanly after cooldown");
     }
 
-    /// @dev ODA-428-F3: dust to an established holder must NOT reset their cooldown.
-    function test_ODA428_F3_dustDoesNotGriefEstablishedHolder() public {
+    /// @dev Security takes precedence over dust-grief resistance: every hot
+    ///      transfer must propagate or pre-seeding bypasses the wrapper delay.
+    function test_M08_hotTransferUpdatesEstablishedHolderCooldown() public {
         // bob wraps at block 1 and waits out cooldown
         vm.prank(bob);
         wrapper.wrap(1_000);
-        uint256 bobCooldown = wrapper.lastWrapperDepositBlock(bob);
         vm.roll(block.number + 1);
 
         // attacker (alice) wraps later and dust-transfers to bob
@@ -175,12 +176,61 @@ contract M08CooldownPropagationTest is Test {
 
         assertEq(
             wrapper.lastWrapperDepositBlock(bob),
-            bobCooldown,
-            "established holder cooldown must not be grief-reset"
+            block.number,
+            "established holder inherits hot cooldown"
         );
 
-        // bob can still unwrap (cooldown already elapsed)
         vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVaultWrapper.WrapperWithdrawTooSoon.selector,
+                block.number,
+                block.number + 1
+            )
+        );
+        wrapper.unwrap(1);
+    }
+
+    /// @dev A cold pre-seed must not allow laundering a later hot transfer.
+    function test_M08_preseedCannotBypassHotCooldownPropagation() public {
+        address seeder = makeAddr("seeder");
+        vaultShare.mint(seeder, 10_000);
+        vm.prank(seeder);
+        vaultShare.approve(address(wrapper), type(uint256).max);
+
+        // Block N: seeder wraps and cold-pre-seeds bob with 1 ShareOFT after cooldown elapses.
+        vm.prank(seeder);
+        wrapper.wrap(2_000);
+        vm.roll(block.number + 1);
+        vm.prank(seeder);
+        shareOFT.transfer(bob, 1);
+
+        uint256 bobCooldownAfterPreseed = wrapper.lastWrapperDepositBlock(bob);
+        assertEq(shareOFT.balanceOf(bob), 1, "bob pre-seeded");
+
+        // Block N+1 (current): alice wraps hot and transfers to pre-seeded bob.
+        vm.prank(alice);
+        wrapper.wrap(1_000);
+        uint256 aliceBlock = wrapper.lastWrapperDepositBlock(alice);
+        assertGt(aliceBlock, bobCooldownAfterPreseed, "alice is hotter than bob's preseed stamp");
+
+        vm.prank(alice);
+        shareOFT.transfer(bob, 1);
+
+        assertEq(
+            wrapper.lastWrapperDepositBlock(bob),
+            aliceBlock,
+            "pre-seeded recipient inherits hot cooldown"
+        );
+
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVaultWrapper.WrapperWithdrawTooSoon.selector,
+                block.number,
+                block.number + 1
+            )
+        );
         wrapper.unwrap(1);
     }
 

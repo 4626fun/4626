@@ -151,7 +151,7 @@ contract LotteryManager4626OracleGuardsTest is Test {
         assertEq(secondId, 0, "deviation guard should skip the entry");
     }
 
-    function test_ProcessSwapLottery_AcceptsJumpAfterDeviationWindowWithoutPermanentLockout() public {
+    function test_ProcessSwapLottery_RebootstrapsWhenDeviationReferenceStale() public {
         vm.prank(owner);
         lotteryManager.setOracleDeviationGuard(1000, 1 hours);
 
@@ -167,13 +167,15 @@ contract LotteryManager4626OracleGuardsTest is Test {
         assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 1e18);
         assertEq(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), firstTimestamp);
 
+        // Outside the deviation window: re-bootstrap so quiet lanes can recover.
+        // Live oracle staleness still applies; in-window deviation remains fail-closed.
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.setPrice(15e17);
         vm.prank(authorizedSwap);
-        uint256 acceptedId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
-        assertGt(acceptedId, 0);
+        uint256 recoveredId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
+        assertGt(recoveredId, 0, "stale reference must re-bootstrap outside window");
         assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 15e17);
-        assertGt(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), firstTimestamp);
+        assertEq(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), block.timestamp);
     }
 
     function test_ProcessSwapLottery_ZeroDeviationSettingDisablesGuard() public {
@@ -193,4 +195,3 @@ contract LotteryManager4626OracleGuardsTest is Test {
         assertGt(lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0), 0);
     }
 }
-

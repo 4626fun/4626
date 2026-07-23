@@ -176,6 +176,24 @@ contract ChainlinkVRFIntegratorV2_5NonblockingLzReceiveTest is Test {
         assertEq(word, 0);
     }
 
+    /// @notice ODA-461-9: non-hub peer responses are ignored (hub-only).
+    function test_nonHubPeerResponse_isIgnoredWithoutRevert() external {
+        uint32 otherEid = 30110;
+        bytes32 otherPeer = bytes32(uint256(0xCAD));
+        integrator.setPeer(otherEid, otherPeer);
+
+        vm.prank(address(provider));
+        (, uint64 seq) = integrator.requestRandomWordsPayable{value: 0.02 ether}();
+
+        Origin memory evil = Origin({srcEid: otherEid, sender: otherPeer, nonce: 1});
+        integrator.exposedLzReceive(evil, _newFormatPayload(seq, 999), hex"");
+
+        (uint256 word, bool fulfilled) = integrator.getRandomWord(seq);
+        assertFalse(fulfilled);
+        assertEq(word, 0);
+        assertEq(provider.calls(), 0);
+    }
+
     function test_retryCallback_recoversFailedConsumerCallback() external {
         provider.setShouldRevert(true);
 
@@ -204,4 +222,3 @@ contract ChainlinkVRFIntegratorV2_5NonblockingLzReceiveTest is Test {
         integrator.retryCallback(seq);
     }
 }
-

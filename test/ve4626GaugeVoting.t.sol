@@ -744,7 +744,7 @@ contract ve4626GaugeVotingTest is Test {
         assertLe(weightAfter, weightBefore + 1); // same power budget; allow 1 wei dust variance
     }
 
-    /// ODA-433-F3: emergency reset cannot run inside the end-of-epoch freeze window.
+    /// ODA-433-F3 / ODA-468-M1: emergency reset blocked within 2× VOTE_FREEZE_WINDOW of epoch end.
     function testEmergencyReset_RevertsInFreezeWindow() public {
         uint256 genesis = voting.genesisEpochStart();
         vm.warp(genesis - WEEK);
@@ -753,8 +753,13 @@ contract ve4626GaugeVotingTest is Test {
         _vote(alice, vault1, 100);
 
         uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
-        vm.warp(epochEnd - 30 minutes); // inside VOTE_FREEZE_WINDOW (1 hour)
+        // Inside single freeze window
+        vm.warp(epochEnd - 30 minutes);
+        vm.expectRevert(ve4626GaugeVoting.EmergencyResetInFreezeWindow.selector);
+        voting.emergencyResetAllVotes();
 
+        // ODA-468-M1: also blocked between 1h and 2h (re-cast buffer after reset).
+        vm.warp(epochEnd - 90 minutes);
         vm.expectRevert(ve4626GaugeVoting.EmergencyResetInFreezeWindow.selector);
         voting.emergencyResetAllVotes();
     }
@@ -886,4 +891,3 @@ contract FeeSplitTest is Test {
         assert(protocolPct == 9); // Protocol should be ~9%
     }
 }
-

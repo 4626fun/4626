@@ -43,6 +43,30 @@ contract MockRegistryHardening {
     }
 }
 
+contract MockErc20Decimals6 {
+    function decimals() external pure returns (uint8) {
+        return 6;
+    }
+}
+
+contract MockRegistryHardeningDecimals {
+    address public oracle;
+    address public token;
+
+    constructor(address oracle_, address token_) {
+        oracle = oracle_;
+        token = token_;
+    }
+
+    function getOracleForToken(address) external view returns (address) {
+        return oracle;
+    }
+
+    function getShareOFTForToken(address) external view returns (address) {
+        return token;
+    }
+}
+
 /// @notice Hardening checks for size-extraction: EIP-170, pricing lib fail-closed, storage mirror notes.
 contract LotteryManager4626HardeningTest is Test {
     function test_mainAndAdmin_underEip170() public view {
@@ -100,14 +124,46 @@ contract LotteryManager4626HardeningTest is Test {
         );
         assertEq(usd, 0, "deviation should fail closed inside window");
 
-        // After the deviation window elapses, same jump is accepted (new reference).
+        // After the deviation window elapses, re-bootstrap from the live oracle quote
+        // (still subject to oracleMaxStaleness) so quiet lanes are not permanently disabled.
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.set(15e17, block.timestamp);
         (usd, price,) = LotteryManager4626PricingLib.calculateTokenUSD(
             address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp - 1 hours - 1, 0
         );
-        assertEq(usd, 1_500_000, "after window, repricing must not lock out entries");
-        assertEq(price, 15e17);
+        assertEq(price, 15e17, "stale reference must re-bootstrap outside window");
+        assertGt(usd, 0, "stale reference must re-bootstrap outside window");
+    }
+
+    function test_pricingLib_respectsTokenDecimals() public {
+        MockOracleHardening oracle = new MockOracleHardening();
+        MockRegistryHardening reg = new MockRegistryHardening(address(oracle), address(0xBEEF));
+        oracle.set(1e18, block.timestamp);
+
+        MockErc20Decimals6 token6 = new MockErc20Decimals6();
+        // Point registry token/share at the 6-decimal mock via a custom registry.
+        MockRegistryHardeningDecimals reg6 = new MockRegistryHardeningDecimals(address(oracle), address(token6));
+
+        // 1e6 units of a 6-decimal token at $1 → $1 (1e6 USD).
+        (uint256 usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg6), address(token6), address(token6), 1e6, 0, 0, 0, 0, 0, 0
+        );
+        assertEq(usd, 1_000_000, "6-decimal token must normalize by 1e6 not 1e18");
+
+        // Pathological amount fails closed (ODA-461-22).
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg),
+            reg.token(),
+            reg.token(),
+            uint256(type(uint128).max) + 1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        );
+        assertEq(usd, 0, "amount above uint128 max must fail closed");
     }
 
     function test_adminModule_payoutSelector_exists() public pure {

@@ -1,0 +1,18 @@
+{
+  "jobId": 466,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit 4626 Charm + Ajna strategies. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3), paths under contracts/. Do NOT use github.com/wenakita/CreatorVault. Private wenakita/4626 is out of scope. Files: contracts/shared/strategies/ERC4626StrategyAdapter.sol, univ3/CharmStrategy4626.sol, ajna/AjnaERC4626Vault.sol, AjnaVaultAuth.sol, AjnaVaultBuffer.sol, AjnaVaultLibrary.sol. Focus rescue/drain paths, valuation, withdraw realizability, fee/timelock, oracle coupling.\n\nContext: Fetch https://github.com/4626fun/4626/tree/audit/oda-2026-07-22/contracts/shared/strategies and audit ONLY those strategy files.",
+  "createdAt": "2026-07-22T09:11:09.000Z",
+  "startedAt": "2026-07-22T10:02:59.000Z",
+  "completedAt": "2026-07-22T10:29:51.000Z",
+  "report": "https://bafkreigivupyilcb2meseopt7kj4sszrqupw67kl5ereq55ldmb5visrty.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreigivupyilcb2meseopt7kj4sszrqupw67kl5ereq55ldmb5visrty.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/466.html",
+  "trackUrl": "https://onedollaraudit.com/audit/466",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

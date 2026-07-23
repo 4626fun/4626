@@ -14,24 +14,30 @@ import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/Lottery
  *      and the CREATE2 deploy scripts.
  */
 contract LotteryManager4626BytecodeLinkTest is Test {
-    // linkReferences start for PricingLib (out/LotteryManager4626.sol/LotteryManager4626.json)
-    uint256 constant PRICING_LIB_LINK_OFFSET = 12_558;
-
     function test_creationCode_isLinked_notPlaceholder() public pure {
         bytes memory creation = type(LotteryManager4626).creationCode;
-        require(creation.length > PRICING_LIB_LINK_OFFSET + 20, "creation too short");
-
-        // Opcode before the 20-byte address must be PUSH20.
-        assertEq(uint8(creation[PRICING_LIB_LINK_OFFSET - 1]), 0x73, "expected PUSH20 before lib address");
-
-        address embedded;
-        assembly {
-            embedded := shr(96, mload(add(add(creation, 32), PRICING_LIB_LINK_OFFSET)))
-        }
-        assertTrue(embedded != address(0), "PricingLib link address must be non-zero");
+        address linkedLibrary = address(LotteryManager4626PricingLib);
+        assertTrue(linkedLibrary != address(0), "PricingLib link address must be non-zero");
+        assertTrue(
+            _containsPush20Address(creation, linkedLibrary),
+            "creation bytecode must contain linked PricingLib address"
+        );
 
         // Sanity: library itself has non-empty creation code (deployable).
         assertGt(type(LotteryManager4626PricingLib).creationCode.length, 0);
+    }
+
+    function _containsPush20Address(bytes memory code, address target) internal pure returns (bool) {
+        bytes20 needle = bytes20(target);
+        for (uint256 i = 1; i + 20 <= code.length; ++i) {
+            if (uint8(code[i - 1]) != 0x73) continue;
+            bytes20 candidate;
+            assembly {
+                candidate := mload(add(add(code, 32), i))
+            }
+            if (candidate == needle) return true;
+        }
+        return false;
     }
 
     function test_creationCode_fullSize_notTruncatedAtPlaceholder() public pure {

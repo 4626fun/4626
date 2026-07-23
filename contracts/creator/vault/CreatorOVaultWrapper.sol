@@ -820,12 +820,6 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 fromBlock = lastWrapperDepositBlock[from];
         if (fromBlock == 0) return;
 
-        // ODA-428-F3: only propagate onto genuinely fresh recipients. Hook runs
-        // after ShareOFT balance mutation, so prior balance is `balanceOf(to) - amount`.
-        // Established holders must not have cooldowns grief-reset by dust transfers.
-        uint256 toBalance = IERC20(address(shareOFT)).balanceOf(to);
-        if (toBalance > amount) return;
-
         uint256 toBlock = lastWrapperDepositBlock[to];
         if (fromBlock > toBlock) {
             lastWrapperDepositBlock[to] = fromBlock;

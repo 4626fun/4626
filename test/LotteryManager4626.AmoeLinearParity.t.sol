@@ -97,6 +97,7 @@ contract MockLocalVrfConsumerAmoe {
 
 contract MockShareTokenAmoe {
     mapping(address => uint256) private _balances;
+    bool public eligibleReverts;
 
     function decimals() external pure returns (uint8) {
         return 18;
@@ -108,6 +109,16 @@ contract MockShareTokenAmoe {
 
     function setBalance(address account, uint256 amount) external {
         _balances[account] = amount;
+    }
+
+    function setEligibleReverts(bool v) external {
+        eligibleReverts = v;
+    }
+
+    /// @dev Block-start eligible view. ODA-461-5: manager must not fall back to balanceOf on revert.
+    function balanceEligibleForLotteryCoverage(address account) external view returns (uint256) {
+        if (eligibleReverts) revert("eligible down");
+        return _balances[account];
     }
 }
 
@@ -482,6 +493,23 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         // Base is $10 → 40 PPM. With coverage=0 both personal branches are
         // gated off, so effective == base.
         assertEq(effectivePPM, 40, "no shares -> base PPM only");
+    }
+
+    /// @notice ODA-461-5: eligible-view revert must not fall back to live balanceOf.
+    function test_ProcessAmoeEntry_EligibleRevert_NoLiveBalanceFallback() public {
+        boostManager.setBoostBPS(20_000);
+        gauge.setGaugeBoostPPM(0);
+        oracle.setPrice(int256(1e18));
+
+        shareToken.setBalance(buyer, 100e18);
+        shareToken.setEligibleReverts(true);
+
+        uint256 swapUSD = 10 * 1_000_000;
+        vm.prank(relayer);
+        uint256 entryId = manager.processAmoeEntry(buyer, creatorCoin, swapUSD);
+        assertGt(entryId, 0);
+        (, , , uint256 effectivePPM, , , ) = manager.vrfRequests(entryId);
+        assertEq(effectivePPM, 40, "eligible revert must yield base PPM (no flash-boost)");
     }
 
     // -------------------------------------------------------------

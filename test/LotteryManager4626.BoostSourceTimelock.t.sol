@@ -103,14 +103,11 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
 
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
-    // Storage slot indices (verified via `forge inspect storageLayout`).
+    // Stable live-source slots. Pending timelock state is read through the
+    // admin module's canonical combined getter below so append-only storage
+    // additions cannot silently stale these lifecycle assertions.
     uint256 internal constant SLOT_BOOST_MANAGER = 9;
     uint256 internal constant SLOT_VAULT_GAUGE = 10;
-    uint256 internal constant SLOT_PENDING_BOOST_MGR = 60;
-    uint256 internal constant SLOT_PENDING_BOOST_MGR_EFFECTIVE_AT = 61;
-    uint256 internal constant SLOT_PENDING_GAUGE = 62;
-    uint256 internal constant SLOT_PENDING_GAUGE_EFFECTIVE_AT = 63;
-    uint256 internal constant SLOT_TIMELOCK_ARMED = 64;
 
     uint256 internal constant TIMELOCK_DELAY = 24 hours;
 
@@ -148,24 +145,43 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
 
     // ---- helpers ----
 
-    function _readPendingBoostMgr() internal view returns (address) {
-        return address(uint160(uint256(vm.load(address(manager), bytes32(SLOT_PENDING_BOOST_MGR)))));
+    function _readTimelockState()
+        internal
+        returns (
+            address pendingBoostMgr,
+            uint256 boostMgrEffectiveAt,
+            address pendingGauge,
+            uint256 gaugeEffectiveAt,
+            bool armed
+        )
+    {
+        bytes memory moduleCall = abi.encodeWithSignature("getBoostSourceTimelockState()");
+        vm.prank(owner);
+        (bool ok, bytes memory result) = address(manager).staticcall(
+            abi.encodeCall(LotteryManager4626.adminModuleCall, (moduleCall))
+        );
+        assertTrue(ok, "timelock state read failed");
+        return abi.decode(result, (address, uint256, address, uint256, bool));
     }
 
-    function _readPendingBoostMgrEffectiveAt() internal view returns (uint256) {
-        return uint256(vm.load(address(manager), bytes32(SLOT_PENDING_BOOST_MGR_EFFECTIVE_AT)));
+    function _readPendingBoostMgr() internal returns (address value) {
+        (value,,,,) = _readTimelockState();
     }
 
-    function _readPendingGauge() internal view returns (address) {
-        return address(uint160(uint256(vm.load(address(manager), bytes32(SLOT_PENDING_GAUGE)))));
+    function _readPendingBoostMgrEffectiveAt() internal returns (uint256 value) {
+        (, value,,,) = _readTimelockState();
     }
 
-    function _readPendingGaugeEffectiveAt() internal view returns (uint256) {
-        return uint256(vm.load(address(manager), bytes32(SLOT_PENDING_GAUGE_EFFECTIVE_AT)));
+    function _readPendingGauge() internal returns (address value) {
+        (,, value,,) = _readTimelockState();
     }
 
-    function _readTimelockArmed() internal view returns (bool) {
-        return uint256(vm.load(address(manager), bytes32(SLOT_TIMELOCK_ARMED))) != 0;
+    function _readPendingGaugeEffectiveAt() internal returns (uint256 value) {
+        (,,, value,) = _readTimelockState();
+    }
+
+    function _readTimelockArmed() internal returns (bool value) {
+        (,,,, value) = _readTimelockState();
     }
 
     function _readBoostManager() internal view returns (address) {

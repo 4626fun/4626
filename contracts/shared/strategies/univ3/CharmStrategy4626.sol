@@ -6,7 +6,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IUniswapV3Factory} from "@4626/shared/interfaces/uniswap/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol";
 import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol";
 import {IAjnaPool} from "@4626/shared/interfaces/external/IAjnaPool.sol";
@@ -74,9 +73,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
     /// @dev Default TWAP window used for valuation (share pricing).
     uint32 internal constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes
-    uint32 public constant MIN_TWAP_DURATION = 60; // 1 minute
-    uint32 public constant MAX_TWAP_DURATION = 1 days;
-
+    /// @notice ODA-466-9: floor matches default — sub-default windows approach spot manipulability.
+    uint32 public constant MIN_TWAP_DURATION = 1800; // 30 minutes
     address public immutable vault; // lane vault
     IERC20 public immutable ASSET; // lane vault asset token (asset coin or agent token)
     IERC20 public immutable USDC; // USDC (quote token)
@@ -88,15 +86,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     /// @notice Lane oracle (asset in this case) used for valuation inside `getTotalAssets()`.
     /// @dev This is intentionally distinct from Uniswap TWAP used for swap sizing/slippage.
     IOracle4626 public assetOracle;
-
-    /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
-    /// @dev This impacts ERC-4626 share pricing via the lane vault's totalAssets().
-    uint32 public twapDuration = DEFAULT_TWAP_DURATION;
-
-    /// @notice Uniswap V3 Factory for auto fee tier discovery
-    /// @dev Base: 0x33128a8fC17869897dcE68Ed026d694621f6FDfD
-    IUniswapV3Factory public uniFactory;
-    bool public autoFeeTier = false;
 
     /// @notice Optional Ajna ERC20 pool used as ASSET borrow backstop against USDC collateral.
     IAjnaPool public ajnaPool;
@@ -140,22 +129,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
     // Additional strategy-specific events:
     event TokensSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
-    event DepositFailed(string reason);
-    event UnusedTokensReturned(uint256 baseAmount, uint256 usdcAmount);
-    event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
-    event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
-    event LaneOracleUpdated(address indexed oldOracle, address indexed newOracle);
-    event AjnaPoolUpdated(address indexed oldPool, address indexed newPool);
-    event AjnaBorrowConfigUpdated(
-        bool enabled,
-        uint256 maxDebt,
-        uint256 maxBorrowPerWithdraw,
-        uint256 minCollateralRatioBps,
-        uint256 borrowLimitIndex,
-        uint256 repayLimitIndex
-    );
-    event AjnaBorrowed(uint256 requestedBase, uint256 borrowedBase, uint256 pledgedUsdc);
-    event AjnaRepaid(uint256 repaidBase, uint256 collateralPulledUsdc);
+    event AjnaResidualPosition(uint256 debtAsset, uint256 collateralUsdc, bool readable);
 
     // =================================
     // ERRORS
@@ -165,9 +139,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     error NotActive();
     error ZeroAddress();
     error SlippageExceeded(uint256 expected, uint256 actual);
-    error InvalidTwapDuration(uint32 duration);
-    error TwapUnavailable();
-    error RequiredSwapFailed();
+    error InvalidCharmVault(address vault);
+    error MaxSwapPercentTooHigh(uint256 maxSwapPercent);
     error InvalidCollateralRatioBps(uint256 ratioBps);
     error InvalidAjnaLimitIndex(uint256 limitIndex);
     error InvalidAjnaPool(address expectedQuote, address actualQuote, address expectedCollateral, address actualCollateral);
@@ -177,6 +150,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     error EmergencyWithdrawRestrictedToken(address token);
     error RebalanceValuationUnavailable();
     error SlippageBpsTooHigh(uint256 bps);
+    error CharmSharesOutstanding(address charmVault, uint256 shares);
+    error CharmOutOfRange();
 
     // =================================
     // MODIFIERS
@@ -231,44 +206,46 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         // and grant fresh approvals to the new one (mirror setAjnaPool).
         address oldVault = address(charmVault);
         if (oldVault != address(0) && oldVault != _charmVault) {
+            uint256 outstanding = ICharmVault(oldVault).balanceOf(address(this));
+            if (outstanding != 0) revert CharmSharesOutstanding(oldVault, outstanding);
             ASSET.forceApprove(oldVault, 0);
             USDC.forceApprove(oldVault, 0);
         }
-        charmVault = ICharmVault(_charmVault);
-        if (_charmVault != address(0)) {
-            ASSET.forceApprove(_charmVault, type(uint256).max);
-            USDC.forceApprove(_charmVault, type(uint256).max);
+        if (_charmVault == address(0)) {
+            charmVault = ICharmVault(address(0));
+            return;
         }
+        // ODA-466-3: basic validation before forceApprove(max).
+        if (_charmVault.code.length == 0) revert InvalidCharmVault(_charmVault);
+        ICharmVault candidate = ICharmVault(_charmVault);
+        address t0;
+        address t1;
+        try candidate.token0() returns (address token0_) {
+            t0 = token0_;
+        } catch {
+            revert InvalidCharmVault(_charmVault);
+        }
+        try candidate.token1() returns (address token1_) {
+            t1 = token1_;
+        } catch {
+            revert InvalidCharmVault(_charmVault);
+        }
+        bool pairOk = (t0 == address(ASSET) && t1 == address(USDC)) || (t0 == address(USDC) && t1 == address(ASSET));
+        if (!pairOk) revert InvalidCharmVault(_charmVault);
+
+        charmVault = candidate;
+        ASSET.forceApprove(_charmVault, type(uint256).max);
+        USDC.forceApprove(_charmVault, type(uint256).max);
     }
 
     function setSwapPool(address _swapPool) external onlyOwner {
         swapPool = IUniswapV3Pool(_swapPool);
     }
 
+    /// @notice Set lane oracle used for valuation (ODA-466-10: EIP-170 — instant set; owner-gated).
     function setAssetOracle(address _assetOracle) external onlyOwner {
-        address old = address(assetOracle);
+        if (_assetOracle == address(0)) revert ZeroAddress();
         assetOracle = IOracle4626(_assetOracle);
-        emit LaneOracleUpdated(old, _assetOracle);
-    }
-
-    function setTwapDuration(uint32 _twapDuration) external onlyOwner {
-        if (_twapDuration < MIN_TWAP_DURATION || _twapDuration > MAX_TWAP_DURATION) {
-            revert InvalidTwapDuration(_twapDuration);
-        }
-        uint32 old = twapDuration;
-        twapDuration = _twapDuration;
-        emit TwapDurationUpdated(old, _twapDuration);
-    }
-
-    /// @notice Set Uniswap V3 Factory for auto fee tier discovery
-    /// @param _factory Factory address (0x33128a8fC17869897dcE68Ed026d694621f6FDfD on Base)
-    function setUniFactory(address _factory) external onlyOwner {
-        uniFactory = IUniswapV3Factory(_factory);
-    }
-
-    /// @notice Toggle automatic fee tier discovery
-    function setAutoFeeTier(bool _autoFeeTier) external onlyOwner {
-        autoFeeTier = _autoFeeTier;
     }
 
     function setAjnaPool(address _ajnaPool) external onlyOwner {
@@ -287,13 +264,26 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         if (_ajnaPool == address(0)) {
             ajnaPool = IAjnaPool(address(0));
-            emit AjnaPoolUpdated(oldPool, address(0));
             return;
         }
 
+        // ODA-466-3: require code + probe quote/collateral views before forceApprove(max).
+        if (_ajnaPool.code.length == 0) {
+            revert InvalidAjnaPool(address(ASSET), address(0), address(USDC), address(0));
+        }
         IAjnaPool pool = IAjnaPool(_ajnaPool);
-        address quote = pool.quoteTokenAddress();
-        address collateral = pool.collateralAddress();
+        address quote;
+        address collateral;
+        try pool.quoteTokenAddress() returns (address q) {
+            quote = q;
+        } catch {
+            revert InvalidAjnaPool(address(ASSET), address(0), address(USDC), address(0));
+        }
+        try pool.collateralAddress() returns (address c) {
+            collateral = c;
+        } catch {
+            revert InvalidAjnaPool(address(ASSET), quote, address(USDC), address(0));
+        }
         if (quote != address(ASSET) || collateral != address(USDC)) {
             revert InvalidAjnaPool(address(ASSET), quote, address(USDC), collateral);
         }
@@ -301,7 +291,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         ajnaPool = pool;
         ASSET.forceApprove(_ajnaPool, type(uint256).max);
         USDC.forceApprove(_ajnaPool, type(uint256).max);
-        emit AjnaPoolUpdated(oldPool, _ajnaPool);
     }
 
     function setAjnaBorrowConfig(
@@ -328,36 +317,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         ajnaMinCollateralRatioBps = _minCollateralRatioBps;
         ajnaBorrowLimitIndex = _borrowLimitIndex;
         ajnaRepayLimitIndex = _repayLimitIndex;
-
-        emit AjnaBorrowConfigUpdated(
-            _enabled, _maxDebt, _maxBorrowPerWithdraw, _minCollateralRatioBps, _borrowLimitIndex, _repayLimitIndex
-        );
-    }
-
-    /// @notice Find best fee tier for a token pair (checks liquidity)
-    /// @dev Checks 0.01%, 0.05%, 0.3%, 1% fee tiers
-    function _findBestFeeTier(address tokenIn, address tokenOut) internal view returns (uint24 bestFee) {
-        if (address(uniFactory) == address(0) || !autoFeeTier) {
-            return swapPoolFee; // Return default
-        }
-
-        uint24[4] memory fees = [uint24(100), uint24(500), uint24(3000), uint24(10000)];
-        uint128 bestLiquidity = 0;
-        bestFee = swapPoolFee; // Default fallback
-
-        for (uint256 i = 0; i < fees.length; i++) {
-            address pool = uniFactory.getPool(tokenIn, tokenOut, fees[i]);
-            if (pool != address(0)) {
-                try IUniswapV3Pool(pool).liquidity() returns (uint128 liq) {
-                    if (liq > bestLiquidity) {
-                        bestLiquidity = liq;
-                        bestFee = fees[i];
-                    }
-                } catch {
-                    continue;
-                }
-            }
-        }
     }
 
     function setParameters(
@@ -366,14 +325,14 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         uint256 _depositSlippageBps,
         uint24 _swapPoolFee
     ) external onlyOwner {
+        // maxSwapPercent is percent units (divides by 100); allow up to 10000 for safety margin.
+        if (_maxSwapPercent > 10_000) revert MaxSwapPercentTooHigh(_maxSwapPercent);
         if (_swapSlippageBps > MAX_SLIPPAGE_BPS) revert SlippageBpsTooHigh(_swapSlippageBps);
         if (_depositSlippageBps > MAX_SLIPPAGE_BPS) revert SlippageBpsTooHigh(_depositSlippageBps);
         maxSwapPercent = _maxSwapPercent;
         swapSlippageBps = _swapSlippageBps;
         depositSlippageBps = _depositSlippageBps;
         swapPoolFee = _swapPoolFee;
-
-        emit ParametersUpdated(_maxSwapPercent, _swapSlippageBps);
     }
 
     function setActive(bool _active) external onlyOwner {
@@ -480,12 +439,21 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             return 0;
         }
 
+        // ODA-466-4: with outstanding Ajna debt, a stale oracle must fail closed to 0.
+        // Zeroing USDC legs via `_usdcToAssetValue` while still subtracting full debt is
+        // economically incoherent (prices the loan, erases the collateral).
+        if (ajnaState.debtAsset > 0) {
+            (, bool fresh) = _getFreshAssetPrice();
+            if (!fresh) return 0;
+        }
+
         uint256 grossAsset = idleAsset + charmAsset;
         // NAV keeps oracle pricing for share accounting (see Oracle.t.sol). Withdraw
         // paths use `_realizableTotalAssets` / `_usdcToAssetValueRealizable` (ODA-423-M10)
         // so exits cannot over-promise against a lower TWAP realization.
         // ODA-423-M09 residual: Charm `getTotalAmounts` composition is still spot-based;
         // bounding spot-vs-TWAP composition without calibrated mocks would break NAV tests.
+        // Without debt, stale oracle still conservatively ignores USDC legs (returns ASSET-only).
         uint256 usdcInAsset = _usdcToAssetValue(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
         uint256 grossAssetValue = grossAsset + usdcInAsset;
 
@@ -507,6 +475,11 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         AjnaDebtState memory ajnaState = _readAjnaDebtState();
         if (!ajnaState.readable) return 0;
+        // ODA-466-4: match getTotalAssets fail-closed when debt needs a fresh oracle.
+        if (ajnaState.debtAsset > 0) {
+            (, bool fresh) = _getFreshAssetPrice();
+            if (!fresh) return 0;
+        }
 
         uint256 usdcInAsset =
             _usdcToAssetValueRealizable(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
@@ -562,7 +535,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     function _usdcToAssetValueRealizable(uint256 usdcAmount) internal view returns (uint256) {
         if (usdcAmount == 0) return 0;
         uint256 byOracle = _usdcToAssetValue(usdcAmount);
-        (uint256 assetPerUsdc, bool twapOk) = _getPoolPriceTWAP(twapDuration);
+        (uint256 assetPerUsdc, bool twapOk) = _getPoolPriceTWAP(DEFAULT_TWAP_DURATION);
         if (!twapOk || byOracle == 0) return byOracle;
         uint256 byTwap = Math.mulDiv(usdcAmount, assetPerUsdc, 1e6);
         return byOracle < byTwap ? byOracle : byTwap;
@@ -739,6 +712,10 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         uint256 finalAsset;
         uint256 finalUsdc;
 
+        // Preflight Charm range before any ASSET→USDC swap. Out-of-range deposits are
+        // deferred; spending ASSET on USDC that cannot be seeded is pure inventory drift.
+        (bool charmInRange,,,) = isCharmInRange();
+
         if (charmAsset > 0 && charmUsdc > 0) {
             // Charm has liquidity - calculate required USDC for our ASSET
             uint256 usdcNeeded = (totalAsset * charmUsdc) / charmAsset;
@@ -747,6 +724,10 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
                 // Have enough USDC - use all ASSET
                 finalAsset = totalAsset;
                 finalUsdc = usdcNeeded;
+            } else if (!charmInRange) {
+                // Cannot deposit while out of range — keep inventory idle (no swap).
+                finalAsset = 0;
+                finalUsdc = 0;
             } else {
                 // Need more USDC - swap some ASSET → USDC
                 uint256 usdcDeficit = usdcNeeded - totalUsdc;
@@ -774,6 +755,9 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
                     finalUsdc = totalUsdc;
                 }
             }
+        } else if (!charmInRange) {
+            finalAsset = 0;
+            finalUsdc = 0;
         } else {
             // Charm empty - deposit 99% ASSET, 1% USDC
             // Attempt to swap ~1% ASSET → USDC for bootstrap seeding.
@@ -790,7 +774,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             // Enforce bootstrap intent: do not seed an initial one-sided ASSET position.
             // If no USDC leg is available yet, defer Charm deposit and keep assets idle.
             if (totalAsset > 0 && totalUsdc == 0) {
-                emit DepositFailed("Bootstrap deferred: require USDC leg for initial 99/1 seed");
                 finalAsset = 0;
                 finalUsdc = 0;
             } else {
@@ -810,9 +793,13 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         // the requested vault allocation amount. The vault enforces this strictly.
         deposited = amount;
 
-        // Update for harvest tracking only when valuation is ready (ODA-423-M01).
+        // Harvest baseline: full NAV when valuation is ready (ODA-423-M01).
+        // ODA-466-5: when not ready, still advance by deposited principal so it is
+        // not later reported as harvest profit once valuation recovers.
         if (this.isValuationReady()) {
             lastTotalAssets = getTotalAssets();
+        } else {
+            lastTotalAssets += amount;
         }
 
         emit StrategyDeposit(msg.sender, amount, deposited);
@@ -825,7 +812,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         if (usdcNeeded == 0) return 0;
 
         // Use TWAP to avoid spot manipulation in quoted swap sizing.
-        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
+        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(DEFAULT_TWAP_DURATION);
         if (!ok || assetPerUsdc == 0) return 0;
         uint256 assetNeeded = (usdcNeeded * assetPerUsdc) / 1e6; // USDC has 6 decimals
 
@@ -874,19 +861,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         if (assetAmount == 0 && usdcAmount == 0) return 0;
 
         // PRE-CHECK: Is Charm vault in range?
-        (bool inRange, int24 currentTick, int24 lower, int24 upper) = isCharmInRange();
+        (bool inRange,,,) = isCharmInRange();
         if (!inRange) {
-            emit DepositFailed(string(
-                    abi.encodePacked(
-                        "Out of range: tick ",
-                        _int24ToString(currentTick),
-                        " not in [",
-                        _int24ToString(lower),
-                        ",",
-                        _int24ToString(upper),
-                        "]"
-                    )
-                ));
             return 0;
         }
 
@@ -905,72 +881,19 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             uint256 _shares, uint256, uint256
         ) {
             shares = _shares;
-        } catch Error(string memory reason) {
-            emit DepositFailed(reason);
-        } catch (bytes memory lowLevelData) {
-            // Try to decode the error for debugging
-            if (lowLevelData.length > 0) {
-                emit DepositFailed(string(abi.encodePacked("Low-level: ", _bytesToHex(lowLevelData))));
-            } else {
-                emit DepositFailed("Unknown error");
-            }
+        } catch {
         }
-    }
-
-    /**
-     * @notice Convert int24 to string for error messages
-     */
-    function _int24ToString(int24 value) internal pure returns (string memory) {
-        if (value == 0) return "0";
-
-        bool negative = value < 0;
-        uint256 absValue = negative ? uint256(uint24(-value)) : uint256(uint24(value));
-
-        bytes memory buffer = new bytes(10);
-        uint256 i = buffer.length;
-        while (absValue > 0) {
-            i--;
-            buffer[i] = bytes1(uint8(48 + absValue % 10));
-            absValue /= 10;
-        }
-        if (negative) {
-            i--;
-            buffer[i] = "-";
-        }
-
-        bytes memory result = new bytes(buffer.length - i);
-        for (uint256 j = 0; j < result.length; j++) {
-            result[j] = buffer[i + j];
-        }
-        return string(result);
-    }
-
-    /**
-     * @notice Convert bytes to hex string for error debugging
-     */
-    function _bytesToHex(bytes memory data) internal pure returns (string memory) {
-        bytes memory hexChars = "0123456789abcdef";
-        uint256 len = data.length > 4 ? 4 : data.length; // Only first 4 bytes (selector)
-        bytes memory result = new bytes(len * 2);
-        for (uint256 i = 0; i < len; i++) {
-            result[i * 2] = hexChars[uint8(data[i]) >> 4];
-            result[i * 2 + 1] = hexChars[uint8(data[i]) & 0x0f];
-        }
-        return string(result);
     }
 
     /**
      * @notice Swap ASSET → USDC with slippage protection
-     * @dev Uses Uniswap V3 router with optional auto fee tier discovery.
+     * @dev Uses Uniswap V3 router with the configured fee tier.
      */
     function _swapAssetToUsdcSafe(uint256 amountIn) internal returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
 
-        // Auto-discover best fee tier if enabled
-        uint24 fee = _findBestFeeTier(address(ASSET), address(USDC));
-
         // Calculate expected output from TWAP quote, not spot.
-        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
+        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(DEFAULT_TWAP_DURATION);
         if (!ok || assetPerUsdc == 0) {
             return 0;
         }
@@ -981,7 +904,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: address(ASSET),
                 tokenOut: address(USDC),
-                fee: fee,
+                fee: swapPoolFee,
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: amountIn,
@@ -1033,7 +956,9 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
                 uint256 expected1 = totalShares > 0 ? Math.mulDiv(total1, sharesToWithdraw, totalShares) : 0;
                 uint256 min0 = Math.mulDiv(expected0, 10_000 - depositSlippageBps, 10_000);
                 uint256 min1 = Math.mulDiv(expected1, 10_000 - depositSlippageBps, 10_000);
-                charmVault.withdraw(sharesToWithdraw, min0, min1, address(this));
+                // Best-effort Charm redeem: do not revert the whole strategy withdraw so the
+                // OVault queue can continue to the Ajna sleeve with any partial CREATOR recovered.
+                try charmVault.withdraw(sharesToWithdraw, min0, min1, address(this)) {} catch {}
             }
         }
 
@@ -1046,19 +971,29 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             availableAsset = ASSET.balanceOf(address(this));
 
             // Swap fallback for any residual deficit.
+            // ODA-466-12: swap only the USDC shortfall (+ slippage buffer), not all idle USDC.
             if (availableAsset < amount) {
                 uint256 totalUsdc = USDC.balanceOf(address(this));
                 if (totalUsdc > 0) {
-                    _swapUsdcToAssetSafe(totalUsdc);
+                    assetNeeded = amount - availableAsset;
+                    uint256 usdcToSwap = totalUsdc;
+                    (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(DEFAULT_TWAP_DURATION);
+                    if (ok && assetPerUsdc > 0) {
+                        uint256 usdcNeeded = Math.ceilDiv(assetNeeded * 1e6, assetPerUsdc);
+                        usdcNeeded = Math.mulDiv(usdcNeeded, 10_000 + swapSlippageBps, 10_000);
+                        if (usdcNeeded < usdcToSwap) usdcToSwap = usdcNeeded;
+                    }
+                    _swapUsdcToAssetSafe(usdcToSwap);
                     availableAsset = ASSET.balanceOf(address(this));
                 }
             }
         }
 
-        if (availableAsset < amount) revert WithdrawLiquidityUnavailable(amount, availableAsset);
+        // Partial fill: return measured CREATOR so OVault can continue to the next strategy.
+        withdrawn = availableAsset < amount ? availableAsset : amount;
+        if (withdrawn == 0) return 0;
 
-        ASSET.safeTransfer(vault, amount);
-        withdrawn = amount;
+        ASSET.safeTransfer(vault, withdrawn);
 
         emit StrategyWithdraw(msg.sender, amount, withdrawn);
     }
@@ -1068,22 +1003,14 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
      */
     function _swapUsdcToAssetSafe(uint256 amountIn) internal returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
-        return _swapUsdcToAsset(amountIn, false);
+        return _swapUsdcToAsset(amountIn);
     }
 
-    function _swapUsdcToAssetRequired(uint256 amountIn) internal returns (uint256 amountOut) {
-        if (amountIn == 0) return 0;
-        return _swapUsdcToAsset(amountIn, true);
-    }
-
-    function _swapUsdcToAsset(uint256 amountIn, bool required) internal returns (uint256 amountOut) {
-        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
+    function _swapUsdcToAsset(uint256 amountIn) internal returns (uint256 amountOut) {
+        (uint256 assetPerUsdc, bool ok) = _getPoolPriceTWAP(DEFAULT_TWAP_DURATION);
         if (!ok || assetPerUsdc == 0) {
-            if (required) revert TwapUnavailable();
             return 0;
         }
-
-        uint24 fee = _findBestFeeTier(address(USDC), address(ASSET));
 
         uint256 expectedOut = (amountIn * assetPerUsdc) / 1e6; // USDC has 6 decimals
         uint256 minOut = (expectedOut * (10000 - swapSlippageBps)) / 10000;
@@ -1092,7 +1019,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: address(USDC),
                 tokenOut: address(ASSET),
-                fee: fee,
+                fee: swapPoolFee,
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: amountIn,
@@ -1105,7 +1032,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             amountOut = out;
             emit TokensSwapped(address(USDC), address(ASSET), amountIn, amountOut);
         } catch {
-            if (required) revert RequiredSwapFailed();
             amountOut = 0;
         }
     }
@@ -1158,16 +1084,13 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         }
 
         uint256 assetBefore = ASSET.balanceOf(address(this));
-        uint256 usdcBefore = USDC.balanceOf(address(this));
-        uint256 borrowLimitIndex = _resolveAjnaLimitIndex(true);
+        (uint256 borrowLimitIndex, bool borrowReady) = _resolveAjnaLimitIndex(true);
+        if (!borrowReady) return 0;
 
         try pool.drawDebt(address(this), borrowTarget, borrowLimitIndex, _usdcToAjnaWad(collateralToPledgeUsdc)) {
             uint256 assetAfter = ASSET.balanceOf(address(this));
             if (assetAfter > assetBefore) {
                 borrowed = assetAfter - assetBefore;
-                uint256 usdcAfter = USDC.balanceOf(address(this));
-                uint256 pledgedUsdc = usdcBefore > usdcAfter ? usdcBefore - usdcAfter : 0;
-                emit AjnaBorrowed(borrowTarget, borrowed, pledgedUsdc);
             }
         } catch {
             return 0;
@@ -1196,16 +1119,13 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         }
 
         uint256 usdcBefore = USDC.balanceOf(address(this));
-        uint256 repayLimitIndex = _resolveAjnaLimitIndex(false);
+        (uint256 repayLimitIndex,) = _resolveAjnaLimitIndex(false);
         try pool.repayDebt(address(this), repayTarget, collateralToPullWad, address(this), repayLimitIndex) returns (
             uint256 amountRepaid
         ) {
             repaid = amountRepaid;
             uint256 usdcAfter = USDC.balanceOf(address(this));
             collateralPulledUsdc = usdcAfter > usdcBefore ? usdcAfter - usdcBefore : 0;
-            if (repaid > 0 || collateralPulledUsdc > 0) {
-                emit AjnaRepaid(repaid, collateralPulledUsdc);
-            }
         } catch {
             return (0, 0);
         }
@@ -1219,25 +1139,35 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
      * @notice Resolve Ajna draw/repay limit index.
      * @dev Configured non-zero index is used as-is (clamped); 0 enables oracle-driven auto mode:
      *      base bucket from the lane oracle's V3 TWAP helper + conservative collateral-ratio buffer.
+     *      Borrow fails closed when the oracle bucket is unavailable; repay keeps a max-index
+     *      liveness fallback so debt can still be closed under oracle outage.
      */
-    function _resolveAjnaLimitIndex(bool forBorrow) internal view returns (uint256 limitIndex) {
+    function _resolveAjnaLimitIndex(bool forBorrow) internal view returns (uint256 limitIndex, bool ready) {
         uint256 configured = forBorrow ? ajnaBorrowLimitIndex : ajnaRepayLimitIndex;
-        if (configured != 0) return _clampAjnaBucketIndex(configured);
+        if (configured != 0) return (_clampAjnaBucketIndex(configured), true);
 
         uint256 oracleBucket = _oracleSuggestedAjnaBucket();
-        if (oracleBucket == 0) return AJNA_MAX_BUCKET_INDEX;
+        if (oracleBucket == 0) {
+            if (forBorrow) return (0, false);
+            return (AJNA_MAX_BUCKET_INDEX, true);
+        }
 
         uint256 extraCollateralBps =
             ajnaMinCollateralRatioBps > 10_000 ? ajnaMinCollateralRatioBps - 10_000 : 0;
         uint256 safetySteps = Math.ceilDiv(extraCollateralBps, AJNA_APPROX_BUCKET_STEP_BPS);
-        return _clampAjnaBucketIndex(oracleBucket + safetySteps);
+        if (forBorrow) {
+            return (oracleBucket > safetySteps ? oracleBucket - safetySteps : 0, true);
+        }
+        return (_clampAjnaBucketIndex(oracleBucket + safetySteps), true);
     }
 
     function _oracleSuggestedAjnaBucket() internal view returns (uint256 bucketIndex) {
         IOracle4626 oracle = assetOracle;
         if (address(oracle) == address(0)) return 0;
 
-        try oracle.getAjnaBucketFromV3TWAP(twapDuration) returns (uint256 suggested) {
+        try oracle.getAjnaBucketFromV3TWAP(DEFAULT_TWAP_DURATION) returns (uint256 suggested) {
+            // Treat explicit 0 as "unavailable" before clamping (min index would invent a price).
+            if (suggested == 0) return 0;
             bucketIndex = _clampAjnaBucketIndex(suggested);
         } catch {
             bucketIndex = 0;
@@ -1303,44 +1233,41 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // EMERGENCY
     // =================================
 
-    function emergencyWithdraw() external override onlyVault returns (uint256 withdrawn) {
-        if (address(charmVault) == address(0)) {
-            withdrawn = ASSET.balanceOf(address(this));
-            if (withdrawn > 0) {
-                ASSET.safeTransfer(vault, withdrawn);
+    function emergencyWithdraw() external override onlyVault nonReentrant returns (uint256 withdrawn) {
+        if (address(charmVault) != address(0)) {
+            uint256 ourShares = charmVault.balanceOf(address(this));
+            bool assetIsToken0 = address(charmVault.token0()) == address(ASSET);
+
+            if (ourShares > 0) {
+                (uint256 min0, uint256 min1) = _charmWithdrawMins(ourShares);
+                // Best-effort Charm exit — do not brick Ajna unwind / residual sweeps.
+                try charmVault.withdraw(ourShares, min0, min1, address(this)) returns (
+                    uint256 amount0, uint256 amount1
+                ) {
+                    uint256 assetReceived = assetIsToken0 ? amount0 : amount1;
+                    uint256 usdcReceived = assetIsToken0 ? amount1 : amount0;
+
+                    // ODA-423-M02: best-effort swap — do not brick the whole emergency exit
+                    // when TWAP/router is unavailable; forward residual USDC below.
+                    uint256 totalUsdc = USDC.balanceOf(address(this));
+                    if (usdcReceived > 0 || totalUsdc > 0) {
+                        assetReceived += _swapUsdcToAssetSafe(totalUsdc);
+                    }
+
+                    withdrawn = assetReceived;
+                } catch {}
             }
-            // ODA-423-M04: still forward any idle USDC when Charm is unset.
-            uint256 idleUsdc = USDC.balanceOf(address(this));
-            if (idleUsdc > 0) {
-                USDC.safeTransfer(vault, idleUsdc);
-            }
-            emit EmergencyWithdraw(vault, withdrawn);
-            return withdrawn;
         }
 
-        uint256 ourShares = charmVault.balanceOf(address(this));
-        bool assetIsToken0 = address(charmVault.token0()) == address(ASSET);
-
-        if (ourShares > 0) {
-            (uint256 min0, uint256 min1) = _charmWithdrawMins(ourShares);
-            (uint256 amount0, uint256 amount1) = charmVault.withdraw(ourShares, min0, min1, address(this));
-            uint256 assetReceived = assetIsToken0 ? amount0 : amount1;
-            uint256 usdcReceived = assetIsToken0 ? amount1 : amount0;
-
-            // ODA-423-M02: best-effort swap — do not brick the whole emergency exit
-            // when TWAP/router is unavailable; forward residual USDC below.
-            uint256 totalUsdc = USDC.balanceOf(address(this));
-            if (usdcReceived > 0 || totalUsdc > 0) {
-                assetReceived += _swapUsdcToAssetSafe(totalUsdc);
-            }
-
-            withdrawn = assetReceived;
-        }
-
-        // ODA-423-M03 (partial): best-effort Ajna repay before sweeping to vault.
+        // Always attempt Ajna unwind (including when Charm vault is unset).
         uint256 assetBeforeRepay = ASSET.balanceOf(address(this));
         if (assetBeforeRepay > 0 && address(ajnaPool) != address(0)) {
             _repayAjnaDebtWithAsset(assetBeforeRepay);
+        }
+
+        AjnaDebtState memory residual = _readAjnaDebtState();
+        if (residual.debtAsset > 0 || residual.collateralUsdc > 0 || !residual.readable) {
+            emit AjnaResidualPosition(residual.debtAsset, residual.collateralUsdc, residual.readable);
         }
 
         // Send all ASSET to vault
@@ -1350,7 +1277,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             withdrawn = totalAsset;
         }
 
-        // ODA-423-M04: forward residual USDC (including when ourShares == 0).
+        // ODA-423-M04: forward residual USDC (including when Charm is unset / shares == 0).
         uint256 residualUsdc = USDC.balanceOf(address(this));
         if (residualUsdc > 0) {
             USDC.safeTransfer(vault, residualUsdc);
@@ -1360,6 +1287,9 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     }
 
     /// @dev Expected proportional amounts with depositSlippageBps floor (never 0/0 when exposure exists).
+    /// ODA-466-6 SKIP: mins still derive from Charm spot `getTotalAmounts` (same source the
+    /// vault returns). Full TWAP/OracleLibrary composition reconstruction is out of smallest-diff
+    /// scope; withdraw sizing already uses `_usdcToAssetValueRealizable` for share count.
     function _charmWithdrawMins(uint256 shares) internal view returns (uint256 min0, uint256 min1) {
         if (shares == 0 || address(charmVault) == address(0)) return (0, 0);
         uint256 totalShares = charmVault.totalSupply();
@@ -1383,17 +1313,6 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         if (assetBal > 0) ASSET.safeTransfer(vault, assetBal);
         if (usdcBal > 0) USDC.safeTransfer(vault, usdcBal);
-    }
-
-    function _returnUnusedTokens() internal {
-        uint256 assetBal = ASSET.balanceOf(address(this));
-        uint256 usdcBal = USDC.balanceOf(address(this));
-
-        if (assetBal > 0 || usdcBal > 0) {
-            if (assetBal > 0) ASSET.safeTransfer(vault, assetBal);
-            if (usdcBal > 0) USDC.safeTransfer(vault, usdcBal);
-            emit UnusedTokensReturned(assetBal, usdcBal);
-        }
     }
 
     // =================================

@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Charm + Ajna ERC4626 Strategies — LeftClaw Services</title>
+<meta name="description" content="Smart contract audit report for leftclaw.services job #466">
+<style>
+  :root {
+    --bg: #fffdf9;
+    --bg-soft: #fdf3e8;
+    --bg-softer: #f9e2c8;
+    --ink: #2c1408;
+    --ink-soft: #6b5648;
+    --primary: #c93a1e;
+    --rule: #ecd9c0;
+    --code-bg: #faf2e6;
+    --code-ink: #4a2c14;
+    --pill-critical-bg: #7a1010; --pill-critical-ink: #ffe3e3;
+    --pill-high-bg: #e03030;     --pill-high-ink: #ffffff;
+    --pill-medium-bg: #e8a020;   --pill-medium-ink: #2c1408;
+    --pill-low-bg: #4a90d9;      --pill-low-ink: #ffffff;
+    --pill-info-bg: #d8cbb8;     --pill-info-ink: #2c1408;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1410;
+      --bg-soft: #150e0a;
+      --bg-softer: #2a1c12;
+      --ink: #ffe8d8;
+      --ink-soft: #b89a86;
+      --primary: #e8431f;
+      --rule: #3d2a1c;
+      --code-bg: #150e0a;
+      --code-ink: #f4d9c2;
+      --pill-info-bg: #4a382a; --pill-info-ink: #ffe8d8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .band { height: 6px; background: var(--primary); }
+
+  .page { max-width: 880px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead { padding: 36px 0 24px; border-bottom: 2px solid var(--rule); }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+  }
+  .brand .claw { font-size: 20px; }
+  .brand a { color: inherit; }
+  header.masthead h1.doc-title {
+    margin: 14px 0 4px; font-size: 34px; line-height: 1.2; letter-spacing: -.01em;
+  }
+  .job-sub { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; padding: 5px 12px; border-radius: 999px;
+    background: var(--bg-soft); border: 1px solid var(--rule); color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip b { font-weight: 600; }
+  a.chip:hover { text-decoration: none; border-color: var(--primary); }
+
+  /* ---------- severity strip ---------- */
+  .sev-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+  .sev-card {
+    flex: 1 1 90px; min-width: 90px; text-align: center;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 10px 6px 8px;
+    background: var(--bg-soft);
+  }
+  .sev-card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .sev-card .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+  .sev-card.critical .n { color: var(--pill-critical-bg); }
+  .sev-card.high .n { color: var(--pill-high-bg); }
+  .sev-card.medium .n { color: var(--pill-medium-bg); }
+  .sev-card.low .n { color: var(--pill-low-bg); }
+  .sev-card.info .n { color: var(--ink-soft); }
+  @media (prefers-color-scheme: dark) {
+    .sev-card.critical .n { color: #ff8a8a; }
+  }
+
+  /* ---------- severity pills ---------- */
+  .pill {
+    display: inline-block; font-size: 12px; font-weight: 700; line-height: 1;
+    padding: 4px 10px; border-radius: 999px; letter-spacing: .04em;
+    text-transform: uppercase; vertical-align: baseline;
+  }
+  .pill.critical { background: var(--pill-critical-bg); color: var(--pill-critical-ink); }
+  .pill.high     { background: var(--pill-high-bg);     color: var(--pill-high-ink); }
+  .pill.medium   { background: var(--pill-medium-bg);   color: var(--pill-medium-ink); }
+  .pill.low      { background: var(--pill-low-bg);      color: var(--pill-low-ink); }
+  .pill.info     { background: var(--pill-info-bg);     color: var(--pill-info-ink); }
+
+  /* ---------- table of contents ---------- */
+  nav.toc {
+    margin: 28px 0 8px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 10px;
+  }
+  nav.toc .toc-title {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700; margin-bottom: 8px;
+  }
+  nav.toc .toc-cols { display: flex; gap: 36px; }
+  nav.toc ol { margin: 0; padding-left: 20px; flex: 1 1 0; }
+  nav.toc li { font-size: 14px; margin: 3px 0; }
+  @media (max-width: 640px) { nav.toc .toc-cols { flex-direction: column; gap: 0; } }
+
+  /* ---------- report body ---------- */
+  main.report { padding-top: 8px; }
+  main.report h1 { display: none; } /* masthead already shows the title */
+  main.report h2 {
+    font-size: 24px; line-height: 1.3; margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--rule);
+    letter-spacing: -.01em;
+  }
+  main.report h3 { font-size: 19px; margin: 30px 0 10px; }
+  main.report h4 { font-size: 16px; margin: 24px 0 8px; }
+  main.report p { margin: 12px 0; }
+  main.report li { margin: 5px 0; }
+  main.report hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+  main.report strong { font-weight: 650; }
+  main.report blockquote {
+    margin: 16px 0; padding: 10px 18px; border-left: 4px solid var(--primary);
+    background: var(--bg-soft); border-radius: 0 8px 8px 0; color: var(--ink-soft);
+  }
+
+  main.report code {
+    font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--rule);
+  }
+  main.report pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 16px 0;
+  }
+  main.report pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 10px; }
+  main.report table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  main.report th, main.report td {
+    text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  main.report thead th {
+    background: var(--bg-soft); font-size: 12px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); border-bottom: 2px solid var(--rule);
+  }
+  main.report tbody tr:last-child td { border-bottom: none; }
+  main.report tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+
+  /* ---------- footer ---------- */
+  footer.colophon {
+    margin-top: 64px; padding-top: 20px; border-top: 2px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft);
+  }
+  footer.colophon p { margin: 6px 0; }
+  footer.colophon code { font-size: 12px; word-break: break-all; }
+
+  /* ---------- print ---------- */
+  @media print {
+    :root { --bg: #ffffff; --bg-soft: #f6f6f6; --rule: #dddddd; }
+    .band { display: none; }
+    .page { max-width: none; padding: 0; }
+    nav.toc ol { columns: 2; }
+    main.report pre, main.report .table-wrap { break-inside: avoid; }
+    main.report h2 { break-after: avoid; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="band"></div>
+<div class="page">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="claw">🦞</span>
+      <a href="https://leftclaw.services">LeftClaw Services</a>
+      <span>·</span>
+      <span>Smart Contract Audit</span>
+    </div>
+    <h1 class="doc-title">Charm + Ajna ERC4626 Strategies</h1>
+    <p class="job-sub">Job #466 · completed on-chain · report pinned to IPFS</p>
+    <div class="meta-chips">
+      <a class="chip" href="https://leftclaw.services/jobs/466"><b>Job page</b> #466</a>
+      <a class="chip" href="https://bafkreigivupyilcb2meseopt7kj4sszrqupw67kl5ereq55ldmb5visrty.ipfs.community.bgipfs.com/"><b>Canonical report</b> IPFS</a>
+      <span class="chip"><b>Generated</b> 2026-07-22</span>
+    </div>
+    <div class="sev-strip">
+      <div class="sev-card high"><div class="n">2</div><div class="l">High</div></div>
+      <div class="sev-card medium"><div class="n">10</div><div class="l">Medium</div></div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <div class="toc-cols">
+    <ol>
+      <li><a href="#reconciliation-summary">Reconciliation summary</a></li>
+      <li><a href="#access-control-inventory-rescue-path-summary-condensed">Access-Control Inventory &amp; Rescue-Path Summary (condensed)</a></li>
+      <li><a href="#findings">Findings</a></li>
+    </ol>
+    <ol start="4">
+      <li><a href="#leads-info-lower-confidence-or-minor-items-not-scored-as-full-fi">Leads / Info (lower-confidence or minor items — not scored as full findings)</a></li>
+      <li><a href="#completeness">Completeness</a></li>
+    </ol>
+    </div>
+  </nav>
+
+  <main class="report">
+<h1>Security Review — Charm + Ajna ERC4626 Strategies</h1>
+<p><strong>Audit target</strong> (6 files, ~2695 LOC):</p>
+<ul>
+<li><code>contracts/shared/strategies/ERC4626StrategyAdapter.sol</code></li>
+<li><code>contracts/shared/strategies/univ3/CharmStrategy4626.sol</code></li>
+<li><code>contracts/shared/strategies/ajna/AjnaERC4626Vault.sol</code></li>
+<li><code>contracts/shared/strategies/ajna/AjnaVaultAuth.sol</code></li>
+<li><code>contracts/shared/strategies/ajna/AjnaVaultBuffer.sol</code></li>
+<li><code>contracts/shared/strategies/ajna/AjnaVaultLibrary.sol</code></li>
+</ul>
+<p><strong>Source of truth</strong>: <code>github.com/4626fun/4626</code>, tag <code>audit/oda-2026-07-22</code>, commit <code>423e0e3a607884de6e60bccd06f722a8aba770ee</code>.</p>
+<p><strong>Job scope note</strong>: Per the client&#39;s brief, the audit target is the ERC4626 strategy adapters — a generic <code>ERC4626StrategyAdapter</code>, a Charm (Uniswap V3 managed-liquidity) strategy with an Ajna borrow backstop, and the Ajna-backed <code>AjnaERC4626Vault</code> (+ its <code>AjnaVaultAuth</code> role hub, <code>AjnaVaultBuffer</code> idle reserve, <code>AjnaVaultLibrary</code> math helper) that sits behind it. Requested focus areas: rescue/drain paths, valuation, withdraw realizability, fee/timelock, oracle coupling. The interfaces <code>IAjnaPool</code>, <code>IOracle4626</code>, <code>IStrategy</code> are referenced via a <code>@4626/</code> remapping and were <strong>not vendored in this checkout</strong> — several findings below are marked as depending on the deployed Ajna pool&#39;s exact ABI/field semantics, which could not be independently confirmed from this repo alone. The out-of-scope &quot;lane vault&quot; (<code>CreatorOVault</code>/<code>AgentOVault</code>) that calls these strategies was not re-examined.</p>
+<p><strong>Methodology</strong>: Three-phase review — (0) context building: a protocol map, access-control/rescue-path inventory, and threat catalog built by 3 parallel agents with no findings; (1) breadth: 7 domain-specialist agents (general, precision-math, ERC4626, DeFi-lending, DeFi-AMM, oracles, access-control) walking curated checklists; (2) depth: 12 attacker-mindset agents (9 single-specialty + 3 cross-lens gap-hunters), run <strong>blind</strong> to phase-1&#39;s findings (one agent&#39;s first attempt was invalidated by a tool-name collision and was successfully re-run), each independently reading the full source and the phase-0 map. All hunting agents ran on <code>opus</code> given the scope. This reconciliation cross-checks both phases&#39; raw output against each other and against the phase-0 inventory/catalog.</p>
+<p><strong>Confidence floor</strong>: All findings Low+ are reported; items resting on an unconfirmed precondition (most commonly: the exact mechanics of the out-of-scope Ajna pool) are explicitly flagged as such within their own finding rather than silently omitted or silently promoted.</p>
+<hr>
+<h2 id="reconciliation-summary">Reconciliation summary</h2>
+<ul>
+<li><strong>Overlap</strong> (found independently by both phases, several by 5+ of the 12 blind agents): the two spot-valuation clusters (Charm composition, Ajna bucket ratio), the <code>rebalance()</code> sandwich, the <code>setCharmVault</code>/<code>setAjnaPool</code> approval bypass, and the <code>withdraw()</code> over-swap.</li>
+<li><strong>Phase-2-only, newly discovered and independently verified against source by the orchestrator</strong>: an incoherent-NAV bug when the oracle is stale (zeroes collateral value but not debt), a deposit/harvest accounting bug (undeposited-principal-as-profit), a self-referential Charm withdraw slippage floor, an un-timelocked oracle rewire enabling a deposit-timing attack, and a valuation-guard bypass via PPS-truncation-to-zero.</li>
+<li><strong>Phase-1-only</strong>: several Low findings (ownership hygiene, <code>getAllTokens</code>-style unbounded reads N/A here, fee-on-transfer assumptions, etc.)</li>
+<li><strong>Coverage</strong>: <code>Entrypoints: ~40 external/public state-changing functions across 6 files, all examined by ≥1 domain agent and ≥1 blind attack agent. Threat-catalog rows: 6, 6 answered.</code></li>
+</ul>
+<p><strong>The single most important structural fact of this audit</strong>: nearly every hunting agent, regardless of assigned specialty, independently converged on the same root defect from different angles — <strong>both of the system&#39;s two &quot;total assets&quot; computations (<code>CharmStrategy4626.getTotalAssets()</code>&#39;s Charm-composition leg, and <code>AjnaERC4626Vault.totalAssets()</code>&#39;s Ajna-bucket leg) are unguarded, un-timelocked, single-block spot reads with no staleness, deviation, or TWAP defense, and both feed directly into the lane vault&#39;s user-facing share price.</strong> This is the load-bearing risk of the entire system; every other Medium+ finding below is either a direct consequence of it or an independent, unrelated defect.</p>
+<hr>
+<h2 id="access-control-inventory-rescue-path-summary-condensed">Access-Control Inventory &amp; Rescue-Path Summary (condensed)</h2>
+<ul>
+<li>Two authority models: OZ <code>Ownable</code> (one-step, no timelock) in both strategies; <code>AjnaVaultAuth</code> role hub (admin two-step transfer, swapper/keeper one-step, 24h timelock on fee changes only).</li>
+<li><code>ERC4626StrategyAdapter</code>&#39;s only approval target is the immutable <code>ERC4626_VAULT</code> — verified safe (exact-amount approvals, reset to 0 on failure).</li>
+<li><strong><code>CharmStrategy4626.setCharmVault</code>/<code>setAjnaPool</code> are owner-settable approval targets</strong> — see Finding 3.</li>
+<li><code>AjnaERC4626Vault</code> fully overrides ERC4626 <code>deposit/mint/withdraw/redeem</code> to be callable only by <code>AUTH.swapper()</code> — end users never interact with it directly; the adapter is effectively the sole shareholder.</li>
+<li>Rescue paths: <code>ERC4626StrategyAdapter.rescueTokens</code> (position shares always blocked; ASSET only to <code>vault</code> while inactive; other tokens to arbitrary <code>to</code>, unrestricted); <code>CharmStrategy4626.ownerEmergencyWithdraw</code>/<code>ownerEmergencyWithdrawFromCharm</code> (destination forced to <code>vault</code>; core tokens blocked while <code>active</code>, though <code>active</code> is owner-flippable immediately before rescuing — a speedbump, not a real barrier, but the vault-only destination lock independently contains the impact of that gap); <code>AjnaVaultAuth.retrieveFees</code> (verified to only ever sweep the Auth contract&#39;s own — normally empty — balance; user principal never sits there, so its NatSpec warning about not sweeping collateral is effectively moot).</li>
+</ul>
+<hr>
+<h2 id="findings">Findings</h2>
+<h3 id="1-both-of-the-systems-total-assets-computations-are-unguarded-si">[1] Both of the system&#39;s &quot;total assets&quot; computations are unguarded, single-block spot reads with no staleness/deviation/TWAP defense — the system-wide root risk</h3>
+<p><strong>Severity</strong>: <span class="pill high">High</span><br><strong>Origin</strong>: <code>[both]</code> — independently found and elevated to full FINDING status by an overwhelming majority of agents across both phases (ethskills: general, oracles ×2, defi-amm, defi-lending, erc4626; pashov: economic-security, first-principles, invariant [with a complete numeric proof], trust-gap, boundary, periphery).<br><strong>Location</strong>: <code>CharmStrategy4626.getTotalAssets()</code>/<code>_getCharmExposure()</code> (lines 467-494, 518-559); <code>AjnaVaultLibrary.lpToAssets()</code> (41-48) consumed by <code>AjnaERC4626Vault.totalAssets()</code> (85-92).</p>
+<p><strong>Description</strong>: Two related but independent gaps feed the same class of downstream harm (mispriced lane-vault shares):</p>
+<ol>
+<li><strong>Charm leg</strong>: <code>_getCharmExposure()</code> splits the strategy&#39;s Charm inventory into ASSET/USDC using a <strong>spot</strong> read of <code>charmVault.getTotalAmounts()</code> — the code&#39;s own comments flag this as an accepted residual (ODA-423-M09). A flash-swap in the underlying Uniswap V3 pool shifts this composition within a block; since the shifted leg is then valued at the (unmoved) external oracle price, <code>getTotalAssets()</code> moves with the composition skew. Critically, the withdraw path is protected (<code>_realizableTotalAssets()</code> uses <code>min(oracle, TWAP)</code>), but the <strong>deposit/mint-side</strong> NAV read is not.</li>
+<li><strong>Ajna leg</strong>: <code>AjnaVaultLibrary.lpToAssets</code> computes bucket value as <code>lpAmount * bucketDeposit / bucketLpTotal</code>, reading both quantities live from <code>pool.bucketInfo()</code> with <strong>zero staleness, deviation, or TWAP guard</strong> — the sole valuation source for bucket positions, feeding directly into <code>AjnaERC4626Vault.convertToAssets()</code>/share price, which the adapter then reports upward as <code>getTotalAssets()</code> to the outer lane vault.</li>
+</ol>
+<p>One pashov agent (invariant specialty) constructed a complete numeric proof of the extraction mechanism for the Ajna leg: with buffer=1000, one bucket at true value 1000, total=2000, supply=2000 shares, an attacker holding 1000 shares who can transiently inflate the bucket&#39;s reported value to 5000 (total→6000) can then <code>withdraw(1000)</code> — burning only 333 shares against the inflated NAV (<code>previewWithdraw</code> divides by the inflated total) while receiving the full 1000 real (buffer) assets. After the inflation reverts, the attacker holds 667 shares worth 400 more than their original stake, extracted directly from remaining holders. <strong>The one load-bearing precondition this proof depends on — whether an Ajna bucket&#39;s <code>bucketDeposit/bucketLpTotal</code> ratio can actually be moved within a single transaction without proportional LP mint/burn — could not be confirmed from these 6 files</strong> (the Ajna pool interface is not vendored in this checkout); one ERC4626-domain agent argued that ordinary permissionless <code>addQuoteToken</code>/<code>removeQuoteToken</code> on the same bucket move deposit and LP proportionally (ratio-neutral), which would mean the obvious &quot;donation&quot; path does not work — but interest accrual and liquidation-driven bucket state changes were not ruled out as alternative levers. Given this, the mechanism is High-confidence and the numeric proof of impact-given-the-precondition is exact, but the precondition itself is a Lead pending confirmation against the deployed Ajna pool.</p>
+<p><strong>Proof of Concept</strong>: See the numeric trace above for the Ajna leg (mechanism proven; triggering precondition unconfirmed). For the Charm leg: attacker flash-swaps the Charm/Uniswap V3 pool to shift ASSET/USDC composition, times a lane-vault deposit or withdrawal around the skewed <code>getTotalAssets()</code> read, then reverts the price — profit is bounded by the composition shift times the price divergence and the attacker&#39;s capital, and requires the out-of-scope lane vault to consult <code>getTotalAssets()</code> without its own independent bound (which the adapter and Charm strategy do not enforce on the deposit side).</p>
+<p><strong>Recommendation</strong>: For the Charm leg, reconstruct the position&#39;s token composition from the TWAP tick and position range (OracleLibrary-style) rather than trusting spot <code>getTotalAmounts()</code>, or bound spot composition against a TWAP-derived expected value and fail closed on deviation. For the Ajna leg, add a per-bucket cached exchange-rate with a per-block/per-window deviation cap (mirroring the adapter&#39;s own <code>_isWithinValuationBounds</code> pattern, which exists but is never applied to this input), and — most importantly — extend whatever guard is built to gate <code>getTotalAssets()</code>/deposits/withdrawals directly, not merely an advisory view.</p>
+<hr>
+<h3 id="2-rebalance-is-vulnerable-to-a-sandwich-attack-the-slippage-guar">[2] <code>rebalance()</code> is vulnerable to a sandwich attack — the slippage guard is measured instantaneously in the same manipulated block and cannot detect the loss</h3>
+<p><strong>Severity</strong>: <span class="pill high">High</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills-defi-amm; independently confirmed by pashov economic-security and flow-gap agents.<br><strong>Location</strong>: <code>CharmStrategy4626.rebalance()</code>, lines 1285-1300.</p>
+<p><strong>Description</strong>: <code>rebalance()</code> (callable by <code>owner()</code> OR the immutable <code>vault</code>) calls <code>charmVault.rebalance()</code>, which burns the Charm/Uniswap-V3 position and re-mints liquidity centered on the pool&#39;s <strong>current spot price</strong>. The only protection is <code>require(totalAfter + maxLoss &gt;= totalBefore)</code> where <code>maxLoss = totalBefore * depositSlippageBps / 10000</code> (5% default, cap 20%) and both values come from <code>getTotalAssets()</code> (Finding 1&#39;s unguarded input). This cannot detect a sandwich: it is measured inside the same block the price was manipulated in, so <code>totalAfter ≈ totalBefore</code> even at an attacker-pushed price — the real loss only materializes after the price reverts and the freshly re-centered position sits off-center. There is no calm-period/TWAP-deviation gate before triggering re-deployment — the same pattern behind the ~$1.2M Beefy CLM incident.</p>
+<p><strong>Proof of Concept</strong>: Attacker observes an owner/vault <code>rebalance()</code> tx in the mempool → front-runs with a flash-swap to push the Charm pool tick far from fair value → <code>rebalance()</code> executes and re-mints centered on the fake tick; the guard passes since both bounds see the manipulated spot → attacker back-runs to revert the price and captures the difference via arbitrage against the now-mispriced position.</p>
+<p><strong>Recommendation</strong>: Before calling <code>charmVault.rebalance()</code>, require the pool&#39;s spot tick to be within a bounded deviation of <code>_getPoolPriceTWAP(twapDuration)</code> (a calm-period check), and reject if the deviation exceeds a small fixed bound.</p>
+<hr>
+<h3 id="3-setcharmvaultsetajnapool-grant-unlimited-token-approval-to-an-">[3] <code>setCharmVault</code>/<code>setAjnaPool</code> grant unlimited token approval to an owner-settable, unvalidated address — bypassing the &quot;outflows to vault only&quot; destination lock</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills-access-control; independently confirmed as a full FINDING by pashov access-control and asymmetry agents.<br><strong>Location</strong>: <code>CharmStrategy4626.setCharmVault()</code> (229-242), <code>setAjnaPool()</code> (274-305).</p>
+<p><strong>Description</strong>: The strategy&#39;s documented design intent (evident from <code>ownerEmergencyWithdraw</code>&#39;s hard-coded <code>to == vault</code> check) is that owner-triggered outflows can only reach the <code>vault</code>. That lock is bypassable: <code>setCharmVault(_charmVault)</code> performs <strong>no validation</strong> on <code>_charmVault</code> before granting <code>ASSET.forceApprove(_charmVault, type(uint256).max)</code> and the same for <code>USDC</code>. The owner can set <code>charmVault</code> to any address they control, which then holds an unlimited allowance and can <code>transferFrom</code> the strategy&#39;s idle ASSET/USDC to any destination — exactly what the vault-only destination lock elsewhere in the same file exists to prevent. <code>setAjnaPool</code> is a second, weaker vector (gated only by a trivially-satisfiable <code>quoteTokenAddress()==ASSET</code>/<code>collateralAddress()==USDC</code> check on the attacker&#39;s own stub contract). By contrast, <code>ERC4626StrategyAdapter</code> has no analogous hole (its only approval target is the immutable <code>ERC4626_VAULT</code>, with exact-amount, reset-on-failure approvals).</p>
+<p><strong>Proof of Concept</strong>: Owner calls <code>setCharmVault(attackerAddr)</code> → grants <code>attackerAddr</code> unlimited ASSET/USDC allowance with zero checks → from <code>attackerAddr</code>, owner calls <code>ASSET.transferFrom(strategy, anywhere, ASSET.balanceOf(strategy))</code> (and the same for USDC) — funds leave to <code>anywhere</code>, never touching <code>vault</code>, fully bypassing <code>ownerEmergencyWithdraw</code>&#39;s destination lock. Additionally, <code>setCharmVault</code> (unlike its sibling <code>setAjnaPool</code>, which refuses to rewire while a position is open) has no open-position guard, so rewiring while the strategy holds Charm LP also silently strands that LP out of NAV and out of the normal redemption path.</p>
+<p><strong>Recommendation</strong>: Do not grant <code>type(uint256).max</code> to mutable, unvalidated addresses — approve exact per-operation amounts and reset to 0 after each op (as the adapter does), and/or restrict <code>charmVault</code>/<code>ajnaPool</code> rewiring to validated, code-bearing addresses behind a timelock, mirroring <code>setAjnaPool</code>&#39;s open-position guard onto <code>setCharmVault</code> as well.</p>
+<hr>
+<h3 id="4-gettotalassets-computes-an-incoherent-nav-when-the-oracle-is-s">[4] <code>getTotalAssets()</code> computes an incoherent NAV when the oracle is stale: it zeroes every USDC-denominated asset leg but still subtracts the full outstanding Ajna debt</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov first-principles agent; independently verified by the orchestrator directly against source.<br><strong>Location</strong>: <code>CharmStrategy4626.getTotalAssets()</code>, lines 467-494; <code>_usdcToAssetValue()</code>, 619-625.</p>
+<p><strong>Description</strong>:</p>
+<pre><code class="language-solidity">usdcInAsset = _usdcToAssetValue(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
+// ... grossAssetValue = idleAsset + charmAsset + usdcInAsset;
+if (ajnaState.debtAsset &gt;= grossAssetValue) return 0;
+</code></pre>
+<p><code>_usdcToAssetValue</code> returns 0 whenever the oracle is not fresh (<code>!fresh</code>). So a stale oracle zeroes <strong>every</strong> USDC-denominated asset leg — idle USDC, the Charm position&#39;s USDC leg, and the USDC pledged as Ajna collateral — while <code>ajnaState.debtAsset</code> (the ASSET-denominated liability against that same collateral) is still subtracted in full. This is not a conservative &quot;fail closed&quot; — it is economically incoherent: it prices the loan but erases the collateral backing it. A healthy, well-over-collateralized position (e.g. 10,000 USDC collateral backing 5,000 ASSET debt at 125%+ ratio) reports NAV of exactly 0 the moment the oracle blips stale, even though nothing about the position&#39;s actual solvency changed. This is the number the outer lane vault reads for share pricing — <code>getTotalAssets()</code> is not itself gated by <code>isValuationReady()</code>.</p>
+<p><strong>Proof of Concept</strong>: Collateral 10,000 USDC backs 5,000 ASSET Ajna debt (healthy, ~125%+ ratio). Fresh oracle: NAV ≈ value(10,000 USDC) − 5,000 ≈ 5,000. Oracle blips stale (<code>isPriceFresh()</code> returns false, even momentarily): NAV = 0 − 5,000 → function returns 0. Share price computed off this number craters to zero for a healthy position, opening a mispricing/DoS window until the oracle recovers.</p>
+<p><strong>Recommendation</strong>: When the oracle is not fresh and Ajna debt is nonzero, fail closed <em>symmetrically</em> — either revert/signal &quot;valuation unavailable&quot; rather than returning a number, or exclude the debt subtraction proportionally to the zeroed collateral, rather than letting one economic side (assets) go stale-to-zero while the other (liabilities) stays at full value.</p>
+<hr>
+<h3 id="5-a-deposit-that-lands-while-isvaluationready-is-false-skips-upd">[5] A deposit that lands while <code>isValuationReady()</code> is false skips updating the harvest baseline, so its principal is later reported as profit</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov flow-gap agent; independently verified by the orchestrator directly against source.<br><strong>Location</strong>: <code>CharmStrategy4626.deposit()</code> (lines 811-814), <code>harvest()</code> (lines 1268-1281).</p>
+<p><strong>Description</strong>:</p>
+<pre><code class="language-solidity">// deposit():
+if (this.isValuationReady()) {
+    lastTotalAssets = getTotalAssets();
+}
+</code></pre>
+<pre><code class="language-solidity">// harvest():
+if (!this.isValuationReady()) { return 0; }
+uint256 currentTotal = getTotalAssets();
+if (currentTotal &gt; lastTotalAssets) { profit = currentTotal - lastTotalAssets; }
+lastTotalAssets = currentTotal;
+</code></pre>
+<p><code>deposit()</code> pulls the deposited <code>amount</code> into the strategy (it enters <code>getTotalAssets()</code> immediately), but only updates the <code>lastTotalAssets</code> baseline <strong>if</strong> <code>isValuationReady()</code> returns true at that moment. If a deposit lands during a window where valuation is not ready (oracle momentarily stale, Ajna debt transiently exceeding <code>ajnaMaxDebt</code>, or collateral ratio transiently below the minimum — any of which <code>isValuationReady()</code> checks), the newly-deposited principal enters <code>getTotalAssets()</code> but is <strong>not</strong> folded into the baseline. The very next <code>harvest()</code> call that runs while valuation is ready then computes <code>profit = currentTotal - lastTotalAssets</code>, and that difference includes the un-baselined deposit — principal is reported as yield.</p>
+<p><strong>Proof of Concept</strong>: t0 (oracle fresh): <code>lastTotalAssets = 1000</code>. t1 (oracle momentarily stale): lane vault deposits 500 ASSET; <code>getTotalAssets()</code> is now 1500, but <code>isValuationReady()</code> returns false so <code>lastTotalAssets</code> stays at 1000. t2 (oracle fresh again): <code>harvest()</code> passes its readiness gate, computes <code>profit = 1500 - 1000 = 500</code> — exactly the deposited principal — and reports it as harvested profit.</p>
+<p><strong>Recommendation</strong>: In <code>deposit()</code>, always advance the baseline by the deposited principal (e.g. <code>lastTotalAssets += amount</code> unconditionally after a successful pull) rather than gating the update on <code>isValuationReady()</code>.</p>
+<hr>
+<h3 id="6-charmwithdrawminss-slippage-floor-is-computed-from-the-same-sp">[6] <code>_charmWithdrawMins</code>&#39;s slippage floor is computed from the same spot composition it is checked against, providing no real protection against composition manipulation</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov periphery agent (retry run).<br><strong>Location</strong>: <code>CharmStrategy4626._charmWithdrawMins()</code> (1363-1374), also inlined in <code>withdraw()</code> (1030-1036).</p>
+<p><strong>Description</strong>: When redeeming Charm LP shares, the strategy computes a &quot;don&#39;t accept less than this&quot; floor as <code>expected = total * shares / totalShares</code> (from <code>charmVault.getTotalAmounts()</code> — a live, spot read) then <code>min = expected * (10000 - depositSlippageBps) / 10000</code>. But <code>charmVault.withdraw()</code> itself returns amounts derived from that <strong>same</strong> spot composition. So if a third party skews the Charm/Uniswap V3 pool&#39;s composition in the same block, both the computed floor and the actual returned amounts shift together — the min-check compares a manipulated value against a floor computed from the same manipulated value, and always passes. This applies to both the standard <code>withdraw()</code> path and, more critically, <code>emergencyWithdraw()</code>/<code>ownerEmergencyWithdrawFromCharm()</code>, neither of which have any independent price reference to fall back on.</p>
+<p><strong>Proof of Concept</strong>: An attacker skews the Charm pool&#39;s underlying Uniswap V3 composition so the position reports (say) 95% of its value in the currently-cheap token. <code>_charmWithdrawMins</code> computes <code>expected0</code>/<code>expected1</code> off that same skewed 95/5 split; <code>charmVault.withdraw()</code> returns exactly that skewed split; the <code>&gt;= min</code> check trivially passes since both sides derive from the identical manipulated read. The strategy realizes the skewed (worse) token composition, with the loss borne by remaining lane-vault holders.</p>
+<p><strong>Recommendation</strong>: Derive <code>min0</code>/<code>min1</code> from a manipulation-resistant source — the same TWAP-priced expected value used in <code>_realizableTotalAssets</code>/<code>_usdcToAssetValueRealizable</code> — rather than from the live <code>getTotalAmounts()</code> split that the withdrawal itself will also return.</p>
+<hr>
+<h3 id="7-charmstrategy4626s-ajna-borrower-position-has-no-health-mainte">[7] <code>CharmStrategy4626</code>&#39;s Ajna borrower position has no health-maintenance or standalone repay/close path</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills defi-lending.<br><strong>Location</strong>: <code>_tryAjnaBorrow()</code> (1113-1175), <code>_repayAjnaDebtWithAsset()</code> (1177-1212); absence of any owner/keeper repay-or-topup entrypoint.</p>
+<p><strong>Description</strong>: As a borrower, the strategy draws ASSET debt against USDC collateral in Ajna, with <code>ajnaMinCollateralRatioBps</code> (125% default) enforced only at draw time against the fresh oracle price. After the draw there is no monitoring or defensive action available — debt accrues interest continuously with zero repayment absent a deposit/emergency-withdraw event, and if ASSET appreciates relative to USDC the position&#39;s ratio degrades toward liquidation with no way for a keeper to proactively repay or top up collateral.</p>
+<p><strong>Proof of Concept</strong>: Enable <code>ajnaBorrowEnabled</code>; a withdrawal borrows ASSET against USDC at 125%; no further deposits occur; ASSET price rises and/or interest accrues; the position falls below Ajna&#39;s liquidation threshold; an Ajna kicker liquidates it, seizing USDC collateral at a penalty, with no code path to have intervened.</p>
+<p><strong>Recommendation</strong>: Add a permissioned <code>repayAjna(uint256)</code>/<code>addAjnaCollateral(uint256)</code> callable by owner/keeper, plus an off-chain-checkable health view.</p>
+<hr>
+<h3 id="8-erc4626strategyadaptergettotalassets-marks-illiquid-target-vau">[8] <code>ERC4626StrategyAdapter.getTotalAssets()</code> marks illiquid target-vault claims at full spot value, while the target&#39;s <code>maxWithdraw</code> is deliberately buffer-only</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills erc4626.<br><strong>Location</strong>: <code>ERC4626StrategyAdapter.getTotalAssets()</code> (186-197); interaction with <code>AjnaERC4626Vault.maxWithdraw()</code> (176-182).</p>
+<p><strong>Description</strong>: The adapter&#39;s <code>getTotalAssets()</code> = <code>idle + ERC4626_VAULT.convertToAssets(sharesHeld)</code>. For the intended Ajna target, <code>convertToAssets</code> reflects full NAV per Finding 1, but the target deliberately caps <code>maxWithdraw</code>/<code>maxRedeem</code> at buffer liquidity only (<code>isPartialWithdrawVault()==true</code>). The adapter never consults this signal and applies no liquidity haircut, so it reports a NAV to the outer lane vault that can materially exceed what it can actually deliver on demand — and <code>_withdrawFrom4626BestEffort</code> silently returns less than requested rather than reverting or surfacing the shortfall.</p>
+<p><strong>Proof of Concept</strong>: Target vault has buffer=100, buckets=900 → <code>convertToAssets(adapterShares)=1000</code>; adapter reports ~1000. A redemption for 500 routes to <code>adapter.withdraw(500)</code>; <code>_withdrawFrom4626BestEffort</code> is capped at <code>maxWithdraw≈100</code> → adapter silently returns <code>withdrawn≈100</code>, shorting the request by ~400 with no revert.</p>
+<p><strong>Recommendation</strong>: When the target reports <code>isPartialWithdrawVault()</code>, value only <code>min(convertToAssets(shares), maxWithdraw)</code> in <code>getTotalAssets()</code>, or have <code>withdraw()</code> revert (not silently short) when it cannot realize the requested amount.</p>
+<hr>
+<h3 id="9-owner-configurable-uniswap-twap-window-down-to-60-seconds-appr">[9] Owner-configurable Uniswap TWAP window down to 60 seconds approaches spot-manipulability</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills oracles.<br><strong>Location</strong>: <code>_getPoolPriceTWAP()</code> (644-671), <code>setTwapDuration()</code> (254-261), <code>MIN_TWAP_DURATION = 60</code>.</p>
+<p><strong>Description</strong>: <code>twapDuration</code> is owner-settable anywhere in <code>[60s, 1 day]</code>. At the 60s floor, a thin ASSET/USDC pool&#39;s TWAP is cheap to move — an attacker holds a displaced price for ~60s and the geometric-mean tick barely averages it out. This TWAP drives swap <code>minOut</code>, the realizable exit cap, and the Ajna auto-bucket-index suggestion, so a manipulated short-window TWAP weakens all three simultaneously.</p>
+<p><strong>Recommendation</strong>: Raise <code>MIN_TWAP_DURATION</code> to at least 1800s (the existing default) — there is no legitimate reason to allow 60s for a valuation/slippage oracle.</p>
+<hr>
+<h3 id="10-setassetoracle-is-instant-and-un-timelocked-an-oracle-rewire-">[10] <code>setAssetOracle</code> is instant and un-timelocked — an oracle rewire produces an un-smoothed NAV jump an unprivileged depositor can back-run</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov trust-gap agent.<br><strong>Location</strong>: <code>CharmStrategy4626.setAssetOracle()</code> (248-252); <code>getTotalAssets()</code>&#39;s oracle-priced USDC leg (467-494, 619-632).</p>
+<p><strong>Description</strong>: <code>AjnaVaultAuth</code> deliberately timelocks <code>toll</code>/<code>tax</code> changes 24h &quot;so rewires cannot front-run flows&quot; — but those fee parameters move NAV by at most ~10%. <code>setAssetOracle</code>, which can move the entire USDC leg of NAV with no bound and no delay, has no equivalent protection. <code>isValuationReady()</code> does not catch this either — it only checks the <em>new</em> oracle&#39;s self-reported freshness, never whether the price <em>source</em> changed; a newly-pointed oracle reporting a fresh-but-different price passes cleanly. Because <code>_realizableTotalAssets()</code> (the <code>min(oracle,TWAP)</code> conservative bound) only applies to the withdraw path, an oracle rewire&#39;s NAV jump on the deposit side is undefended, letting an unprivileged party time a deposit around a (even honest, routine) oracle migration to mint disproportionate shares at existing holders&#39; expense.</p>
+<p><strong>Proof of Concept</strong>: Owner migrates <code>assetOracle</code> from a source reporting ASSET=$1.00 to one reporting ASSET=$0.90. In that block, the USDC leg&#39;s ASSET-denominated value jumps ~11%, producing a discrete, un-smoothed NAV move with no timelock and no drift guard. An attacker (or an MEV searcher watching the mempool for the <code>setAssetOracle</code> tx) deposits immediately after, minting shares against the now-favorable price.</p>
+<p><strong>Recommendation</strong>: Timelock <code>setAssetOracle</code> the same way <code>AjnaVaultAuth</code> timelocks fee changes, and/or route the deposit-side NAV through the same <code>min(oracle, TWAP)</code> conservative bound already used for exits.</p>
+<hr>
+<h3 id="11-ajnaerc4626vaulttotalassetslptoassets-ignores-ajna-bucket-ban">[11] <code>AjnaERC4626Vault.totalAssets()</code>/<code>lpToAssets</code> ignores Ajna bucket bankruptcy and the bucket&#39;s collateral leg, both of which can mis-state recoverable value</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills defi-lending, erc4626; independently corroborated by pashov invariant, first-principles.<br><strong>Location</strong>: <code>AjnaVaultLibrary.lpToAssets()</code> (41-48).</p>
+<p><strong>Description</strong>: In addition to the general lack of any staleness/deviation guard (Finding 1), <code>lpToAssets</code> only accounts for a bucket&#39;s quote-deposit leg (<code>bucketDeposit</code>), discarding two Ajna-specific realities: (a) <strong>bucket bankruptcy</strong> — if a bucket takes bad debt beyond its collateral, Ajna marks it bankrupt and pre-bankruptcy LP becomes worthless, but the vault&#39;s stored <code>bucketLp[index]</code> is never reset or checked against a bankruptcy marker, so a subsequent lender re-seeding that bucket can make the vault&#39;s stale LP appear to claim a share of the <em>new</em> lender&#39;s deposit; (b) <strong>collateral accrued during liquidation</strong> — when a bucket&#39;s quote deposit is partially converted to collateral via a liquidation take, that value is invisible to <code>lpToAssets</code> (which reads only the deposit leg) and the vault has no <code>removeCollateral</code> call anywhere, so any such collateral is both unaccounted-for in NAV and permanently unrecoverable.</p>
+<p><strong>Proof of Concept</strong>: Lead-strength — full exploitability of the bankruptcy-overstatement path depends on Ajna pool internals not vendored in this repo, but the structural gap (no bankruptcy check, no collateral-leg accounting, no <code>removeCollateral</code> path) is confirmed directly from the in-scope code.</p>
+<p><strong>Recommendation</strong>: Read and honor the bucket&#39;s bankruptcy marker (value LP predating it at 0 and untrack); include the bucket&#39;s collateral leg pro-rata in valuation, or add a keeper-callable collateral-recovery path.</p>
+<hr>
+<h3 id="12-withdraw-swaps-the-entire-idle-usdc-balance-instead-of-only-t">[12] <code>withdraw()</code> swaps the entire idle USDC balance instead of only the shortfall, leaking value on every liquidity-constrained exit</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills defi-amm; independently elevated to a full FINDING by pashov execution-trace agent with a concrete numeric example.<br><strong>Location</strong>: <code>CharmStrategy4626.withdraw()</code>, lines 1049-1055.</p>
+<p><strong>Description</strong>: When post-Charm-withdrawal ASSET is still short of the requested <code>amount</code>, the fallback swaps the <strong>entire</strong> idle USDC balance (<code>_swapUsdcToAssetSafe(totalUsdc)</code>), not just the deficit. Any idle USDC beyond what&#39;s needed is force-converted, paying pool fee + up to <code>swapSlippageBps</code> (3% default, cap 20%) on the unnecessary portion — a real, recurring loss borne by remaining shareholders, and it drifts the strategy composition so the next deposit must swap back (paying the spread twice).</p>
+<p><strong>Proof of Concept</strong>: Strategy holds 10,000 USDC idle plus a Charm position; a withdrawal&#39;s deficit after Charm redemption is only 100 USDC-worth of ASSET. The code swaps all 10,000 USDC, paying fee+slippage on the full 10,000 rather than ~100.</p>
+<p><strong>Recommendation</strong>: Compute the USDC required for the deficit via the TWAP, add a slippage buffer, and swap <code>min(that, totalUsdc)</code> instead of the entire balance.</p>
+<hr>
+<h2 id="leads-info-lower-confidence-or-minor-items-not-scored-as-full-fi">Leads / Info (lower-confidence or minor items — not scored as full findings)</h2>
+<ul>
+<li><strong><code>isValuationReady()</code>&#39;s <code>currentAssetsPerShare == 0</code> sentinel conflates &quot;no exposure&quot; with &quot;PPS truncated to 0 by <code>mulDiv</code> despite non-zero shares held.&quot;</strong> With <code>sharesHeld=2e18</code> and <code>convertToAssets</code> returning 1 wei, the guard returns <code>true</code> (bypassing the drift check entirely) exactly when the underlying position has collapsed to near-worthless — the opposite of the intended fail-closed behavior. Gated on the out-of-scope lane vault actually consulting this view. <code>[pashov: numerical-gap]</code></li>
+<li><strong>Ajna pool return values (<code>addQuoteToken</code>/<code>removeQuoteToken</code>/<code>moveQuoteToken</code>) are written directly into <code>bucketLp[]</code> with no independent balance-delta verification</strong>, unlike <code>CharmStrategy4626._tryAjnaBorrow</code>, which measures real before/after deltas for the same class of pool interaction. Multiple agents additionally flagged a possible <strong>unit mismatch</strong>: <code>burnableLp()</code>/<code>move()</code> pass an LP-denominated amount as the first argument to <code>removeQuoteToken</code>/<code>moveQuoteToken</code>, which canonical Ajna documents as a quote-token-denominated <code>maxAmount_</code> — this could cause under/over-sized bucket removals whenever a bucket&#39;s LP:deposit exchange rate isn&#39;t 1:1. <strong>This must be reconciled against the deployed Ajna pool&#39;s actual ABI before relying on this code</strong>, since the interface isn&#39;t vendored in this repo. <code>[ethskills: general, defi-lending; pashov: economic-security, execution-trace, boundary]</code></li>
+<li><strong><code>move()</code> unconditionally tracks its destination bucket (<code>_trackBucket(toIndex)</code>) while its sibling <code>moveFromBuffer</code> gates the identical call on <code>mintedBucketLp &gt; 0</code>.</strong> If a move returns zero destination LP, an empty bucket permanently occupies a <code>MAX_BUCKETS</code> (50) slot with no cleanup path, eventually bricking further bucket moves via <code>MaxBucketsReached</code>. <code>[pashov: boundary]</code></li>
+<li><strong>Best-effort Ajna repay can silently fail on Ajna&#39;s minimum-debt floor</strong>, leaving debt (and, on emergency exit, USDC collateral) stranded with no standalone force-close function. <code>[ethskills: defi-lending]</code></li>
+<li><strong><code>AjnaVaultAuth.minBucketIndex</code> defaults to 0 (disabled)</strong>, permitting deposits into the highest-price/highest-liquidation-risk Ajna buckets out of the box. <code>[ethskills: defi-lending]</code></li>
+<li><strong><code>getTotalAssets()</code> collapses to 0 (rather than degrading gracefully) when the Ajna pool read itself is unreadable</strong> (distinct from Finding 4&#39;s stale-oracle case) — same class of mispricing risk. <code>[ethskills: defi-lending]</code></li>
+<li><strong><code>AjnaERC4626Vault</code>&#39;s <code>max*</code>/<code>preview*</code> views are not wrapped in try/catch around <code>pool.bucketInfo()</code></strong>, so a reverting Ajna pool read cascades into a revert on views EIP-4626 requires to degrade gracefully. <code>[ethskills: erc4626]</code></li>
+<li><strong>Adapter discards the shares returned by the target vault&#39;s <code>deposit()</code></strong> and unconditionally reports <code>deposited = amount</code>; if the target mints 0/dust shares, assets transfer with no proportional claim recorded. <code>[ethskills: erc4626]</code></li>
+<li><strong>Adapter&#39;s withdraw fallback redeems the entire share balance</strong> if <code>previewWithdraw</code> also reverts, over-liquidating the position for what may have been a small request (funds still go to the legitimate vault — a liquidity-management defect, not theft). <code>[ethskills: erc4626]</code></li>
+<li><strong>Direct-transfer donation to <code>AjnaVaultBuffer</code> inflates <code>totalAssets()</code></strong> since buffer balance is read via raw <code>balanceOf</code>; donor cannot retract, so this is NAV-noise/griefing rather than a profit vector on its own. <code>[ethskills: general; pashov: math-precision]</code></li>
+<li><strong>The adapter&#39;s valuation-drift snapshot is refreshed by the same operation it&#39;s meant to guard</strong>, letting a manipulated PPS progressively become the trusted baseline across successive in-band windows; the guard also gates only the advisory <code>isValuationReady()</code> view, never <code>getTotalAssets()</code> or withdrawals. <code>[ethskills: general, oracles; pashov: invariant, trust-gap]</code></li>
+<li><strong><code>harvest()</code>/<code>rebalance()</code>/<code>emergencyWithdraw()</code> lack <code>nonReentrant</code></strong> in one or both strategies; independently traced by 4+ agents across both phases and confirmed <strong>not exploitable</strong> — every state-changing entrypoint is gated to <code>vault</code>/<code>owner</code>, which a substituted external dependency cannot satisfy. Recommended as defense-in-depth only.</li>
+<li><strong><code>_resolveAjnaLimitIndex</code>&#39;s &quot;safety&quot; adjustment moves the Ajna limit index in the <em>permissive</em> direction</strong> (higher index = lower price = more permissive LUP limit) rather than the conservative direction the comment implies; impact bounded by the separate <code>ajnaMinCollateralRatioBps</code> pre-check. <code>[pashov: periphery]</code></li>
+<li><strong><code>_findBestFeeTier</code>&#39;s auto-selection uses spot <code>liquidity()</code></strong>, griefable via JIT liquidity to route swaps through a disadvantageous tier; bounded to griefing since <code>minOut</code> still gates the fill and <code>autoFeeTier</code> is off by default. <code>[ethskills: defi-amm; pashov: periphery]</code></li>
+<li><strong>Hardcoded decimal/scale assumptions</strong> (ASSET=18dec, USDC=6dec, oracle price=1e18) throughout <code>CharmStrategy4626</code>&#39;s USD conversions with no <code>decimals()</code> validation — internally consistent under the intended deployment convention, but silently wrong by orders of magnitude if ever violated; the same 18-decimal assumption may also be missing in <code>AjnaERC4626Vault</code>&#39;s Ajna-WAD conversions (unlike Charm&#39;s explicit <code>USDC_TO_AJNA_WAD</code> handling), an inconsistency worth reconciling. <code>[ethskills: oracles, precision-math; pashov: math-precision, economic-security]</code></li>
+<li><strong>Deposit range-gating (<code>isCharmInRange</code>) uses the same manipulable spot tick that feeds NAV</strong>, allowing griefing (deferred deposits) but not fund loss. <code>[ethskills: defi-amm]</code></li>
+<li><strong>One-step <code>Ownable</code></strong> in both strategies (vs. <code>AjnaVaultAuth</code>&#39;s correct two-step admin transfer) — operator-error risk, not a hijack window. <code>[ethskills: access-control]</code></li>
+<li><strong>Trust-critical dependencies (<code>charmVault</code>, <code>swapPool</code>, <code>assetOracle</code>, <code>ajnaPool</code>, <code>uniFactory</code>) are owner-repointable instantly with no timelock</strong> beyond Finding 10&#39;s oracle case — compounds Finding 3&#39;s severity and independently reduces user reaction time. <code>[ethskills: access-control, general]</code></li>
+<li><strong>Swap <code>deadline=block.timestamp</code> and <code>sqrtPriceLimitX96=0</code></strong> — the sole slippage defense is the TWAP-derived <code>amountOutMinimum</code>, confirmed never bypassable to 0 and hard-capped at 20%; acceptable given that bound, but worth tightening as defense-in-depth. <code>[ethskills: defi-amm; pashov: boundary]</code></li>
+<li><strong><code>maxSwapPercent</code> has no upper bound in <code>setParameters()</code></strong> — values &gt;100 would attempt to swap more than the full ASSET balance; bounded in practice since the swap simply reverts-to-0 on an over-large input. <code>[ethskills: defi-amm]</code></li>
+</ul>
+<h2 id="completeness">Completeness</h2>
+<p>Every unique (Contract, function) flagged by any of the 3 phase-0 + 7 phase-1 + 13 phase-2 sub-agents appears above, either as a numbered finding or in the Leads/Info section. The central Phase-0 open question (whether buffer-only withdrawal vs. full-NAV pricing creates an extraction asymmetry in <code>AjnaERC4626Vault</code>) was resolved analytically: the mechanism is fair by construction <strong>given an honest valuation input</strong> — the entire residual risk is concentrated in Finding 1&#39;s unguarded spot valuations, exactly as the numeric proof under Finding 1 demonstrates.</p>
+<blockquote>
+<p>⚠️ This review was performed by AI auditor agents. AI analysis can never verify the complete absence of vulnerabilities and no guarantee of security is given. Several findings here (1, 2, 6, and the Ajna-units Lead) depend on the exact behavior/interface of the out-of-scope Ajna pool and Charm vault contracts, and on how the out-of-scope lane vault consumes these strategies&#39; <code>getTotalAssets()</code>/<code>isValuationReady()</code> — independent verification against the deployed Ajna/Charm contracts and the lane vault is strongly recommended to fully size the risk before mainnet reliance at scale.</p>
+</blockquote>
+
+  </main>
+
+  <footer class="colophon">
+    <p><strong>Canonical copy:</strong> this is a styled rendering of the immutable report delivered on IPFS —
+       <a href="https://bafkreigivupyilcb2meseopt7kj4sszrqupw67kl5ereq55ldmb5visrty.ipfs.community.bgipfs.com/"><code>https://bafkreigivupyilcb2meseopt7kj4sszrqupw67kl5ereq55ldmb5visrty.ipfs.community.bgipfs.com/</code></a>.
+       If the two ever differ, the IPFS copy is authoritative.</p>
+    <p>Audited by <a href="https://leftclaw.services">LeftClaw Services</a> 🦞 — job
+       <a href="https://leftclaw.services/jobs/466">#466</a> on Base. Rendered 2026-07-22.</p>
+  </footer>
+
+</div>
+</body>
+</html>

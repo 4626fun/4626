@@ -176,15 +176,22 @@ contract LotteryManager4626VrfSponsorshipHardeningTest is Test {
         assertEq(lotteryManager.callbackMaxSponsoredPerOriginPerEpoch(), 10, "default callback origin cap");
     }
 
-    function test_processSwapLottery_revertsWhenMsgValueProvidedInLocalVrfMode() public {
+    function test_processSwapLottery_refundsMsgValueInLocalVrfMode() public {
+        // ODA-461-I34: stray msg.value in local VRF mode is refunded (not a hard revert).
         vm.startPrank(owner);
         lotteryManager.setLocalVRFConsumer(address(localConsumer));
         lotteryManager.setUseLocalVRF(true);
         vm.stopPrank();
 
+        uint256 buyerBalBefore = buyer.balance;
+        vm.deal(authorizedSwap, 1);
         vm.prank(authorizedSwap);
-        vm.expectRevert(LotteryManager4626.InvalidAmount.selector);
-        lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
+        uint256 entryId = lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
+        assertGt(entryId, 0, "local VRF entry should succeed");
+        assertEq(address(lotteryManager).balance, 0, "LM must not retain stray fee");
+        // Refund goes to msg.sender (authorizedSwap), not buyer.
+        assertEq(authorizedSwap.balance, 1, "stray fee refunded to caller");
+        assertEq(buyer.balance, buyerBalBefore, "buyer balance unchanged");
     }
 
     function test_processSwapLottery_revertsWhenCallerFeeUnderpays_butAcceptsOverpayment() public {
@@ -272,4 +279,3 @@ contract LotteryManager4626VrfSponsorshipHardeningTest is Test {
         vm.stopPrank();
     }
 }
-

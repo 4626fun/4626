@@ -23,15 +23,43 @@ interface IChainlinkVRFConsumerLike {
 /// @notice Wraps `VRFConsumer4626` behind the `IRandomnessSource`
 ///         interface. This is the REQUEST-mode side of the new selector.
 ///
-/// @dev    No state of its own — every call passes through to the existing
-///         consumer. That keeps the audited Chainlink path bit-identical to
-///         what's deployed today; this adapter is a pure shape converter.
+/// @dev    REQUEST entry is gated to `requester` (normally RandomnessRouter)
+///         so unauthorized EOAs cannot spam the VRF subscription.
 contract ChainlinkVRFAdapter is IRandomnessSource {
     IChainlinkVRFConsumerLike public immutable consumer;
+    address public owner;
+    address public requester;
 
-    constructor(IChainlinkVRFConsumerLike _consumer) {
+    error UnauthorizedRequester();
+    error Unauthorized();
+    error ZeroAddress();
+
+    event RequesterUpdated(address indexed requester);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    constructor(IChainlinkVRFConsumerLike _consumer, address _owner) {
         require(address(_consumer) != address(0), "zero consumer");
+        require(_owner != address(0), "zero owner");
         consumer = _consumer;
+        owner = _owner;
+        emit OwnershipTransferred(address(0), _owner);
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert Unauthorized();
+        _;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function setRequester(address _requester) external onlyOwner {
+        if (_requester == address(0)) revert ZeroAddress();
+        requester = _requester;
+        emit RequesterUpdated(_requester);
     }
 
     function mode() external pure returns (SourceMode) {
@@ -52,6 +80,7 @@ contract ChainlinkVRFAdapter is IRandomnessSource {
     /// @notice REQUEST-mode entrypoint. Returns the consumer's request id so
     ///         the caller can use it as the lookup key for `randomWord`.
     function request() external returns (uint256 requestId) {
+        if (msg.sender != requester) revert UnauthorizedRequester();
         return consumer.requestRandomWords();
     }
 }

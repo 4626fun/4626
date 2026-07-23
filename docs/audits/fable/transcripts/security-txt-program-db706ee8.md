@@ -125,7 +125,7 @@ I’ll tighten `security.json` now to better match your existing `SECURITY.md` a
 
 Updated—`security.json` is now aligned with your policy/contact surface:
 
-- Uses `email:keepr@4626.fun` (matches `SECURITY.md`)
+- Uses `email:hello@4626.fun` (matches `SECURITY.md`)
 - Keeps project/source metadata
 - Adds `acknowledgements` pointing at `https://4626.fun/.well-known/security.txt`
 

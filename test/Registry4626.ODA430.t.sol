@@ -126,4 +126,87 @@ contract Registry4626ODA430Test is Test {
         assertEq(cfg.eid, 0);
         assertFalse(cfg.isConfigured);
     }
+
+    function test_getEffectiveLzConfig_overlaysLiveMapsWhenConfigured() public {
+        // ODA-465-4: even after setLzConfig, live chainIdToEid / endpoint overlays apply.
+        registry.setLzConfig(
+            1,
+            address(0xE1),
+            101,
+            address(0),
+            address(0),
+            address(0),
+            address(0),
+            address(0),
+            1,
+            false
+        );
+        registry.setChainIdToEid(1, 102);
+        registry.setLayerZeroEndpoint(1, address(0xE2));
+
+        IRegistry4626.LzConfig memory cfg = registry.getEffectiveLzConfig(1);
+        assertEq(cfg.eid, 102);
+        assertEq(cfg.endpoint, address(0xE2));
+        assertTrue(cfg.isConfigured);
+    }
+
+    function test_setCreator_clearsCanonicalWalletAndReverseMap() public {
+        address wallet = address(0xABCD);
+        registry.setCanonicalWallet(TOKEN_A, wallet);
+        assertEq(registry.canonicalWalletToToken(wallet), TOKEN_A);
+
+        registry.setCreator(TOKEN_A, address(0x600D));
+        assertEq(registry.getTokenInfo(TOKEN_A).creator, address(0x600D));
+        assertEq(registry.getTokenInfo(TOKEN_A).canonicalWallet, address(0));
+        assertEq(registry.canonicalWalletToToken(wallet), address(0));
+    }
+
+    function test_ecosystemSetters_rejectZeroAddress() public {
+        vm.expectRevert(Registry4626.ZeroAddress.selector);
+        registry.setLotteryManager(8453, address(0));
+        vm.expectRevert(Registry4626.ZeroAddress.selector);
+        registry.setGaugeController(8453, address(0));
+        vm.expectRevert(Registry4626.ZeroAddress.selector);
+        registry.setGasReserve(8453, address(0));
+    }
+
+    function test_onlyAuthorizedOrOwner_rechecksFactoryCodehashPin() public {
+        address factory = address(new CodehashFactoryProbe());
+        bytes32 pin;
+        assembly {
+            pin := extcodehash(factory)
+        }
+        registry.approveFactoryCodehash(factory, pin);
+        registry.setAuthorizedFactory(factory, true);
+        // Change pin after authorization — call-time check must fail.
+        registry.approveFactoryCodehash(factory, bytes32(uint256(2)));
+
+        vm.prank(factory);
+        vm.expectRevert(
+            abi.encodeWithSelector(Registry4626.FactoryCodehashMismatch.selector, factory, bytes32(uint256(2)), pin)
+        );
+        registry.registerToken(address(0xF00), "F", "F", address(this), address(0), 0);
+    }
+
+    function test_remoteOft_crossNamespaceUniqueness_sameNamespaceOnly() public {
+        address peer = address(0xBEEF);
+        bytes32 peerBytes32 = bytes32(uint256(uint160(peer)));
+
+        registry.setRemoteOFTPeer(TOKEN_A, EID_1, peer);
+        registry.setRemoteOFTPeerBytes32(TOKEN_B, EID_1, peerBytes32);
+        assertEq(registry.getTokenForRemoteOFT(peer), TOKEN_A);
+        assertEq(registry.getTokenForRemoteOFTBytes32(peerBytes32), TOKEN_B);
+
+        // Cross-namespace uniqueness was intentionally dropped for size; only
+        // same-namespace reverse maps must stay unique.
+        address peer2 = address(0xBEEF2);
+        bytes32 peer2Bytes32 = bytes32(uint256(uint160(peer2)));
+        registry.setRemoteOFTPeerBytes32(TOKEN_A, EID_2, peer2Bytes32);
+        registry.setRemoteOFTPeer(TOKEN_B, EID_2, peer2);
+        assertEq(registry.getTokenForRemoteOFTBytes32(peer2Bytes32), TOKEN_A);
+        assertEq(registry.getTokenForRemoteOFT(peer2), TOKEN_B);
+    }
 }
+
+/// @dev Minimal contract so extcodehash is non-zero for factory pin tests.
+contract CodehashFactoryProbe {}

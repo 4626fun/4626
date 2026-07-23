@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LotteryManager4626 — LeftClaw Services</title>
+<meta name="description" content="Smart contract audit report for leftclaw.services job #460">
+<style>
+  :root {
+    --bg: #fffdf9;
+    --bg-soft: #fdf3e8;
+    --bg-softer: #f9e2c8;
+    --ink: #2c1408;
+    --ink-soft: #6b5648;
+    --primary: #c93a1e;
+    --rule: #ecd9c0;
+    --code-bg: #faf2e6;
+    --code-ink: #4a2c14;
+    --pill-critical-bg: #7a1010; --pill-critical-ink: #ffe3e3;
+    --pill-high-bg: #e03030;     --pill-high-ink: #ffffff;
+    --pill-medium-bg: #e8a020;   --pill-medium-ink: #2c1408;
+    --pill-low-bg: #4a90d9;      --pill-low-ink: #ffffff;
+    --pill-info-bg: #d8cbb8;     --pill-info-ink: #2c1408;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1410;
+      --bg-soft: #150e0a;
+      --bg-softer: #2a1c12;
+      --ink: #ffe8d8;
+      --ink-soft: #b89a86;
+      --primary: #e8431f;
+      --rule: #3d2a1c;
+      --code-bg: #150e0a;
+      --code-ink: #f4d9c2;
+      --pill-info-bg: #4a382a; --pill-info-ink: #ffe8d8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .band { height: 6px; background: var(--primary); }
+
+  .page { max-width: 880px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead { padding: 36px 0 24px; border-bottom: 2px solid var(--rule); }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+  }
+  .brand .claw { font-size: 20px; }
+  .brand a { color: inherit; }
+  header.masthead h1.doc-title {
+    margin: 14px 0 4px; font-size: 34px; line-height: 1.2; letter-spacing: -.01em;
+  }
+  .job-sub { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; padding: 5px 12px; border-radius: 999px;
+    background: var(--bg-soft); border: 1px solid var(--rule); color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip b { font-weight: 600; }
+  a.chip:hover { text-decoration: none; border-color: var(--primary); }
+
+  /* ---------- severity strip ---------- */
+  .sev-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+  .sev-card {
+    flex: 1 1 90px; min-width: 90px; text-align: center;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 10px 6px 8px;
+    background: var(--bg-soft);
+  }
+  .sev-card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .sev-card .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+  .sev-card.critical .n { color: var(--pill-critical-bg); }
+  .sev-card.high .n { color: var(--pill-high-bg); }
+  .sev-card.medium .n { color: var(--pill-medium-bg); }
+  .sev-card.low .n { color: var(--pill-low-bg); }
+  .sev-card.info .n { color: var(--ink-soft); }
+  @media (prefers-color-scheme: dark) {
+    .sev-card.critical .n { color: #ff8a8a; }
+  }
+
+  /* ---------- severity pills ---------- */
+  .pill {
+    display: inline-block; font-size: 12px; font-weight: 700; line-height: 1;
+    padding: 4px 10px; border-radius: 999px; letter-spacing: .04em;
+    text-transform: uppercase; vertical-align: baseline;
+  }
+  .pill.critical { background: var(--pill-critical-bg); color: var(--pill-critical-ink); }
+  .pill.high     { background: var(--pill-high-bg);     color: var(--pill-high-ink); }
+  .pill.medium   { background: var(--pill-medium-bg);   color: var(--pill-medium-ink); }
+  .pill.low      { background: var(--pill-low-bg);      color: var(--pill-low-ink); }
+  .pill.info     { background: var(--pill-info-bg);     color: var(--pill-info-ink); }
+
+  /* ---------- table of contents ---------- */
+  nav.toc {
+    margin: 28px 0 8px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 10px;
+  }
+  nav.toc .toc-title {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700; margin-bottom: 8px;
+  }
+  nav.toc .toc-cols { display: flex; gap: 36px; }
+  nav.toc ol { margin: 0; padding-left: 20px; flex: 1 1 0; }
+  nav.toc li { font-size: 14px; margin: 3px 0; }
+  @media (max-width: 640px) { nav.toc .toc-cols { flex-direction: column; gap: 0; } }
+
+  /* ---------- report body ---------- */
+  main.report { padding-top: 8px; }
+  main.report h1 { display: none; } /* masthead already shows the title */
+  main.report h2 {
+    font-size: 24px; line-height: 1.3; margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--rule);
+    letter-spacing: -.01em;
+  }
+  main.report h3 { font-size: 19px; margin: 30px 0 10px; }
+  main.report h4 { font-size: 16px; margin: 24px 0 8px; }
+  main.report p { margin: 12px 0; }
+  main.report li { margin: 5px 0; }
+  main.report hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+  main.report strong { font-weight: 650; }
+  main.report blockquote {
+    margin: 16px 0; padding: 10px 18px; border-left: 4px solid var(--primary);
+    background: var(--bg-soft); border-radius: 0 8px 8px 0; color: var(--ink-soft);
+  }
+
+  main.report code {
+    font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--rule);
+  }
+  main.report pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 16px 0;
+  }
+  main.report pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 10px; }
+  main.report table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  main.report th, main.report td {
+    text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  main.report thead th {
+    background: var(--bg-soft); font-size: 12px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); border-bottom: 2px solid var(--rule);
+  }
+  main.report tbody tr:last-child td { border-bottom: none; }
+  main.report tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+
+  /* ---------- footer ---------- */
+  footer.colophon {
+    margin-top: 64px; padding-top: 20px; border-top: 2px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft);
+  }
+  footer.colophon p { margin: 6px 0; }
+  footer.colophon code { font-size: 12px; word-break: break-all; }
+
+  /* ---------- print ---------- */
+  @media print {
+    :root { --bg: #ffffff; --bg-soft: #f6f6f6; --rule: #dddddd; }
+    .band { display: none; }
+    .page { max-width: none; padding: 0; }
+    nav.toc ol { columns: 2; }
+    main.report pre, main.report .table-wrap { break-inside: avoid; }
+    main.report h2 { break-after: avoid; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="band"></div>
+<div class="page">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="claw">🦞</span>
+      <a href="https://leftclaw.services">LeftClaw Services</a>
+      <span>·</span>
+      <span>Smart Contract Audit</span>
+    </div>
+    <h1 class="doc-title">LotteryManager4626</h1>
+    <p class="job-sub">Job #460 · completed on-chain · report pinned to IPFS</p>
+    <div class="meta-chips">
+      <a class="chip" href="https://leftclaw.services/jobs/460"><b>Job page</b> #460</a>
+      <a class="chip" href="https://bafkreih3qksesfnonape4ixkut233rfhzn5zzgxq5tsyxiivdpeh4tu7vi.ipfs.community.bgipfs.com/"><b>Canonical report</b> IPFS</a>
+      <span class="chip"><b>Generated</b> 2026-07-22</span>
+    </div>
+    <div class="sev-strip">
+      <div class="sev-card critical"><div class="n">1</div><div class="l">Critical</div></div>
+      <div class="sev-card high"><div class="n">1</div><div class="l">High</div></div>
+      <div class="sev-card medium"><div class="n">3</div><div class="l">Medium</div></div>
+      <div class="sev-card low"><div class="n">12</div><div class="l">Low</div></div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <div class="toc-cols">
+    <ol>
+      <li><a href="#reconciliation-summary">Reconciliation summary</a></li>
+      <li><a href="#access-control-inventory-condensed">Access-Control Inventory (condensed)</a></li>
+      <li><a href="#threat-model">Threat Model</a></li>
+      <li><a href="#findings">Findings</a></li>
+    </ol>
+    <ol start="5">
+      <li><a href="#leads">Leads</a></li>
+      <li><a href="#verified-safe-info-checked-no-action-required">Verified-safe / Info (checked, no action required)</a></li>
+      <li><a href="#completeness">Completeness</a></li>
+    </ol>
+    </div>
+  </nav>
+
+  <main class="report">
+<h1>Security Review — LotteryManager4626</h1>
+<p><strong>Audit target</strong>: <code>contracts/shared/lottery/manager/LotteryManager4626.sol</code> (contains two contracts: <code>LotteryManager4626</code> and <code>LotteryManager4626AdminModule</code>, the latter reached via <code>delegatecall</code>) and <code>contracts/shared/lottery/manager/LotteryManager4626PricingLib.sol</code>.</p>
+<p><strong>Source of truth</strong>: <code>github.com/4626fun/4626</code>, tag <code>audit/oda-2026-07-22</code>, commit <code>423e0e3a607884de6e60bccd06f722a8aba770ee</code> (verified via <code>git rev-parse HEAD</code> on the audit clone).</p>
+<p><strong>Job scope note</strong>: The client&#39;s job description for this engagement (&quot;probe only — LotteryManager4626 source pin ...&quot;) named only <code>LotteryManager4626</code>; scope was resolved to <code>LotteryManager4626.sol</code> (which contains both <code>LotteryManager4626</code> and its delegatecall companion <code>LotteryManager4626AdminModule</code> in one file) plus its directly-imported <code>LotteryManager4626PricingLib.sol</code> library (~3,278 LOC total). Other files in the same repo tree (VRF consumer, AMOE router, registry, vault modules, governance, strategies) are out of scope for this job and were not reviewed here.</p>
+<p><strong>Methodology</strong>: Three-phase review — (0) context building: a protocol map, access-control inventory, and threat catalog built by 3 parallel agents with no findings; (1) breadth: 8 domain-specialist agents (general, precision-math, access-control, bridges, oracles, assembly, DoS, ERC20) walking curated checklists; (2) depth: 12 attacker-mindset agents (9 single-specialty + 3 cross-lens gap-hunters), run <strong>blind</strong> to phase-1&#39;s findings, each independently reading the full source and the phase-0 map. All hunting agents ran on <code>opus</code> given the scope size. This reconciliation cross-checks both phases&#39; raw output against each other and against the phase-0 inventory/catalog (coverage gate below).</p>
+<p><strong>Confidence floor</strong>: All findings below Low+ are reported; anything with confidence &lt; 50 or an incomplete exploit chain is listed under <strong>Leads</strong>, not scored as a finding.</p>
+<hr>
+<h2 id="reconciliation-summary">Reconciliation summary</h2>
+<ul>
+<li><strong>Overlap</strong> (found independently by both phases): 5 findings — including the Critical and the High.</li>
+<li><strong>Phase-1-only</strong>: 10 findings (mostly DoS/liveness/config-hygiene items surfaced by the ethskills checklist agents).</li>
+<li><strong>Phase-2-only</strong>: 2 findings — including a Medium (VRF pause/staleness ordering) independently verified by the orchestrator directly against source.</li>
+<li><strong>Re-examined leads</strong>: several phase-2 leads on the same &quot;non-Solana forwarder <code>sourceEventId==0</code> skips replay guard&quot; issue converged with a phase-1 finding and are folded into it (kept, not demoted). A handful of narrower phase-2 leads (cross-lane prize-scope asymmetry in multi-vault mode, pre-arming boost-source instant window, a boost-scale constant mismatch) remain <strong>Leads</strong> — real code smells, but conditional on non-default configuration or additional out-of-scope assumptions, so not promoted to scored findings.</li>
+<li><strong>Coverage</strong>: <code>Entrypoints: ~75 external/public functions across both contracts in the inventory, all examined. Threat-catalog rows: 7, 7 answered. Coverage holes closed this pass: 0</code> (every entrypoint and catalog row was already covered by phase 0/1/2; no fresh re-read was required in this reconciliation pass).</li>
+</ul>
+<p><strong>The single most important result of this audit</strong>: the Critical finding below (<code>adminModuleCall</code> → <code>payoutLocalJackpot</code>) was independently rediscovered, with a full concrete calldata-level proof of concept, by <strong>16 of the 20 total sub-agents run across both phases</strong> (4 of 8 phase-1 domain agents, and all 12 of 12 phase-2 attack agents, the latter entirely blind to each other and to phase 1). This is about as strong a convergence signal as this methodology can produce.</p>
+<hr>
+<h2 id="access-control-inventory-condensed">Access-Control Inventory (condensed)</h2>
+<p>Full entrypoint-by-entrypoint table available on request; the load-bearing structure:</p>
+<ul>
+<li><strong>User-facing, gated</strong>: <code>processSwapLottery</code> (<code>onlyAuthorizedSwapContract</code>), <code>processAmoeEntry</code> (<code>msg.sender == authorizedAmoeRelayer</code>), <code>receiveRandomWords</code> ×2 (sender-pinned to <code>localVRFConsumer</code>/<code>vrfIntegrator</code>), <code>receiveRemoteLotteryEntry</code> (double-gated: hub forwarder allowlist + remote-OFT origin allowlist), <code>_lzReceive</code> (remote-OFT allowlist + LZ peer check), <code>applyDeferredVrf</code>/<code>processDeferredVrfBatch</code> (owner-only).</li>
+<li><strong>Admin surface</strong>: ~35 thin stubs in <code>LotteryManager4626</code> whose body is only <code>_delegateAdmin()</code> (no modifier on the stub itself — the real guard lives in <code>LotteryManager4626AdminModule</code>, reached via <code>delegatecall</code>, where every function is <code>onlyDelegateCall onlyOwner</code> — <strong>except one</strong>, see Finding 1). A second, generic dispatcher <code>adminModuleCall(bytes)</code> forwards <strong>arbitrary caller-supplied calldata</strong> to the same module with <strong>no modifier at all</strong>.</li>
+<li><strong>Roles</strong>: <code>owner</code> (single-step <code>Ownable</code>, root of all administration); <code>authorizedSwapContracts</code>/<code>authorizedAmoeRelayer</code>/<code>localVRFConsumer</code>/<code>vrfIntegrator</code> (bootstrap-instant-while-unset, 2-day timelocked rotation thereafter); <code>boostManager</code>/<code>ve4626GaugeVoting</code> (instant legacy setter until a one-way <code>armBoostSourceTimelock()</code>, then 24h propose→commit, plus an always-available instant kill-switch); <code>authorizedHubShareOftForwarders</code>/<code>authorizedRemoteOFTs</code> (owner-only, no timelock).</li>
+<li><strong>Unguarded state-changing entrypoints reachable by anyone</strong>: <code>receive()</code> (funds the sponsorship balance, benign); and, structurally, every admin stub (all but one revert downstream at the module&#39;s <code>onlyOwner</code> for a non-owner caller — the one exception is Finding 1).</li>
+</ul>
+<h2 id="threat-model">Threat Model</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Reachable entrypoint</th>
+<th>Potential gain</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Arbitrary unprivileged caller</td>
+<td><code>adminModuleCall</code> → module <code>payoutLocalJackpot</code></td>
+<td>Up to 100% of any/every vault&#39;s jackpot reserve, no win required</td>
+<td><strong>Addressed by Finding 1 (Critical)</strong></td>
+</tr>
+<tr>
+<td>Arbitrary unprivileged caller</td>
+<td>Any other admin stub via <code>adminModuleCall</code>/<code>_delegateAdmin</code></td>
+<td>None beyond what <code>onlyOwner</code> already blocks</td>
+<td>Invariant holds — independently re-verified by 5+ phase-2 agents individually diffing every module function&#39;s guard</td>
+</tr>
+<tr>
+<td>Compromised/malicious <code>localVRFConsumer</code> or <code>vrfIntegrator</code></td>
+<td><code>receiveRandomWords</code> (either overload)</td>
+<td>Controls win/loss outcome for existing requests only, cannot fabricate request params</td>
+<td>Invariant holds — sender-pinning + settle-once-before-payout verified</td>
+</tr>
+<tr>
+<td>Malicious/compromised registry-listed vault or gauge</td>
+<td>Hostile return values from registry lookups</td>
+<td>Mis-reported reserve/redirected payout at gauge&#39;s own discretion</td>
+<td>Out of this file&#39;s scope (registry <code>immutable</code>, trusted); per-gauge failure isolated via try/catch</td>
+</tr>
+<tr>
+<td>Owner (trusted, broad by design)</td>
+<td>Non-timelocked config, <code>emergencyWithdraw</code> (<code>whenPaused</code>, recipient pinned to <code>owner()</code>)</td>
+<td>Broad instant control</td>
+<td>By design; centralization noted, not a finding beyond Findings 8/9 (ownership hygiene)</td>
+</tr>
+<tr>
+<td>Malicious/buggy remote OFT or hub forwarder</td>
+<td><code>_lzReceive</code>, <code>receiveRemoteLotteryEntry</code></td>
+<td>Fabricated/duplicate entries</td>
+<td><strong>Addressed by Finding 6</strong> (non-Solana lanes lack the documented non-zero-<code>sourceEventId</code> enforcement)</td>
+</tr>
+<tr>
+<td>Sponsorship-budget griefer</td>
+<td>Repeated low-cost sponsored VRF/callback triggers</td>
+<td>Exhaust epoch budget</td>
+<td>Invariant holds — rate limits verified sound (increment-before-call, symmetric rollback) by 3+ agents across both phases</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="findings">Findings</h2>
+<h3 id="1-unauthenticated-jackpot-drain-adminmodulecall-forwards-arbitra">[1] Unauthenticated jackpot drain: <code>adminModuleCall</code> forwards arbitrary calldata to <code>payoutLocalJackpot</code>, which has no owner/caller gate</h3>
+<p><strong>Severity</strong>: <span class="pill critical">Critical</span><br><strong>Origin</strong>: <code>[both]</code> — found independently by 16/20 agents (ethskills: general, access-control, assembly, bridges; pashov: all 12 of 12).<br><strong>Location</strong>: <code>LotteryManager4626.adminModuleCall(bytes)</code> (<code>LotteryManager4626.sol:1989-1999</code>) → <code>delegatecall</code> → <code>LotteryManager4626AdminModule.payoutLocalJackpot(address,address,uint16)</code> (<code>LotteryManager4626.sol:2461-2473</code>); <code>onlyDelegateCall</code> modifier (<code>LotteryManager4626.sol:2359-2362</code>).</p>
+<p><strong>Description</strong>: <code>adminModuleCall</code> carries no access modifier:</p>
+<pre><code class="language-solidity">function adminModuleCall(bytes calldata data) external {
+    address module = _adminModule;
+    assembly {
+        let size := data.length
+        calldatacopy(0, data.offset, size)
+        let ok := delegatecall(gas(), module, 0, size, 0, 0)
+        returndatacopy(0, 0, returndatasize())
+        if iszero(ok) { revert(0, returndatasize()) }
+        return(0, returndatasize())
+    }
+}
+</code></pre>
+<p>It copies caller-supplied calldata verbatim and <code>delegatecall</code>s the immutable admin module with it — any address can select any module function. The module&#39;s <code>payoutLocalJackpot</code> is guarded only by:</p>
+<pre><code class="language-solidity">modifier onlyDelegateCall() { if (address(this) == _self) revert OnlyDelegateCall(); _; }
+function payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+    external onlyDelegateCall returns (uint256 totalSharesPaid) {
+    if (winner == address(0)) revert ZeroAddress();
+    if (uint256(payoutBps) &gt; BASIS_POINTS) revert InvalidAmount();
+    if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
+    _payoutLock = 1;
+    totalSharesPaid = payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
+    _payoutLock = 0;
+}
+</code></pre>
+<p><code>onlyDelegateCall</code> checks only &quot;did this arrive via delegatecall&quot; — never who the caller is. Every one of the ~35 other module functions carries <code>onlyDelegateCall onlyOwner</code>; <code>payoutLocalJackpot</code> is the sole exception (independently re-verified function-by-function by five separate agents). Under delegatecall the module runs in the main contract&#39;s storage/identity context, so the downstream <code>ITradeFeeCollector4626(gauge).payJackpot(winner, ...)</code> call is seen by the gauge as coming from the manager itself — the authorized payout authority — so it succeeds. In default <code>singleVaultJackpotOnly = true</code> mode, one call pays <code>winner</code> up to 100% (<code>payoutBps ≤ 10000</code>) of the chosen active vault&#39;s <code>availableJackpotReserve()</code>; in multi-vault mode, one call sweeps up to 128 active vaults.</p>
+<p>Additional consequences noted by multiple agents: this path bypasses <strong>both</strong> the protocol&#39;s own reward-percentage cap (<code>lotteryConfig.rewardPercentage</code>, normally ≤69% per the config) <strong>and</strong> its 2-day timelock on changing that cap — the attacker simply supplies <code>payoutBps</code> directly. There is also no <code>whenNotPaused</code> on this path, so the owner&#39;s <code>pause()</code> — the only other incident-response lever, and the gate on the <code>emergencyWithdraw</code> rescue — cannot stop an in-progress drain. Each call also emits the normal win events (<code>LotteryWon</code>, <code>CrossChainJackpotPaid</code>, <code>MultiTokenJackpotWon</code>) and increments the normal stats, so the drain is indistinguishable from a legitimate win in the event/stat stream.</p>
+<p><strong>Proof of Concept</strong> (calldata-level, independently reproduced by 2+ agents):</p>
+<ul>
+<li>Selectors: <code>adminModuleCall(bytes)</code> = <code>0xa847fca8</code>; <code>payoutLocalJackpot(address,address,uint16)</code> = <code>0x8a0bc866</code>.</li>
+<li><code>attacker</code> calls <code>LotteryManager4626.adminModuleCall(abi.encodeWithSelector(0x8a0bc866, triggeringCoin, attacker, uint16(10000)))</code> where <code>triggeringCoin</code> is any active registry token with a funded gauge.</li>
+<li>No value, no VRF request, no swap, no entry, no owner key. <code>onlyDelegateCall</code> passes (call arrived via delegatecall); <code>winner != 0</code> and <code>payoutBps ≤ 10000</code> pass; <code>_payoutLock == 0</code> passes.</li>
+<li><code>payTriggeringVaultJackpot</code> computes <code>rewardShares = availableJackpotReserve() * 10000 / 10000 = availableJackpotReserve()</code> and calls <code>gauge.payJackpot(attacker, rewardShares)</code> — the gauge sees <code>msg.sender == LotteryManager4626</code> (authorized) and transfers the full reserve to <code>attacker</code>.</li>
+<li>Repeatable per active token (single-vault mode) or in one call across up to 128 vaults (multi-vault mode); <code>_payoutLock</code> resets to 0 after each call, so this is repeatable indefinitely as reserves refill.</li>
+</ul>
+<p><strong>Recommendation</strong>: <code>payoutLocalJackpot</code> must never be reachable from the generic raw-calldata-forwarding surface. Two complementary changes:</p>
+<ol>
+<li>Restrict <code>adminModuleCall</code> to <code>onlyOwner</code> (every function it is documented to reach — the ODA-426-F3 queue/execute/cancel/view helpers — is already <code>onlyOwner</code> inside the module; the legitimate payout uses the separate, typed <code>_payoutLocalJackpot()</code> internal delegatecall at L1770, not <code>adminModuleCall</code>, so this closes the hole without breaking any legitimate flow).</li>
+<li>Defense-in-depth: have <code>LotteryManager4626._payoutLocalJackpot()</code> set a transient-storage sentinel immediately before its typed delegatecall (cleared after), and require that sentinel inside <code>payoutLocalJackpot</code>, so the function is only ever executable from the intended <code>_processWin → _payoutLocalJackpot</code> path regardless of how it&#39;s reached. Also consider re-adding <code>whenNotPaused</code> and enforcing <code>payoutBps &lt;= lotteryConfig.rewardPercentage</code> at the module level as additional layers.</li>
+</ol>
+<hr>
+<h3 id="2-return00-in-the-remote-entry-replay-guard-bypasses-the-nonreen">[2] <code>return(0,0)</code> in the remote-entry replay guard bypasses the <code>nonReentrant</code> epilogue — permanent DoS of the entire contract</h3>
+<p><strong>Severity</strong>: <span class="pill high">High</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills-assembly agent and pashov execution-trace agent, found independently and blind to each other; independently re-verified by the orchestrator directly against source.<br><strong>Location</strong>: <code>_handleLotteryEntry()</code> (<code>LotteryManager4626.sol:1290-1299</code>, specifically the <code>if sload(sourceEventKey) { return(0, 0) }</code> at line 1297), reached from <code>receiveRemoteLotteryEntry()</code> (<code>LotteryManager4626.sol:972</code>, <code>external nonReentrant</code>).</p>
+<p><strong>Description</strong>: The replay-dedup block is raw inline assembly:</p>
+<pre><code class="language-solidity">if (sourceEventId != bytes32(0)) {
+    assembly {
+        mstore(0, sourceEventId)
+        mstore(32, _processedRemoteLotterySourceEvents.slot)
+        sourceEventKey := keccak256(0, 64)
+        if sload(sourceEventKey) { return(0, 0) }   // raw EVM RETURN
+    }
+}
+</code></pre>
+<p>Inline-assembly <code>return(0,0)</code> executes the actual EVM <code>RETURN</code> opcode, halting the <strong>entire current external call frame</strong> — not a Solidity-level <code>return</code> from the internal function. <code>_handleLotteryEntry</code> is called internally from <code>receiveRemoteLotteryEntry</code>, which is <code>nonReentrant</code>. OpenZeppelin&#39;s guard sets <code>_status = ENTERED</code> on entry and resets it to <code>NOT_ENTERED</code> only in the modifier&#39;s epilogue, which runs <em>after</em> the function body returns normally. The raw <code>return(0,0)</code> skips that epilogue entirely, so <code>_status</code> is left permanently stuck at <code>ENTERED</code>. Every <code>nonReentrant</code>-guarded function then reverts forever: <code>processSwapLottery</code>, <code>processAmoeEntry</code>, both <code>receiveRandomWords</code> overloads, <code>applyDeferredVrf</code>, <code>processDeferredVrfBatch</code>, and <code>receiveRemoteLotteryEntry</code> itself — the entire user-facing and VRF-settlement surface is permanently bricked, with no recovery path (nothing else resets <code>_status</code>).</p>
+<p>The trigger is exactly the scenario the guard exists to handle: a <code>sourceEventId</code> that has already been marked consumed (line 1352) arriving a second time — i.e. <strong>LayerZero message redelivery</strong>, which the code&#39;s own comments explicitly anticipate (&quot;Solana exactly-once: consume the V3 digest ... Prevents LZ redelivery from requesting VRF later&quot;). Message redelivery is normal, expected behavior in LZ-based systems (retryable payloads, executor retries), not a privileged or exotic precondition.</p>
+<p><strong>Proof of Concept</strong>:</p>
+<ol>
+<li>A remote V3 entry with <code>sourceEventId = X</code> is processed normally through <code>receiveRemoteLotteryEntry</code> (via the authorized hub forwarder + authorized remote-OFT origin); line 1352 sets <code>_processedRemoteLotterySourceEvents[X] = 1</code>; the call completes normally and <code>nonReentrant</code> resets <code>_status</code> cleanly.</li>
+<li>The same underlying message is redelivered — a normal LZ occurrence — and <code>receiveRemoteLotteryEntry</code> is called again with the same parameters.</li>
+<li><code>nonReentrant</code> sets <code>_status = ENTERED</code>; <code>_handleLotteryEntry</code> finds <code>sload(sourceEventKey) == 1</code> → <code>return(0,0)</code> halts the entire call frame immediately, <strong>skipping</strong> the <code>nonReentrant</code> epilogue.</li>
+<li><code>_status</code> is now permanently <code>ENTERED</code>. Every subsequent call to any <code>nonReentrant</code> function reverts with <code>ReentrancyGuardReentrantCall</code> forever. (The owner can still <code>pause()</code>/<code>emergencyWithdraw()</code> sponsorship-held native since those are not <code>nonReentrant</code>, so ETH is not trapped — but the lottery&#39;s entire user/VRF surface is dead permanently.)</li>
+</ol>
+<p><strong>Recommendation</strong>: Never use assembly <code>return</code>/<code>revert</code>/<code>stop</code> inside a function invoked (directly or transitively) under a Solidity modifier. Compute <code>sourceEventKey</code> in assembly, then perform the early-exit check and <code>return;</code> in plain Solidity so the <code>nonReentrant</code> epilogue always runs.</p>
+<hr>
+<h3 id="3-oracle-deviation-circuit-breaker-self-disables-on-inactivity-o">[3] Oracle deviation circuit-breaker self-disables on inactivity, on first entry, and can be defeated by ratcheting within the window</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills (oracles, precision-math) and pashov (periphery, economic-security, numerical-gap), converged from 5 agents; the numerical-gap agent additionally produced a concrete ratchet-math proof.<br><strong>Location</strong>: <code>LotteryManager4626PricingLib.calculateTokenUSD()</code> (<code>LotteryManager4626PricingLib.sol:87-99</code>); reference-update sites <code>LotteryManager4626.sol:708-711</code>, <code>LotteryManager4626.sol:1356-1360</code>.</p>
+<p><strong>Description</strong>: The deviation guard — the only defense against an anomalous/extreme oracle print, since there is no absolute price floor/ceiling beyond <code>&gt;0</code> — runs only while <code>block.timestamp - lastAcceptedPriceTimestamp[token] &lt;= oracleDeviationWindow</code> (default 30 min), and <code>lastAcceptedPriceTimestamp</code> is updated only when an entry is actually created. Two distinct bypasses were confirmed:</p>
+<ul>
+<li><strong>Window-elapsed bypass</strong>: for any lane that hasn&#39;t produced an accepted entry within the window (a quiet token, or simply waiting out 30 minutes), the deviation check is skipped entirely and <strong>any</strong> <code>priceUSD &gt; 0</code> is accepted unconditionally and installed as the new reference. Same for a token&#39;s first-ever entry (<code>lastPrice == 0</code>).</li>
+<li><strong>Ratchet bypass</strong> (numerical-gap agent, concrete): with entries spaced <em>inside</em> the window and each step moving the price by exactly the deviation cap (e.g. 20% at <code>oracleMaxDeviationBps=2000</code>), every individual step passes the <code>&gt; 2000 bps</code> check, so the reference can drift arbitrarily far (e.g. 6.19× after 10 steps of +20%) while the &quot;circuit breaker&quot; reads as continuously active. The guard bounds <em>per-step</em> deviation, not cumulative drift.</li>
+</ul>
+<p>Since <code>swapValueUSD</code> drives <code>winChancePPM</code> (capped at <code>baseCeilingPPM</code>/<code>maxWinChance</code>), an attacker able to move or catch an extreme/drifted oracle print can push a swap&#39;s measured USD value up, saturating win-chance for a trivial real notional. Payout amount itself is decoupled from USD value (<code>rewardShares</code> derives only from <code>payoutBps</code>/gauge reserve, per Finding 1&#39;s mechanism and separately confirmed by the precision-math agent), so this is a probability/entry-integrity issue, not a direct payout-inflation bug — bounded by the win-chance cap but repeatable.</p>
+<p><strong>Proof of Concept</strong> (Lead-strength — requires influence over or an organic extreme reading from the out-of-scope <code>IOracle4626</code> feed): wait ≥30 min since token T&#39;s last accepted entry (or use a never-entered token); submit a trivial swap while T&#39;s oracle reports an inflated price; <code>calculateTokenUSD</code> takes no deviation branch and returns the inflated value; win-chance saturates toward the ceiling; the inflated price becomes the new stored reference. Alternatively, for an active lane, ratchet the price up in ≤20%-per-entry steps to drift the reference over multiple transactions without ever tripping the guard.</p>
+<p><strong>Recommendation</strong>: Key the deviation window off the oracle&#39;s own update timestamp (or an admin heartbeat), not lottery activity; don&#39;t skip the check on a token&#39;s first entry; add absolute per-token min/max price bounds independent of the window; bound cumulative drift over a rolling period, not just per-step deviation.</p>
+<hr>
+<h3 id="4-vrf-result-staleness-check-runs-before-the-pause-deferral-chec">[4] VRF result staleness check runs before the pause-deferral check, permanently losing a legitimate win if a callback arrives late during a pause</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov flow-gap agent; independently verified by the orchestrator directly against source.<br><strong>Location</strong>: <code>_processVRFResult()</code>, <code>LotteryManager4626.sol:1000-1024</code>.</p>
+<p><strong>Description</strong>:</p>
+<pre><code class="language-solidity">function _processVRFResult(uint256 requestId, uint256[] memory randomWords) internal {
+    if (randomWords.length == 0) return;
+    VRFRequest memory request = vrfRequests[requestId];
+    if (request.user == address(0)) return;
+
+    if (vrfResultGracePeriod &gt; 0 &amp;&amp; block.timestamp &gt; request.requestTimestamp + vrfResultGracePeriod) {
+        delete vrfRequests[requestId];
+        emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
+        return;
+    }
+
+    if (paused() &amp;&amp; !_settlingDeferredVrf) {
+        if (!hasPendingRandomWord[requestId]) {
+            pendingRandomWord[requestId] = randomWords[0];
+            hasPendingRandomWord[requestId] = true;
+            _pushDeferredVrf(requestId);
+            emit VrfResultDeferred(requestId, randomWords[0]);
+        }
+        return;
+    }
+    ...
+</code></pre>
+<p>The staleness-discard branch (line 1007) is evaluated <strong>before</strong> the pause-deferral branch (line 1016). The deferred-VRF queue&#39;s whole purpose is &quot;no win is ever lost across a pause,&quot; and its flush path (<code>_settleDeferredVrfAt</code>) deliberately refreshes <code>requestTimestamp</code> to the current time specifically so an <em>already-queued</em> result isn&#39;t later discarded as stale. But that refresh only helps results that already reached the queue. A result whose <strong>first arrival</strong> happens while the contract is paused, at a point where <code>block.timestamp</code> already exceeds the <em>original</em> entry&#39;s <code>requestTimestamp + vrfResultGracePeriod</code> (default 30 minutes), is deleted and discarded before the pause branch is ever reached — it never enters the deferred queue and can never be recovered by any later flush.</p>
+<p><strong>Proof of Concept</strong>: Entry created at T=0 (<code>requestTimestamp=0</code>). Owner pauses at T=10min (a legitimate incident-response action). VRF provider&#39;s callback arrives at T=35min while still paused. <code>35min &gt; 0 + 30min</code> (default grace period) → the staleness branch fires first: <code>delete vrfRequests[requestId]</code>, <code>StaleVRFResultDiscarded</code> emitted, function returns successfully (no revert, so the VRF provider does not know to retry). The pause-deferral branch is never reached. If that draw was a win, it is permanently lost with no path to settlement or compensation.</p>
+<p><strong>Recommendation</strong>: Evaluate the pause-deferral branch before the staleness-discard branch (or skip the staleness check entirely whenever <code>paused() &amp;&amp; !_settlingDeferredVrf</code>), so any result arriving during a pause is always queued and gets its staleness clock refreshed on flush, regardless of how long it&#39;s been since the original entry.</p>
+<hr>
+<h3 id="5-multi-vault-jackpot-payout-loop-runs-up-to-640-external-calls-">[5] Multi-vault jackpot payout loop runs up to ~640 external calls / 128 token transfers synchronously inside the VRF-settlement callback</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-dos agent.<br><strong>Location</strong>: <code>payoutLocalJackpotInner()</code> (<code>LotteryManager4626.sol:2529-2669</code>, loop at 2580-2647), reached via <code>receiveRandomWords</code> → <code>_processVRFResult</code> → <code>_processWin</code> → <code>_payoutLocalJackpot</code> (delegatecall bubbles revert, lines 1785-1789).</p>
+<p><strong>Description</strong>: In multi-vault mode (<code>singleVaultJackpotOnly=false</code>), a winning VRF settlement iterates up to <code>MAX_JACKPOT_PAYOUT_ITERATIONS</code> (128) active registry tokens — each doing 5 external calls (<code>isTokenActive</code>, <code>getVaultForToken</code>, <code>getGaugeControllerForToken</code>, <code>availableJackpotReserve</code>, <code>payJackpot</code>) — plus up to <code>MAX_JACKPOT_PAYOUT_SLOT_SCANS</code> (1024) slot scans, all synchronously inside the VRF callback. Per-gauge failures are try/caught, but nothing bounds the <em>aggregate</em> gas of the loop. If the VRF coordinator forwards a bounded gas stipend below the loop&#39;s worst-case cost, the callback can run out of gas; since the delegatecall bubbles that failure up through <code>receiveRandomWords</code>, settlement reverts, and a retried callback re-runs the same too-heavy loop. Once <code>vrfResultGracePeriod</code> (default 30 min) elapses on the un-settled request, it is discarded as stale (Finding 4&#39;s mechanism) with no payout — a permanent loss of that specific win. A registry needing ≥128 active vaults for the worst case to bite is a realistic long-run condition given the registry is append-only.</p>
+<p><strong>Proof of Concept</strong>: Not independently exploitable by an unprivileged actor to steal funds — requires (a) owner-enabled multi-vault mode, (b) a large active registry, and (c) the out-of-scope VRF coordinator&#39;s gas-forwarding limit being below the loop&#39;s cost. Reported at Medium on the in-file, verified half: gas cost scales unboundedly up to 128 vaults on a callback hot path with no aggregate gas guard.</p>
+<p><strong>Recommendation</strong>: Do not perform multi-vault payout synchronously inside the VRF callback — separate &quot;mark win&quot; from &quot;pay out&quot; (a pull-style claim, or a bounded owner-triggered flush), or materially lower the active cap. At minimum, wrap the outer <code>_payoutLocalJackpot</code> delegatecall in a try/catch inside <code>_processWin</code> so an OOG/heavy payout cannot revert-and-strand the win settlement itself.</p>
+<hr>
+<h3 id="6-non-solana-forwarder-lanes-dont-enforce-the-documented-non-zer">[6] Non-Solana forwarder lanes don&#39;t enforce the documented non-zero <code>sourceEventId</code> replay invariant (and the replay key isn&#39;t namespaced by source chain)</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills-bridges agent (both sub-issues), strongly corroborated by 5 pashov agents (asymmetry, first-principles, boundary, invariant, flow-gap) independently flagging the same code path as a Lead, blind to phase 1 and to each other.<br><strong>Location</strong>: <code>receiveRemoteLotteryEntry()</code> (<code>LotteryManager4626.sol:972-992</code>); <code>_handleLotteryEntry()</code> (<code>LotteryManager4626.sol:1290-1299</code>, <code>1351-1353</code>).</p>
+<p><strong>Description</strong>: Code comments state the manager requires &quot;a V3 non-zero <code>sourceEventId</code> replay key for every forwarder lane (parity with Solana),&quot; but enforcement (<code>if (srcEid == SOLANA_LZ_EID &amp;&amp; sourceEventId == bytes32(0)) return;</code>, line 1290) only applies to Solana. Any other forwarder lane&#39;s 224-byte payload with <code>sourceEventId == 0</code> skips the entire replay-key block — no manager-level dedup is recorded, and (per the flow-gap agent) if VRF dispatch subsequently fails for a transient reason, the code still treats the opportunity as &quot;processed&quot; with no replay key ever written, so a legitimately-failed entry cannot be safely retried by redelivery either. Separately, even where a <code>sourceEventId</code> is present, the replay key is derived from the id alone (not mixed with <code>srcEid</code>), so two different source chains coincidentally reusing the same id value would collide in the shared consumed-set.</p>
+<p>Both issues depend on trust-boundary conditions already named in the phase-0 threat catalog (a misbehaving/buggy authorized hub forwarder, or two lanes sharing an id-generation scheme) rather than being triggerable by a fully unprivileged party — hence Low, despite the multi-agent convergence.</p>
+<p><strong>Proof of Concept</strong>: Requires a misbehaving trusted forwarder (Low, not directly attacker-triggerable). Forwarder <code>F</code> calls <code>receiveRemoteLotteryEntry</code> twice with a valid 224-byte, <code>sourceEventId==0</code> payload for a non-Solana <code>srcEid</code> — both calls create a full entry/VRF request with no on-chain guard preventing the duplicate.</p>
+<p><strong>Recommendation</strong>: Enforce non-zero <code>sourceEventId</code> for all forwarder lanes, not just Solana, and namespace the replay key by origin: <code>keccak256(abi.encode(srcEid, originSender, sourceEventId))</code>.</p>
+<hr>
+<h3 id="7-hardcoded-1e18-implicit-18-decimal-assumption-in-usd-conversio">[7] Hardcoded <code>1e18</code> / implicit 18-decimal assumption in USD conversion</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[both]</code> — ethskills precision-math agent; independently found by pashov math-precision and periphery agents.<br><strong>Location</strong>: <code>LotteryManager4626PricingLib.calculateTokenUSD()</code>, lines 83, 105, 111.</p>
+<p><strong>Description</strong>: <code>usd1e18 = FullMath.mulDiv(amount, priceUSD1e18, 1e18)</code> then <code>/1e12</code> is only dimensionally correct when the valued token has exactly 18 decimals and the oracle returns a 1e18-scaled USD price — neither is verified (<code>decimals()</code> is never queried on the token or the oracle). Today <code>tokenIn</code> always resolves to an 18-decimal ShareOFT, so the assumption currently holds; it silently breaks the moment a non-18-decimal lane token or a differently-scaled oracle is registered — a 6-decimal token would compute <code>usd1e6 = 0</code> (permanently blocking that lane&#39;s entries below <code>minSwapAmount</code>), while a 24-decimal token would inflate valuations by ~10^6× (pinning win-chance to the ceiling for dust swaps).</p>
+<p><strong>Proof of Concept</strong>: Not exploitable against the current registry; contingent on future token/oracle registration outside these two files.</p>
+<p><strong>Recommendation</strong>: Query and normalize by <code>IERC20Metadata(tokenIn).decimals()</code> and the oracle&#39;s declared scale before the <code>mulDiv</code>, or enforce/document an 18-decimal-only invariant at registration time.</p>
+<hr>
+<h3 id="8-single-step-ownable-no-two-step-ownership-transfer">[8] Single-step <code>Ownable</code> (no two-step ownership transfer)</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-access-control agent.<br><strong>Location</strong>: <code>LotteryManager4626</code> / <code>LotteryManager4626AdminModule</code>, both inherit OZ <code>Ownable</code> (single-step).</p>
+<p><strong>Description</strong>: <code>owner</code> is the root of the entire admin/timelock surface. <code>transferOwnership</code> is single-step with no accept handshake — a mistaken address hands over (or permanently bricks) all administration in one irreversible call.</p>
+<p><strong>Recommendation</strong>: Use <code>Ownable2Step</code>.</p>
+<hr>
+<h3 id="9-unguarded-renounceownership-can-permanently-freeze-settlement">[9] Unguarded <code>renounceOwnership</code> can permanently freeze settlement</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-access-control agent.<br><strong>Location</strong>: inherited <code>Ownable.renounceOwnership()</code>, not overridden.</p>
+<p><strong>Description</strong>: Owner is required for <code>unpause()</code>, all timelock execute/cancel paths, <code>applyDeferredVrf</code>/<code>processDeferredVrfBatch</code> (the only way to flush deferred VRF results after a pause), and <code>disableBoostSources()</code>. An accidental or malicious renounce leaves the contract permanently unable to unpause or flush deferred wins if it is ever paused thereafter.</p>
+<p><strong>Recommendation</strong>: Override <code>renounceOwnership()</code> to revert, or restrict it to a state with no pending timelocks/deferred queue/pause.</p>
+<hr>
+<h3 id="10-winners-jackpot-is-permanently-forfeited-if-the-payout-token-">[10] Winner&#39;s jackpot is permanently forfeited if the payout token is paused/blacklisted at settlement (no re-claim)</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-erc20 agent.<br><strong>Location</strong>: <code>_processVRFResult()</code> line 1026 (settle-once delete) + <code>payTriggeringVaultJackpot()</code>/<code>payoutLocalJackpotInner()</code> try/catch around <code>payJackpot</code> (lines 2516-2526, 2634-2645).</p>
+<p><strong>Description</strong>: The VRF request is deleted (settle-once) independent of whether the subsequent <code>payJackpot</code> succeeds; a reverting transfer (e.g. winner blacklisted, or the ShareOFT paused, at the moment of settlement) is caught and only emits <code>JackpotPayoutFailed</code> — there is no escrow/re-claim path, so a legitimately-won prize is permanently lost with no recovery.</p>
+<p><strong>Proof of Concept</strong>: Lead-strength — settlement timing is VRF-driven, not attacker-controlled, and requires the deployed ShareOFT to have pause/blacklist mechanics (not confirmed from these two files).</p>
+<p><strong>Recommendation</strong>: On a caught payout failure, record the owed prize into a claimable-escrow mapping and expose a retry/claim entrypoint, rather than silently discarding it.</p>
+<hr>
+<h3 id="11-on-fifo-shift-makes-deferred-vrf-batch-drain-on">[11] O(n) FIFO shift makes deferred-VRF batch drain O(n²)</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-dos agent.<br><strong>Location</strong>: <code>_popDeferredVrfHead()</code>, <code>LotteryManager4626.sol:935-945</code>, consumed by <code>processDeferredVrfBatch()</code>/<code>applyDeferredVrf()</code>.</p>
+<p><strong>Description</strong>: Popping the queue head shifts every remaining element left by one storage slot; draining a near-full (128-item) queue in one <code>processDeferredVrfBatch(16)</code> call does ~16×120 element-move operations on top of 16 settlements — an O(n²) pattern where a ring buffer would be O(1). Not attacker-triggerable (owner-only function); worst case is a very expensive owner tx, not fund loss, and the owner can always fall back to smaller batches.</p>
+<p><strong>Recommendation</strong>: Replace the shift-on-pop array with a <code>mapping(uint256=&gt;uint256)</code> ring buffer plus head/tail indices.</p>
+<hr>
+<h3 id="12-deferred-vrf-queue-full-reverts-inbound-vrf-callback-while-pa">[12] Deferred-VRF queue-full reverts inbound VRF callback while paused</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-dos agent.<br><strong>Location</strong>: <code>_pushDeferredVrf()</code>, <code>LotteryManager4626.sol:930-933</code> (<code>revert DeferredVrfQueueFull</code>), called from <code>_processVRFResult()</code> under the paused-deferral branch.</p>
+<p><strong>Description</strong>: Once the deferred FIFO reaches <code>MAX_DEFERRED_VRF_QUEUE</code> (128) while paused, the next arriving VRF result&#39;s callback reverts uncaught. Whether the result is permanently lost or safely retried depends on the out-of-scope VRF coordinator&#39;s redelivery semantics.</p>
+<p><strong>Recommendation</strong>: Catch the full-queue condition in the paused branch and degrade gracefully (event + drop-oldest, or a soft-cap) rather than reverting the callback transaction.</p>
+<hr>
+<h3 id="13-registrybalanceof-calls-un-trycaught-on-the-hot-entry-paths">[13] Registry/<code>balanceOf</code> calls un-try/caught on the hot entry paths</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-dos and ethskills-erc20 agents (same issue, different angles).<br><strong>Location</strong>: <code>processSwapLottery()</code> lines 669/678 (<code>getTokenForShareOFT</code>, <code>isTokenActive</code>); <code>_handleLotteryEntry()</code> lines 1307/1309; <code>_coverageShareBalance()</code> line 1708 (<code>balanceOf</code>, unguarded, unlike the payout-path registry calls which are all try/caught).</p>
+<p><strong>Description</strong>: Unlike the payout path (every registry call try/caught), the swap and LZ-inbound entry paths call the immutable, trusted registry and a registered ShareOFT&#39;s <code>balanceOf</code> directly. A revert (e.g. a misbehaving/paused registered token) reverts the whole entry, and on the <code>_lzReceive</code> path this could stall that LZ lane&#39;s inbound nonce. Not attacker-triggerable since the registry/tokens involved are trusted/immutable, but a latent robustness gap vs. the defensive posture used elsewhere in the same file.</p>
+<p><strong>Recommendation</strong>: Wrap these hot-path calls in try/catch (default to &quot;no entry&quot;/&quot;no coverage boost&quot; on revert) for parity with the payout path and LZ-lane liveness.</p>
+<hr>
+<h3 id="14-global-oraclemaxstaleness-applied-uniformly-to-heterogeneous-">[14] Global <code>oracleMaxStaleness</code> applied uniformly to heterogeneous per-lane oracles</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-oracles agent.<br><strong>Location</strong>: <code>oracleMaxStaleness</code> (single protocol-wide var, line 214) consumed in <code>calculateTokenUSD</code>.</p>
+<p><strong>Description</strong>: One global staleness threshold (default 2h) is checked against every lane&#39;s oracle regardless of that oracle&#39;s actual update cadence, and the oracle&#39;s own freshness signal (used by a sibling consumer contract) is not consulted here.</p>
+<p><strong>Recommendation</strong>: Store staleness per token/oracle, or additionally consult the oracle&#39;s own freshness signal.</p>
+<hr>
+<h3 id="15-no-absolute-oracle-price-bounds-beyond-0">[15] No absolute oracle price bounds beyond <code>&gt;0</code></h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-oracles agent.<br><strong>Location</strong>: <code>calculateTokenUSD()</code>, line 83.</p>
+<p><strong>Description</strong>: The only price validation is strictly-positive; there is no <code>minAnswer</code>/<code>maxAnswer</code>-style absolute band independent of the (bypassable, see Finding 3) deviation window.</p>
+<p><strong>Recommendation</strong>: Add per-token absolute min/max price bounds as a circuit breaker independent of the deviation-window logic.</p>
+<hr>
+<h3 id="16-no-l2-sequencer-uptime-check-base-deployment">[16] No L2 sequencer-uptime check (Base deployment)</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills-oracles agent.<br><strong>Location</strong>: <code>calculateTokenUSD()</code> staleness block; no sequencer-feed check anywhere in scope.</p>
+<p><strong>Description</strong>: Deployed as a Base (OP-stack) hub with no Chainlink-style L2 sequencer-uptime feed/grace-period check; a sequencer restart could present a stale-but-&quot;fresh-enough&quot; price within the 2h staleness window. Impact is bounded (affects win-chance/odds, not collateral seizure).</p>
+<p><strong>Recommendation</strong>: Add a sequencer-uptime check with grace period, or explicitly document the accepted tolerance given the non-liquidation impact.</p>
+<hr>
+<h3 id="17-asymmetric-native-fee-refund-when-the-quoted-vrf-fee-is-exact">[17] Asymmetric native-fee refund when the quoted VRF fee is exactly zero and the caller-funded request reverts</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov execution-trace agent.<br><strong>Location</strong>: <code>_requestCrossChainVRFWithSource()</code>, <code>LotteryManager4626.sol:1501-1522</code>.</p>
+<p><strong>Description</strong>: In the inner <code>catch</code>, refund of caller-attached funds is gated on <code>useCallerFunds &amp;&amp; nativeFee &gt; 0</code>. If <code>quoteFee()</code> returns <code>nativeFee == 0</code> while the caller attached ETH (<code>useCallerFunds == true</code>), and the subsequent <code>requestRandomWordsPayable{value:0}</code> call reverts, neither the <code>useCallerFunds &amp;&amp; nativeFee&gt;0</code> branch nor the <code>else if (nativeFee&gt;0)</code> branch executes, so the caller&#39;s attached native is never refunded and stays trapped in the contract. The success path correctly refunds for the same <code>nativeFee==0</code> case; only this failure path leaks.</p>
+<p><strong>Proof of Concept</strong>: Requires a zero-fee integrator quote coinciding with a request-call revert — a narrow, provider-dependent edge condition not independently reproduced end-to-end in this review.</p>
+<p><strong>Recommendation</strong>: Refund <code>callerFeeValue</code> unconditionally in this catch branch whenever <code>useCallerFunds</code> is true, regardless of the quoted <code>nativeFee</code> value.</p>
+<hr>
+<h2 id="leads">Leads</h2>
+<p><em>Concrete code smells where the full exploit path could not be completed, or which depend on non-default configuration or out-of-scope assumptions. Not scored; flagged for manual follow-up.</em></p>
+<ul>
+<li><strong>Cross-lane prize-scope asymmetry in multi-vault mode</strong> — <code>LotteryManager4626AdminModule.payoutLocalJackpotInner</code> — when the owner sets <code>singleVaultJackpotOnly=false</code>, a single winning entry on one (possibly the cheapest/lowest-notional) lane pays the winner a percentage of <strong>every</strong> active vault&#39;s reserve, while win-chance was priced solely off that one lane&#39;s swap value. A buyer could systematically farm win-chance on the cheapest lane while each win skims unrelated high-value lanes&#39; jackpots. Gated behind an owner-controlled, non-default toggle; treat as a product/design question for the client rather than a code defect. <code>[pashov: trust-gap]</code></li>
+<li><strong>Boost-source pre-arming instant-set window</strong> — <code>LotteryManager4626AdminModule.setBoostManager</code>/<code>setve4626GaugeVoting</code> — before <code>armBoostSourceTimelock()</code> is called, these setters take effect instantly with no delay, so a compromised owner key could briefly point <code>boostManager</code>/<code>ve4626GaugeVoting</code> at a hostile contract that grants a chosen buyer maximal boost. The code already ships the mitigation (one-way arming + an always-available <code>disableBoostSources()</code> kill switch); this lead simply notes the pre-arming window has no on-chain safeguard beyond the owner key itself. <code>[pashov: trust-gap]</code></li>
+<li><strong><code>_scaleGaugeBoostBySwapSize</code> saturation constant decoupled from configurable <code>minSwapAmount</code></strong> — the boost ramp&#39;s &quot;distance above minSwap for full boost&quot; is a hardcoded <code>$9,999</code>, while <code>minSwapAmount</code> is owner-configurable up to <code>$1,000,000</code>. Raising <code>minSwapAmount</code> desynchronizes the intended saturation point from the actual floor; verified this can only ever <em>reduce</em> a user&#39;s boost (never inflate it), so no attacker-favorable direction was found, but it&#39;s a latent config-hygiene gap. <code>[pashov: numerical-gap]</code></li>
+<li><strong>Orphaned deferred VRF word from a duplicate callback during a pause</strong> — <code>_processVRFResult</code>/<code>_settleDeferredVrfAt</code> — if the same request ID&#39;s callback is delivered twice while paused, the second delivery&#39;s staleness check can fire against the un-refreshed original timestamp and delete the request struct while the already-enqueued pending word is left orphaned; on flush, the zeroed struct causes a silent no-op rather than a settlement. Reachability depends on whether the pinned VRF providers can ever redeliver the same request ID/sequence — not confirmed from these files. <code>[pashov: flow-gap]</code></li>
+<li><strong>Transient VRF-dispatch failure permanently burns a remote entry&#39;s replay key</strong> — <code>_handleLotteryEntry</code> — remote entries always pass <code>callerFeeValue=0</code>, so cross-chain VRF dispatch depends entirely on sponsorship; if sponsorship is unavailable or the integrator call transiently reverts, <code>entryId==0</code> but the <code>sourceEventId</code> replay key is still marked consumed (&quot;including sponsorship/VRF skips&quot; per the code&#39;s own comment), so a legitimate retry via LZ redelivery is rejected as a duplicate — converting a recoverable failure into a permanently lost entry for a buyer who already paid the cross-chain fee. <code>[pashov: flow-gap]</code></li>
+<li><strong>Missing <code>LotteryEntryCreated</code> emission on the paid-swap path</strong> — <code>processSwapLottery</code> never emits <code>LotteryEntryCreated</code>, unlike the AMOE and remote-entry paths which both do. Off-chain indexers relying on this event silently miss every hub paid-swap entry. Cosmetic/informational, no fund impact. <code>[pashov: asymmetry]</code></li>
+</ul>
+<h2 id="verified-safe-info-checked-no-action-required">Verified-safe / Info (checked, no action required)</h2>
+<ul>
+<li><strong>Delegatecall storage-layout parity</strong> between <code>LotteryManager4626</code> and <code>LotteryManager4626AdminModule</code> was checked slot-by-slot by multiple agents across both phases and found consistent: both <code>_adminModule</code> and <code>_self</code> are <code>immutable</code> (no storage slot), and all appended fields declare in matching relative order across both contracts. Recommend a CI storage-layout diff (<code>forge inspect ... storage-layout</code>) to guard against future drift, but no current mismatch.</li>
+<li>Sponsorship budget/rate-limit accounting (<code>_consumeSponsorship</code>/<code>_refreshSponsorshipEpoch</code>/<code>_rollbackSponsoredSpend</code>) was independently verified sound (symmetric increment/rollback across every failure branch) by 3+ agents across both phases.</li>
+<li>Multi-vault jackpot payout cursor arithmetic tiles the append-only registry contiguously with no gaps/skips/reuse across calls — verified by 3+ agents.</li>
+<li><code>totalSupply()</code>-based boost input is theoretically flash-mint-manipulable but only in a non-attacker-favorable direction (larger supply reduces boost) — <code>[ethskills: erc20]</code>.</li>
+<li>Fee-on-transfer/rebasing assumptions in coverage-balance and reward-accounting math are conservative-only (under-credit boost, never over-credit) — <code>[ethskills: erc20]</code>.</li>
+<li>Winner-callback gas limit is not validated against the remote handler&#39;s actual cost, but this is a best-effort UX notification only; the hub-side payout is authoritative and unaffected by a dropped callback — <code>[ethskills: bridges]</code>.</li>
+</ul>
+<hr>
+<h2 id="completeness">Completeness</h2>
+<p>Every unique (Contract, function) raised by any of the 20 sub-agents across both phases appears above, either as a numbered finding or in the Leads/Info sections. <code>Entrypoints: ~75 in inventory, all examined. Threat-catalog rows: 7, 7 answered. Coverage holes closed this pass: 0.</code></p>
+<blockquote>
+<p>⚠️ This review was performed by AI auditor agents. AI analysis can never verify the complete absence of vulnerabilities and no guarantee of security is given. Independent human review, a public bug bounty, and on-chain monitoring are strongly recommended before or alongside mainnet deployment at scale — particularly given Finding 1&#39;s severity.</p>
+</blockquote>
+
+  </main>
+
+  <footer class="colophon">
+    <p><strong>Canonical copy:</strong> this is a styled rendering of the immutable report delivered on IPFS —
+       <a href="https://bafkreih3qksesfnonape4ixkut233rfhzn5zzgxq5tsyxiivdpeh4tu7vi.ipfs.community.bgipfs.com/"><code>https://bafkreih3qksesfnonape4ixkut233rfhzn5zzgxq5tsyxiivdpeh4tu7vi.ipfs.community.bgipfs.com/</code></a>.
+       If the two ever differ, the IPFS copy is authoritative.</p>
+    <p>Audited by <a href="https://leftclaw.services">LeftClaw Services</a> 🦞 — job
+       <a href="https://leftclaw.services/jobs/460">#460</a> on Base. Rendered 2026-07-22.</p>
+  </footer>
+
+</div>
+</body>
+</html>

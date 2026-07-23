@@ -14,7 +14,8 @@ pragma solidity ^0.8.20;
  *      - `receiveFees` accounting: Creator credits the observed balance delta;
  *        Agent credits the requested `amount`.
  *      - `setLotteryManager`: both lanes — first set is immediate; later
- *        updates are 1-day timelocked via `executeLotteryManagerUpdate()`.
+ *        non-zero updates are 1-day timelocked via `executeLotteryManagerUpdate()`;
+ *        address(0) revokes immediately and cancels any pending update.
  *      - WETH fee path fails closed when the oracle is unavailable (no
  *        unit-mismatched raw-input fallback).
  */

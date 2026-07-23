@@ -73,7 +73,7 @@ contract DeployRandomnessRouter is Script {
 
         vm.startBroadcast(privateKey);
 
-        adapter = new ChainlinkVRFAdapter(IChainlinkVRFConsumerLike(chainlinkConsumer));
+        adapter = new ChainlinkVRFAdapter(IChainlinkVRFConsumerLike(chainlinkConsumer), owner);
         console.log("ChainlinkVRFAdapter:", address(adapter));
 
         // -------------------------------------------------------------

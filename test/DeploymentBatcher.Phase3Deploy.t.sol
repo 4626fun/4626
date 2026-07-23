@@ -61,6 +61,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
         ajnaFactory = new MockAjnaPoolFactoryForPhase3(makeAddr("ajnaPool"));
 
         vault = new MockVaultStrategyManagerForPhase3(address(this));
+        vault.setAsset(creatorToken);
         charmStrategy = new MockCharmStrategyForPhase3();
         ajnaAuth = new MockAjnaVaultAuthForPhase3();
         ajnaVault = makeAddr("ajnaVault");
@@ -182,12 +183,21 @@ contract DeploymentBatcherPhase3DeployTest is Test {
         assertEq(charmStrategy.ajnaPool(), makeAddr("ajnaPool"), "charm ajna pool mismatch");
         assertEq(charmStrategy.assetOracle(), assetOracle, "charm creator oracle mismatch");
         assertEq(charmStrategy.ajnaMinCollateralRatioBps(), 12_500, "charm min collateral ratio mismatch");
+        assertEq(charmStrategy.ajnaMaxDebt(), 100_000 ether, "charm ajna max debt must be finite");
+        assertEq(charmStrategy.ajnaMaxBorrowPerWithdraw(), 10_000 ether, "charm ajna per-withdraw borrow must be finite");
         assertEq(ajnaStrategy.lastOwner(), protocolTreasury, "ajna adapter ownership not transferred");
         assertEq(ajnaStrategy.idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
-        assertEq(ajnaAuth.admin(), protocolAutomation, "ajna auth admin should transfer to automation Safe");
+        assertTrue(ajnaAuth.tollArmed(), "toll must be armed at deploy");
+        assertTrue(ajnaAuth.taxArmed(), "tax must be armed at deploy");
+        assertEq(ajnaAuth.toll(), 0, "toll armed at zero");
+        assertEq(ajnaAuth.tax(), 0, "tax armed at zero");
+        assertEq(ajnaAuth.pendingAdmin(), protocolAutomation, "ajna auth pending admin should be automation Safe");
+        vm.prank(protocolAutomation);
+        ajnaAuth.acceptAdmin();
+        assertEq(ajnaAuth.admin(), protocolAutomation, "ajna auth admin should transfer to automation Safe after accept");
     }
 
     function test_deployPhase3Strategies_callsCharmFactoryWithExpectedManagerFeePips() public {

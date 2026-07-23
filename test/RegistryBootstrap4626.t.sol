@@ -274,6 +274,42 @@ contract RegistryBootstrap4626Test is Test {
         bootstrap.bootstrapToken(p);
     }
 
+    function test_BootstrapToken_OmnichainMesh_SkipsForeignOverwrite() public {
+        RegistryBootstrap4626.BootstrapParams memory p = _baseParams();
+        p.setOmnichainMesh = true;
+        p.omnichainMesh = IRegistry4626.OmnichainVaultMeshConfig({
+            solanaEid: 30168,
+            hubComposer: makeAddr("hubComposer"),
+            assetMeshToken: makeAddr("assetMeshToken"),
+            shareMeshToken: makeAddr("shareMeshToken"),
+            solanaAssetMint: bytes32(uint256(0xABCD)),
+            enabled: true
+        });
+
+        vm.prank(bootstrapOwner);
+        bootstrap.bootstrapToken(p);
+
+        RegistryBootstrap4626.BootstrapParams memory overwrite = _baseParams();
+        overwrite.setOmnichainMesh = true;
+        overwrite.omnichainMesh = IRegistry4626.OmnichainVaultMeshConfig({
+            solanaEid: 30168,
+            hubComposer: makeAddr("otherHubComposer"),
+            assetMeshToken: makeAddr("otherAssetMeshToken"),
+            shareMeshToken: makeAddr("otherShareMeshToken"),
+            solanaAssetMint: bytes32(uint256(0xDCBA)),
+            enabled: true
+        });
+
+        vm.prank(bootstrapOwner);
+        bootstrap.bootstrapToken(overwrite);
+
+        IRegistry4626.OmnichainVaultMeshConfig memory stored = registry.getOmnichainVaultMesh(token);
+        assertEq(stored.hubComposer, p.omnichainMesh.hubComposer);
+        assertEq(stored.assetMeshToken, p.omnichainMesh.assetMeshToken);
+        assertEq(stored.shareMeshToken, p.omnichainMesh.shareMeshToken);
+        assertEq(stored.solanaAssetMint, p.omnichainMesh.solanaAssetMint);
+    }
+
     function test_BootstrapToken_SetsSolanaShareOFTPeer() public {
         RegistryBootstrap4626.BootstrapParams memory p = _baseParams();
         p.setSolanaShareOFTPeer = true;

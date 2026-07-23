@@ -1,0 +1,18 @@
+{
+  "jobId": 468,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit 4626 ve4626 governance + bribes. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3), paths under contracts/. Do NOT use github.com/wenakita/CreatorVault. Private wenakita/4626 is out of scope. Files: contracts/shared/governance/ve4626.sol, ve4626GaugeVoting.sol, ve4626BoostManager.sol, ve4626Utility.sol, bribes/BribeDepot4626.sol. Focus lock/unlock, voting power, bribe claim/rollover, Curve-style boost math abuse.\n\nContext: Fetch https://github.com/4626fun/4626/tree/audit/oda-2026-07-22/contracts/shared/governance and audit ONLY the listed ve/bribe files.",
+  "createdAt": "2026-07-22T09:11:25.000Z",
+  "startedAt": "2026-07-22T11:00:55.000Z",
+  "completedAt": "2026-07-22T11:39:11.000Z",
+  "report": "https://bafkreia3hbdlzupry7k7mnresq4gmlqp77i5sxhgniws2fzr42f55ktsya.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreia3hbdlzupry7k7mnresq4gmlqp77i5sxhgniws2fzr42f55ktsya.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/468.html",
+  "trackUrl": "https://onedollaraudit.com/audit/468",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

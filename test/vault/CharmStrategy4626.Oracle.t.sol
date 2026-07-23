@@ -627,24 +627,17 @@ contract CharmStrategy4626OracleTest is Test {
         assertFalse(strategy.isValuationReady(), "unsafe Ajna collateralization must disable valuation readiness");
     }
 
-    function test_setTwapDuration_bounds() external {
+    function test_minTwapDuration_matchesFrozenDefault() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
         MockCharmVault charm = new MockCharmVault(address(usdc), address(creator));
         CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
-        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.InvalidTwapDuration.selector, 59));
-        strategy.setTwapDuration(59);
-
-        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.InvalidTwapDuration.selector, uint32(1 days + 1)));
-        strategy.setTwapDuration(uint32(1 days + 1));
-
-        strategy.setTwapDuration(3600);
-        assertEq(strategy.twapDuration(), 3600);
+        assertEq(uint256(strategy.MIN_TWAP_DURATION()), 1800);
     }
 
-    function test_withdraw_reverts_whenSwapFailsAndNoAjnaBorrow() external {
+    function test_withdraw_returnsPartial_whenSwapFailsAndNoAjnaBorrow() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
@@ -665,13 +658,12 @@ contract CharmStrategy4626OracleTest is Test {
         creator.mint(address(charm), 50e18);
         usdc.mint(address(charm), 5_000_000e6);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
-        );
-        strategy.withdraw(100e18);
+        uint256 withdrawn = strategy.withdraw(100e18);
+        assertEq(withdrawn, 20e18, "partial CREATOR should return so OVault can continue to Ajna");
+        assertEq(creator.balanceOf(address(this)), 20e18);
     }
 
-    function test_withdraw_reverts_whenTwapUnavailableAndNoAjnaBorrow() external {
+    function test_withdraw_returnsPartial_whenTwapUnavailableAndNoAjnaBorrow() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
@@ -691,10 +683,8 @@ contract CharmStrategy4626OracleTest is Test {
         creator.mint(address(charm), 50e18);
         usdc.mint(address(charm), 5_000_000e6);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 15e18)
-        );
-        strategy.withdraw(100e18);
+        uint256 withdrawn = strategy.withdraw(100e18);
+        assertEq(withdrawn, 15e18, "partial CREATOR should return when swap path is unavailable");
         assertFalse(router.called(), "router should not be called when TWAP is unavailable");
     }
 
@@ -714,6 +704,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
+        oracle.setAjnaBucketFromV3Twap(6_000, false);
         strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
@@ -770,10 +761,43 @@ contract CharmStrategy4626OracleTest is Test {
 
         uint256 withdrawn = strategy.withdraw(100e18);
         assertEq(withdrawn, 100e18, "Ajna borrow should satisfy full withdraw");
-        assertEq(ajna.lastDrawLimitIndex(), 6_050, "auto-limit should use oracle bucket plus ratio safety steps");
+        assertEq(ajna.lastDrawLimitIndex(), 5_950, "borrow auto-limit should step below the oracle bucket");
     }
 
-    function test_withdraw_ajnaBorrow_autoLimitIndex_fallsBackToMaxWhenOracleBucketUnavailable() external {
+    function test_withdraw_ajnaBorrow_autoLimitIndex_saturatesAtZero() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        pool.setTwapTick(5000);
+        MockRouter router = new MockRouter();
+        router.setShouldRevert(true);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true);
+        oracle.setAjnaBucketFromV3Twap(10, false);
+        strategy.setAssetOracle(address(oracle));
+        strategy.setAjnaPool(address(ajna));
+        strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
+        strategy.initializeApprovals();
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 1_000_000e6);
+        charm.setWithdrawAmounts(20e18, 2_000_000e6);
+
+        creator.mint(address(charm), 100e18);
+        creator.mint(address(ajna), 1_000_000e18);
+        usdc.mint(address(charm), 5_000_000e6);
+
+        strategy.withdraw(100e18);
+        assertEq(ajna.lastDrawLimitIndex(), 0, "borrow auto-limit should saturate at zero");
+    }
+
+    function test_withdraw_ajnaBorrow_abortsWhenOracleBucketUnavailable() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
@@ -803,8 +827,10 @@ contract CharmStrategy4626OracleTest is Test {
         usdc.mint(address(charm), 5_000_000e6);
 
         uint256 withdrawn = strategy.withdraw(100e18);
-        assertEq(withdrawn, 100e18, "Ajna borrow should still satisfy withdraw");
-        assertEq(ajna.lastDrawLimitIndex(), 7_388, "auto-limit should fail-safe to max Ajna index");
+        assertEq(withdrawn, 20e18, "borrow must fail closed; return partial Charm CREATOR");
+        (uint256 debt,,) = ajna.borrowerInfo(address(strategy));
+        assertEq(debt, 0, "no Ajna debt when borrow pricing is unavailable");
+        assertEq(ajna.lastDrawLimitIndex(), 0, "drawDebt must not run when oracle bucket unavailable");
     }
 
     function test_withdraw_swapFallback_usesTwapQuote_notSpot_forMinOut() external {
@@ -856,6 +882,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
+        oracle.setAjnaBucketFromV3Twap(6_000, false);
         strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         // Cap Ajna borrow so swap fallback must cover the residual.
@@ -928,6 +955,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
+        oracle.setAjnaBucketFromV3Twap(6_000, false);
         strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
@@ -1093,7 +1121,7 @@ contract CharmStrategy4626OracleTest is Test {
         strategy.setAjnaPool(address(0));
     }
 
-    function test_withdraw_reverts_whenAjnaAndSwapUnavailable() external {
+    function test_withdraw_returnsPartial_whenAjnaAndSwapUnavailable() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
@@ -1119,10 +1147,8 @@ contract CharmStrategy4626OracleTest is Test {
         creator.mint(address(charm), 50e18);
         usdc.mint(address(charm), 5_000_000e6);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
-        );
-        strategy.withdraw(100e18);
+        uint256 withdrawn = strategy.withdraw(100e18);
+        assertEq(withdrawn, 20e18, "partial CREATOR should return when Ajna and swap both fail");
     }
 
     function test_deposit_bootstrap_noTwap_defersWithoutUsdcLeg() external {
@@ -1317,5 +1343,47 @@ contract CharmStrategy4626OracleTest is Test {
         assertEq(charm.lastWithdrawAmount1Min(), 0);
     }
 
-}
+    function test_setCharmVault_revertsWhenOldSharesOutstanding() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
+        charm.setBalance(address(strategy), 1e18);
+        MockCharmVault nextCharm = new MockCharmVault(address(creator), address(usdc));
+        vm.expectRevert(
+            abi.encodeWithSelector(CharmStrategy4626.CharmSharesOutstanding.selector, address(charm), 1e18)
+        );
+        strategy.setCharmVault(address(nextCharm));
+    }
+
+    function test_emergencyWithdraw_unwindsAjnaWhenCharmUnset() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockRouter router = new MockRouter();
+        CharmStrategy4626 strategy = new CharmStrategy4626(
+            address(this), address(creator), address(usdc), address(router), address(0), address(pool), address(this)
+        );
+        MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true);
+        strategy.setAssetOracle(address(oracle));
+        strategy.setAjnaPool(address(ajna));
+        strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
+        strategy.initializeApprovals();
+
+        ajna.seedPosition(address(strategy), 10e18, 20e6);
+        usdc.mint(address(ajna), 20e6);
+        creator.mint(address(strategy), 10e18);
+
+        uint256 withdrawn = strategy.emergencyWithdraw();
+        assertEq(withdrawn, 0, "repay consumes idle CREATOR; no residual ASSET to vault");
+        (uint256 debt, uint256 collateralWad,) = ajna.borrowerInfo(address(strategy));
+        assertEq(debt, 0, "Ajna debt should be repaid even when Charm unset");
+        assertEq(collateralWad, 0, "collateral should be released on repay");
+        assertEq(usdc.balanceOf(address(this)), 20e6, "released USDC should forward to vault");
+    }
+
+}

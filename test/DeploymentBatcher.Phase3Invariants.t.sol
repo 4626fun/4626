@@ -105,6 +105,7 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
         MockAjnaPoolFactoryForPhase3 ajnaFactory = new MockAjnaPoolFactoryForPhase3(makeAddr("ajnaPool"));
 
         vault = new MockVaultStrategyManagerForPhase3(address(this));
+        vault.setAsset(makeAddr("creatorToken"));
         MockCharmStrategyForPhase3 charmStrategy = new MockCharmStrategyForPhase3();
         MockAjnaVaultAuthForPhase3 ajnaAuth = new MockAjnaVaultAuthForPhase3();
         MockAjnaAdapterForPhase3 ajnaStrategy = new MockAjnaAdapterForPhase3();

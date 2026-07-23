@@ -101,4 +101,13 @@ contract OVaultLPManagerNativeEthTest is Test {
         vm.expectRevert(OVaultLPManager.PoolNotConfigured.selector);
         manager.seedRebalance();
     }
+
+    function test_seedRebalance_revertsWhenTwapOracleUnset() public {
+        _configureNativePool();
+        manager.setManager(address(this), true);
+        manager.setParameters(400000, 120, 60, 1 hours, 10, 100, 900);
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.expectRevert(OVaultLPManager.TwapOracleNotSet.selector);
+        manager.seedRebalance();
+    }
 }

@@ -40,7 +40,29 @@ interface IAjnaERC4626StrategyFactory {
     ) external returns (address strategy, address innerVault, address auth);
 }
 
+contract CharmStrategy4626Deployer {
+    function deploy(
+        address creatorVault,
+        address underlyingToken,
+        address quoteToken,
+        address uniswapRouter,
+        address charmVault,
+        address v3Pool,
+        address owner
+    ) external returns (address) {
+        return address(
+            new CharmStrategy4626(creatorVault, underlyingToken, quoteToken, uniswapRouter, charmVault, v3Pool, owner)
+        );
+    }
+}
+
 contract CharmStrategy4626Factory is ICharmStrategy4626Factory {
+    CharmStrategy4626Deployer public immutable deployer;
+
+    constructor() {
+        deployer = new CharmStrategy4626Deployer();
+    }
+
     function deployAndInitialize(
         address creatorVault,
         address underlyingToken,
@@ -50,11 +72,7 @@ contract CharmStrategy4626Factory is ICharmStrategy4626Factory {
         address v3Pool,
         address owner
     ) external returns (address strategy) {
-        strategy = address(
-            new CharmStrategy4626(
-                creatorVault, underlyingToken, quoteToken, uniswapRouter, charmVault, v3Pool, owner
-            )
-        );
+        strategy = deployer.deploy(creatorVault, underlyingToken, quoteToken, uniswapRouter, charmVault, v3Pool, owner);
         CharmStrategy4626(strategy).initializeApprovals();
     }
 }
@@ -128,8 +146,11 @@ contract AjnaERC4626StrategyFactory is IAjnaERC4626StrategyFactory {
         adapter.setIdleBufferBps(0);
         // FIX: F-28 — set swapper to adapter BEFORE transferring admin, since only admin can setSwapper
         authContract.setSwapper(address(adapter));
+        // Arm toll/tax at zero so later fee changes require the 24h timelock.
+        authContract.setToll(0);
+        authContract.setTax(0);
         adapter.transferOwnership(owner);
-        // FIX: F-04 compatibility — use two-step admin transfer
+        // FIX: F-04 compatibility — use two-step admin transfer (owner must acceptAdmin).
         authContract.transferAdmin(owner);
 
         auth = address(authContract);

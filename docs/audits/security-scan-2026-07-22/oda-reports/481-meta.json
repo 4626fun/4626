@@ -1,0 +1,18 @@
+{
+  "jobId": 481,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit 4626 CreatorShareOFT + Wrapper. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3), paths under contracts/. Do NOT use github.com/wenakita/CreatorVault. Private wenakita/4626 is out of scope. Files: contracts/creator/vault/CreatorShareOFT.sol, CreatorOVaultWrapper.sol. Focus mint authority, vault-backing, LZ credit, fee flush, lottery coverage snapshots.\n\nContext: Fetch https://raw.githubusercontent.com/4626fun/4626/audit/oda-2026-07-22/contracts/creator/vault/CreatorShareOFT.sol and CreatorOVaultWrapper.sol. Reject CreatorVault. RESUBMIT of stuck job 463 (accepted ~20h, no report). Same public pin.",
+  "createdAt": "2026-07-23T05:41:15.000Z",
+  "startedAt": "2026-07-23T08:19:31.000Z",
+  "completedAt": "2026-07-23T08:49:45.000Z",
+  "report": "https://bafkreigcd47idasunabebnb33ytptdpv7jx4jbxcgfujb4krtcmd55i4yy.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreigcd47idasunabebnb33ytptdpv7jx4jbxcgfujb4krtcmd55i4yy.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/481.html",
+  "trackUrl": "https://onedollaraudit.com/audit/481",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

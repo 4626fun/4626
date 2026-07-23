@@ -211,7 +211,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.deployPhase2Core(params, codeIds);
     }
 
-    function test_deployPhase2CoreWithRolePolicy_appliesPerCallPolicyOverride() public {
+    function test_deployPhase2CoreWithRolePolicy_rejectsPerCallPolicyOverride() public {
         rolePolicyManager.setRolePolicy(
             9,
             VaultRolePolicyManager.RolePolicy({
@@ -250,7 +250,9 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         });
 
         vm.prank(ownerContract);
-        vm.expectRevert(abi.encodeWithSelector(VaultRolePolicyManager.OwnerMustBeEoa.selector, ownerContract));
+        vm.expectRevert(
+            abi.encodeWithSelector(DeploymentBatcher.RolePolicyOverrideRejected.selector, uint256(9), uint256(0))
+        );
         batcher.deployPhase2CoreWithRolePolicy(params, codeIds, 9);
     }
 

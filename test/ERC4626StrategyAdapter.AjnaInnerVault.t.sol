@@ -167,10 +167,8 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         vm.prank(address(outerVault));
         adapter.deposit(100e18);
 
-        auth.setKeeper(keeper, true);
-        // 5% min buffer floor (M-14): leave >= 5% of total assets in the buffer.
-        // Move 50e18 → remaining buffer 50e18 (50%) which is always above the floor.
-        vm.prank(keeper);
+        // moveFromBuffer is swapper-gated (adapter); leave >= 5% buffer floor (M-14).
+        vm.prank(address(adapter));
         innerVault.moveFromBuffer(4_156, 50e18);
 
         uint256 beforeBalance = asset.balanceOf(address(outerVault));
@@ -186,19 +184,42 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         assertEq(withdrawn, 40e18);
         assertEq(afterBalance - beforeBalance, 40e18);
         assertEq(innerVault.bufferAssets(), 10e18);
-        assertEq(adapter.getTotalAssets(), 60e18); // 50e18 bucket + 10e18 buffer remaining after withdraw from buffer
+        // Economic NAV keeps full bucket claim; realizable is buffer-only.
+        uint256 shares = innerVault.balanceOf(address(adapter));
+        uint256 idle = asset.balanceOf(address(adapter));
+        assertEq(adapter.getTotalAssets(), idle + innerVault.convertToAssets(shares));
+        assertEq(adapter.getRealizableAssets(), idle + innerVault.maxWithdraw(address(adapter)));
+        assertLt(adapter.getRealizableAssets(), adapter.getTotalAssets(), "realizable < economic after bucket move");
     }
 
     function testValuationReadyRemainsTrueWithAjnaBucketExposure() public {
         vm.prank(address(outerVault));
         adapter.deposit(100e18);
 
-        auth.setKeeper(keeper, true);
-
-        vm.prank(keeper);
+        vm.prank(address(adapter));
         innerVault.moveFromBuffer(4_156, 50e18);
 
         assertTrue(adapter.isValuationReady());
-        assertEq(adapter.getTotalAssets(), 100e18);
+        uint256 idle = asset.balanceOf(address(adapter));
+        uint256 shares = innerVault.balanceOf(address(adapter));
+        assertEq(adapter.getTotalAssets(), idle + innerVault.convertToAssets(shares));
+        assertEq(adapter.getRealizableAssets(), idle + innerVault.maxWithdraw(address(adapter)));
+        assertLt(adapter.getRealizableAssets(), adapter.getTotalAssets(), "bucket LP is economic but not instantly realizable");
+    }
+
+    function testOwnerCanMoveBufferViaAdapterWithoutImpersonation() public {
+        vm.prank(address(outerVault));
+        adapter.deposit(100e18);
+
+        uint256 navBefore = adapter.getTotalAssets();
+        (uint256 moved,) = adapter.moveFromBuffer(4_156, 50e18);
+        assertEq(moved, 50e18);
+        assertEq(adapter.getTotalAssets(), navBefore, "pure liquidity movement must not change economic NAV");
+        assertLt(adapter.getRealizableAssets(), navBefore);
+
+        (uint256 pulled,) = adapter.moveToBuffer(4_156, innerVault.bucketLp(4_156));
+        assertEq(pulled, 50e18);
+        assertEq(adapter.getTotalAssets(), navBefore);
+        assertEq(adapter.getRealizableAssets(), navBefore);
     }
 }

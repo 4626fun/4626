@@ -13,6 +13,29 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 /**
+ * @notice Optional Ajna inner-vault bucket ops used by the ERC-4626 strategy adapter.
+ * @dev Non-Ajna ERC-4626 vaults simply leave these methods unimplemented; forwarding
+ *      uses try/catch so the adapter stays generic.
+ */
+interface IAjnaBucketOps {
+    function moveFromBuffer(uint256 toIndex, uint256 assets)
+        external
+        returns (uint256 movedAssets, uint256 mintedBucketLp);
+
+    function move(uint256 fromIndex, uint256 toIndex, uint256 bucketLpAmount)
+        external
+        returns (uint256 fromBucketLp, uint256 toBucketLp);
+
+    function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
+        external
+        returns (uint256 pulledAssets, uint256 burnedBucketLp);
+
+    function getBuckets() external view returns (uint256[] memory);
+
+    function bucketLp(uint256 bucketIndex) external view returns (uint256);
+}
+
+/**
  * @title ERC4626StrategyAdapter
  * @author 0xakita.eth
  * @notice Adapts an ERC-4626 vault to the `IStrategy` interface.
@@ -37,6 +60,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     /// @notice ODA-423-H01 — idle ASSET may only return to the owning vault.
     error CannotRescueAssetToNonVault();
     error ZeroAddress();
+    error InnerBucketOpFailed();
 
     // ================================
     // STATE
@@ -83,6 +107,10 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     event ValuationSnapshotSynced(uint256 assetsPerShare, uint256 timestamp);
     // FIX: S-H03 — surface silent deposit failures during rebalance
     event RebalanceDepositFailed(uint256 amount, bytes reason);
+    event AjnaBufferMovedToBucket(uint256 indexed toIndex, uint256 assets, uint256 mintedBucketLp);
+    event AjnaBucketMoved(uint256 indexed fromIndex, uint256 indexed toIndex, uint256 fromBucketLp, uint256 toBucketLp);
+    event AjnaBucketMovedToBuffer(uint256 indexed fromIndex, uint256 pulledAssets, uint256 burnedBucketLp);
+    event AjnaBucketsDrained(uint256 bucketsProcessed, uint256 residualBuckets);
 
     // ================================
     // MODIFIERS
@@ -183,17 +211,31 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         return _isWithinValuationBounds(snapshot, currentAssetsPerShare);
     }
 
+    /**
+     * @notice Economic NAV: adapter idle + full inner-share claim.
+     * @dev Must not haircut to `maxWithdraw`. Ajna intentionally under-reports
+     *      `maxWithdraw` as buffer-only liquidity; clamping here fabricated losses when
+     *      capital moved into buckets and caused OVault over-allocation / `report` PnL.
+     *      Use `getRealizableAssets()` for synchronous withdrawal sizing.
+     */
     function getTotalAssets() public view override returns (uint256) {
         uint256 idle = ASSET.balanceOf(address(this));
         uint256 sharesHeld = ERC4626_VAULT.balanceOf(address(this));
         if (sharesHeld == 0) return idle;
 
-        // Best-effort conversion (some 4626 implementations can revert in edge cases).
         try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 assetsFromShares) {
             return idle + assetsFromShares;
         } catch {
             return idle;
         }
+    }
+
+    /**
+     * @notice Immediately realizable assets (adapter idle + inner `maxWithdraw`).
+     * @dev For Ajna this is typically buffer-backed liquidity only.
+     */
+    function getRealizableAssets() public view returns (uint256) {
+        return ASSET.balanceOf(address(this)) + _maxWithdrawBestEffort();
     }
 
     // ================================
@@ -217,7 +259,11 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         if (toDeposit > 0) {
             ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
             try ERC4626_VAULT.deposit(toDeposit, address(this)) returns (uint256 shares) {
-                shares;
+                // ODA-466 low: reject zero-share mints (donation/rounding edge cases).
+                if (shares == 0) {
+                    ASSET.forceApprove(address(ERC4626_VAULT), 0);
+                    revert InnerDepositFailed();
+                }
             } catch {
                 ASSET.forceApprove(address(ERC4626_VAULT), 0);
                 revert InnerDepositFailed();
@@ -260,7 +306,10 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     function emergencyWithdraw() external override onlyVault nonReentrant returns (uint256 totalWithdrawn) {
         _isActive = false;
 
-        // Best-effort: withdraw as much as possible from the ERC4626 vault.
+        // Stage 1: pull Ajna bucket LP back into the inner buffer when supported.
+        _drainBucketsToBufferBestEffort();
+
+        // Stage 2: withdraw realizable inner liquidity (buffer-backed for Ajna).
         uint256 maxAssets = _maxWithdrawBestEffort();
         if (maxAssets > 0) {
             _withdrawFrom4626BestEffort(maxAssets);
@@ -297,7 +346,12 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             if (toDeposit > 0) {
                 ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
                 // FIX: S-H03 — log deposit failure instead of silently swallowing
-                try ERC4626_VAULT.deposit(toDeposit, address(this)) {} catch (bytes memory reason) {
+                try ERC4626_VAULT.deposit(toDeposit, address(this)) returns (uint256 shares) {
+                    if (shares == 0) {
+                        ASSET.forceApprove(address(ERC4626_VAULT), 0);
+                        emit RebalanceDepositFailed(toDeposit, bytes("zero-share mint"));
+                    }
+                } catch (bytes memory reason) {
                     ASSET.forceApprove(address(ERC4626_VAULT), 0);
                     emit RebalanceDepositFailed(toDeposit, reason);
                 }
@@ -368,6 +422,114 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
                 return 0;
             }
         }
+    }
+
+    function _drainBucketsToBufferBestEffort() internal returns (uint256 residualBuckets) {
+        IAjnaBucketOps ops = IAjnaBucketOps(address(ERC4626_VAULT));
+        uint256[] memory buckets;
+        try ops.getBuckets() returns (uint256[] memory tracked) {
+            buckets = tracked;
+        } catch {
+            return 0;
+        }
+
+        uint256 processed;
+        for (uint256 i = 0; i < buckets.length; i++) {
+            uint256 idx = buckets[i];
+            uint256 lpAmount;
+            try ops.bucketLp(idx) returns (uint256 lp) {
+                lpAmount = lp;
+            } catch {
+                residualBuckets++;
+                continue;
+            }
+            if (lpAmount == 0) continue;
+
+            try ops.moveToBuffer(idx, lpAmount) {
+                processed++;
+            } catch {
+                residualBuckets++;
+            }
+        }
+
+        emit AjnaBucketsDrained(processed, residualBuckets);
+    }
+
+    // ================================
+    // AJNA BUCKET FORWARDING (optional)
+    // ================================
+
+    /**
+     * @notice Deploy idle buffer into an Ajna lending bucket via the inner vault.
+     * @dev Adapter must be the inner vault's authenticated swapper. Owner/treasury operates.
+     */
+    function moveFromBuffer(uint256 toIndex, uint256 assets)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 movedAssets, uint256 mintedBucketLp)
+    {
+        try IAjnaBucketOps(address(ERC4626_VAULT)).moveFromBuffer(toIndex, assets) returns (
+            uint256 moved, uint256 minted
+        ) {
+            movedAssets = moved;
+            mintedBucketLp = minted;
+            emit AjnaBufferMovedToBucket(toIndex, movedAssets, mintedBucketLp);
+        } catch {
+            revert InnerBucketOpFailed();
+        }
+        _syncValuationSnapshotBestEffort();
+    }
+
+    /**
+     * @notice Rebalance Ajna bucket LP from one index to another via the inner vault.
+     */
+    function move(uint256 fromIndex, uint256 toIndex, uint256 bucketLpAmount)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 fromBucketLp, uint256 toBucketLp)
+    {
+        try IAjnaBucketOps(address(ERC4626_VAULT)).move(fromIndex, toIndex, bucketLpAmount) returns (
+            uint256 fromLp, uint256 toLp
+        ) {
+            fromBucketLp = fromLp;
+            toBucketLp = toLp;
+            emit AjnaBucketMoved(fromIndex, toIndex, fromBucketLp, toBucketLp);
+        } catch {
+            revert InnerBucketOpFailed();
+        }
+        _syncValuationSnapshotBestEffort();
+    }
+
+    /**
+     * @notice Pull Ajna bucket LP back into the inner buffer via the inner vault.
+     */
+    function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 pulledAssets, uint256 burnedBucketLp)
+    {
+        try IAjnaBucketOps(address(ERC4626_VAULT)).moveToBuffer(fromIndex, bucketLpAmount) returns (
+            uint256 pulled, uint256 burned
+        ) {
+            pulledAssets = pulled;
+            burnedBucketLp = burned;
+            emit AjnaBucketMovedToBuffer(fromIndex, pulledAssets, burnedBucketLp);
+        } catch {
+            revert InnerBucketOpFailed();
+        }
+        _syncValuationSnapshotBestEffort();
+    }
+
+    /**
+     * @notice Best-effort drain of all tracked Ajna buckets into the inner buffer.
+     * @dev Stage-1 emergency / de-risk path. Returns the count of buckets that still hold LP.
+     */
+    function drainBucketsToBuffer() external onlyOwner nonReentrant returns (uint256 residualBuckets) {
+        residualBuckets = _drainBucketsToBufferBestEffort();
+        _syncValuationSnapshotBestEffort();
     }
 
     // ================================
@@ -468,4 +630,3 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         emit ValuationSnapshotSynced(currentAssetsPerShare, block.timestamp);
     }
 }
-

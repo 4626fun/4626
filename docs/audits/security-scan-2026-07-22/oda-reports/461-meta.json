@@ -1,0 +1,18 @@
+{
+  "jobId": 461,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit 4626 LOTTERY stack. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3), paths under contracts/. Do NOT use github.com/wenakita/CreatorVault. Private wenakita/4626 is out of scope. Files: contracts/shared/lottery/manager/LotteryManager4626.sol, LotteryManager4626PricingLib.sol, VRFConsumer4626.sol; contracts/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol; contracts/shared/lottery/zk/LotteryAmoeRouter.sol, AmoePlonkVerifier.sol, IAmoePlonkVerifier.sol. Live Base: LM 0xB45E68a5867935a5734E4185977F81c528006650, VRF 0x98fb5e0af3120B32E2E03400B6E51d0bde433670, AMOE 0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e. Focus access control, VRF callback retry, AMOE nullifiers, jackpot custody, oracle fail-closed.\n\nContext: Fetch https://github.com/4626fun/4626/tree/audit/oda-2026-07-22/contracts/shared/lottery and audit ONLY the listed lottery files. Reject CreatorVault.",
+  "createdAt": "2026-07-22T09:10:25.000Z",
+  "startedAt": "2026-07-22T09:12:53.000Z",
+  "completedAt": "2026-07-22T13:58:05.000Z",
+  "report": "https://bafkreiaq44tl5ir7cla3q65yxaut5tu24cm23vrjupxrgxujdm6mm7mehm.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreiaq44tl5ir7cla3q65yxaut5tu24cm23vrjupxrgxujdm6mm7mehm.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/461.html",
+  "trackUrl": "https://onedollaraudit.com/audit/461",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

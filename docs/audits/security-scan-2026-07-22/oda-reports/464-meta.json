@@ -1,0 +1,18 @@
+{
+  "jobId": 464,
+  "status": "complete",
+  "statusLabel": "Completed",
+  "stage": "audit-pass-2-pashov",
+  "description": "Audit 4626 DeploymentBatcher (Phase1/2/3 modules in-file). SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3), paths under contracts/. Do NOT use github.com/wenakita/CreatorVault. Private wenakita/4626 is out of scope. File: contracts/shared/deploy/batchers/DeploymentBatcher.sol. Live Batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145, Phase2Module 0x1217bA070DBf64303117939301788925030295d1. Focus privilege, CREATE2 reuse, init-code hashes, Phase trust boundaries.\n\nContext: Fetch https://raw.githubusercontent.com/4626fun/4626/audit/oda-2026-07-22/contracts/shared/deploy/batchers/DeploymentBatcher.sol. Reject CreatorVault deployer.",
+  "createdAt": "2026-07-22T09:10:51.000Z",
+  "startedAt": "2026-07-22T09:16:43.000Z",
+  "completedAt": "2026-07-22T13:58:13.000Z",
+  "report": "https://bafkreigiw33hvt2tkqp2sj7fndp7uqytjda7tnkit47xxtcgdtlisgms7y.ipfs.community.bgipfs.com/",
+  "reportUrl": "https://bafkreigiw33hvt2tkqp2sj7fndp7uqytjda7tnkit47xxtcgdtlisgms7y.ipfs.community.bgipfs.com/",
+  "reportHtmlUrl": "https://leftclaw.services/result/464.html",
+  "trackUrl": "https://onedollaraudit.com/audit/464",
+  "contract": {
+    "address": "0xb2fb486a9569ad2c97d9c73936b46ef7fdaa413a",
+    "chainId": 8453
+  }
+}

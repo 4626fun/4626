@@ -183,6 +183,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /// @notice Minimum time between distributions
     uint256 public distributionInterval = 1 hours;
+    /// @notice Cap distributionInterval to avoid `lastDistribution + interval` overflow brick (ODA-467-5).
+    uint256 public constant MAX_DISTRIBUTION_INTERVAL = 30 days;
+    /// @notice Minimum oracle TWAP window (ODA-467-4).
+    uint32 public constant MIN_ORACLE_TWAP_DURATION = 1800;
+    /// @notice Maximum oracle TWAP window.
+    uint32 public constant MAX_ORACLE_TWAP_DURATION = 7200;
 
     // ================================
     // JACKPOT RESERVE
@@ -288,6 +294,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
     error FallbackMinOutputDisabled();
     error OwnershipRenounceDisabled();
+    error InvalidFeeTier();
+    error InvalidDistributionInterval();
+    error InvalidTwapDuration();
 
     // ================================
     // CONSTRUCTOR
@@ -747,8 +756,17 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (oftAmount == 0) return 0;
         if (address(wrapper) == address(0)) revert WrapperNotSet();
 
+        // ODA-467-[1] (agent lane parity): bridged ShareOFT has no wrap accounting.
         shareOFT.forceApprove(address(wrapper), oftAmount);
-        vaultSharesBurned = wrapper.unwrap(oftAmount);
+        try wrapper.unwrap(oftAmount) returns (uint256 unwrapped) {
+            vaultSharesBurned = unwrapped;
+        } catch {
+            shareOFT.forceApprove(address(wrapper), 0);
+            jackpotReserve += oftAmount;
+            totalLotteryFunded += oftAmount;
+            accountedOFTBalance += oftAmount;
+            return 0;
+        }
 
         vaultShares.forceApprove(address(vault), vaultSharesBurned);
         vault.burnSharesForPriceIncrease(vaultSharesBurned);
@@ -879,10 +897,19 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the lottery manager
+     * @dev First set is immediate (deploy wiring). Later non-zero reassignments are
+     *      timelocked (ODA-424-M2). ODA-467-2: address(0) revokes immediately and
+     *      cancels any pending update.
      * @param _lotteryManager Lottery manager address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
-        if (_lotteryManager == address(0)) revert ZeroAddress();
+        if (_lotteryManager == address(0)) {
+            pendingLotteryManager = ILotteryManager4626(address(0));
+            pendingLotteryManagerAt = 0;
+            lotteryManager = ILotteryManager4626(address(0));
+            emit LotteryManagerSet(address(0));
+            return;
+        }
         if (address(lotteryManager) == address(0)) {
             lotteryManager = ILotteryManager4626(_lotteryManager);
             emit LotteryManagerSet(_lotteryManager);
@@ -943,6 +970,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      */
     function setSwapConfig(uint24 _feeTier, uint256 _slippageBps) external onlyOwner {
         if (_slippageBps > 1000) revert InvalidSlippage(); // Max 10% slippage
+        // ODA-467-6: whitelist Uniswap v3 fee tiers only.
+        if (_feeTier != 100 && _feeTier != 500 && _feeTier != 3000 && _feeTier != 10000) {
+            revert InvalidFeeTier();
+        }
         swapFeeTier = _feeTier;
         swapSlippageBps = _slippageBps;
         emit SwapConfigUpdated(_feeTier, _slippageBps);
@@ -989,7 +1020,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param _useOracle Whether to use oracle for slippage protection
      */
     function setOracleConfig(uint32 _twapDuration, bool _useOracle) external onlyOwner {
-        require(_twapDuration >= 60 && _twapDuration <= 7200, "Invalid duration");
+        // ODA-467-3/4: keep amountOutMinimum-only swaps (ODA-424-M3 griefing fix) and
+        // raise the TWAP floor so permissionless pricing is not unbounded short-window.
+        if (_twapDuration < MIN_ORACLE_TWAP_DURATION || _twapDuration > MAX_ORACLE_TWAP_DURATION) {
+            revert InvalidTwapDuration();
+        }
         oracleTwapDuration = _twapDuration;
         useOracleSlippage = _useOracle;
         emit OracleConfigUpdated(_twapDuration, _useOracle);
@@ -1038,6 +1073,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param _interval Minimum time between distributions
      */
     function setDistributionInterval(uint256 _interval) external onlyOwner {
+        if (_interval > MAX_DISTRIBUTION_INTERVAL) revert InvalidDistributionInterval();
         distributionInterval = _interval;
     }
 

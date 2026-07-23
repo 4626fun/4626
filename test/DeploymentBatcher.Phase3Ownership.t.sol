@@ -39,6 +39,11 @@ contract MockCharmStrategy is MockOwnableTransfer {
 
 contract MockAjnaVaultAuth {
     address public admin;
+    address public pendingAdmin;
+    uint256 public toll;
+    uint256 public tax;
+    bool public tollArmed;
+    bool public taxArmed;
 
     function setBufferRatio(uint256) external {}
 
@@ -47,6 +52,16 @@ contract MockAjnaVaultAuth {
     function setKeeper(address, bool) external {}
 
     function setSwapper(address) external {}
+
+    function setToll(uint256 nextToll) external {
+        toll = nextToll;
+        tollArmed = true;
+    }
+
+    function setTax(uint256 nextTax) external {
+        tax = nextTax;
+        taxArmed = true;
+    }
 
     function setAdmin(address nextAdmin) external {
         admin = nextAdmin;
@@ -59,7 +74,13 @@ contract MockAjnaVaultAuth {
 
     // F-04: two-step admin transfer
     function transferAdmin(address nextAdmin) external {
-        admin = nextAdmin;
+        pendingAdmin = nextAdmin;
+    }
+
+    function acceptAdmin() external {
+        require(msg.sender == pendingAdmin, "NotPendingAdmin");
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
     }
 }
 
@@ -171,6 +192,7 @@ contract MockAjnaPoolFactory {
 contract MockVaultStrategyManager {
     address public owner;
     address public managementAddress;
+    address public assetToken;
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
 
@@ -197,6 +219,14 @@ contract MockVaultStrategyManager {
     function setAutoAllocate(bool enabled) external {
         if (msg.sender != managementAddress && msg.sender != owner) revert Unauthorized();
         autoAllocate = enabled;
+    }
+
+    function setAsset(address asset_) external {
+        assetToken = asset_;
+    }
+
+    function asset() external view returns (address) {
+        return assetToken;
     }
 }
 
@@ -227,6 +257,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.chainId(8453);
 
         vault = new MockVaultStrategyManager(ownerAddr);
+        vault.setAsset(makeAddr("creatorToken"));
         create2Deployer = new MockCreate2Deployer(
             CREATOR_CHARM_STRATEGY_CODE_ID,
             AJNA_AUTH_CODE_ID,
@@ -315,9 +346,21 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
 
         assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
         assertEq(
+            MockAjnaVaultAuth(out.ajnaVaultAuth).pendingAdmin(),
+            protocolAutomation,
+            "ajna auth pending admin should be protocol automation Safe"
+        );
+        assertTrue(MockAjnaVaultAuth(out.ajnaVaultAuth).tollArmed(), "toll must be armed at deploy");
+        assertTrue(MockAjnaVaultAuth(out.ajnaVaultAuth).taxArmed(), "tax must be armed at deploy");
+        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).toll(), 0, "toll armed at zero");
+        assertEq(MockAjnaVaultAuth(out.ajnaVaultAuth).tax(), 0, "tax armed at zero");
+
+        vm.prank(protocolAutomation);
+        MockAjnaVaultAuth(out.ajnaVaultAuth).acceptAdmin();
+        assertEq(
             MockAjnaVaultAuth(out.ajnaVaultAuth).admin(),
             protocolAutomation,
-            "ajna auth admin should be protocol automation Safe"
+            "ajna auth admin should be protocol automation Safe after accept"
         );
         assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");

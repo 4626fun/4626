@@ -208,7 +208,7 @@ contract AjnaERC4626VaultTest is Test {
         auth.setKeeper(keeper, true);
         auth.setBufferRatio(2_000);
 
-        // moveFromBuffer is swapper-only (user); keepers pull back via moveToBuffer.
+        // moveFromBuffer is swapper-only (user); keepers only pull back via moveToBuffer.
         vm.prank(user);
         vm.expectRevert();
         vault.moveFromBuffer(4_156, 81e18);
@@ -277,9 +277,20 @@ contract AjnaERC4626VaultTest is Test {
 
         auth.setKeeper(keeper, true);
 
-        vm.prank(keeper);
+        vm.prank(user);
         vm.expectRevert();
         vault.moveFromBuffer(7_389, 10e18);
+    }
+
+    function testKeeperCannotMoveFromBuffer() public {
+        vm.prank(user);
+        vault.deposit(100e18, user);
+
+        auth.setKeeper(keeper, true);
+
+        vm.prank(keeper);
+        vm.expectRevert(AjnaERC4626Vault.NotAuthorized.selector);
+        vault.moveFromBuffer(4_156, 10e18);
     }
 
     function testNonKeeperCannotCallMoveFunctions() public {
@@ -291,15 +302,17 @@ contract AjnaERC4626VaultTest is Test {
         vault.moveFromBuffer(4_156, 10e18);
     }
 
-    function testMoveFunctionsRespectPauseGuardForKeeper() public {
+    function testMoveToBufferRespectsPauseGuardForKeeper() public {
         vm.prank(user);
         vault.deposit(100e18, user);
 
         auth.setKeeper(keeper, true);
+        vm.prank(user);
+        vault.moveFromBuffer(4_156, 10e18);
         auth.pause();
 
         vm.prank(keeper);
         vm.expectRevert(AjnaERC4626Vault.VaultPaused.selector);
-        vault.moveFromBuffer(4_156, 10e18);
+        vault.moveToBuffer(4_156, 1e18);
     }
 }

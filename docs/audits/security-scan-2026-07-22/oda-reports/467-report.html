@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CreatorGaugeController — LeftClaw Services</title>
+<meta name="description" content="Smart contract audit report for leftclaw.services job #467">
+<style>
+  :root {
+    --bg: #fffdf9;
+    --bg-soft: #fdf3e8;
+    --bg-softer: #f9e2c8;
+    --ink: #2c1408;
+    --ink-soft: #6b5648;
+    --primary: #c93a1e;
+    --rule: #ecd9c0;
+    --code-bg: #faf2e6;
+    --code-ink: #4a2c14;
+    --pill-critical-bg: #7a1010; --pill-critical-ink: #ffe3e3;
+    --pill-high-bg: #e03030;     --pill-high-ink: #ffffff;
+    --pill-medium-bg: #e8a020;   --pill-medium-ink: #2c1408;
+    --pill-low-bg: #4a90d9;      --pill-low-ink: #ffffff;
+    --pill-info-bg: #d8cbb8;     --pill-info-ink: #2c1408;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1410;
+      --bg-soft: #150e0a;
+      --bg-softer: #2a1c12;
+      --ink: #ffe8d8;
+      --ink-soft: #b89a86;
+      --primary: #e8431f;
+      --rule: #3d2a1c;
+      --code-bg: #150e0a;
+      --code-ink: #f4d9c2;
+      --pill-info-bg: #4a382a; --pill-info-ink: #ffe8d8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .band { height: 6px; background: var(--primary); }
+
+  .page { max-width: 880px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead { padding: 36px 0 24px; border-bottom: 2px solid var(--rule); }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600;
+  }
+  .brand .claw { font-size: 20px; }
+  .brand a { color: inherit; }
+  header.masthead h1.doc-title {
+    margin: 14px 0 4px; font-size: 34px; line-height: 1.2; letter-spacing: -.01em;
+  }
+  .job-sub { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; padding: 5px 12px; border-radius: 999px;
+    background: var(--bg-soft); border: 1px solid var(--rule); color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip b { font-weight: 600; }
+  a.chip:hover { text-decoration: none; border-color: var(--primary); }
+
+  /* ---------- severity strip ---------- */
+  .sev-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+  .sev-card {
+    flex: 1 1 90px; min-width: 90px; text-align: center;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 10px 6px 8px;
+    background: var(--bg-soft);
+  }
+  .sev-card .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .sev-card .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+  .sev-card.critical .n { color: var(--pill-critical-bg); }
+  .sev-card.high .n { color: var(--pill-high-bg); }
+  .sev-card.medium .n { color: var(--pill-medium-bg); }
+  .sev-card.low .n { color: var(--pill-low-bg); }
+  .sev-card.info .n { color: var(--ink-soft); }
+  @media (prefers-color-scheme: dark) {
+    .sev-card.critical .n { color: #ff8a8a; }
+  }
+
+  /* ---------- severity pills ---------- */
+  .pill {
+    display: inline-block; font-size: 12px; font-weight: 700; line-height: 1;
+    padding: 4px 10px; border-radius: 999px; letter-spacing: .04em;
+    text-transform: uppercase; vertical-align: baseline;
+  }
+  .pill.critical { background: var(--pill-critical-bg); color: var(--pill-critical-ink); }
+  .pill.high     { background: var(--pill-high-bg);     color: var(--pill-high-ink); }
+  .pill.medium   { background: var(--pill-medium-bg);   color: var(--pill-medium-ink); }
+  .pill.low      { background: var(--pill-low-bg);      color: var(--pill-low-ink); }
+  .pill.info     { background: var(--pill-info-bg);     color: var(--pill-info-ink); }
+
+  /* ---------- table of contents ---------- */
+  nav.toc {
+    margin: 28px 0 8px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 10px;
+  }
+  nav.toc .toc-title {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 700; margin-bottom: 8px;
+  }
+  nav.toc .toc-cols { display: flex; gap: 36px; }
+  nav.toc ol { margin: 0; padding-left: 20px; flex: 1 1 0; }
+  nav.toc li { font-size: 14px; margin: 3px 0; }
+  @media (max-width: 640px) { nav.toc .toc-cols { flex-direction: column; gap: 0; } }
+
+  /* ---------- report body ---------- */
+  main.report { padding-top: 8px; }
+  main.report h1 { display: none; } /* masthead already shows the title */
+  main.report h2 {
+    font-size: 24px; line-height: 1.3; margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--rule);
+    letter-spacing: -.01em;
+  }
+  main.report h3 { font-size: 19px; margin: 30px 0 10px; }
+  main.report h4 { font-size: 16px; margin: 24px 0 8px; }
+  main.report p { margin: 12px 0; }
+  main.report li { margin: 5px 0; }
+  main.report hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+  main.report strong { font-weight: 650; }
+  main.report blockquote {
+    margin: 16px 0; padding: 10px 18px; border-left: 4px solid var(--primary);
+    background: var(--bg-soft); border-radius: 0 8px 8px 0; color: var(--ink-soft);
+  }
+
+  main.report code {
+    font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--rule);
+  }
+  main.report pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 16px 0;
+  }
+  main.report pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 10px; }
+  main.report table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  main.report th, main.report td {
+    text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  main.report thead th {
+    background: var(--bg-soft); font-size: 12px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); border-bottom: 2px solid var(--rule);
+  }
+  main.report tbody tr:last-child td { border-bottom: none; }
+  main.report tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+
+  /* ---------- footer ---------- */
+  footer.colophon {
+    margin-top: 64px; padding-top: 20px; border-top: 2px solid var(--rule);
+    font-size: 13.5px; color: var(--ink-soft);
+  }
+  footer.colophon p { margin: 6px 0; }
+  footer.colophon code { font-size: 12px; word-break: break-all; }
+
+  /* ---------- print ---------- */
+  @media print {
+    :root { --bg: #ffffff; --bg-soft: #f6f6f6; --rule: #dddddd; }
+    .band { display: none; }
+    .page { max-width: none; padding: 0; }
+    nav.toc ol { columns: 2; }
+    main.report pre, main.report .table-wrap { break-inside: avoid; }
+    main.report h2 { break-after: avoid; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="band"></div>
+<div class="page">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="claw">🦞</span>
+      <a href="https://leftclaw.services">LeftClaw Services</a>
+      <span>·</span>
+      <span>Smart Contract Audit</span>
+    </div>
+    <h1 class="doc-title">CreatorGaugeController</h1>
+    <p class="job-sub">Job #467 · completed on-chain · report pinned to IPFS</p>
+    <div class="meta-chips">
+      <a class="chip" href="https://leftclaw.services/jobs/467"><b>Job page</b> #467</a>
+      <a class="chip" href="https://bafkreihh7hr73mzhe7uu664wpwggxbp46k4rkvgon5xxlah47eyv2ddpem.ipfs.community.bgipfs.com/"><b>Canonical report</b> IPFS</a>
+      <span class="chip"><b>Generated</b> 2026-07-22</span>
+    </div>
+    <div class="sev-strip">
+      <div class="sev-card high"><div class="n">1</div><div class="l">High</div></div>
+      <div class="sev-card medium"><div class="n">3</div><div class="l">Medium</div></div>
+      <div class="sev-card low"><div class="n">2</div><div class="l">Low</div></div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <div class="toc-cols">
+    <ol>
+      <li><a href="#reconciliation-summary">Reconciliation summary</a></li>
+      <li><a href="#access-control-inventory-condensed">Access-Control Inventory (condensed)</a></li>
+      <li><a href="#threat-model">Threat Model</a></li>
+    </ol>
+    <ol start="4">
+      <li><a href="#findings">Findings</a></li>
+      <li><a href="#leads-info-lower-confidence-or-minor-items-not-scored-as-full-fi">Leads / Info (lower-confidence or minor items — not scored as full findings)</a></li>
+      <li><a href="#completeness">Completeness</a></li>
+    </ol>
+    </div>
+  </nav>
+
+  <main class="report">
+<h1>Security Review — CreatorGaugeController</h1>
+<p><strong>Audit target</strong> (1 file, ~1319 LOC):</p>
+<ul>
+<li><code>contracts/creator/revenue/CreatorGaugeController.sol</code></li>
+</ul>
+<p><strong>Source of truth</strong>: <code>github.com/4626fun/4626</code>, tag <code>audit/oda-2026-07-22</code>, commit <code>423e0e3a607884de6e60bccd06f722a8aba770ee</code>.</p>
+<p><strong>Job scope note</strong>: Per the client&#39;s brief, the audit target is the creator-coin fee-collection, WETH-swap, and distribution hub. It receives fees directly in ShareOFT, as LayerZero-bridged ShareOFT, and as native/WETH; swaps WETH for the creator coin via Uniswap V3; and splits proceeds across burn, lottery jackpot, voter rewards, and (currently disabled) creator treasury. Its calling counterpart <code>LotteryManager4626</code> was audited separately in job 460; its dependencies <code>CreatorOVaultWrapper</code> and <code>CreatorShareOFT</code> were read only to verify specific cross-contract claims below and were not independently audited end-to-end.</p>
+<p><strong>Methodology</strong>: Three-phase review — (0) context building: a protocol map, access-control inventory, and threat catalog built by 3 parallel agents with no findings; (1) breadth: 6 domain-specialist agents (general, precision-math, access-control, defi-amm, oracles, dos) walking curated checklists; (2) depth: 12 attacker-mindset agents (9 single-specialty + 3 cross-lens gap-hunters), run <strong>blind</strong> to phase-1&#39;s findings (one agent&#39;s first attempt was invalidated by a tool-name collision and was successfully re-run), each independently reading the full source and the phase-0 map. All hunting agents ran on <code>opus</code> given the scope. This reconciliation cross-checks both phases&#39; raw output against each other and against the phase-0 inventory/catalog, and independently re-verifies every file:line citation and the strongest finding&#39;s full exploit chain against source.</p>
+<p><strong>Confidence floor</strong>: All findings Low+ are reported; items resting on an unconfirmed precondition (most commonly: behavior of the out-of-scope <code>LotteryManager4626</code>/wrapper/vault/oracle/distributor dependencies) are explicitly flagged as such within their own finding rather than silently omitted or promoted.</p>
+<hr>
+<h2 id="reconciliation-summary">Reconciliation summary</h2>
+<ul>
+<li><strong>Overlap</strong>: the lottery-manager no-revocation-during-timelock gap (phase-1 access-control; independently corroborated by pashov access-control, trust-gap, execution-trace agents), the non-degrading vault/wrapper burn call (phase-1 dos/general; independently corroborated by pashov boundary, flow-gap agents — flow-gap escalated this from a conditional lead to a fully-proven, always-reachable trigger), the oracle-only slippage protection with <code>sqrtPriceLimitX96=0</code> (phase-1 defi-amm/oracles; corroborated by pashov boundary), and the wrapper return-value trust gap (phase-1 general; corroborated by pashov general, periphery, execution-trace, invariant, first-principles, numerical-gap).</li>
+<li><strong>Phase-2-only, newly discovered and independently verified against source by the orchestrator</strong>: a fully-proven, always-reachable DoS where bridged (LayerZero-<code>_credit</code>-minted) ShareOFT can never be unwrapped for the OFT-lane burn slice, permanently bricking distribution and fee intake for bridged-fee-heavy gauges (flow-gap agent, promoted to Finding 1).</li>
+<li><strong>Phase-1-only</strong>: the oracle TWAP floor / no absolute price band (Medium), the <code>distributionInterval</code> overflow footgun (Low), <code>setSwapConfig</code>&#39;s unchecked fee tier (Low).</li>
+<li><strong>Positive verification result</strong>: the <code>accountedOFTBalance == pendingFees + jackpotReserve</code> invariant was independently proven to hold across every code path by multiple agents in both phases (phase-1 general/precision-math, phase-2 boundary) — no fund-loss divergence exists in the ledger itself. <code>payJackpot</code>&#39;s access gate, the emergency-withdraw timelock/cancel lifecycle, and every timelock boundary condition were also traced and confirmed correct.</li>
+<li><strong>Coverage</strong>: <code>Entrypoints: ~35 external/public functions in inventory, all examined by ≥1 domain agent and ≥1 blind attack agent. Threat-catalog rows: 6, 6 answered. Coverage holes closed this pass: 0.</code></li>
+</ul>
+<p><strong>The single most important structural fact of this audit</strong>: this contract&#39;s fee-distribution pipeline has exactly one non-degrading external dependency — the OFT-lane burn step&#39;s <code>wrapper.unwrap()</code> call — and that dependency is now proven, not merely suspected, to revert deterministically whenever the pending OFT fee slice traces back to LayerZero-bridged tokens rather than locally-<code>wrap()</code>-ed ones. Every other Medium+ finding is either a direct consequence of this same non-degrading-call pattern (the boundary agent&#39;s cross-lane cooldown collision) or an independent, unrelated gap in the admin/oracle/timelock surface.</p>
+<hr>
+<h2 id="access-control-inventory-condensed">Access-Control Inventory (condensed)</h2>
+<ul>
+<li><strong>Fee intake is fully permissionless</strong>: <code>receiveFees</code>, <code>deposit</code>, <code>receiveBridgedFees</code>, <code>receiveWETHFees</code>, <code>receive()</code> — all ERC20 intakes use balance-delta accounting (credit only what actually arrived); no over-credit path found.</li>
+<li><strong><code>processWETHFees()</code></strong>: owner/<code>wethFeeKeeper</code> may process the entire <code>pendingWETHFees</code> uncapped; any other caller is capped at <code>maxPermissionlessWethProcess</code> (default 0 = disabled). No interval/cooldown gate on this entrypoint itself (see Finding 3).</li>
+<li><strong><code>distribute()</code></strong>: permissionless, gated by <code>pendingFees &gt; 0</code> and <code>distributionInterval</code>. <strong><code>forceDistribute()</code></strong>: <code>onlyOwner</code>, bypasses the interval check.</li>
+<li><strong><code>payJackpot(winner, amount)</code></strong>: gated by <code>msg.sender == address(lotteryManager)</code>, bounded by <code>amount &lt;= jackpotReserve</code> — <strong>verified correct</strong> directly against source; equality-at-boundary (full drain) is intended, not a bug.</li>
+<li><strong>All config setters + <code>forceDistribute</code> + emergency-withdraw/lottery-manager-update lifecycles</strong>: <code>onlyOwner</code>. <code>renounceOwnership()</code> is overridden to always revert.</li>
+<li><strong>Two timelocks, both 1 day</strong>: (a) lottery-manager reassignment — first set instant, every subsequent change queues; <strong>the incumbent manager keeps full <code>payJackpot</code> authority throughout the entire pending window, with no revoke/cancel function</strong> (Finding 2). (b) emergency withdraw — queue → 1-day delay → execute, with an explicit cancel function.</li>
+<li><strong>Emergency-withdraw asset protections</strong>: ShareOFT blocked entirely while <code>jackpotReserve &gt; 0 || pendingFees &gt; 0</code>; WETH capped at the surplus above <code>pendingWETHFees</code>; any other token unrestricted (owner-trusted, timelocked only).</li>
+<li><strong>No unguarded (arbitrary-caller) entrypoint lacks a meaningful safeguard</strong>: every permissionless state-changing function is either balance-delta-accounted or bps-fixed/interval-gated — no path lets an arbitrary caller redirect value to themselves directly.</li>
+</ul>
+<hr>
+<h2 id="threat-model">Threat Model</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Reachable entrypoint</th>
+<th>Potential gain</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Any unprivileged caller</td>
+<td><code>receiveFees</code>/<code>deposit</code>/<code>receiveBridgedFees</code>/<code>receiveWETHFees</code>/<code>receive()</code></td>
+<td>None directly</td>
+<td>Invariant holds — balance-delta accounting confirmed on every intake path</td>
+</tr>
+<tr>
+<td>Any unprivileged caller</td>
+<td><code>receiveBridgedFees()</code> → auto-<code>_distribute()</code></td>
+<td>Trigger, not redirect: permanently bricks the OFT distribution pipeline for bridged-heavy gauges</td>
+<td><strong>Addressed by Finding 1</strong></td>
+</tr>
+<tr>
+<td>Any unprivileged caller</td>
+<td><code>processWETHFees()</code> when <code>maxPermissionlessWethProcess &gt; 0</code></td>
+<td>Chop pending WETH into repeated cap-sized swaps, each sandwich-able up to the oracle-TWAP slippage band</td>
+<td><strong>Addressed by Finding 3</strong></td>
+</tr>
+<tr>
+<td>Any unprivileged caller</td>
+<td><code>distribute()</code></td>
+<td>Trigger distribution at a caller-chosen moment only (fixed bps split)</td>
+<td>Invariant holds — immutable constants prevent redirection</td>
+</tr>
+<tr>
+<td>Compromised/buggy registered <code>lotteryManager</code></td>
+<td><code>payJackpot(winner, amount)</code></td>
+<td>Drain <code>jackpotReserve</code>, bounded by reserve balance</td>
+<td>By design; <strong>owner&#39;s ability to react is addressed by Finding 2</strong></td>
+</tr>
+<tr>
+<td>Owner (trusted)</td>
+<td><code>executeEmergencyWithdraw</code> on any non-ShareOFT/non-WETH token</td>
+<td>Sweep arbitrary tokens, 1-day timelock only</td>
+<td>Accepted trust model — flagged as an asymmetry (Leads)</td>
+</tr>
+<tr>
+<td>Owner (trusted)</td>
+<td><code>setLotteryManager</code> → 1-day pending window</td>
+<td>Old manager retains full <code>payJackpot</code> authority for the entire window</td>
+<td><strong>Addressed by Finding 2</strong></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="findings">Findings</h2>
+<h3 id="1-bridged-layerzero-minted-shareoft-can-never-be-unwrapped-for-t">[1] Bridged (LayerZero-minted) ShareOFT can never be unwrapped for the OFT-lane burn slice — a fully-proven, always-reachable DoS on fee distribution and intake</h3>
+<p><strong>Severity</strong>: <span class="pill high">High</span><br><strong>Origin</strong>: <code>[phase2 only]</code> — pashov flow-gap agent; independently re-verified line-by-line by the orchestrator directly against <code>CreatorGaugeController.sol</code>, <code>CreatorOVaultWrapper.sol</code>, and <code>CreatorShareOFT.sol</code> source. Escalates phase-1 Finding [P1-4] (which had only proven the structural &quot;no try/catch&quot; gap, with the trigger condition left at lead-strength) to a fully-confirmed, concretely-reproducible root cause.<br><strong>Location</strong>: <code>CreatorGaugeController._burnShareOftSlice()</code> (lines 774-786, <code>wrapper.unwrap()</code> call at line 779, no try/catch); <code>CreatorGaugeController.receiveBridgedFees()</code> (405-424, auto-<code>_distribute()</code> at 421-423); <code>CreatorOVaultWrapper._unwrapInternal</code> guards <code>InsufficientLocked</code>/<code>BurnExceedsTotalMinted</code> (wrapper lines 559-560), backed only by <code>totalLocked</code>/<code>totalMinted</code> which are incremented <strong>only</strong> inside <code>wrap()</code> (wrapper lines 516/525); <code>CreatorShareOFT.sol</code> line 480 comment confirming &quot;LayerZero <code>_credit</code> paths are unaffected&quot; by <code>_assertMintBacking</code> (which guards only the wrapper&#39;s own <code>mint()</code> path, not LayerZero&#39;s <code>_credit</code>).</p>
+<p><strong>Description</strong>: <code>receiveBridgedFees()</code> is permissionless and sweeps any ShareOFT balance in excess of <code>accountedOFTBalance</code> into <code>pendingFees</code> — this surplus arises when a remote-chain <code>CreatorShareOFT</code> flushes fees via LayerZero, which mints ShareOFT directly to this contract through the OFT base&#39;s <code>_credit()</code> path. That mint <strong>never</strong> touches <code>CreatorOVaultWrapper.totalLocked</code>/<code>totalMinted</code> — those counters are only advanced when <em>this</em> contract itself calls <code>wrapper.wrap()</code> (the WETH lane&#39;s vault-shares → ShareOFT step). Once enough pending OFT fees accumulate (<code>pendingFees &gt;= distributionThreshold &amp;&amp; block.timestamp &gt;= lastDistribution + distributionInterval</code>), <code>receiveBridgedFees()</code> auto-calls <code>_distribute()</code> → <code>_distributeInternal()</code> → <code>_burnShareOftSlice(toBurnOft)</code>, which calls <code>wrapper.unwrap(toBurnOft)</code> with <strong>no try/catch</strong> (line 779) — in contrast to the voter lane&#39;s <code>_routeVoterShareOft</code>, which wraps its external call in try/catch and degrades gracefully to a treasury/jackpot fallback on failure. <code>wrapper.unwrap()</code> reverts with <code>InsufficientLocked</code>/<code>BurnExceedsTotalMinted</code> whenever <code>totalLocked</code>/<code>totalMinted</code> cannot back the requested unwrap amount — which is exactly the case for a burn slice sourced from bridged fees, since no corresponding <code>wrap()</code> call ever raised those counters. The revert propagates uncaught, so the entire <code>receiveBridgedFees()</code> transaction reverts, rolling back its own <code>pendingFees += bridgedAmount</code> accounting — meaning <strong>every subsequent call to <code>receiveBridgedFees()</code> hits the identical failure</strong> once the threshold/interval condition is met, permanently blocking both distribution and further bridged-fee intake for that gauge. The four fee-split bps constants (<code>burnShareBps</code>, <code>lotteryShareBps</code>, <code>creatorShareBps</code>, <code>protocolShareBps</code>, lines 163-169) are <code>constant</code>, not owner-adjustable — there is no config-level escape hatch to zero out the burn slice once this condition is hit. The only path out is enough local <code>wrap()</code> activity (i.e., WETH-lane processing) to raise <code>totalLocked</code>/<code>totalMinted</code> above the stuck burn slice — which does not happen for a gauge whose fee volume is predominantly bridged (the intended steady state for any non-hub/remote-chain-heavy deployment per this protocol&#39;s own cross-chain design), or at bootstrap before any local wrap has occurred.</p>
+<p><strong>Proof of Concept</strong>: Hub gauge, freshly deployed: <code>wrapper.totalMinted = 0</code>, <code>wrapper.totalLocked = 0</code> (no local wraps yet). A remote-chain <code>CreatorShareOFT</code> flushes fees; LayerZero&#39;s <code>_credit</code> mints 100e18 ShareOFT directly to the gauge. Anyone calls <code>receiveBridgedFees()</code>: <code>balance(100e18) &gt; accounted(0)</code> → <code>pendingFees = 100e18</code>, <code>accountedOFTBalance = 100e18</code>. Once <code>distributionThreshold</code>/<code>distributionInterval</code> are met, the same call (or a later <code>distribute()</code>) triggers <code>_distributeInternal()</code>: <code>toBurnOft = 100e18 - 69e18 (lottery) - 21.39e18 (voters) - 0 (creator) = 9.61e18</code>. <code>_burnShareOftSlice(9.61e18)</code> → <code>wrapper.unwrap(9.61e18)</code> → <code>_unwrapInternal</code>: <code>vaultSharesBeforeFee = 9.61e18 × 1000</code>; <code>totalLocked(0) &lt; that</code> → reverts <code>InsufficientLocked</code> (and independently, <code>9.61e18 &gt; totalMinted(0)</code> → <code>BurnExceedsTotalMinted</code>). The entire <code>distribute()</code>/<code>receiveBridgedFees()</code> call reverts; the 100e18 in bridged fees is stuck, and every future call attempting to cross the threshold/interval condition fails identically.</p>
+<p><strong>Recommendation</strong>: Wrap the <code>wrapper.unwrap()</code> + <code>vault.burnSharesForPriceIncrease()</code> step in <code>_burnShareOftSlice</code> in try/catch, mirroring <code>_routeVoterShareOft</code>&#39;s existing graceful-degradation pattern — on failure, route the un-unwrappable burn slice to a fallback (fold into jackpot/treasury, or simply skip the burn and carry the slice forward) rather than letting it revert the whole distribution. Separately, consider whether the OFT lane should track &quot;locally-backed&quot; vs. &quot;bridged-only&quot; ShareOFT distinctly, since only the former can ever be burned via this wrapper.</p>
+<hr>
+<h3 id="2-no-kill-switch-to-revoke-a-compromised-lottery-manager-during-">[2] No kill-switch to revoke a compromised lottery manager during the 1-day rewire timelock; the jackpot reserve has zero protection during that window</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — phase-1 access-control; independently corroborated by pashov access-control, trust-gap, and execution-trace agents.<br><strong>Location</strong>: <code>setLotteryManager()</code>/<code>executeLotteryManagerUpdate()</code> (913-935); interaction with <code>payJackpot()</code> (854) and <code>executeEmergencyWithdraw()</code> (1298-1300).</p>
+<p><strong>Description</strong>: After the first assignment, every <code>lotteryManager</code> change queues <code>pendingLotteryManager</code> and requires a 1-day wait before <code>executeLotteryManagerUpdate()</code> swaps it in. Throughout that entire window, the <strong>current</strong> <code>lotteryManager</code> retains unchanged, full <code>payJackpot(winner, amount)</code> authority — it is never revoked, and there is no cancel function for this specific timelock (unlike the emergency-withdraw one). If the owner discovers the registered manager is compromised, there is no fast path to protect funds: <code>executeEmergencyWithdraw</code> refuses to move ShareOFT while <code>jackpotReserve &gt; 0</code> (line 1298), and no other function reduces <code>jackpotReserve</code>. The owner cannot even instantly point <code>lotteryManager</code> at a dead address — all changes after the first are timelocked. This is the inverse of what the timelock is presumably meant to protect against (a malicious owner instantly rewiring to drain) — it simultaneously removes the owner&#39;s only fast defense against a <em>bad manager</em>.</p>
+<p><strong>Proof of Concept</strong>: Manager <code>M1</code> is live with <code>jackpotReserve = X</code>. Owner discovers <code>M1</code> is compromised and calls <code>setLotteryManager(M2)</code> — this only queues <code>M2</code> (1-day delay); <code>lotteryManager</code> remains <code>M1</code>, fully authorized. Before the delay elapses, <code>M1</code> calls <code>payJackpot(attacker, X)</code>, draining the full reserve. The owner cannot front-run this: <code>executeEmergencyWithdraw</code> reverts <code>JackpotReserveProtected</code> while <code>jackpotReserve &gt; 0</code>, and there is no revoke/cancel mechanism for the lottery-manager assignment itself.</p>
+<p><strong>Recommendation</strong>: Add an owner-only instant <em>revoke</em> that sets <code>lotteryManager = address(0)</code> (disabling <code>payJackpot</code> immediately), keeping the 1-day timelock only on <em>assigning</em> a new manager. Add a <code>cancelLotteryManagerUpdate()</code> for symmetry with the emergency-withdraw lifecycle.</p>
+<hr>
+<h3 id="3-uniswap-swap-execution-has-no-router-side-price-limit-sqrtpric">[3] Uniswap swap execution has no router-side price limit (<code>sqrtPriceLimitX96=0</code>); the oracle-TWAP slippage band is a fully extractable MEV budget, worsened by permissionless processing and by the lack of any interval gate on the permissionless entrypoint</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[both]</code> — phase-1 defi-amm/oracles; independently corroborated and sharpened by pashov boundary agent (which confirmed <code>processWETHFees()</code> itself has no cooldown, unlike its auto-triggered sibling).<br><strong>Location</strong>: <code>_processWETHFees()</code> (508-563, <code>sqrtPriceLimitX96=0</code> at line 524), <code>_calculateMinOutput()</code> (570-598), <code>processWETHFees()</code>/<code>_wethAmountToProcessForCaller()</code> (489-506, confirmed via direct Read: no interval/cooldown check anywhere in this call path).</p>
+<p><strong>Description</strong>: Every WETH→creator-coin swap hardcodes <code>sqrtPriceLimitX96 = 0</code>, disabling Uniswap&#39;s own execution-price ceiling (an intentional tradeoff per an in-code comment, avoiding partial-fill griefing). The only remaining protection is <code>amountOutMinimum</code>, derived from an oracle TWAP with a <code>swapSlippageBps</code> tolerance (default 100 bps, owner-cappable to 1000 bps). This lets an attacker push the pool price until the realized output equals exactly <code>minOut</code>, extracting the slippage band as MEV — profitable whenever <code>swapSlippageBps &gt; 2 × poolFeeTier</code>. Separately, and confirmed directly against source: <code>receiveWETHFees</code>&#39;s auto-process path gates on <code>block.timestamp &gt;= lastWethDistribution + distributionInterval</code>, but the direct <code>processWETHFees()</code> entrypoint has <strong>no equivalent interval check</strong> and never reads/writes <code>lastWethDistribution</code>. When <code>maxPermissionlessWethProcess &gt; 0</code>, an unprivileged caller can invoke <code>processWETHFees()</code> repeatedly in consecutive blocks, chopping pending WETH into many back-to-back cap-sized swaps, each individually sandwich-able up to the slippage tolerance — turning a single passive sandwich surface into a repeatable, attacker-timed extraction loop. Both issues are gated by the owner enabling <code>maxPermissionlessWethProcess</code>/<code>autoProcessWethFees</code> (disabled by default).</p>
+<p><strong>Proof of Concept</strong>: With <code>swapSlippageBps=100</code> and fee tier 3000 (0.3%): searcher front-runs to push the creator-coin price until the protocol&#39;s realized swap output falls to exactly <code>minOut</code> (nothing stops it earlier) → protocol swap executes at the degraded price → searcher back-runs to sell, netting <code>≈ (swapSlippageBps - 2×feeTier)</code> of the swapped amount. With permissionless processing enabled, the same caller can also self-trigger this repeatedly rather than waiting for organic keeper calls, since <code>processWETHFees()</code> has no per-caller or global cooldown.</p>
+<p><strong>Recommendation</strong>: Re-enable a real <code>sqrtPriceLimitX96</code> derived from the oracle price, or restrict permissionless processing to a cooldown-gated cadence matching the auto-process path&#39;s <code>distributionInterval</code> semantics; lower <code>swapSlippageBps</code> as far as liquidity allows if permissionless processing remains enabled.</p>
+<hr>
+<h3 id="4-no-absolute-sanity-bound-on-the-oracle-twap-price-beyond-a-bar">[4] No absolute sanity bound on the oracle TWAP price beyond a bare <code>!= 0</code> check; the 60-second minimum TWAP window is manipulable on a thin pool</h3>
+<p><strong>Severity</strong>: <span class="pill medium">Medium</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills oracles.<br><strong>Location</strong>: <code>_calculateMinOutput()</code> (586-597), <code>setOracleConfig()</code> (1019-1024, bounds <code>[60, 7200]</code> seconds).</p>
+<p><strong>Description</strong>: The only validation applied to the oracle&#39;s TWAP price is <code>if (creatorPerEth == 0) return 0</code> — any nonzero value, however extreme, is accepted with no floor/ceiling and no cross-check against the oracle&#39;s own independently-available USD reading. <code>oracleTwapDuration</code> can be configured as low as 60 seconds, well below prudent TWAP windows for a newly-launched, thin-liquidity creator-coin pool. A manipulated-low-but-&quot;fresh&quot; TWAP collapses <code>minOut</code> toward (but not exactly) zero, evading the <code>MinOutputUnavailable</code> fail-closed check while combining with Finding 3&#39;s missing price limit to extract more than the nominal slippage band.</p>
+<p><strong>Proof of Concept</strong>: Lead-strength — the manipulation mechanics live inside the external <code>IOracle4626</code> implementation (out of scope). Confirmed in-scope: no absolute price band exists on the consumed value, and the 60-second floor is owner-configurable and far below prudent TWAP windows for thin pools.</p>
+<p><strong>Recommendation</strong>: Raise the minimum <code>oracleTwapDuration</code> floor to at least 1800s. Add an absolute sanity band on the consumed price or a bounded-deviation cross-check against the oracle&#39;s independently-fetched USD price.</p>
+<hr>
+<h3 id="5-distributioninterval-set-near-typeuint256max-causes-an-arithme">[5] <code>distributionInterval</code> set near <code>type(uint256).max</code> causes an arithmetic-overflow revert, bricking all OFT fee intake and distribution</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills dos.<br><strong>Location</strong>: <code>setDistributionInterval()</code> (1068, no upper bound); consumed via <code>lastDistribution + distributionInterval</code> in <code>_distribute()</code> (661), <code>receiveFees()</code> (370), <code>receiveBridgedFees()</code> (421), <code>receiveWETHFees()</code> (460), <code>canDistribute()</code> (1146).</p>
+<p><strong>Description</strong>: Once <code>lastDistribution</code> is nonzero, setting <code>distributionInterval</code> large enough that <code>lastDistribution + distributionInterval</code> overflows <code>uint256</code> causes that addition to revert (checked arithmetic). Because this expression appears in the unconditional auto-distribute check inside <code>receiveFees()</code>/<code>receiveBridgedFees()</code>, those permissionless intake functions revert on every call, freezing OFT intake entirely; <code>distribute()</code>/<code>canDistribute()</code> revert too. <code>forceDistribute()</code> survives (bypasses the interval check). Owner-only misconfiguration, not attacker-reachable.</p>
+<p><strong>Proof of Concept</strong>: After at least one distribution (<code>lastDistribution = T &gt; 0</code>), owner calls <code>setDistributionInterval(type(uint256).max)</code>. Any subsequent <code>receiveFees(x)</code> evaluates <code>T + type(uint256).max</code>, panics, and reverts — freezing all OFT intake/distribution until the owner lowers the interval.</p>
+<p><strong>Recommendation</strong>: Cap <code>distributionInterval</code> to a sane maximum (e.g. 30 days), or compute the cooldown check in an overflow-immune form (e.g. <code>block.timestamp &lt; lastDistribution || block.timestamp - lastDistribution &lt; distributionInterval</code>).</p>
+<hr>
+<h3 id="6-setswapconfig-accepts-any-fee-tier-with-no-whitelist-or-pool-e">[6] <code>setSwapConfig</code> accepts any fee tier with no whitelist or pool-existence check</h3>
+<p><strong>Severity</strong>: <span class="pill low">Low</span><br><strong>Origin</strong>: <code>[phase1 only]</code> — ethskills amm, general (independently, same finding).<br><strong>Location</strong>: <code>setSwapConfig()</code> (972-977).</p>
+<p><strong>Description</strong>: Despite an in-code comment listing the standard Uniswap tiers (100/500/3000/10000), <code>setSwapConfig</code> enforces neither that set nor that a pool exists at the chosen tier. Setting an invalid/non-existent tier makes every subsequent <code>exactInputSingle</code> revert, halting the WETH-processing lane until the owner corrects it. Owner-only, no fund loss, latent config-hygiene risk.</p>
+<p><strong>Recommendation</strong>: Restrict the fee tier to the known-valid set, or verify pool existence in the setter.</p>
+<hr>
+<h2 id="leads-info-lower-confidence-or-minor-items-not-scored-as-full-fi">Leads / Info (lower-confidence or minor items — not scored as full findings)</h2>
+<ul>
+<li><strong><code>wrapper.wrap()</code>/<code>wrapper.unwrap()</code> return values are trusted directly into <code>accountedOFTBalance</code> with no balance-delta verification</strong>, unlike every ERC20 intake path. If the wrapper ever returns a value diverging by even 1 wei from the ShareOFT actually minted/burned, a three-way seam emerges: the drift compounds into <code>jackpotReserve</code>/<code>accountedOFTBalance</code>, and combined with <code>payJackpot</code>&#39;s exact-transfer semantics and <code>executeEmergencyWithdraw</code>&#39;s <code>jackpotReserve &gt; 0</code> block, could <strong>permanently</strong> brick both jackpot payout and emergency rescue for the stuck difference. <code>[phase1: general; phase2: general, periphery, execution-trace, invariant, first-principles, numerical-gap]</code>. Partially cleared: the pashov boundary agent traced every mutation of <code>jackpotReserve</code>/<code>pendingFees</code>/<code>accountedOFTBalance</code> this file performs and confirmed the invariant holds <em>exactly</em> under correct wrapper behavior — this lead&#39;s exposure is conditioned entirely on the wrapper (audited separately) ever misreporting, which was not confirmed or refuted here.</li>
+<li><strong>A same-block WETH-lane <code>wrap()</code> and OFT-lane <code>unwrap()</code> collide via <code>CreatorOVaultWrapper</code>&#39;s 1-block withdraw cooldown</strong>, which is bypassed only for whitelisted addresses — confirmed the deployment batcher whitelists the wrapper&#39;s <code>payoutRouter</code> but never the gauge controller itself. If a permissionless WETH-lane process and an OFT-lane distribute land in the same block, the unwrap reverts <code>WrapperWithdrawTooSoon</code>, reverting <code>distribute()</code>/<code>forceDistribute()</code>/auto-distribute-in-<code>receiveFees</code> (and thus the fee-collecting buy transaction that triggered it). Griefable when permissionless WETH processing is enabled; otherwise a latent same-block keeper-collision bug. <code>[phase2: boundary]</code></li>
+<li><strong>Small WETH batches whose swap output produces a sub-1000-vault-share voter slice can revert the entire <code>_processWETHFees()</code></strong> via the wrapper&#39;s <code>AmountTooSmallToNormalize</code> guard on <code>wrap()</code>, not caught by try/catch. Bounded impact — fees stay pending until larger amounts accumulate. <code>[phase2: flow-gap]</code></li>
+<li><strong><code>_routeVoterShareOft</code>&#39;s <code>spent = balanceBefore - balanceAfter</code> accounting assumes the voter-rewards distributor pulls its ShareOFT synchronously.</strong> If the distributor instead uses a deferred/claim-based pull, <code>spent</code> reads 0, the full <code>toVoters</code> reroutes to <code>protocolTreasury</code>/jackpot, and the approval is reset to 0 — the distributor is left with a recorded-but-unbacked reward while the tokens went elsewhere. Depends on the out-of-scope distributor&#39;s implementation. <code>[phase1: general; phase2: flow-gap]</code></li>
+<li><strong>Security-critical setters (<code>setOracle</code>, <code>setVault</code>, <code>setWrapper</code>, <code>setve4626VoterRewardsDistributor</code>, <code>setSwapConfig</code>, <code>setOracleConfig</code>) have no timelock</strong>, unlike the lottery-manager and emergency-withdraw paths — an asymmetry worth flagging even though all are owner-only by design. <code>[phase1: access-control]</code></li>
+<li><strong>One-step <code>Ownable</code></strong> (no <code>Ownable2Step</code>) — operator-error risk, not a hijack window. <code>[phase1: access-control]</code></li>
+<li><strong>Owner can sweep unreconciled bridged/donated ShareOFT via <code>executeEmergencyWithdraw</code></strong> when <code>jackpotReserve</code>/<code>pendingFees</code> are both zero but real balance is nonzero (e.g. unswept LayerZero-minted fees) — mitigated by the 1-day timelock and by anyone being able to front-run the execute with a permissionless <code>receiveBridgedFees()</code> call. <code>[phase1: general]</code></li>
+<li><strong>Dead code confirmed inert</strong>: the unreachable <code>PendingOftFeesProtected</code> check in <code>executeEmergencyWithdraw</code> (already covered by the preceding <code>JackpotReserveProtected</code> check), the unused <code>_sqrtPriceLimitX96</code> helper, <code>ve4626GaugeVoting</code> (write-only, never read), and <code>ILotteryManager4626.addToJackpot</code> (never called). <code>[phase1: general; phase2: asymmetry]</code></li>
+<li><strong>Fee-split residual asymmetry between the two distribution lanes</strong> (OFT lane routes rounding dust to burn; WETH lane routes it to voters) — verified both lanes sum exactly to their input with no loss/double-count; the only effect is which slice absorbs sub-wei dust. <code>[phase1: general, precision-math]</code></li>
+<li><strong><code>receive()</code> and <code>executeEmergencyWithdraw()</code> lack <code>nonReentrant</code></strong> — traced and confirmed not exploitable (reentry into <code>receive()</code> only increments an isolated counter; <code>executeEmergencyWithdraw</code> follows CEI and is <code>onlyOwner</code>). Defense-in-depth only. <code>[phase1: general]</code></li>
+<li><strong>Hardcoded <code>1e18</code> scaling in <code>_calculateMinOutput</code> assumes an 18-decimal creator coin</strong> with no <code>decimals()</code> validation in <code>setCreatorCoin()</code> — internally consistent under the intended convention; a non-18-decimal coin fails closed (DoS via reverting swaps) rather than fails open. <code>[phase1: precision-math, oracles]</code></li>
+</ul>
+<h2 id="completeness">Completeness</h2>
+<p>Every unique (Contract, function) flagged by any of the 3 phase-0 + 6 phase-1 + 13 phase-2 sub-agents appears above, either as a numbered finding or in the Leads/Info section. <code>Coverage: 6 entrypoints/threat-catalog rows in inventory, 6 addressed. Coverage holes closed this pass: 0.</code> The central phase-0 open question (whether the OFT-lane burn slice can ever fail to unwrap) was resolved definitively by Finding 1 — it always fails for bridged-only backing, not merely under some unconfirmed precondition.</p>
+<blockquote>
+<p>⚠️ This review was performed by AI auditor agents. AI analysis can never verify the complete absence of vulnerabilities and no guarantee of security is given. Findings 1 and the wrapper-return-value Lead depend in part on the exact behavior of <code>CreatorOVaultWrapper</code>/<code>CreatorShareOFT</code> (read here only to verify specific cross-contract claims, not independently audited end-to-end), and Finding 2&#39;s severity depends on <code>LotteryManager4626</code> (audited separately in job 460). Independent verification against those deployed contracts together with this one is recommended before relying on this report alone.</p>
+</blockquote>
+
+  </main>
+
+  <footer class="colophon">
+    <p><strong>Canonical copy:</strong> this is a styled rendering of the immutable report delivered on IPFS —
+       <a href="https://bafkreihh7hr73mzhe7uu664wpwggxbp46k4rkvgon5xxlah47eyv2ddpem.ipfs.community.bgipfs.com/"><code>https://bafkreihh7hr73mzhe7uu664wpwggxbp46k4rkvgon5xxlah47eyv2ddpem.ipfs.community.bgipfs.com/</code></a>.
+       If the two ever differ, the IPFS copy is authoritative.</p>
+    <p>Audited by <a href="https://leftclaw.services">LeftClaw Services</a> 🦞 — job
+       <a href="https://leftclaw.services/jobs/467">#467</a> on Base. Rendered 2026-07-22.</p>
+  </footer>
+
+</div>
+</body>
+</html>

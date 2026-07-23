@@ -151,7 +151,11 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
         internal
         override
     {
-        require(peers[_origin.srcEid] == _origin.sender, "Unauthorized");
+        // ODA-461-9: only accept VRF responses from the configured hub peer.
+        if (_origin.srcEid != hubEid || peers[_origin.srcEid] != _origin.sender) {
+            emit InvalidVrfResponsePayload(_origin.srcEid, _origin.sender, _payload.length);
+            return;
+        }
 
         uint64 sequence;
         uint256 randomWord;

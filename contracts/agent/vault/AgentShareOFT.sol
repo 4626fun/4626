@@ -594,11 +594,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
         if (value == 0) return;
-        OperationType fromType = addressType[from];
-        OperationType toType = addressType[to];
-        if (fromType == OperationType.SwapOnly || toType == OperationType.SwapOnly) return;
-        if (fromType == OperationType.NoFees || toType == OperationType.NoFees) return;
-
         try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to, value) {
             // ok
         } catch (bytes memory revertData) {
@@ -851,7 +846,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) revert HubNotConfigured();
 
         (bytes memory payload, bytes memory options, MessagingFee memory fee) =
-            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
+            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue, entryId);
 
         if (msg.value < fee.nativeFee) {
             revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
@@ -879,21 +874,26 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (entry.buyer == address(0)) return MessagingFee(0, 0);
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) return MessagingFee(0, 0);
 
-        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
+        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue, entryId);
     }
 
-    function _prepareLotteryEntryMessage(address buyer, uint256 amount, uint256 buyerCurrentShareBalance)
-        internal
-        view
-        returns (bytes memory payload, bytes memory options, MessagingFee memory fee)
-    {
+    function _prepareLotteryEntryMessage(
+        address buyer,
+        uint256 amount,
+        uint256 buyerCurrentShareBalance,
+        uint256 entryId
+    ) internal view returns (bytes memory payload, bytes memory options, MessagingFee memory fee) {
+        // ODA-481-[2] / LM forwarder: V3 224-byte payload with non-zero replay id.
+        bytes32 sourceEventId =
+            keccak256(abi.encode(block.chainid, address(this), entryId, buyer, amount, buyerCurrentShareBalance));
         payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
             buyer,
             address(this), // tokenIn (this ShareOFT)
             amount,
             uint32(block.chainid), // sourceChainId metadata (callback routing uses _origin.srcEid on hub)
-            buyerCurrentShareBalance // coverage input on the hub lottery manager
+            buyerCurrentShareBalance,
+            sourceEventId
         );
 
         options = _lzReceiveOptions(lotteryEntryGasLimit, 0);
@@ -1055,26 +1055,31 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         return true;
     }
 
+    /// @dev ODA-481-[2]: V3 ABI-only (224 bytes) with structural padding + non-zero replay id.
     function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
-        if (message.length != 160 && message.length != 192 && message.length != 224) return false;
+        if (message.length != 224) return false;
         uint256 word0;
         uint256 word1;
         uint256 word2;
         uint256 word3;
         uint256 word4;
+        uint256 word6;
         assembly {
             word0 := calldataload(message.offset)
             word1 := calldataload(add(message.offset, 0x20))
             word2 := calldataload(add(message.offset, 0x40))
             word3 := calldataload(add(message.offset, 0x60))
             word4 := calldataload(add(message.offset, 0x80))
+            word6 := calldataload(add(message.offset, 0xc0))
         }
         if (word0 >> 16 != 0) return false;
         if (uint16(word0) != MSG_TYPE_LOTTERY_ENTRY) return false;
         if (word1 >> 160 != 0) return false; // buyer
         if (word2 >> 160 != 0) return false; // tokenIn
+        if (uint160(word1) == 0 || uint160(word2) == 0) return false;
         if (word3 == 0) return false; // amount
         if (word4 >> 32 != 0) return false; // sourceChainId uint32
+        if (word6 == 0) return false; // sourceEventId
         return true;
     }
 

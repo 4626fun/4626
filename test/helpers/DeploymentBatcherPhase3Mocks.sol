@@ -102,10 +102,15 @@ contract MockCharmStrategyForPhase3 is MockOwnableTransferForPhase3 {
 
 contract MockAjnaVaultAuthForPhase3 {
     address public admin;
+    address public pendingAdmin;
     uint256 public bufferRatio;
     uint256 public minBucketIndex;
     mapping(address => bool) public keepers;
     address public swapper;
+    uint256 public toll;
+    uint256 public tax;
+    bool public tollArmed;
+    bool public taxArmed;
 
     function setBufferRatio(uint256 ratio) external {
         bufferRatio = ratio;
@@ -123,6 +128,16 @@ contract MockAjnaVaultAuthForPhase3 {
         swapper = nextSwapper;
     }
 
+    function setToll(uint256 nextToll) external {
+        toll = nextToll;
+        tollArmed = true;
+    }
+
+    function setTax(uint256 nextTax) external {
+        tax = nextTax;
+        taxArmed = true;
+    }
+
     function setAdmin(address nextAdmin) external {
         admin = nextAdmin;
     }
@@ -132,7 +147,13 @@ contract MockAjnaVaultAuthForPhase3 {
     }
 
     function transferAdmin(address nextAdmin) external {
-        admin = nextAdmin;
+        pendingAdmin = nextAdmin;
+    }
+
+    function acceptAdmin() external {
+        require(msg.sender == pendingAdmin, "NotPendingAdmin");
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
     }
 }
 
@@ -147,6 +168,7 @@ contract MockAjnaAdapterForPhase3 is MockOwnableTransferForPhase3 {
 contract MockVaultStrategyManagerForPhase3 {
     address public owner;
     address public managementAddress;
+    address public assetToken;
     address[] public strategies;
     uint256[] public weights;
     bool public autoAllocate;
@@ -175,6 +197,15 @@ contract MockVaultStrategyManagerForPhase3 {
 
     function setManagement(address account) external {
         managementAddress = account;
+    }
+
+    /// @notice ODA-464-F05 test hook — Phase3 requires vault.asset() == creatorToken.
+    function setAsset(address asset_) external {
+        assetToken = asset_;
+    }
+
+    function asset() external view returns (address) {
+        return assetToken;
     }
 
     function strategyCount() external view returns (uint256) {
