@@ -278,7 +278,10 @@ function formatPortionFeeUsd(params: {
   }
 }
 
-/** Uniswap-style "1 USDC = 95840.4 akita" execution rate from quoted amounts. */
+/** Uniswap-style execution rate from quoted amounts.
+ * Prefer a human-scale quote: if `1 in = x out` is a tiny fraction, flip to
+ * `1 out = (1/x) in` (e.g. key markets: 1 AKITA = 11,992,858 akita).
+ */
 export function formatSwapExchangeRate(params: {
   amountIn: string
   tokenInSymbol: string
@@ -293,11 +296,20 @@ export function formatSwapExchangeRate(params: {
   const outAmt = parsePositiveHumanAmount(params.amountOut) ?? parseSwapDisplayNumber(params.amountOut)
   if (inAmt == null || outAmt == null || inAmt <= 0 || outAmt <= 0) return null
 
-  const rate = outAmt / inAmt
+  let baseSym = inSym
+  let quoteSym = outSym
+  let rate = outAmt / inAmt
   if (!Number.isFinite(rate) || rate <= 0) return null
 
+  if (rate < 1) {
+    rate = inAmt / outAmt
+    if (!Number.isFinite(rate) || rate <= 0) return null
+    baseSym = outSym
+    quoteSym = inSym
+  }
+
   const formattedRate = formatUniswapSwapTradeAmount(rate)
-  return `1 ${inSym} = ${formattedRate} ${outSym}`
+  return `1 ${baseSym} = ${formattedRate} ${quoteSym}`
 }
 
 export function summarizeRouteProtocols(legs: SwapRouteLeg[]): string | null {

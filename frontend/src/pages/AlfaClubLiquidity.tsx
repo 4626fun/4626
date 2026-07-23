@@ -1140,9 +1140,12 @@ export function AlfaClubLiquidity({
       keyId: keyIdForImage,
       imageUrl: initialImageUrl,
     });
-    // Keep picker labels as the room name; disambiguate colliding coin/key chips here.
+    // Keep picker labels as the room name; disambiguate colliding coin/key chips here
+    // (including case-only collisions like AKITA vs akita so the rate reads clearly).
     const keyChipSymbol =
-      keySymbol === creatorSymbol ? `${keySymbol} key` : keySymbol;
+      keySymbol.toLowerCase() === creatorSymbol.toLowerCase()
+        ? `${keySymbol} key`
+        : keySymbol;
     const keyDisplay: TokenDisplay = {
       symbol: keyChipSymbol,
       name: `AlfaClub · #${keyIdForImage}`,
