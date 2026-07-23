@@ -91,9 +91,10 @@ export function isBlockedTokenLogoUrl(value: string | null | undefined): boolean
   const normalized = normalizeUrl(value)
   if (!normalized) return false
   const lc = normalized.toLowerCase()
+  // First-party `/api/v1/token/.../image` (and legacy `/api/token/image`) are
+  // canonical creator/share artwork — allow them so SwapCard TokenAvatar can
+  // render logos passed via creatorCoinRawLogo / shareTokenLogo.
   return (
-    (lc.includes('/api/v1/token/') && lc.includes('/image')) ||
-    lc.includes('/api/token/image') ||
     lc.includes('dd.dexscreener.com/ds-data/tokens/') ||
     lc.includes('/base/base-chain-light.svg') ||
     lc.includes('/assets/logo-mark.svg') ||
