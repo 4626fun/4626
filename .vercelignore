@@ -71,7 +71,11 @@ target
 !/apps/docs-site
 !/apps/docs-site/**
 /contracts
-/kpr
+/kpr/**
+!/kpr/vendor/
+!/kpr/vendor/bigint-buffer/
+!/kpr/vendor/bigint-buffer/**
+
 /design
 /deployments
 # Manual docs at repo-root `docs/` are required for apps/docs-site sync (4626-docs).
