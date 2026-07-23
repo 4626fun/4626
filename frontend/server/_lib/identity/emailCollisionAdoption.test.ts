@@ -76,6 +76,11 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
         verified: true,
       }),
     )
+    expect(
+      db.sql.mock.calls.some((call) =>
+        String(call[0]?.join?.(' ') ?? call[0]).toLowerCase().includes('delete from privy_user_aliases'),
+      ),
+    ).toBe(true)
   })
 
   it('uses the collision email when the caller email is still hydrating', async () => {
@@ -158,24 +163,21 @@ describe('runWithWaitlistEmailCollisionAdoption', () => {
     expect(action).toHaveBeenCalledTimes(2)
   })
 
-  it('rebinds from a client bootstrap email hint when Privy server hydration lags', async () => {
+  it('does not rebind from a client bootstrap email hint when Privy server hydration lags', async () => {
     const db = createRebindDb()
-    const action = vi
-      .fn()
-      .mockRejectedValueOnce(recoveryError('user@example.com'))
-      .mockResolvedValueOnce('ok')
+    const action = vi.fn().mockRejectedValueOnce(recoveryError('user@example.com'))
 
-    const result = await runWithWaitlistEmailCollisionAdoption({
-      db: db as any,
-      email: null,
-      privyUserId: 'did:privy:new-user',
-      privyUser: { id: 'did:privy:new-user' },
-      bootstrapEmailHint: 'user@example.com',
-      action,
-    })
+    await expect(
+      runWithWaitlistEmailCollisionAdoption({
+        db: db as any,
+        email: null,
+        privyUserId: 'did:privy:new-user',
+        privyUser: { id: 'did:privy:new-user' } as any,
+        action,
+      }),
+    ).rejects.toMatchObject({ code: 'IDENTITY_RECOVERY_REQUIRED' })
 
-    expect(result).toBe('ok')
-    expect(action).toHaveBeenCalledTimes(2)
+    expect(action).toHaveBeenCalledTimes(1)
   })
 
   it('delegates to assertNoEmailPrivyCollision without throwing when no collision exists', async () => {
@@ -267,7 +269,6 @@ describe('runWithWaitlistWalletCollisionAdoption', () => {
       email: 'user@example.com',
       privyUserId: 'did:privy:new-user',
       privyUser,
-      bootstrapEmailHint: 'user@example.com',
       action,
     })
 

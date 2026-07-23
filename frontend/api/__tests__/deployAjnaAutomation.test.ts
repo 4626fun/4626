@@ -8,6 +8,7 @@ const { resolveCoinPartiesAndOwnerMock, isServerAdminAddressMock, getAjnaVaultRe
     resolveCoinPartiesAndOwnerMock: vi.fn(async () => ({
       owner: '0x1111111111111111111111111111111111111111',
       payoutRecipient: null,
+      creator: null,
       platformReferrer: null,
       tradeReferrer: null,
       isReferralEnabled: false,
@@ -160,5 +161,38 @@ describe('deploy ajna automation endpoints', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.status).toBe('live')
     expect(updateAjnaVaultAutomationConfigMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects the stale registry owner after onchain ownership changes', async () => {
+    resolveCoinPartiesAndOwnerMock.mockResolvedValueOnce({
+      owner: '0x9999999999999999999999999999999999999999',
+      payoutRecipient: null,
+      creator: null,
+      platformReferrer: null,
+      tradeReferrer: null,
+      isReferralEnabled: false,
+      isVerified: false,
+    })
+    getAjnaVaultRegistryEntryMock.mockResolvedValueOnce({
+      chainId: 8453,
+      creatorToken: '0x1111111111111111111111111111111111111111',
+      strategyAdapter: '0x2222222222222222222222222222222222222222',
+      ownerAddress: '0x1111111111111111111111111111111111111111',
+    } as AjnaVaultRegistryRow)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: withAuthHeader({}, '0x1111111111111111111111111111111111111111'),
+      body: {
+        creatorToken: '0x1111111111111111111111111111111111111111',
+        strategyAdapter: '0x2222222222222222222222222222222222222222',
+        automationStatus: 'paused',
+      },
+    })
+    const res = createMockRes()
+    await automationControlHandler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(updateAjnaVaultAutomationConfigMock).not.toHaveBeenCalled()
   })
 })

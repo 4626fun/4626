@@ -163,6 +163,10 @@ for target in "${SYNC_TARGETS[@]}"; do
       echo "  skip $target $key (empty locally)" >&2
       continue
     fi
+    if [[ "$target" != "production" ]]; then
+      echo "  skip $target $key (production-only secret)" >&2
+      continue
+    fi
     upsert_env "$target" "$key" "$value" || SYNC_FAILURES=$((SYNC_FAILURES + 1))
   done
 done

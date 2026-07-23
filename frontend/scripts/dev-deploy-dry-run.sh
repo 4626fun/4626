@@ -262,16 +262,11 @@ ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
 DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
-# WSL2: bind all interfaces so Windows can reach the dev server, but keep Privy/OAuth
-# origins on http://localhost:5174 (secure context + redirect match). Classic WSL
-# localhost forwarding is flaky; mirrored networking (.wslconfig) fixes Windows
-# http://localhost after `wsl --shutdown`.
+VITE_DEV_SERVER_HOST_WAS_SET="${VITE_DEV_SERVER_HOST+x}"
+# Keep the secret-backed Vite API loopback-only by default on every platform.
+# WSL LAN exposure requires the explicit DEPLOY_DRY_RUN_USE_WSL_LAN_ORIGIN=1 lane.
 if [[ -z "${VITE_DEV_SERVER_HOST-}" ]]; then
-  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-    export VITE_DEV_SERVER_HOST="true"
-  else
-    export VITE_DEV_SERVER_HOST="localhost"
-  fi
+  export VITE_DEV_SERVER_HOST="localhost"
 fi
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
@@ -481,7 +476,9 @@ fi
 USE_WSL_LAN_ORIGIN="${DEPLOY_DRY_RUN_USE_WSL_LAN_ORIGIN:-0}"
 WSL_LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if [[ "$USE_WSL_LAN_ORIGIN" == "1" && -n "$WSL_LAN_IP" ]]; then
-  export VITE_DEV_SERVER_HOST="${VITE_DEV_SERVER_HOST:-true}"
+  if [[ -z "$VITE_DEV_SERVER_HOST_WAS_SET" ]]; then
+    export VITE_DEV_SERVER_HOST="true"
+  fi
   export VITE_APP_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
   export VITE_MARKETING_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
   export VITE_PRIVY_ALLOWED_ORIGINS="http://localhost:${DEV_PORT} http://127.0.0.1:${DEV_PORT} http://${WSL_LAN_IP}:${DEV_PORT}"

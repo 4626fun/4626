@@ -11,6 +11,7 @@ import {
 import { verifyPrivyForAccounts } from '../../../server/_lib/identity/accountsIdentity.js'
 import {
   readWaitlistTwitterEngagementProgressForPrivyUser,
+  readTwitterIdentityFromPrivyUser,
   verifyAndAwardWaitlistTwitterEngagementStep,
   readWaitlistXEngagementCampaignKey,
   readWaitlistXEngagementStepOrder,
@@ -111,6 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         db: db as any,
         privyUserId: context.privyUserId,
         step,
+        verifiedActor: readTwitterIdentityFromPrivyUser(context.privyUser),
       })
       if (!result.ok) {
         const { status, error } = statusForFailure(result.reason)

@@ -18,7 +18,7 @@
  *
  * For Railway: Run this locally with the exact vars you plan to set on
  * the hermit.4626.fun service (and/or your watcher service). The script
- * will output clean copy-paste blocks at the end.
+ * reports presence only; it never prints secret values.
  */
 
 import { isDbConfigured } from '../../frontend/server/_lib/db/postgres.js'
@@ -33,6 +33,10 @@ function check(name: string, condition: boolean, required = true) {
   const icon = condition ? `${GREEN}✓${RESET}` : required ? `${RED}✗${RESET}` : `${YELLOW}?${RESET}`
   console.log(`${icon} ${name}`)
   return condition
+}
+
+function secretStatus(value: string | undefined): string {
+  return String(value ?? '').trim() ? '<set>' : '<missing>'
 }
 
 console.log('\n' + '='.repeat(70))
@@ -123,16 +127,16 @@ console.log('')
 
 console.log('--- For hermit.4626.fun service (Hermit + rich 1659 context) ---')
 const hermitBlock = [
-  `DATABASE_URL=${process.env.DATABASE_URL ?? 'postgresql://...'}`,
+  `DATABASE_URL=${secretStatus(process.env.DATABASE_URL ?? process.env.POSTGRES_URL)}`,
   '',
   '# AlfaClub auth (one of these two paths)',
-  `ALFACLUB_CHAT_JWT=${process.env.ALFACLUB_CHAT_JWT ?? ''}`,
-  `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? ''}`,
-  `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? ''}`,
+  `ALFACLUB_CHAT_JWT=${secretStatus(process.env.ALFACLUB_CHAT_JWT)}`,
+  `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${secretStatus(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN)}`,
+  `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${secretStatus(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN)}`,
   '',
   '# Creative brain (first-party /api/hermit/draft via AI Gateway)',
   `HERMIT_AGENT_CHAT_ENDPOINT=${process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? 'https://app.4626.fun/api/hermit/draft'}`,
-  `HERMIT_AGENT_BEARER_TOKEN=${process.env.HERMIT_AGENT_BEARER_TOKEN ?? ''}`,
+  `HERMIT_AGENT_BEARER_TOKEN=${secretStatus(process.env.HERMIT_AGENT_BEARER_TOKEN)}`,
   '',
   '# Room targeting',
   `ALFACLUB_HERMIT_COMMAND_ROOMS=${process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '1659'}`,
@@ -141,7 +145,7 @@ console.log(hermitBlock)
 
 console.log('\n--- For 1659 risk watcher service (or same env as above) ---')
 const watcherBlock = [
-  `ALFACLUB_TELEGRAM_BOT_TOKEN=${process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? ''}`,
+  `ALFACLUB_TELEGRAM_BOT_TOKEN=${secretStatus(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? process.env.TELEGRAM_BOT_TOKEN)}`,
   `ALFACLUB_TELEGRAM_RELAY_CHAT_ID=${process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '-1003709479662'}`,
   `ALFACLUB_TELEGRAM_RELAY_THREAD_ID=${process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID ?? '2'}`,
   `ALFACLUB_RADAR_TELEGRAM_CHAT_ID=${process.env.ALFACLUB_RADAR_TELEGRAM_CHAT_ID ?? '@fun4626'}`,

@@ -12,6 +12,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { PublicKey } from '@solana/web3.js'
 import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
@@ -37,9 +38,9 @@ declare const process: {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '../..')
 
-const SHARE_MESH_MINT = '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv'
-/** Example Solana OFT store peer bytes32 for composer mesh planning (not a batcher-global peer). */
-const SHARE_MESH_PEER_EXAMPLE =
+const RETIRED_B1_SHARE_MESH_MINT = '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv'
+const RETIRED_B1_OFT_STORE = 'G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN'
+const RETIRED_B1_SHARE_PEER =
   '0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f'
 
 function getArg(name: string, fallback = ''): string {
@@ -81,10 +82,15 @@ async function main(): Promise<void> {
   const shareOftRaw = getArg('--share-oft')
   const vaultRaw = getArg('--vault')
   const wrapperRaw = getArg('--wrapper')
-  if (!shareOftRaw || !vaultRaw || !wrapperRaw) {
+  const shareMeshMintRaw = getArg('--share-mesh-mint')
+  const oftStoreRaw = getArg('--oft-store')
+  const sharePeerRaw = getArg('--solana-share-peer').toLowerCase()
+  if (!shareOftRaw || !vaultRaw || !wrapperRaw || !shareMeshMintRaw || !oftStoreRaw || !sharePeerRaw) {
     process.stdout.write(
       'Usage: pnpm -C frontend ops:verify-post-phase1-mesh \\\n' +
         '  --share-oft 0xNewShareOFT --vault 0xNewVault --wrapper 0xNewWrapper \\\n' +
+        '  --share-mesh-mint <FRESH_TOKEN_2022_MINT> --oft-store <FRESH_OFT_STORE> \\\n' +
+        '  --solana-share-peer <FRESH_OFT_STORE_BYTES32> \\\n' +
         '  [--creator 0x5b6741…] [--owner 0xYourCSW]\n',
     )
     process.exit(1)
@@ -99,6 +105,26 @@ async function main(): Promise<void> {
     getArg('--owner', '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'),
     'owner',
   )
+  let shareMeshMint: PublicKey
+  let oftStore: PublicKey
+  try {
+    shareMeshMint = new PublicKey(shareMeshMintRaw)
+    oftStore = new PublicKey(oftStoreRaw)
+  } catch {
+    throw new Error('Invalid share-mesh mint or OFT Store Solana public key')
+  }
+  const sharePeer = sharePeerRaw
+  const expectedPeer = `0x${Buffer.from(oftStore.toBytes()).toString('hex')}`
+  if (!/^0x[0-9a-f]{64}$/.test(sharePeer) || sharePeer !== expectedPeer) {
+    throw new Error(`OFT Store/peer mismatch: expected ${expectedPeer}`)
+  }
+  if (
+    shareMeshMint.toBase58() === RETIRED_B1_SHARE_MESH_MINT ||
+    oftStore.toBase58() === RETIRED_B1_OFT_STORE ||
+    sharePeer === RETIRED_B1_SHARE_PEER
+  ) {
+    throw new Error('Retired AKITA B1 mint/store/peer cannot satisfy the B2 post-Phase-1 gate')
+  }
 
   const rpc =
     process.env.BASE_RPC_URL?.trim() ||
@@ -128,6 +154,8 @@ async function main(): Promise<void> {
   process.stdout.write('\n=== Post–Phase 1 mesh readiness ===\n\n')
   process.stdout.write(`ShareOFT: ${shareOft}\n`)
   process.stdout.write(`Batcher:  ${batcher}\n`)
+  process.stdout.write(`B2 mint:  ${shareMeshMint.toBase58()}\n`)
+  process.stdout.write(`OFT Store:${oftStore.toBase58()}\n`)
   process.stdout.write(`RPC:      ${rpc}\n\n`)
 
   const wiring = await readShareBridgeOftWiringStatus({
@@ -184,7 +212,7 @@ async function main(): Promise<void> {
     `Merge into SOLANA_SHARE_OFT_MAPPING on /etc/4626/solana-keeper-orchestrator.env:\n`,
   )
   process.stdout.write(
-    `  SOLANA_SHARE_OFT_MAPPING='{"${SHARE_MESH_MINT}":"${shareOft.toLowerCase()}"}'\n`,
+    `  SOLANA_SHARE_OFT_MAPPING='{"${shareMeshMint.toBase58()}":"${shareOft.toLowerCase()}"}'\n`,
   )
   process.stdout.write(`  (keep existing keys if other creators are live)\n`)
   process.stdout.write(`  sudo systemctl restart solana-keeper-orchestrator\n\n`)
@@ -194,7 +222,7 @@ async function main(): Promise<void> {
     `Seed Registry4626.setRemoteOFTPeerBytes32(creator, 30168, peer) then:\n` +
       `pnpm -C frontend exec tsx scripts/ops/plan-akita-share-mesh-phase-a.ts \\\n` +
       `  --share-mesh ${shareOft} \\\n` +
-      `  --solana-share-peer ${SHARE_MESH_PEER_EXAMPLE} \\\n` +
+      `  --solana-share-peer ${sharePeer} \\\n` +
       `  --solana-eid 30168\n\n`,
   )
 

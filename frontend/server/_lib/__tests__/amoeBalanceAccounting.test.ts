@@ -19,7 +19,7 @@ describe('AMOE balance accounting (earn N, burn M)', () => {
 
   it('reduces balance after a single burn (200 earned, 100 burned → 100 left)', () => {
     const rows = [
-      { source: 'amoe_checkin', amount: 200 },
+      { source: 'waitlist_signup', amount: 200 },
       { source: 'amoe_entry_spend', amount: -AMOE_CREDITS_PER_ENTRY },
     ]
     expect(eligibleBalanceFromRows(rows)).toBe(100)
@@ -27,7 +27,7 @@ describe('AMOE balance accounting (earn N, burn M)', () => {
 
   it('blocks a second entry when balance is insufficient after first burn', () => {
     const afterFirstBurn = eligibleBalanceFromRows([
-      { source: 'amoe_checkin', amount: 150 },
+      { source: 'waitlist_signup', amount: 150 },
       { source: 'amoe_entry_spend', amount: -AMOE_CREDITS_PER_ENTRY },
     ])
     expect(afterFirstBurn).toBe(50)
@@ -37,17 +37,23 @@ describe('AMOE balance accounting (earn N, burn M)', () => {
   it('excludes referral_passthrough from AMOE spendable balance', () => {
     const balance = eligibleBalanceFromRows([
       { source: 'referral_passthrough', amount: 500 },
-      { source: 'amoe_checkin', amount: 150 },
+      { source: 'waitlist_signup', amount: 150 },
     ])
     expect(balance).toBe(150)
   })
 
   it('refunds restore spendable balance', () => {
     const balance = eligibleBalanceFromRows([
-      { source: 'amoe_checkin', amount: 200 },
+      { source: 'waitlist_signup', amount: 200 },
       { source: 'amoe_entry_spend', amount: -100 },
       { source: 'amoe_entry_refund', amount: 100 },
     ])
     expect(balance).toBe(200)
+  })
+
+  it('does not recycle waitlist-facing AMOE check-in awards into lottery credit', () => {
+    expect(
+      eligibleBalanceFromRows([{ source: 'amoe_checkin', amount: 6 }]),
+    ).toBe(0)
   })
 })

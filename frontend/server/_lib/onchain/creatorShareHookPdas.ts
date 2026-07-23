@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js'
 
-const CREATOR_SHARE_HOOK_PROGRAM_ID = 'EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU'
+export const CREATOR_SHARE_HOOK_PROGRAM_ID = 'EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU'
 const PROGRAM_ID = new PublicKey(CREATOR_SHARE_HOOK_PROGRAM_ID)
 
 const CREATOR_CONFIG_SEED = Buffer.from('creator_config')

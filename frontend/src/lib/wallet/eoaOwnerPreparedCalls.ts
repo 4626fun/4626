@@ -1,5 +1,7 @@
-import { recoverAddress, type Hex } from 'viem'
+import { getAddress, recoverAddress, type Hex } from 'viem'
 
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { assertAddOwnerSelfCallOwnerArg } from '@/lib/wallet/addOwnerCallShape'
 import { hexByteLength } from '@/lib/wallet/coinbaseSignatureWrapper'
 
 export type EoaOwnerPreparedCallsExecutionMode = 'canonicalSmartWallet'
@@ -43,21 +45,42 @@ function unwrapDoubleHexEncodedHash(hash: `0x${string}`): `0x${string}` {
   return hash
 }
 
-function resolvePreparedCallsPaymasterUrl(paymasterUrl: string | null): string | null {
-  const directEnv = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
-  if (/^https?:\/\//i.test(directEnv)) {
-    return directEnv.replace(
-      'https://api.developer.coinbase.com/',
-      'https://api.cdp.coinbase.com/',
+function readPreparedUserOpCallData(userOp: unknown): Hex | null {
+  if (!userOp || typeof userOp !== 'object') return null
+  const callData = (userOp as { callData?: unknown }).callData
+  return typeof callData === 'string' && callData.startsWith('0x') ? callData as Hex : null
+}
+
+function assertPreparedUserOpContainsExpectedCalldata(params: {
+  preparedUserOp: unknown
+  expectedSender: `0x${string}`
+  expectedCalldata: `0x${string}`
+}): void {
+  if (!params.preparedUserOp || typeof params.preparedUserOp !== 'object') {
+    throw new Error('wallet_prepareCalls returned an invalid userOp payload.')
+  }
+  const preparedSenderRaw = (params.preparedUserOp as { sender?: unknown }).sender
+  if (typeof preparedSenderRaw === 'string') {
+    const preparedSender = getAddress(preparedSenderRaw)
+    if (preparedSender.toLowerCase() != params.expectedSender.toLowerCase()) {
+      throw new Error('Prepared UserOp sender drifted from the expected smart wallet. Refresh and retry.')
+    }
+  }
+  const callData = readPreparedUserOpCallData(params.preparedUserOp)
+  if (!callData) {
+    throw new Error('wallet_prepareCalls returned a userOp without callData. Refresh and retry.')
+  }
+  if (!callData.toLowerCase().includes(params.expectedCalldata.slice(2).toLowerCase())) {
+    throw new Error(
+      'The prepared UserOp no longer matches the expected addOwnerAddress calldata. Refresh the owner-install preview and retry.',
     )
   }
-  if (!paymasterUrl) return null
-  const normalized = String(paymasterUrl).trim()
-  if (!/^https?:\/\//i.test(normalized)) return null
-  return normalized.replace(
-    'https://api.developer.coinbase.com/',
-    'https://api.cdp.coinbase.com/',
-  )
+}
+
+function resolvePreparedCallsPaymasterUrl(paymasterUrl: string | null): string | null {
+  const directEnv = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
+  const configured = directEnv || String(paymasterUrl ?? '').trim()
+  return configured ? resolveCdpPaymasterUrl(configured) : null
 }
 
 function extractWalletCallsId(sendResult: unknown): string {
@@ -86,6 +109,8 @@ export async function submitOwnerViaPreparedCallsWithEoaOwner(params: {
   data: `0x${string}`
   paymasterUrl: string | null
 }): Promise<`0x${string}`> {
+  assertAddOwnerSelfCallOwnerArg({ data: params.data, expectedOwnerToAdd: params.eoaOwnerAddress })
+
   const chainIdHex = `0x${params.chainId.toString(16)}`
   const capabilities: Record<string, unknown> = {}
   const paymasterUrlStr = resolvePreparedCallsPaymasterUrl(params.paymasterUrl)
@@ -115,6 +140,11 @@ export async function submitOwnerViaPreparedCallsWithEoaOwner(params: {
   if (!prepareResult.userOp) {
     throw new Error('wallet_prepareCalls did not return a userOp.')
   }
+  assertPreparedUserOpContainsExpectedCalldata({
+    preparedUserOp: prepareResult.userOp,
+    expectedSender: params.sender,
+    expectedCalldata: params.data,
+  })
 
   const userOpHash = unwrapDoubleHexEncodedHash(
     prepareResult.signatureRequest.hash as `0x${string}`,

@@ -1,4 +1,11 @@
-import { decodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
+import {
+  ContractFunctionZeroDataError,
+  decodeFunctionData,
+  getAddress,
+  isAddress,
+  type Address,
+  type Hex,
+} from 'viem'
 
 import { verifyLotteryProductionReadiness } from '../lottery/lotteryProductionReadiness.js'
 import { getApiContracts } from '../onchain/contracts.js'
@@ -320,14 +327,28 @@ export async function verifyDeployPhase2Invariants(
   // Ops canaries may use plain ERC20 assets that do not implement CreatorCoin.payoutRecipient.
   // Treat a revert / missing selector as "not a CreatorCoin" and skip this lane check rather
   // than hard-failing the whole gate before post-phase2 stages can run.
-  const creatorCoinPayoutRecipientRaw = await params.publicClient
-    .readContract({
+  let creatorCoinPayoutRecipientRaw: unknown = null
+  let creatorCoinSupportsPayoutRecipient = true
+  try {
+    creatorCoinPayoutRecipientRaw = await params.publicClient.readContract({
       address: info.creatorToken,
       abi: CREATOR_COIN_PAYOUT_RECIPIENT_VIEW_ABI,
       functionName: 'payoutRecipient',
     })
-    .catch(() => null)
-  const creatorCoinSupportsPayoutRecipient = creatorCoinPayoutRecipientRaw !== null
+  } catch (error) {
+    creatorCoinSupportsPayoutRecipient = false
+    if (error instanceof ContractFunctionZeroDataError || (error as { name?: string })?.name === 'ContractFunctionZeroDataError') {
+      // Plain ERC20/canary: selector truly absent.
+    } else {
+      checksRun++
+      recordViolation(
+        'creator_coin_payout_recipient_read_failed',
+        'Creator coin payoutRecipient read failed; invariant cannot be proven',
+        'successful read or missing selector',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
   const creatorCoinPayoutRecipient = normalizeAddress(creatorCoinPayoutRecipientRaw)
   if (creatorCoinSupportsPayoutRecipient) {
     checksRun++

@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
-import { getWaitlistLeaderboardData } from './waitlistLeaderboard.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  __resetWaitlistLeaderboardCacheForTests,
+  __waitlistLeaderboardCacheSizeForTests,
+  getWaitlistLeaderboardData,
+} from './waitlistLeaderboard.js'
 
 describe('public waitlist leaderboard wallet privacy', () => {
+  afterEach(() => __resetWaitlistLeaderboardCacheForTests())
+
   it('preserves canonical CSWs and external EOAs while excluding embedded signer identities', async () => {
     const rankedQueries: string[] = []
     let rankedQueryCount = 0
@@ -96,5 +102,25 @@ describe('public waitlist leaderboard wallet privacy', () => {
     expect(result.leaderboard[2]?.eoaAddress).toBeNull()
     expect(result.leaderboard[0]?.eoaAddress).toBeNull()
     expect(result.me?.eoaAddress).toBeNull()
+  })
+
+  it('bounds attacker-controlled page cache cardinality', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const sql = strings.join(' ').toLowerCase()
+        if (sql.includes('count(*)')) return { rows: [{ c: 1 }] }
+        return { rows: [] }
+      }),
+    }
+    for (let page = 1; page <= 300; page += 1) {
+      await getWaitlistLeaderboardData({
+        db,
+        page,
+        limit: 1,
+        pointsType: 'total',
+        authorizedProfileId: null,
+      })
+    }
+    expect(__waitlistLeaderboardCacheSizeForTests()).toBeLessThanOrEqual(256)
   })
 })

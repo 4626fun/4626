@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { keccak256, type Address, type Hex } from 'viem'
 
 import {
-  findDeploymentVersionForVanityTargetsSync,
   type PerVaultVanityVersionSearchParams,
 } from '../../../src/lib/deploy/perVaultVanityVersionSearch.js'
 import {
@@ -16,7 +15,7 @@ import {
 
 declare const process: { env: Record<string, string | undefined> }
 
-const DEFAULT_SERVER_MAX_ATTEMPTS = 50_000_000
+const DEFAULT_SERVER_MAX_ATTEMPTS = 100_000
 
 type VanityWasmEnvelope =
   | { ok: true; result: { version: string; attempt: number } }
@@ -28,7 +27,7 @@ export function readCombinedVanityServerMaxAttempts(): number {
   const raw = String(process.env.DEPLOY_COMBINED_VANITY_SERVER_MAX_TRIES ?? '').trim()
   const parsed = raw ? Number.parseInt(raw, 10) : DEFAULT_SERVER_MAX_ATTEMPTS
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SERVER_MAX_ATTEMPTS
-  return Math.min(parsed, 500_000_000)
+  return Math.min(parsed, DEFAULT_SERVER_MAX_ATTEMPTS)
 }
 
 export async function findPerVaultVanityVersionOnServer(
@@ -66,13 +65,7 @@ export async function findPerVaultVanityVersionOnServer(
     }
   }
 
-  const version = findDeploymentVersionForVanityTargetsSync({
-    ...params,
-    maxTries,
-    startAttempt,
-    preferWasm: false,
-  })
-  return { version, attempts: maxTries }
+  throw new Error('Server vanity WASM is unavailable; refusing synchronous CPU search')
 }
 
 function resolveVanityWasmPath(): string | null {

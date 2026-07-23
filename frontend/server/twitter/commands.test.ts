@@ -9,6 +9,14 @@ vi.mock('../_lib/alfaclub/roomCharts.js', () => ({
   buildAlfaRoomChart: (...args: any[]) => buildAlfaRoomChartMock(...args),
 }))
 
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}))
+
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}))
+
 import { handleTwitterCommand, postTweetFromSystem } from './commands.js'
 
 describe('twitter commands', () => {
@@ -289,15 +297,10 @@ describe('twitter commands', () => {
         }),
         text: async () => '',
       })
-      .mockResolvedValueOnce({
-        ok: true,
+      .mockResolvedValueOnce(new Response(Uint8Array.from([1, 2, 3, 4]), {
         status: 200,
-        headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
-        },
-        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
-        text: async () => '',
-      })
+        headers: { 'content-type': 'image/png' },
+      }))
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -357,15 +360,10 @@ describe('twitter commands', () => {
         }),
         text: async () => '',
       })
-      .mockResolvedValueOnce({
-        ok: true,
+      .mockResolvedValueOnce(new Response(Uint8Array.from([1, 2, 3, 4]), {
         status: 200,
-        headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
-        },
-        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
-        text: async () => '',
-      })
+        headers: { 'content-type': 'image/png' },
+      }))
       .mockResolvedValueOnce({
         ok: false,
         status: 403,
@@ -408,15 +406,10 @@ describe('twitter commands', () => {
         }),
         text: async () => '',
       })
-      .mockResolvedValueOnce({
-        ok: true,
+      .mockResolvedValueOnce(new Response(Uint8Array.from([1, 2, 3, 4]), {
         status: 200,
-        headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
-        },
-        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
-        text: async () => '',
-      })
+        headers: { 'content-type': 'image/png' },
+      }))
       .mockResolvedValueOnce({
         ok: true,
         status: 200,

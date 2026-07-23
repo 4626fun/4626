@@ -35,7 +35,7 @@ describe('canonicalWalletResolver.resolveAuthorizedWalletProfile', () => {
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ')
-        if (text.includes('SELECT p.id') && text.includes('WHERE LOWER(p.primary_wallet)')) {
+        if (text.includes('SELECT p.id') && text.includes('LOWER(p.primary_wallet)')) {
           return { rows: [{ id: profileId }] }
         }
         if (text.includes('FROM profiles p') && text.includes('WHERE p.id =')) {
@@ -68,6 +68,26 @@ describe('canonicalWalletResolver.resolveAuthorizedWalletProfile', () => {
       canonicalSmartWalletAddress: canonicalSmartWallet,
       activeOwnerWalletAddress: null,
     })
+  })
+
+  it('excludes merged profile tombstones from address authorization', async () => {
+    const queries: string[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        queries.push(text)
+        return { rows: [] }
+      }),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const { resolveAuthorizedWalletProfile } = await import('./canonicalWalletResolver.ts')
+    await expect(
+      resolveAuthorizedWalletProfile('0x8888888888888888888888888888888888888888'),
+    ).resolves.toBeNull()
+
+    const profileLookup = queries.find((query) => query.includes('SELECT p.id'))
+    expect(profileLookup).toContain('p.merged_into_profile_id IS NULL')
   })
 })
 
@@ -263,5 +283,25 @@ describe('canonicalWalletResolver identity disambiguation', () => {
       embeddedEoa: embedded,
       privyUserId: 'did:privy:test',
     })
+  })
+
+  it('excludes merged profile tombstones from profile-id authority fallback', async () => {
+    const queries: string[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        queries.push(text)
+        return { rows: [] }
+      }),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const { resolvePersistedWalletIdentityForProfileId } = await import('./canonicalWalletResolver.ts')
+    await expect(resolvePersistedWalletIdentityForProfileId(710)).resolves.toBeNull()
+
+    const profileLookup = queries.find(
+      (query) => query.includes('SELECT id, privy_user_id') && query.includes('WHERE id ='),
+    )
+    expect(profileLookup).toContain('merged_into_profile_id IS NULL')
   })
 })

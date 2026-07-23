@@ -11,7 +11,7 @@ Robinhood Chain (chainId `4663`, EID `30416`) is a **remote ShareOFT-only** expa
 
 ## DVN policy (Base ↔ Robinhood)
 
-Do **not** reuse Base ↔ Solana 6-of-9.
+Do **not** reuse the Base ↔ Solana 3-of-5 pool; verify the Robinhood-specific intersection.
 
 Shared DVNs (verify before wire):
 

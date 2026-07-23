@@ -1138,20 +1138,28 @@ async function providerWasAlreadyLinked(
   provider: AccountLinkProvider,
 ): Promise<boolean> {
   const result = await db.sql`
-    SELECT 1
-    FROM account_linked_methods
-    WHERE privy_user_id = ${privyUserId}
-      AND type = ${provider}
+    SELECT 1 FROM (
+      SELECT 1
+      FROM account_linked_methods
+      WHERE privy_user_id = ${privyUserId}
+        AND type = ${provider}
+      UNION ALL
+      SELECT 1
+      FROM points p
+      INNER JOIN profiles pr ON pr.id = p.signup_id
+      WHERE pr.privy_user_id = ${privyUserId}
+        AND p.source = ${toEventType(provider)}
+        AND p.amount > 0
+    ) AS provider_link_history
     LIMIT 1;
   `
   return Array.isArray(result.rows) && result.rows.length > 0
 }
 
-function resolveLinkPointEventKey(provider: AccountLinkProvider, methodValue: string): string {
+function resolveLinkPointEventKey(provider: AccountLinkProvider, _methodValue: string): string {
   const eventType = toEventType(provider)
-  if (provider === 'external_eoa') {
-    return `${eventType}:${methodValue.toLowerCase()}`
-  }
+  // Points reward linking the provider once, not every identifier a user may
+  // rotate through. Identity rows remain value-specific for account display.
   return eventType
 }
 

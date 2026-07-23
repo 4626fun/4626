@@ -454,7 +454,7 @@ describe('recordIssuerDailySpend', () => {
 
   it('rejects negative amounts before any DB call', async () => {
     const mod = await importModule()
-    const result = await mod.recordIssuerDailySpend({ profileId: 1, amountWei: -1n })
+    const result = await mod.recordIssuerDailySpend({ profileId: 1, amountWei: -1n, dailyCapWei: 100n })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe('negative_amount')
     expect(getDbMock).not.toHaveBeenCalled()
@@ -465,8 +465,19 @@ describe('recordIssuerDailySpend', () => {
       makeDb(async () => ({ rows: [{ spent_wei: '12345' }] })),
     )
     const mod = await importModule()
-    const result = await mod.recordIssuerDailySpend({ profileId: 1, amountWei: 100n })
+    const result = await mod.recordIssuerDailySpend({ profileId: 1, amountWei: 100n, dailyCapWei: 1_000n })
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.newTotalWei).toBe(12_345n)
+  })
+
+  it('fails atomically when the conditional upsert returns no row', async () => {
+    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [] })))
+    const mod = await importModule()
+    const result = await mod.recordIssuerDailySpend({
+      profileId: 1,
+      amountWei: 100n,
+      dailyCapWei: 100n,
+    })
+    expect(result).toEqual({ ok: false, error: 'cap_exceeded' })
   })
 })

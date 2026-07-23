@@ -99,16 +99,21 @@ function withOptionalCabalsBuilder<T extends Record<string, unknown>>(
   }
 }
 
-function getAcpBin(): string {
+function getAcpCommand(): { command: string; prefixArgs: string[] } {
   const fromEnv = String(process.env.ACP_BIN ?? process.env.ARENA_ACP_BIN ?? '').trim()
-  if (fromEnv) return fromEnv
+  if (fromEnv) {
+    if (/\s|[;&|`$<>]/.test(fromEnv)) {
+      throw new Error('ACP_BIN must be one executable path without shell syntax')
+    }
+    return { command: fromEnv, prefixArgs: [] }
+  }
   try {
     execSync('command -v acp', {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       shell: '/bin/sh',
     })
-    return 'acp'
+    return { command: 'acp', prefixArgs: [] }
   } catch {
     // fall through to dev checkout
   }
@@ -118,7 +123,7 @@ function getAcpBin(): string {
     console.error('Set ACP_CLI_DIR or clone acp-cli as a sibling directory.');
     process.exit(1);
   }
-  return `npx tsx ${bin}`;
+  return { command: 'npx', prefixArgs: ['tsx', bin] };
 }
 
 interface TradeArgs {
@@ -999,9 +1004,9 @@ function getMasterAddress(): string {
     process.exit(1);
   }
 
-  const acp = getAcpBin();
+  const acp = getAcpCommand();
   try {
-    const result = execSync(`${acp} agent whoami --json`, {
+    const result = execFileSync(acp.command, [...acp.prefixArgs, 'agent', 'whoami', '--json'], {
       encoding: 'utf-8',
       cwd: ACP_DIR,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1035,7 +1040,7 @@ function extractAcpCliError(err: any): string {
 }
 
 function runAcpWalletSignTypedData(typedData: unknown): string {
-  const acp = getAcpBin()
+  const acp = getAcpCommand()
   const args = ['wallet', 'sign-typed-data', '--data', JSON.stringify(typedData), '--json']
   const opts = {
     encoding: 'utf-8' as const,
@@ -1043,15 +1048,7 @@ function runAcpWalletSignTypedData(typedData: unknown): string {
     stdio: ['pipe', 'pipe', 'pipe'] as const,
     env: process.env,
   }
-  // Prefer execFile (no shell) when ACP_BIN is a single token (production: `acp`).
-  if (!/\s/.test(acp)) {
-    return execFileSync(acp, args, opts)
-  }
-  // Dev checkout path may be `npx tsx /path/bin/acp.ts`.
-  return execSync(
-    `${acp} wallet sign-typed-data --data ${JSON.stringify(JSON.stringify(typedData))} --json`,
-    opts,
-  )
+  return execFileSync(acp.command, [...acp.prefixArgs, ...args], opts)
 }
 
 // An ethers-v6-shaped signer the Hyperliquid SDK can use. Instead of holding a

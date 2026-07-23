@@ -365,6 +365,7 @@ function localApiRoutesPlugin(): Plugin {
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
         '/api/robots.txt': apiImport('./api/_handlers/seo/_robots'),
         '/api/sitemap.xml': apiImport('./api/_handlers/seo/_sitemap'),
+        '/api/seo/key-markets': apiImport('./api/_handlers/seo/_keyMarkets'),
         '/api/social-preview': apiImport('./api/_handlers/social/_socialPreviewRoute'),
         '/api/social-preview-debug': apiImport('./api/_handlers/social/_socialPreviewDebug'),
         '/api/creator-allowlist': apiImport('./api/_handlers/creator-access/_allowlist'),

@@ -304,13 +304,15 @@ export async function enforceDualRateLimit(params: {
   ipConfig: RateLimitConfig
   check: (key: string, config: RateLimitConfig) => Promise<RateLimitResult> | RateLimitResult
 }): Promise<RateLimitResult> {
-  const sessionKey = buildPrivySessionRateLimitKey(params.scope, params.req, params.ip)
-  const sessionResult = await params.check(sessionKey, params.sessionConfig)
-  if (!sessionResult.allowed) return sessionResult
-
+  // Check the bounded IP key before creating a durable bucket derived from
+  // attacker-controlled, unverified bearer material.
   const ipKey = rateLimitKey(params.scope, params.ip)
   const ipResult = await params.check(ipKey, params.ipConfig)
   if (!ipResult.allowed) return ipResult
+
+  const sessionKey = buildPrivySessionRateLimitKey(params.scope, params.req, params.ip)
+  const sessionResult = await params.check(sessionKey, params.sessionConfig)
+  if (!sessionResult.allowed) return sessionResult
 
   return {
     allowed: true,

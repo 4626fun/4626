@@ -152,6 +152,15 @@ describe('arenaClient trade guardrails', () => {
     expect(result.run?.args).toEqual(['tsx', 'scripts/trade.ts', 'close', '--pair', 'xyz:GOLD'])
   })
 
+  it('permits reduce-only closes for a position removed from the entry allowlist', async () => {
+    const result = await runArenaTrade(
+      { action: 'close', pair: 'BTC' },
+      mockConfig({ dryRun: true, assetAllowlist: new Set(['ETH']) }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.run?.args).toContain('BTC')
+  })
+
   it('parses the exit fill from the dgclaw close order response', () => {
     const stdout = JSON.stringify({
       status: 'ok',
@@ -296,7 +305,7 @@ describe('arenaClient dgclaw command preflight', () => {
     expect(result.details?.dgclawCommandExists).toBe(false)
   })
 
-  it('falls back to canonical dgclaw.sh in configured dir when bin override is stale', async () => {
+  it('fails closed instead of bypassing a stale configured wrapper', async () => {
     const dgclawDir = mkdtempSync(resolve(tmpdir(), 'arena-dgclaw-'))
     const dgclawPath = resolve(dgclawDir, 'dgclaw.sh')
     writeFileSync(dgclawPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8')
@@ -310,11 +319,11 @@ describe('arenaClient dgclaw command preflight', () => {
       }),
     )
 
-    expect(result.ok).toBe(true)
-    expect(result.run?.command).toBe(dgclawPath)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('stale-wrapper.sh')
   })
 
-  it('falls back to scripts/dgclaw.sh when canonical wrapper is missing', async () => {
+  it('does not discover scripts/dgclaw.sh when the configured path is absent', async () => {
     const dgclawDir = mkdtempSync(resolve(tmpdir(), 'arena-dgclaw-scripts-'))
     const scriptsDir = resolve(dgclawDir, 'scripts')
     mkdirSync(scriptsDir)
@@ -330,8 +339,8 @@ describe('arenaClient dgclaw command preflight', () => {
       }),
     )
 
-    expect(result.ok).toBe(true)
-    expect(result.run?.command).toBe(scriptPath)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('dgclaw binary not found')
   })
 })
 
@@ -362,16 +371,14 @@ describe('arenaClient create/register (acp path)', () => {
     expect(result.message).toContain('ARENA_CREATION_ENABLED')
   })
 
-  it('fails closed when ACP session rotation vars are only partially set', async () => {
+  it('fails closed when any runtime ACP session rotation variable is set', async () => {
     process.env.ACP_OWNER_WALLET = '0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9'
     const result = await runArenaCreateAgent(mockConfig({ dryRun: true, creationEnabled: true }))
     expect(result.ok).toBe(false)
-    expect(result.message).toContain('partially configured')
-    expect(result.message).toContain('ACP_ACCESS_TOKEN')
-    expect(result.message).toContain('ACP_REFRESH_TOKEN')
+    expect(result.message).toContain('Runtime ACP token rotation is disabled')
   })
 
-  it('fails closed when headless acp configure fails', async () => {
+  it('refuses a complete headless ACP credential triplet before spawning a process', async () => {
     process.env.ACP_ACCESS_TOKEN = 'token'
     process.env.ACP_REFRESH_TOKEN = 'refresh'
     process.env.ACP_OWNER_WALLET = '0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9'
@@ -379,10 +386,10 @@ describe('arenaClient create/register (acp path)', () => {
       mockConfig({ dryRun: false, creationEnabled: true, acpBin: '__definitely_missing_acp_bin__' }),
     )
     expect(result.ok).toBe(false)
-    expect(result.message).toContain('acp configure failed')
+    expect(result.message).toContain('Runtime ACP token rotation is disabled')
   })
 
-  it('uses ownerAddress fallback when ACP_OWNER_WALLET is unset', async () => {
+  it('does not pair service ACP tokens with a caller-provided owner fallback', async () => {
     process.env.ACP_ACCESS_TOKEN = 'token'
     process.env.ACP_REFRESH_TOKEN = 'refresh'
     delete process.env.ACP_OWNER_WALLET
@@ -392,8 +399,8 @@ describe('arenaClient create/register (acp path)', () => {
       '0x64c3Fb828bD2A8cDe9Cde14d0295D34916bb94e9',
     )
 
-    expect(result.ok).toBe(true)
-    expect(result.run?.dryRun).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Runtime ACP token rotation is disabled')
   })
 
   it('returns dry-run success (mock) and attempts parse when enabled', async () => {

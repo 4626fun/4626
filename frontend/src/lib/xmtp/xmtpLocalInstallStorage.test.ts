@@ -23,10 +23,10 @@ describe('xmtpLocalInstallStorage', () => {
     window.localStorage.removeItem(`cv:xmtp:installationProvisioned:${ENV}:${ADDRESS.toLowerCase()}`)
   })
 
-  it('persists encryption keys in localStorage for reload-safe Client.build', () => {
+  it('keeps encryption keys in memory and never persists them to localStorage', () => {
     const encKey = `0x${'ab'.repeat(32)}`
     writeStoredEncKeyHex(ENV, ADDRESS, encKey)
-    expect(window.localStorage.getItem(`cv:xmtp:encKey:${ENV}:${ADDRESS.toLowerCase()}`)).toBe(encKey)
+    expect(window.localStorage.getItem(`cv:xmtp:encKey:${ENV}:${ADDRESS.toLowerCase()}`)).toBeNull()
     expect(readStoredEncKeyHex(ENV, ADDRESS)).toBe(encKey)
   })
 

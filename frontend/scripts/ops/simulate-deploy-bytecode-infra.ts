@@ -121,7 +121,8 @@ async function run(rpc: string): Promise<void> {
 async function main(): Promise<void> {
   console.log('vault codeId', deployCodeIds.vault)
   await run(process.env.BASE_RPC_URL?.trim() || 'https://mainnet.base.org')
-  await run('https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82')
+  const paidRpc = process.env.BASE_PAID_RPC_URL?.trim()
+  if (paidRpc) await run(paidRpc)
 }
 
 main().catch((err) => {

@@ -16,6 +16,7 @@ import {
 export type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[]; rowCount?: number }>
   query?: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>
+  transaction?: <T>(fn: (txDb: Db) => Promise<T>) => Promise<T>
 }
 
 type ExistingProfile = { id: number; email: string | null }
@@ -35,21 +36,8 @@ function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
-async function withDbTransaction<T>(db: Db, fn: (txDb: Db) => Promise<T>): Promise<T> {
-  // Some test mocks expose only tagged-sql helpers; in that case we preserve
-  // current behavior while production db handles can execute atomic tx blocks.
-  if (typeof db.query !== 'function') {
-    return fn(db)
-  }
-  await db.query('BEGIN')
-  try {
-    const result = await fn(db)
-    await db.query('COMMIT')
-    return result
-  } catch (error) {
-    await db.query('ROLLBACK').catch(() => undefined)
-    throw error
-  }
+export async function withDbTransaction<T>(db: Db, fn: (txDb: Db) => Promise<T>): Promise<T> {
+  return typeof db.transaction === 'function' ? db.transaction(fn) : fn(db)
 }
 
 function normalizeAddress(value: unknown): string | null {

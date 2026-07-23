@@ -23,6 +23,7 @@ import {
   processWaitlistTwitterFollowEvent,
   processWaitlistTwitterTweetCreateEvent,
   readLinkedTwitterIdentityForPrivyUser,
+  readTwitterIdentityFromPrivyUser,
   resolvePrivyUserIdForTwitterActor,
   verifyAndAwardWaitlistTwitterEngagementStep,
 } from './waitlistTwitterEngagementServer.js'
@@ -173,6 +174,16 @@ describe('waitlistTwitterEngagementServer', () => {
     })
   })
 
+  it('reads the Twitter actor from the freshly verified Privy user', () => {
+    expect(
+      readTwitterIdentityFromPrivyUser({
+        linkedAccounts: [
+          { type: 'twitter_oauth', subject: '1502233', username: '@CreatorFan' },
+        ],
+      }),
+    ).toEqual({ id: '1502233', username: 'creatorfan' })
+  })
+
   describe('verifyAndAwardWaitlistTwitterEngagementStep', () => {
     function createKeyedDb(opts: { progressSources?: string[]; twitterValues?: string[] }) {
       return {
@@ -195,6 +206,7 @@ describe('waitlistTwitterEngagementServer', () => {
         db,
         privyUserId: 'did:privy:abc',
         step: 'like',
+        verifiedActor: { id: '123', username: null },
       })
       expect(result).toMatchObject({ ok: false, reason: 'out_of_order' })
       expect(verifyTwitterEngagementStep).not.toHaveBeenCalled()
@@ -207,6 +219,7 @@ describe('waitlistTwitterEngagementServer', () => {
         db,
         privyUserId: 'did:privy:abc',
         step: 'follow',
+        verifiedActor: { id: null, username: null },
       })
       expect(result).toMatchObject({ ok: false, reason: 'not_linked' })
       expect(verifyTwitterEngagementStep).not.toHaveBeenCalled()
@@ -219,6 +232,7 @@ describe('waitlistTwitterEngagementServer', () => {
         db,
         privyUserId: 'did:privy:abc',
         step: 'follow',
+        verifiedActor: { id: '123', username: null },
       })
       expect(result).toMatchObject({ ok: false, reason: 'not_found' })
       expect(applyPointEvent).not.toHaveBeenCalled()
@@ -230,6 +244,7 @@ describe('waitlistTwitterEngagementServer', () => {
         db,
         privyUserId: 'did:privy:abc',
         step: 'follow',
+        verifiedActor: { id: '123', username: null },
       })
       expect(result.ok).toBe(true)
       if (result.ok) expect(result.awarded).toBe(true)
@@ -252,6 +267,7 @@ describe('waitlistTwitterEngagementServer', () => {
         db,
         privyUserId: 'did:privy:abc',
         step: 'follow',
+        verifiedActor: { id: '123', username: null },
       })
       expect(result.ok).toBe(true)
       if (result.ok) expect(result.awarded).toBe(false)

@@ -136,8 +136,8 @@ describe('resolveConversationById', () => {
     expect(resolved?.id).toBe('GroupABC')
   })
 
-  it('uses syncAll and listGroups when resolving waitlist group memberships', async () => {
-    const { ConsentEntityType, ConsentState } = await import('@xmtp/browser-sdk')
+  it('does not expose or auto-allow unknown-consent group memberships', async () => {
+    const { ConsentState } = await import('@xmtp/browser-sdk')
     const { resolveConversationById } = await import('./xmtpHelpers')
 
     const group = {
@@ -163,18 +163,12 @@ describe('resolveConversationById', () => {
       preferencesApi,
       forceSync: true,
     })
-    expect(resolved?.id).toBe(group.id)
-    expect(preferencesApi.setConsentStates).toHaveBeenCalledWith([
-      {
-        entityType: ConsentEntityType.GroupId,
-        entity: group.id,
-        state: ConsentState.Allowed,
-      },
-    ])
+    expect(resolved).toBeNull()
+    expect(preferencesApi.setConsentStates).not.toHaveBeenCalled()
     expect(api.syncAll).toHaveBeenCalled()
-    expect(list).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
-    expect(listGroups).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
-    expect(group.updateConsentState).toHaveBeenCalledWith(ConsentState.Allowed)
+    expect(list).toHaveBeenCalledWith({ consentStates: [ConsentState.Allowed] })
+    expect(listGroups).toHaveBeenCalledWith({ consentStates: [ConsentState.Allowed] })
+    expect(group.updateConsentState).not.toHaveBeenCalled()
   })
 })
 

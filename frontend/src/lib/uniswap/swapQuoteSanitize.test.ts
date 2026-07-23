@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   coerceSwapTransactionValue,
   normalizeSwapApiResponsePayload,
+  assertBasePermit2Safety,
   sanitizeClassicQuoteForSwap,
   sanitizeCreateSwapRequestPayload,
 } from './swapQuoteSanitize'
@@ -166,7 +167,7 @@ describe('sanitizeCreateSwapRequestPayload', () => {
             expiration: 1779463380,
             nonce: 0,
           },
-          spender: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+          spender: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
           sigDeadline: 1776873180,
         },
       },
@@ -180,5 +181,61 @@ describe('sanitizeCreateSwapRequestPayload', () => {
     expect(details.expiration).toBe('1779463380')
     expect(details.nonce).toBe('0')
     expect(values.sigDeadline).toBe('1776873180')
+  })
+})
+
+
+describe('assertBasePermit2Safety', () => {
+  const permitData = {
+    domain: {
+      name: 'Permit2',
+      chainId: 8453,
+      verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+    },
+    message: {
+      details: {
+        token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        amount: '1000',
+        expiration: '1893456000',
+        nonce: '7',
+      },
+      spender: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+      sigDeadline: '1893456000',
+    },
+  } as const
+
+  it('accepts canonical Base Permit2 payloads for allowlisted spenders', () => {
+    expect(
+      assertBasePermit2Safety({
+        permitData: permitData as unknown as Record<string, unknown>,
+        expectedTokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+      }),
+    ).toMatchObject({
+      spender: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
+      token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    })
+  })
+
+  it('rejects unallowlisted Permit2 spenders', () => {
+    expect(() =>
+      assertBasePermit2Safety({
+        permitData: {
+          ...permitData,
+          message: {
+            ...permitData.message,
+            spender: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          },
+        },
+      }),
+    ).toThrow(/spender is not allowlisted/i)
+  })
+
+  it('rejects Permit2 payloads that do not match the expected sell token', () => {
+    expect(() =>
+      assertBasePermit2Safety({
+        permitData: permitData as unknown as Record<string, unknown>,
+        expectedTokenAddress: '0x4200000000000000000000000000000000000006',
+      }),
+    ).toThrow(/does not match the sell token/i)
   })
 })

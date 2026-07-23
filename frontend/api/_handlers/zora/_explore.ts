@@ -763,9 +763,7 @@ async function buildEthosSortedCreatorList(params: {
       pageRows
         .map((row) => {
           const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
-          if (twitterUsername) return twitterUsername
-          const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
-          return zoraHandle
+          return twitterUsername
         })
         .filter((username) => username.length > 0)
         .map((username) => `service:x.com:username:${username}`),
@@ -775,10 +773,8 @@ async function buildEthosSortedCreatorList(params: {
 
   const getFreshScoreForRow = (row: { twitter_username: string | null; zora_handle: string | null }): { score: number | null; level: string | null } => {
     const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
-    const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
-    const username = twitterUsername || zoraHandle
-    if (!username) return { score: null, level: null }
-    const fresh = freshScoreMap.get(`service:x.com:username:${username}`) ?? null
+    if (!twitterUsername) return { score: null, level: null }
+    const fresh = freshScoreMap.get(`service:x.com:username:${twitterUsername}`) ?? null
     if (typeof fresh?.score !== 'number' || !Number.isFinite(fresh.score)) return { score: null, level: null }
     return { score: fresh.score, level: typeof fresh.level === 'string' ? fresh.level : null }
   }
@@ -967,5 +963,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 }
-
 

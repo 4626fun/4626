@@ -25,8 +25,6 @@ import {
   checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-  getDbForCron,
-  isDbConfigured,
 } from '@4626/server-core'
 
 
@@ -40,9 +38,7 @@ import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deploy
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
-import { upsertSolanaShareMeshMapping } from '../../../../../server/_lib/onchain/solanaShareMeshMappings.js'
-import { enqueueKeeperJob } from '../../../../../server/_lib/keeperJobs/keeperJobs.js'
-import { enqueueSolanaShareMeshProvisioning } from '../../../../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js'
+import { persistAndQueueSolanaDeploySessionMapping } from '../../../../../server/_lib/deploy/solanaDeploySessionMapping.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
@@ -474,74 +470,6 @@ async function ensureOvaultPreflight(params: {
     finalizeCall: finalizeEntry.call,
     ovaultRequested,
   })
-}
-
-async function persistAndQueueSolanaShareMeshMapping(params: {
-  recId: string
-  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
-  solanaOvault: unknown
-}): Promise<void> {
-  const ovault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
-  if (ovault.enabled !== true) return
-  const shareMeshMint =
-    typeof ovault.shareMeshMint === 'string' && ovault.shareMeshMint.trim()
-      ? ovault.shareMeshMint.trim()
-      : ''
-  if (!shareMeshMint) return
-
-  const finalizeEntry = findFinalizePhase2Entry(params.phase2FinalizeCalls)
-  if (!finalizeEntry) return
-  const creatorToken = finalizeEntry.info.creatorToken
-  const shareOft = finalizeEntry.info.shareToken
-  if (!creatorToken || !shareOft) return
-  if (!isDbConfigured()) return
-
-  const db = await getDbForCron()
-  if (!db) return
-
-  const mapping = await upsertSolanaShareMeshMapping({
-    db: db as any,
-    creatorToken,
-    shareOft,
-    shareMeshMint,
-    sourceSessionId: params.recId,
-  })
-  await enqueueKeeperJob({
-    kind: 'internal_api',
-    source: 'deploy-session-ovault-mesh',
-    dedupeKey: `solana-reconcile:solana-share-mesh-sync:shareoft:${mapping.shareOft.toLowerCase()}`,
-    payload: {
-      path: '/api/keeper/solana/reconcile',
-      body: {
-        workflow: 'solana-share-mesh-sync',
-        action: 'sync_mapping',
-        checkpointKey: `shareoft:${mapping.shareOft.toLowerCase()}`,
-        payload: {
-          creatorToken: mapping.creatorToken,
-          shareOft: mapping.shareOft,
-          shareMeshMint: mapping.shareMeshMint,
-          sourceSessionId: params.recId,
-        },
-      },
-    },
-    maxAttempts: 5,
-  })
-
-  const poolQueue = await enqueueSolanaShareMeshProvisioning({
-    creatorToken: getAddress(creatorToken as Address),
-    activationId: 0,
-    paymentSource: 'post_deploy',
-    trigger: 'post_deploy',
-    deploySessionId: params.recId,
-    shareOft: mapping.shareOft,
-    shareMeshMint: mapping.shareMeshMint,
-  })
-  if (!poolQueue.enqueued) {
-    logger.info('[deploy/session] solana pool provisioning queue skipped', {
-      sessionId: params.recId,
-      reason: poolQueue.reason ?? 'unknown',
-    })
-  }
 }
 
 function asOwnerBytes(owner: Address): Hex {
@@ -1172,6 +1100,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2FinalizeCalls,
         solanaOvault: payload.solanaOvault,
       })
+      // Persist the exact mint/mode before advancing the durable session. If
+      // DB or queueing fails, remain at ovault_mesh_sent so a retry can safely
+      // resume instead of silently completing without a Solana mapping.
+      const finalizeEntry = findFinalizePhase2Entry(phase2FinalizeCalls)
+      if (!finalizeEntry?.info.creatorToken || !finalizeEntry.info.shareToken) {
+        throw new Error('Solana mapping persistence failed: creator token or ShareOFT is missing.')
+      }
+      try {
+        await persistAndQueueSolanaDeploySessionMapping({
+          sessionId: rec.id,
+          creatorToken: finalizeEntry.info.creatorToken,
+          shareOft: finalizeEntry.info.shareToken,
+          solanaOvault: payload.solanaOvault,
+        })
+      } catch (mappingError) {
+        const detail = mappingError instanceof Error ? mappingError.message : String(mappingError)
+        throw new Error(`Solana mapping persistence failed: ${detail}`)
+      }
       const markedConfirmed = await transitionDeploySession({
         id: rec.id,
         fromStep: 'ovault_mesh_sent',
@@ -1182,16 +1128,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!markedConfirmed) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
       }
-      await persistAndQueueSolanaShareMeshMapping({
-        recId: rec.id,
-        phase2FinalizeCalls,
-        solanaOvault: payload.solanaOvault,
-      }).catch((error) => {
-        logger.warn('[deploy/v2/session/continue] failed to persist/queue solana share mesh mapping', {
-          sessionId: rec.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
       return res.status(200).json({
         success: true,
         data: {
@@ -1418,6 +1354,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(409).json({
         success: false,
         error: `Deploy execution reverted: ${pretty}${debug.errorName ? ` (${debug.errorName})` : ''}`,
+      } satisfies ApiEnvelope<null>)
+    }
+    // Mapping persistence is intentionally fail-closed at ovault_mesh_sent. Do not
+    // mark the session failed — /continue must be able to retry once DB recovers.
+    if (
+      String(rec.step) === 'ovault_mesh_sent' &&
+      (/solana mapping/i.test(msg) || /share-mesh mapping/i.test(msg) || /solanaDeploySessionMapping/i.test(msg))
+    ) {
+      logger.error('deploy session continue solana mapping failed (left at ovault_mesh_sent)', pretty)
+      return res.status(503).json({
+        success: false,
+        error: `Solana share-mesh mapping persistence failed; session remains at ovault_mesh_sent for retry. ${pretty}`.slice(
+          0,
+          500,
+        ),
       } satisfies ApiEnvelope<null>)
     }
     logger.error('deploy session continue failed', pretty)

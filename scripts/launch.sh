@@ -182,10 +182,40 @@ fi
 
 header "Frontend Release Gates (Owner: Frontend)"
 echo "Pass criteria: lint/typecheck/launch-critical tests/build all succeed."
-run_cmd "install frontend dependencies (frozen lockfile)" pnpm -C frontend install --frozen-lockfile
-run_cmd "frontend lint" pnpm -C frontend lint
-run_cmd "frontend typecheck" pnpm -C frontend typecheck
-run_cmd "frontend generate html shells" pnpm -C frontend generate:html-shells
+run_cmd "install frontend dependencies (frozen lockfile)" env -i \
+  PATH="$PATH" \
+  HOME="$HOME" \
+  SHELL="${SHELL:-/bin/bash}" \
+  TERM="${TERM:-xterm-256color}" \
+  PNPM_HOME="${PNPM_HOME:-}" \
+  CI="${CI:-}" \
+  pnpm -C frontend install --frozen-lockfile
+run_cmd "frontend lint" env -i \
+  PATH="$PATH" \
+  HOME="$HOME" \
+  SHELL="${SHELL:-/bin/bash}" \
+  TERM="${TERM:-xterm-256color}" \
+  PNPM_HOME="${PNPM_HOME:-}" \
+  CI="${CI:-}" \
+  pnpm -C frontend lint
+run_cmd "frontend typecheck" env -i \
+  PATH="$PATH" \
+  HOME="$HOME" \
+  SHELL="${SHELL:-/bin/bash}" \
+  TERM="${TERM:-xterm-256color}" \
+  PNPM_HOME="${PNPM_HOME:-}" \
+  CI="${CI:-}" \
+  pnpm -C frontend typecheck
+run_cmd "frontend generate html shells" env -i \
+  PATH="$PATH" \
+  HOME="$HOME" \
+  SHELL="${SHELL:-/bin/bash}" \
+  TERM="${TERM:-xterm-256color}" \
+  PNPM_HOME="${PNPM_HOME:-}" \
+  CI="${CI:-}" \
+  VITE_DEPLOY_USE_SERVER_CONTINUE="${VITE_DEPLOY_USE_SERVER_CONTINUE}" \
+  VITE_CDP_PAYMASTER_URL="${VITE_CDP_PAYMASTER_URL}" \
+  pnpm -C frontend generate:html-shells
 run_cmd "frontend launch-critical tests (clean env)" env -i \
   PATH="$PATH" \
   HOME="$HOME" \
@@ -202,7 +232,16 @@ run_cmd "frontend launch-critical tests (clean env)" env -i \
   src/lib/htmlShellsGenerated.guard.test.ts \
   server/_lib/wallet/userOperationSubmitter.test.ts \
   api/__tests__/rpcProxy.test.ts
-run_cmd "frontend build" pnpm -C frontend build
+run_cmd "frontend build" env -i \
+  PATH="$PATH" \
+  HOME="$HOME" \
+  SHELL="${SHELL:-/bin/bash}" \
+  TERM="${TERM:-xterm-256color}" \
+  PNPM_HOME="${PNPM_HOME:-}" \
+  CI="${CI:-}" \
+  VITE_DEPLOY_USE_SERVER_CONTINUE="${VITE_DEPLOY_USE_SERVER_CONTINUE}" \
+  VITE_CDP_PAYMASTER_URL="${VITE_CDP_PAYMASTER_URL}" \
+  pnpm -C frontend build
 
 header "Protocol/Contract Readiness Gates (Owner: Contracts)"
 echo "Pass criteria: release target guard and focused contract tests succeed."

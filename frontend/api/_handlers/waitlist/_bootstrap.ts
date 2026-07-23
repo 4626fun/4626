@@ -42,7 +42,6 @@ import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameRes
 import { dedupeZoraProfileSeeds } from '../../../server/_lib/zora/zoraProfileIdentifier.js'
 import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
-import { classifyLinkedAccounts } from '../../../server/_lib/wallet/walletMapping.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 // Vite apiImport caches handler modules by handler mtime only; identity helpers
@@ -50,6 +49,7 @@ type BootstrapBody = { email?: string; referralCode?: string }
 type BootstrapDb = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
   query?: (sql: string, params?: unknown[]) => Promise<unknown>
+  transaction?: <T>(action: (txDb: BootstrapDb) => Promise<T>) => Promise<T>
 }
 type WaitlistBootstrapResponse =
   | {
@@ -111,52 +111,28 @@ function readPrivyToken(req: VercelRequest): string | null {
   return null
 }
 
-async function runBootstrapTransaction<T>(
+export async function runBootstrapTransaction<T>(
   db: BootstrapDb,
   action: (txDb: BootstrapDb) => Promise<T>,
   lockKey?: string,
 ): Promise<T> {
-  const query = typeof db.query === 'function' ? db.query.bind(db) : null
-  if (!query) {
-    // APIAUTH-006: When db.query is unavailable (Supabase sql-only path), use
-    // pg_advisory_lock to serialize concurrent bootstrap calls for the same
-    // privyUserId, preventing interleaved point moves and profile upserts.
-    if (lockKey) {
-      await db.sql`SELECT pg_advisory_lock(hashtext(${lockKey}))`
-      try {
-        return await action(db)
-      } finally {
-        await db.sql`SELECT pg_advisory_unlock(hashtext(${lockKey}))`
-      }
-    }
-    // R6: Without a lockKey or db.query, the transaction is skipped. ON
-    // CONFLICT clauses in upsertBootstrapProfile handle duplicate inserts,
-    // but rebindEmailProfileToPrivyUser is NOT atomic without a transaction.
-    return action(db)
-  }
-  await query('BEGIN')
-  try {
-    const result = await action(db)
-    await query('COMMIT')
-    return result
-  } catch (error) {
-    try {
-      await query('ROLLBACK')
-    } catch {
-      // ignore rollback failures; preserve root cause from action
-    }
-    throw error
-  }
+  if (typeof db.transaction !== 'function') return action(db)
+  return db.transaction(async (txDb) => {
+    if (lockKey) await txDb.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`
+    return action(txDb)
+  })
 }
 
 async function upsertBootstrapProfile(params: {
   db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
   email: string
+  verifiedEmail: boolean
   privyUserId: string
 }): Promise<void> {
-  const { db, email, privyUserId } = params
+  const { db, email, privyUserId, verifiedEmail } = params
 
   const rebindEmailProfileToPrivyUser = async (): Promise<boolean> => {
+    if (!verifiedEmail) return false
     const emailProfile = await db.sql`
       SELECT id
       FROM profiles
@@ -516,72 +492,6 @@ async function applyBootstrapReferral(params: {
   void conversionResult
 }
 
-async function lookupVerifiedAccountEmailForPrivyUser(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  privyUserId: string,
-): Promise<string | null> {
-  const result = await db.sql`
-    SELECT email
-    FROM profiles
-    WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
-      AND email_verified = TRUE
-      AND email IS NOT NULL
-      AND merged_into_profile_id IS NULL
-    ORDER BY updated_at DESC NULLS LAST, id DESC
-    LIMIT 1;
-  `
-  return normalizeEmail(result.rows?.[0]?.email)
-}
-
-async function lookupProfileEmailForPrivyUser(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  privyUserId: string,
-): Promise<string | null> {
-  const result = await db.sql`
-    SELECT email
-    FROM profiles
-    WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
-      AND email IS NOT NULL
-      AND email <> ''
-      AND LOWER(email) NOT LIKE '%@wallet.4626.fun'
-      AND LOWER(email) NOT LIKE '%@noemail.4626.fun'
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
-    LIMIT 1;
-  `
-  return normalizeEmail(result.rows?.[0]?.email)
-}
-
-async function lookupProfileEmailByLinkedWallets(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  evmAddresses: readonly string[],
-): Promise<string | null> {
-  if (evmAddresses.length === 0) return null
-  const result = await db.sql`
-    SELECT p.email
-    FROM profiles p
-    WHERE p.merged_into_profile_id IS NULL
-      AND p.email IS NOT NULL
-      AND p.email <> ''
-      AND LOWER(p.email) NOT LIKE '%@wallet.4626.fun'
-      AND LOWER(p.email) NOT LIKE '%@noemail.4626.fun'
-      AND (
-        LOWER(p.primary_wallet) = ANY(${evmAddresses})
-        OR LOWER(p.embedded_wallet) = ANY(${evmAddresses})
-        OR LOWER(p.csw_address) = ANY(${evmAddresses})
-        OR LOWER(p.primary_embedded_eoa) = ANY(${evmAddresses})
-        OR EXISTS (
-          SELECT 1
-          FROM profile_wallets pw
-          WHERE pw.profile_id = p.id
-            AND LOWER(pw.address) = ANY(${evmAddresses})
-        )
-      )
-    ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-    LIMIT 1;
-  `
-  return normalizeEmail(result.rows?.[0]?.email)
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -649,7 +559,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
-    const bootstrapEmailHint = email
     const privyUser = (await loadPrivyUserWithVerifiedEmailRetry({
       privyUserId: context.privyUserId,
       initialUser: context.privyUser,
@@ -657,8 +566,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       delayMs: 300,
     })) as any
     let resolvedPrivyUser = privyUser
-    let resolvedEmail =
-      normalizeEmail(extractPrivyVerifiedEmail(privyUser)) ?? bootstrapEmailHint
+    let resolvedEmail = normalizeEmail(extractPrivyVerifiedEmail(privyUser))
 
     // Block wallet-only Privy sign-ins for humans who already have a
     // canonical (email-verified) profile owning one of the incoming
@@ -669,10 +577,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // state is written on collision.
     await runWithWaitlistWalletCollisionAdoption({
       db: db as any,
-      email: resolvedEmail ?? bootstrapEmailHint,
+      email: resolvedEmail,
       privyUserId: context.privyUserId,
       privyUser: resolvedPrivyUser as any,
-      bootstrapEmailHint,
       action: () =>
         assertNoWalletPrivyCollision({
           db: db as any,
@@ -686,7 +593,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       email: resolvedEmail,
       privyUserId: context.privyUserId,
       privyUser: resolvedPrivyUser as any,
-      bootstrapEmailHint,
       action: () =>
         syncEmailIdentity({
           db: db as any,
@@ -702,34 +608,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         attempts: 10,
         delayMs: 300,
       })) as any
-      resolvedEmail =
-        normalizeEmail(extractPrivyVerifiedEmail(resolvedPrivyUser)) ??
-        bootstrapEmailHint ??
-        (await lookupVerifiedAccountEmailForPrivyUser(db, context.privyUserId)) ??
-        (await lookupProfileEmailForPrivyUser(db, context.privyUserId)) ??
-        (await lookupProfileEmailByLinkedWallets(
-          db,
-          Array.from(
-            new Set(
-              classifyLinkedAccounts(resolvedPrivyUser)
-                .allWallets.filter((wallet) => wallet.chain === 'evm')
-                .map((wallet) => wallet.address.trim().toLowerCase())
-                .filter((address) => /^0x[a-f0-9]{40}$/.test(address)),
-            ),
-          ),
-        ))
+      resolvedEmail = normalizeEmail(extractPrivyVerifiedEmail(resolvedPrivyUser))
     }
 
     // Only Privy's verified email is allowed to become the canonical account email.
-    // Pre-auth form input is intent, not proof. After OTP, the client may send the
-    // verified email before Privy server hydration catches up (common in Base App).
+    // Pre-auth form input is intent, not proof.
     if (resolvedEmail) {
       await runWithWaitlistEmailCollisionAdoption({
         db: db as any,
         email: resolvedEmail,
         privyUserId: context.privyUserId,
         privyUser: resolvedPrivyUser as any,
-        bootstrapEmailHint,
         action: () =>
           assertNoEmailPrivyCollision({
             db: db as any,
@@ -742,7 +631,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: resolvedEmail,
         privyUserId: context.privyUserId,
         privyUser: resolvedPrivyUser as any,
-        bootstrapEmailHint,
         action: () =>
           runBootstrapTransaction(db as BootstrapDb, async (txDb) => {
             await upsertAccount({
@@ -754,6 +642,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await upsertBootstrapProfile({
               db: txDb,
               email: resolvedEmail,
+              verifiedEmail: true,
               privyUserId: context.privyUserId,
             })
 

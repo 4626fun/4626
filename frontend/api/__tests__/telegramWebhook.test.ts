@@ -474,7 +474,7 @@ describe('telegram webhook handler', () => {
     }
   })
 
-  it('accepts webhook requests when TELEGRAM_LINK_API_SECRET is used as webhook secret fallback', async () => {
+  it('rejects webhook requests when only TELEGRAM_LINK_API_SECRET is configured', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     const restoreWebhookSecret = applyEnv({
       TELEGRAM_WEBHOOK_SECRET: undefined,
@@ -494,7 +494,8 @@ describe('telegram webhook handler', () => {
 
       await handler(req, res)
 
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(503)
+      expect(String(res.body?.error ?? '')).toContain('webhook secret')
     } finally {
       restoreWebhookSecret()
     }

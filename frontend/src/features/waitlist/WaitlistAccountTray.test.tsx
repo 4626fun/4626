@@ -5,11 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 // `/waitlist` deliberately has no WagmiProvider (see AppQueryProvider.tsx and
-// lib/privy/client.tsx). If the tray — or anything it reuses from the app's
-// `ConnectButton.tsx` tray pieces — ever calls a wagmi hook while rendering
-// on this route, that's the exact extension-collision regression the
-// wagmi-free adapter was built to avoid. Mocking wagmi to throw on any call
-// turns that regression into a hard test failure instead of a silent runtime
+// lib/privy/client.tsx). The waitlist tray must stay on wagmi-free shared tray
+// modules — never import ConnectButton here. Mocking wagmi to throw on any
+// call turns a regression into a hard test failure instead of a silent runtime
 // crash in production.
 vi.mock('wagmi', () => ({
   useAccount: () => {
@@ -48,43 +46,6 @@ vi.mock('@/hooks/useBasenameForAddress', () => ({
   useBasenameForAddress: () => ({ name: null, displayName: null, avatar: null, loading: false }),
 }))
 
-vi.mock('@/hooks/useCreatorCoinBadge', () => ({
-  useCreatorCoinBadge: () => null,
-}))
-
-vi.mock('@/hooks/useCreatorEconomySummary', () => ({
-  useCreatorEconomySummary: () => ({
-    loading: false,
-    capabilities: {},
-    view: {
-      role: 'none',
-      headline: 'No creator economy yet',
-      statusLabel: 'No creator economy yet',
-      statusDetail: null,
-      networkLabel: 'Base',
-      legacyBadge: null,
-      showThreeTokenRail: false,
-      railActive: false,
-      primaryAction: { label: 'Launch or link coin', href: '/deploy/coin' },
-      secondaryLink: null,
-      showPaywall: false,
-      metrics: { tvlUsd: null, sharePpsUsd: null, claimableCreatorEarningsEth: null },
-      holder: null,
-      launchAllocationLabel: '30% auction · 30% vesting · 30% Solana · 10% LP',
-      strategyPlanLabel: null,
-      infrastructureLabel: 'Base primary',
-      accountSigningLabel: 'Ready',
-      connectionsSummary: '0 of 7',
-      nextConnectionBonus: { label: 'Connect Email', points: 10 },
-      symbolDisplay: 'Creator',
-      logoUrl: null,
-      handleOrBasename: null,
-      vaultHref: null,
-      preferEconomyTab: false,
-    },
-  }),
-}))
-
 vi.mock('@/lib/waitlist/accountTrayPoints', () => ({
   fetchAccountTrayPoints: vi.fn(async () => ({
     signupId: 0,
@@ -113,12 +74,41 @@ vi.mock('@/lib/privy/walletHooksContext', () => ({
   usePrivySetActiveWalletFromContext: () => undefined,
 }))
 
+import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { WaitlistAccountTray, type WaitlistAccountTrayProps } from './WaitlistAccountTray'
+
+const emptyAccountMe: AccountSetupMe = {
+  privyUserId: 'did:privy:test',
+  email: null,
+  emailVerified: false,
+  appAccessStatus: null,
+  baseSubAccount: null,
+  linkedMethods: {},
+  accountSignals: {
+    linked: false,
+    canonicalCswAddress: null,
+    canonicalSource: null,
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
+    creatorCoin: null,
+    zoraHandle: null,
+    basename: null,
+    primaryWalletAddress: null,
+    embeddedEoaAddress: null,
+    lastResolvedAt: null,
+  },
+  score: { points: 0, tier: 0 },
+}
 
 function renderTray(props: Partial<WaitlistAccountTrayProps> = {}) {
   const queryClient = new QueryClient()
   const defaults: WaitlistAccountTrayProps = {
-    accountMe: null,
+    accountMe: emptyAccountMe,
     accountMeLoading: false,
     joinedSessionAddress: '0x1111111111111111111111111111111111111111',
     externalEoaAddress: null,
@@ -157,19 +147,31 @@ describe('WaitlistAccountTray', () => {
 
     fireEvent.click(trigger)
 
-    expect(screen.getAllByText(/creator economy/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText(/creator economy/i)).toBeNull()
+    expect(screen.queryByText(/launch bundle/i)).toBeNull()
+    expect(screen.getAllByText(/smart wallet/i).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/embedded signer/i)).toBeTruthy()
-    expect(screen.getByText(/^identities$/i)).toBeTruthy()
+    expect(screen.getByText(/^main wallet$/i)).toBeTruthy()
+    expect(screen.getByText(/^linked accounts$/i)).toBeTruthy()
     expect(screen.getByTestId('identities-panel')).toBeTruthy()
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^identity$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^wallets$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^portfolio$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^points$/i })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
-    expect(screen.getAllByRole('button', { name: /sign out/i }).length).toBeGreaterThanOrEqual(1)
+    // Sign out lives in the shared footer (not duplicated in the wallets list).
+    expect(screen.getByRole('button', { name: /^sign out$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^help$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^accounts$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^settings$/i })).toBeTruthy()
+  })
+
+  it('does not flash smart-wallet needs-setup while account profile is still null', () => {
+    renderTray({ accountMe: null, accountMeLoading: false })
+    fireEvent.click(screen.getByLabelText('Open account menu'))
+
+    expect(screen.queryByText(/needs setup/i)).toBeNull()
+    expect(screen.getByText(/embedded signer/i)).toBeTruthy()
   })
 
   it('shows the portfolio placeholder with enter-app CTA on the portfolio tab', () => {
@@ -195,17 +197,15 @@ describe('WaitlistAccountTray', () => {
     // Tray content is already visible without a click — the required step
     // must not be hidden behind a closed-by-default tray.
     expect(screen.getByText(/embedded signer/i)).toBeTruthy()
-    expect(screen.getAllByText(/creator economy/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: /^wallets$/i })).toBeTruthy()
+    expect(screen.queryByText(/creator economy/i)).toBeNull()
   })
 
   it('disables sign out via the caller-provided aggregate busy flag', () => {
     renderTray({ signOutDisabled: true })
     fireEvent.click(screen.getByLabelText('Open account menu'))
 
-    const signOutButtons = screen.getAllByRole('button', { name: /sign out/i }) as HTMLButtonElement[]
-    expect(signOutButtons.length).toBeGreaterThanOrEqual(1)
-    for (const button of signOutButtons) {
-      expect(button.disabled).toBe(true)
-    }
+    const signOutButton = screen.getByRole('button', { name: /^sign out$/i }) as HTMLButtonElement
+    expect(signOutButton.disabled).toBe(true)
   })
 })

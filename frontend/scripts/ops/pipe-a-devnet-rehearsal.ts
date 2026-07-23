@@ -85,6 +85,7 @@ Options:
   --skip-forge           Skip forge ShareOftPeer wiring tests
   --skip-vitest          Skip vitest wiring/fee suites
   --skip-cost-probe      Skip kpr solana:cost-probe-devnet
+  --live-devnet          Run the mutating cost probe after explicit approval and read-only preflight
   --peer <bytes32>       Validate an OFT store peer from LayerZero devnet create
   --help                 Show this help
 
@@ -146,7 +147,26 @@ function main(): void {
     if (!ok) failed = true
   }
 
-  if (!hasFlag('--skip-cost-probe')) {
+  const runLive = hasFlag('--live-devnet')
+  if (!hasFlag('--skip-cost-probe') && !runLive) {
+    process.stdout.write('\n[skip] cost probe disabled — pass --live-devnet after explicit approval\n')
+  }
+  if (runLive) {
+    const devnetRpc =
+      process.env.SOLANA_DEVNET_RPC_URL?.trim() ||
+      process.env.RPC_URL_SOLANA_TESTNET?.trim() ||
+      process.env.SOLANA_RPC_URL?.trim() ||
+      ''
+    const preflight = runStep(
+      'Solana devnet cost-probe read-only preflight',
+      'pnpm',
+      ['ops:preflight-solana-devnet', '--', '--skip-hook'],
+      FRONTEND_ROOT,
+      { SOLANA_RPC_URL: devnetRpc },
+    )
+    if (!preflight) failed = true
+  }
+  if (runLive && !failed && !hasFlag('--skip-cost-probe')) {
     const kprDir = resolve(REPO_ROOT, 'kpr')
     if (!existsSync(resolve(kprDir, 'package.json'))) {
       process.stderr.write('\n[skip] kpr/ missing — cost probe not run\n')
@@ -154,7 +174,7 @@ function main(): void {
       const ok = runStep(
         'Solana devnet cost probe (Path 1 rent proxy)',
         'pnpm',
-        ['solana:cost-probe-devnet'],
+        ['solana:cost-probe-devnet', '--', '--execute'],
         kprDir,
         {
           SKIP_HOOK: '1',

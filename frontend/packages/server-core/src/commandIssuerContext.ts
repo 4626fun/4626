@@ -306,11 +306,11 @@ export async function readIssuerDailySpend(profileId: number): Promise<bigint> {
 export async function recordIssuerDailySpend(params: {
   profileId: number
   amountWei: bigint
+  dailyCapWei: bigint
 }): Promise<{ ok: true; newTotalWei: bigint } | { ok: false; error: string }> {
-  const { profileId, amountWei } = params
-  if (amountWei < 0n) {
-    return { ok: false, error: 'negative_amount' }
-  }
+  const { profileId, amountWei, dailyCapWei } = params
+  if (amountWei < 0n) return { ok: false, error: 'negative_amount' }
+  if (dailyCapWei <= 0n) return { ok: false, error: 'invalid_caps' }
   if (!isDbConfigured()) return { ok: false, error: 'db_unavailable' }
   const db = await getDb()
   if (!db) return { ok: false, error: 'db_unavailable' }
@@ -319,13 +319,16 @@ export async function recordIssuerDailySpend(params: {
   try {
     const res = await db.sql`
       INSERT INTO command_issuer_daily_spend (profile_id, ymd, spent_wei, updated_at)
-      VALUES (${profileId}, ${ymd}, ${amountWei}, NOW())
+      SELECT ${profileId}, ${ymd}, ${amountWei}, NOW()
+      WHERE ${amountWei} <= ${dailyCapWei}
       ON CONFLICT (profile_id, ymd)
       DO UPDATE SET
         spent_wei = command_issuer_daily_spend.spent_wei + EXCLUDED.spent_wei,
         updated_at = NOW()
+      WHERE command_issuer_daily_spend.spent_wei + EXCLUDED.spent_wei <= ${dailyCapWei}
       RETURNING spent_wei
     `
+    if (!res.rows?.[0]) return { ok: false, error: 'cap_exceeded' }
     const newTotal = res.rows?.[0]?.spent_wei ? BigInt(res.rows[0].spent_wei) : amountWei
     return { ok: true, newTotalWei: newTotal }
   } catch (err: any) {

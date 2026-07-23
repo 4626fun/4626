@@ -59,6 +59,7 @@ import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedTokenList.js'
 import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
+import { persistAndQueueSolanaDeploySessionMapping } from '../../../../../server/_lib/deploy/solanaDeploySessionMapping.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
@@ -811,6 +812,7 @@ function normalizeAddress(value: unknown): Address | null {
 
 function extractFinalizePhase2Info(data: Hex): {
   creatorToken: Address | null
+  shareToken: Address | null
   depositAmount: bigint | null
   owner: Address | null
   vault: Address | null
@@ -823,6 +825,7 @@ function extractFinalizePhase2Info(data: Hex): {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
+        shareToken?: string
         depositAmount?: bigint | string | number
         owner?: string
         vault?: string
@@ -840,6 +843,7 @@ function extractFinalizePhase2Info(data: Hex): {
       if (!creatorToken) continue
       return {
         creatorToken,
+        shareToken: normalizeAddress(params?.shareToken),
         depositAmount: parseBigIntLike(params?.depositAmount),
         owner: normalizeAddress(params?.owner),
         vault: normalizeAddress(params?.vault),
@@ -2128,6 +2132,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     const ovault = await ensureSolanaRouteReadyForPhase3({
       publicClient,
       phase2FinalizeCalls,
+      solanaOvault: payload.solanaOvault,
+    })
+    const finalizeEntry = findFinalizePhase2Entry(phase2FinalizeCalls)
+    if (!finalizeEntry?.info.creatorToken || !finalizeEntry.info.shareToken) {
+      throw new Error('Solana mapping persistence failed: creator token or ShareOFT is missing.')
+    }
+    await persistAndQueueSolanaDeploySessionMapping({
+      sessionId: rec.id,
+      creatorToken: finalizeEntry.info.creatorToken,
+      shareOft: finalizeEntry.info.shareToken,
       solanaOvault: payload.solanaOvault,
     })
     const markedConfirmed = await transitionDeploySession({

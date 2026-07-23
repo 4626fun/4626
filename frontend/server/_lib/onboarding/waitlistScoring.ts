@@ -83,7 +83,6 @@ export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): nu
   if (
     normalizedSource === 'amoe_twitter_daily' ||
     normalizedSource === 'amoe_xmtp_daily' ||
-    normalizedSource === 'amoe_checkin' ||
     normalizedSource === 'waitlist_signup' ||
     normalizedSource === 'csw_link'
   ) {

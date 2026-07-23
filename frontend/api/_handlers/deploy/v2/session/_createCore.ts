@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+import { PublicKey } from '@solana/web3.js'
 import {
   createPublicClient,
   decodeFunctionData,
@@ -95,6 +96,7 @@ export type Call = { to: Address; value?: bigint | number | string; data: Hex }
 // request only carries share-mesh fields.
 type SolanaOvaultRequest = {
   enabled?: boolean
+  mode?: 'b1' | 'b2'
   assetMintOrigin?: 'existing' | 'new'
   shareMeshMint?: string
   solanaEid?: number | string
@@ -1767,13 +1769,6 @@ export function resolveRolePolicyIdForSession(params: {
   creatorToken: Address
   requestedRolePolicyId: bigint | null
 }): { rolePolicyId: bigint | null; source: RolePolicySource } {
-  if (params.requestedRolePolicyId !== null) {
-    return {
-      rolePolicyId: params.requestedRolePolicyId,
-      source: 'request',
-    }
-  }
-
   const creatorMap = readCreatorRolePolicyMap()
   const creatorPolicy = creatorMap[params.creatorToken.toLowerCase()]
   if (creatorPolicy !== undefined) {
@@ -1788,6 +1783,13 @@ export function resolveRolePolicyIdForSession(params: {
     return {
       rolePolicyId: globalDefault,
       source: 'global_default',
+    }
+  }
+
+  if (params.requestedRolePolicyId !== null) {
+    return {
+      rolePolicyId: params.requestedRolePolicyId,
+      source: 'request',
     }
   }
 
@@ -2109,6 +2111,7 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
   const raw = value as Record<string, unknown>
 
   const enabled = raw.enabled === true
+  const mode = raw.mode === 'b1' || raw.mode === 'b2' ? raw.mode : null
   const assetMintOrigin = normalizeSolanaAssetMintOrigin(raw.assetMintOrigin, 'existing')
   const shareMeshMint =
     typeof raw.shareMeshMint === 'string' && raw.shareMeshMint.trim()
@@ -2118,6 +2121,7 @@ function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | 
 
   return {
     enabled,
+    ...(mode ? { mode } : null),
     assetMintOrigin,
     ...(shareMeshMint ? { shareMeshMint } : null),
     ...(solanaEid !== null ? { solanaEid } : null),
@@ -2357,13 +2361,8 @@ async function resolveAllowlistAddresses(params: {
   smartWallet: Address
   creatorToken: Address
 }): Promise<Address[]> {
-  const base = normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet])
-  try {
-    const parties = await resolveCoinPartiesAndOwner(params.creatorToken as `0x${string}`)
-    return normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet, parties.creator, parties.payoutRecipient, parties.owner])
-  } catch {
-    return base
-  }
+  void params.creatorToken
+  return normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet])
 }
 
 /**
@@ -2449,12 +2448,6 @@ async function assertCreatorTokenAuthority(params: {
   const authorized = new Set<string>()
   if (typeof parties.creator === 'string' && isAddress(parties.creator)) {
     authorized.add(getAddress(parties.creator).toLowerCase())
-  }
-  if (typeof parties.payoutRecipient === 'string' && isAddress(parties.payoutRecipient)) {
-    authorized.add(getAddress(parties.payoutRecipient).toLowerCase())
-  }
-  if (typeof parties.owner === 'string' && isAddress(parties.owner)) {
-    authorized.add(getAddress(parties.owner).toLowerCase())
   }
 
   const ownerLc = params.ownerAddress.toLowerCase()
@@ -2895,6 +2888,30 @@ export async function validateDeploySessionRequest(params: {
   const ovaultMeshRequested = solanaOvault?.enabled === true
   const hasPostPhase2Stage = phase3Calls.length > 0 || phase4Calls.length > 0
   if (ovaultMeshRequested) {
+    const mode = solanaOvault?.mode
+    if (mode !== 'b1' && mode !== 'b2') {
+      throw new DeploySessionRequestError(
+        400,
+        'OVault mesh deploy lane requires explicit mode b1 or b2; ambiguous Solana lottery behavior is forbidden.',
+      )
+    }
+    const shareMeshMint =
+      typeof solanaOvault?.shareMeshMint === 'string'
+        ? solanaOvault.shareMeshMint.trim()
+        : ''
+    if (!shareMeshMint) {
+      throw new DeploySessionRequestError(
+        400,
+        'OVault mesh deploy lane requires the exact shareMeshMint; missing mappings must not be silently skipped.',
+      )
+    }
+    try {
+      if (new PublicKey(shareMeshMint).toBase58() !== shareMeshMint) {
+        throw new Error('non_canonical')
+      }
+    } catch {
+      throw new DeploySessionRequestError(400, 'OVault mesh shareMeshMint is not a canonical Solana public key.')
+    }
     if (!hasPostPhase2Stage) {
       throw new DeploySessionRequestError(
         400,

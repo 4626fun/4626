@@ -22,6 +22,7 @@ const {
   getNewTrendsMock,
   getTopVolumeTrends24hMock,
   getCoinMock,
+  fetchFreshEthosScoresByUserkeysMock,
 } = vi.hoisted(() => ({
   requireServerKeyMock: vi.fn(),
   sdkSetApiKeyMock: vi.fn(),
@@ -41,6 +42,7 @@ const {
   getNewTrendsMock: vi.fn(),
   getTopVolumeTrends24hMock: vi.fn(),
   getCoinMock: vi.fn(),
+  fetchFreshEthosScoresByUserkeysMock: vi.fn(async () => new Map()),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -56,7 +58,7 @@ vi.mock('../../server/_lib/zora/creatorEthosProjection.js', async (importOrigina
 })
 
 vi.mock('../../server/_lib/chat/ethosClient.js', () => ({
-  fetchFreshEthosScoresByUserkeys: vi.fn(async () => new Map()),
+  fetchFreshEthosScoresByUserkeys: fetchFreshEthosScoresByUserkeysMock,
 }))
 
 vi.mock('../../server/zora/_shared.js', () => ({
@@ -102,6 +104,7 @@ describe('GET /api/zora/explore', () => {
       sql: vi.fn(async () => ({ rows: [] })),
     })
     loadCreatorEthosProjectionByAddressesMock.mockResolvedValue(new Map())
+    fetchFreshEthosScoresByUserkeysMock.mockResolvedValue(new Map())
   })
 
   it('returns creator lists when the SDK response is already a connection shape at data level', async () => {
@@ -242,6 +245,47 @@ describe('GET /api/zora/explore', () => {
     expect(node?.marketCapDelta24h).toBe('8.4')
     expect(node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse.png')
     expect(node?.creatorProfile?.handle).toBe('jessepollak')
+  })
+
+  it('does not treat an unverified Zora handle as an X identity for fresh Ethos scores', async () => {
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ')
+        if (query.includes('to_regclass')) return { rows: [{ has_projection: true }] }
+        if (query.includes('v_explore_creators (unified view over projection)')) {
+          return {
+            rows: [
+              {
+                creator_address: '0x0000000000000000000000000000000000000abc',
+                coin_address: '0x0000000000000000000000000000000000000123',
+                twitter_username: null,
+                zora_handle: 'victim_x_handle',
+                created_at: '2025-01-01T00:00:00Z',
+                market_cap_usd: '1000',
+                volume_24h_usd: '100',
+                fees_24h_usd: '1',
+                ethos_score: null,
+                ethos_level: null,
+                ethos_score_source: null,
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+    getCoinMock.mockResolvedValue({ data: { zora20Token: { symbol: 'TEST', name: 'Test' } } })
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { list: 'TOP_VOLUME_CREATORS_24H', sort: 'ETHOS_SCORE', includeUnscored: '1' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(fetchFreshEthosScoresByUserkeysMock).not.toHaveBeenCalled()
+    expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBeUndefined()
   })
 
   it.each([

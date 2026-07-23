@@ -7531,7 +7531,7 @@ function DeployVaultBatcher({
                   tone="yours"
                   iconSrc={PROTOCOL_LOGOS.fun4626}
                   className="md:col-span-2"
-                  description="Required Solana lottery surface: Token-2022 transfer-hook mint plus creator-share-hook PDAs (setup-creator). Uses a separate mint from the LZ share-mesh DLMM leg because Meteora rejects TransferHook on the trading mint."
+                  description="Required Solana B2 lottery surface: the mapped LZ share-mesh Token-2022 mint plus creator-share-hook PDAs (setup-creator). The DLMM pool must use this exact same mint; mint alignment is a production gate."
                 >
                   <AddressRow
                     label="Transfer-hook mint (Token-2022)"

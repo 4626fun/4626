@@ -25,6 +25,8 @@ describe('seo route handlers', () => {
     expect(res.statusCode).toBe(200)
     expect(res.getHeader('content-type')).toBe('text/plain; charset=utf-8')
     expect(String(res.body)).toContain('User-agent: *')
+    expect(String(res.body)).toContain('Allow: /explore/pools')
+    expect(String(res.body)).toContain('Disallow: /explore/')
     expect(String(res.body)).toContain('Disallow: /faq')
     expect(String(res.body)).toContain('Disallow: /swap')
     expect(String(res.body)).toContain('Sitemap: https://4626.fun/sitemap.xml')
@@ -51,6 +53,7 @@ describe('seo route handlers', () => {
     expect(res.getHeader('content-type')).toBe('application/xml; charset=utf-8')
     const xml = String(res.body)
     expect(xml).toContain('<loc>https://4626.fun/</loc>')
+    expect(xml).toContain('<loc>https://4626.fun/explore/pools</loc>')
     expect(xml).not.toContain('<loc>https://4626.fun/faq</loc>')
     expect(xml).not.toContain('<loc>https://4626.fun/faq/how-it-works</loc>')
     expect(xml).not.toContain('/swap')
@@ -77,3 +80,41 @@ describe('seo route handlers', () => {
     expect(String(res.body)).not.toContain('https://evil.example/sitemap.xml')
   })
 })
+
+describe('key markets crawlable HTML', () => {
+  it('serves indexable HTML for the clean markets hub', async () => {
+    const { default: keyMarketsHandler } = await import('../_handlers/seo/_keyMarkets.ts')
+    const req = createMockReq({
+      method: 'GET',
+      headers: { host: '4626.fun' },
+      url: '/explore/pools',
+      query: {},
+    })
+    const res = createMockRes()
+    await keyMarketsHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.getHeader('content-type')).toBe('text/html; charset=utf-8')
+    expect(res.getHeader('x-robots-tag')).toBe('index, follow')
+    const html = String(res.body)
+    expect(html).toContain('Official FriendKey markets on Sudoswap')
+    expect(html).toContain('name="robots" content="index,follow')
+    expect(html).toContain('https://4626.fun/explore/pools')
+    expect(html).toContain('https://app.4626.fun/explore/pools')
+  })
+
+  it('noindexes query variants', async () => {
+    const { default: keyMarketsHandler } = await import('../_handlers/seo/_keyMarkets.ts')
+    const req = createMockReq({
+      method: 'GET',
+      headers: { host: '4626.fun' },
+      url: '/explore/pools?q=akita',
+      query: { q: 'akita' },
+    })
+    const res = createMockRes()
+    await keyMarketsHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.getHeader('x-robots-tag')).toBe('noindex, follow')
+    expect(String(res.body)).toContain('name="robots" content="noindex,follow"')
+  })
+})
+

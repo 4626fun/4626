@@ -578,7 +578,9 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           if (!response) {
             response = result.meme?.caption?.trim() || 'Hermit meme drop'
           }
-          if (isHermitAlfaClubPostXFirstEnabled() && mediaUrl) {
+          // Cross-posting to the protocol X account is an operator action even
+          // though local /gmeow generation remains open to room members.
+          if (isHermitAlfaClubPostXFirstEnabled() && mediaUrl && canPilotInverseAkitaInRoom) {
             const xPost = buildHermitXPostPayload({
               reply: result.reply,
               fallbackCaption: result.meme?.caption,

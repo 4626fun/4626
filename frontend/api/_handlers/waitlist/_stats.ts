@@ -30,13 +30,6 @@ type WaitlistAvatar = {
   href: string | null
 }
 
-type RecentAvatarRow = {
-  avatar_url?: unknown
-  handle?: unknown
-  basename?: unknown
-  link_address?: unknown
-}
-
 type WaitlistStatsResponse = {
   signedUpCount: number
   capacity: number
@@ -57,7 +50,6 @@ function emptyStats(): WaitlistStatsResponse {
 // Read a larger leaderboard slice so the top-points lane can still surface enough
 // PFPs even when some high-rank users have no avatar configured.
 const TOP_POINTS_PROFILE_SCAN = 300
-const RECENT_PROFILE_SCAN = 300
 const AVATAR_FETCH_LIMIT = 12
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const DEFAULT_ARWEAVE_GATEWAY = 'https://arweave.net/'
@@ -133,98 +125,11 @@ async function fetchTopMemberAvatarsByPoints(db: any): Promise<WaitlistAvatar[]>
   }
 }
 
-async function fetchRecentMemberAvatars(db: any): Promise<WaitlistAvatar[]> {
-  try {
-    const result = await db.sql`
-      WITH recent AS (
-        SELECT
-          p.id,
-          COALESCE(
-            NULLIF(TRIM(zp_av.basename_avatar), ''),
-            NULLIF(TRIM(zp_av.avatar_image_url), ''),
-            NULLIF(TRIM(p.avatar_url), ''),
-            NULLIF(TRIM(p.preprov_farcaster_pfp), '')
-          ) AS avatar_url,
-          COALESCE(
-            NULLIF(TRIM(zp_av.handle), ''),
-            NULLIF(TRIM(p.preprov_zora_handle), '')
-          ) AS handle,
-          NULLIF(TRIM(zp_av.basename), '') AS basename,
-          COALESCE(
-            NULLIF(TRIM(p.csw_address), ''),
-            NULLIF(TRIM(p.primary_wallet), '')
-          ) AS link_address
-        FROM profiles p
-        LEFT JOIN LATERAL (
-          SELECT zp.basename_avatar, zp.avatar_image_url, zp.handle, zp.basename
-          FROM zora_profiles zp
-          WHERE (
-            NULLIF(TRIM(p.primary_embedded_eoa), '') IS NOT NULL
-            AND (
-              lower(zp.privy_wallet_address) = lower(TRIM(p.primary_embedded_eoa))
-              OR lower(zp.signing_eoa) = lower(TRIM(p.primary_embedded_eoa))
-            )
-          )
-          OR (
-            NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
-            AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
-          )
-          OR (
-            NULLIF(TRIM(p.csw_address), '') IS NOT NULL
-            AND lower(zp.smart_wallet_address) = lower(TRIM(p.csw_address))
-          )
-          ORDER BY zp.last_refreshed_at DESC NULLS LAST
-          LIMIT 1
-        ) zp_av ON true
-        WHERE p.email IS NOT NULL
-          AND p.merged_into_profile_id IS NULL
-        ORDER BY p.id DESC
-        LIMIT ${RECENT_PROFILE_SCAN}
-      )
-      SELECT avatar_url, handle, basename, link_address
-      FROM recent
-      WHERE avatar_url IS NOT NULL
-      LIMIT ${AVATAR_FETCH_LIMIT};
-    `
-    const rows: RecentAvatarRow[] = Array.isArray(result?.rows) ? result.rows : []
-    return rows
-      .map((row) => {
-        const src = normalizeAvatarSource(row?.avatar_url)
-        if (!src) return null
-        const handle = (typeof row?.handle === 'string' ? row.handle.trim() : '').replace(/^@/, '')
-        const basename = typeof row?.basename === 'string' ? row.basename.trim() : ''
-        const linkAddress = typeof row?.link_address === 'string' ? row.link_address.trim() : ''
-        const label = handle ? `@${handle}` : basename || null
-        const href = handle
-          ? `https://zora.co/@${handle}`
-          : linkAddress
-            ? `https://basescan.org/address/${linkAddress}`
-            : null
-        return { src, label, href } satisfies WaitlistAvatar
-      })
-      .filter((avatar): avatar is WaitlistAvatar => avatar !== null)
-  } catch {
-    return []
-  }
-}
-
 async function fetchSocialProofAvatars(db: any): Promise<WaitlistAvatar[]> {
-  const byPoints = await fetchTopMemberAvatarsByPoints(db)
-  if (byPoints.length >= AVATAR_FETCH_LIMIT) return byPoints.slice(0, AVATAR_FETCH_LIMIT)
-
-  const recent = await fetchRecentMemberAvatars(db)
-  const merged: WaitlistAvatar[] = []
-  const seen = new Set<string>()
-
-  for (const avatar of [...byPoints, ...recent]) {
-    const key = avatar.src.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(avatar)
-    if (merged.length >= AVATAR_FETCH_LIMIT) break
-  }
-
-  return merged
+  // Public social proof is restricted to identities users have already
+  // published through the public leaderboard. Never fall back to recent
+  // verified-email signups.
+  return (await fetchTopMemberAvatarsByPoints(db)).slice(0, AVATAR_FETCH_LIMIT)
 }
 
 function shouldFailOpenForStats(): boolean {

@@ -447,7 +447,6 @@ export type PreferencesApiLike = {
 
 /** Consent states included when pulling server-side group memberships into a fresh browser install. */
 export const GROUP_MEMBERSHIP_CONSENT_SYNC_STATES = [
-  ConsentState.Unknown,
   ConsentState.Allowed,
 ] as const
 
@@ -530,9 +529,15 @@ async function findConversationInLists(
   return null
 }
 
-async function finalizeResolvedConversation(convo: ConversationLike): Promise<ConversationLike> {
+async function finalizeResolvedConversation(convo: ConversationLike): Promise<ConversationLike | null> {
   await syncConversationIfSupported(convo)
-  await allowConversationIfUnknown(convo)
+  if (typeof convo.consentState === 'function') {
+    try {
+      if ((await convo.consentState()) !== ConsentState.Allowed) return null
+    } catch {
+      return null
+    }
+  }
   return convo
 }
 
@@ -543,8 +548,6 @@ export async function resolveConversationById(
 ): Promise<ConversationLike | null> {
   const normalizedId = conversationId.trim()
   if (!normalizedId) return null
-
-  await allowGroupConsentById(options?.preferencesApi, normalizedId)
 
   const tryGet = async (): Promise<ConversationLike | null> => {
     try {

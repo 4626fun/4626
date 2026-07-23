@@ -10,13 +10,13 @@ import {
 import { PreflightSimulationRejectionError } from '@/lib/aa/coinbaseErc4337ErrorUtils'
 
 describe('resolveAutoSwapSlippagePct', () => {
-  it('uses 10% floor for canonical Zora routes (matches Zora production default)', () => {
+  it('does not silently force canonical Zora routes above the reviewed 2% floor', () => {
     expect(
       resolveAutoSwapSlippagePct({
         preferZoraTradeRoute: true,
         executionMode: 'canonical',
       }),
-    ).toBe(10)
+    ).toBe(2)
   })
 
   it('uses 2% floor for EOA Zora routes', () => {
@@ -45,7 +45,7 @@ describe('resolveAutoSwapSlippagePct', () => {
         executionMode: 'canonical',
         priceImpactPercent: 8,
       }),
-    ).toBe(10)
+    ).toBe(5)
   })
 
   it('respects quoted Zora provider without prefer flag', () => {
@@ -54,7 +54,7 @@ describe('resolveAutoSwapSlippagePct', () => {
         quotedProvider: 'zora',
         executionMode: 'canonical',
       }),
-    ).toBe(10)
+    ).toBe(2)
   })
 })
 
@@ -68,8 +68,8 @@ describe('parsePriceImpactPercentFromLabel', () => {
 describe('pickNextSwapSlippageEscalationPct', () => {
   it('steps through the auto slippage ladder', () => {
     expect(pickNextSwapSlippageEscalationPct(2)).toBe(5)
-    expect(pickNextSwapSlippageEscalationPct(5)).toBe(10)
-    expect(pickNextSwapSlippageEscalationPct(30)).toBeNull()
+    expect(pickNextSwapSlippageEscalationPct(2)).toBe(5)
+    expect(pickNextSwapSlippageEscalationPct(5)).toBeNull()
   })
 })
 
@@ -78,19 +78,19 @@ describe('resolveSwapSendRetrySlippagePct', () => {
     'This swap would fail on-chain — usually because the quote is stale, slippage is too tight',
   )
 
-  it('escalates slippage on the first retry when auto mode allows it', () => {
+  it('escalates only within the confirmed auto-mode cap', () => {
     expect(
       resolveSwapSendRetrySlippagePct({
         sendAttempt: 0,
-        activeSlippagePct: 5,
+        activeSlippagePct: 2,
         slippageAuto: true,
         parsedSlippage: 0.5,
-        slippageEscalationCapPct: 30,
+        slippageEscalationCapPct: 5,
         pickNext: pickNextSwapSlippageEscalationPct,
         sendError: preflightErr,
         isRetryable: () => true,
       }),
-    ).toBe(10)
+    ).toBe(5)
   })
 
   it('refreshes at the same slippage when manual mode blocks escalation', () => {
@@ -113,15 +113,15 @@ describe('resolveSwapSendRetrySlippagePct', () => {
       resolveSwapSendRetrySlippagePct({
         sendAttempt: 1,
         maxSendAttempts: 4,
-        activeSlippagePct: 30,
+        activeSlippagePct: 5,
         slippageAuto: true,
         parsedSlippage: 0.5,
-        slippageEscalationCapPct: 30,
+        slippageEscalationCapPct: 5,
         pickNext: pickNextSwapSlippageEscalationPct,
         sendError: preflightErr,
         isRetryable: () => true,
       }),
-    ).toBe(30)
+    ).toBe(5)
   })
 
   it('returns null when no send retries remain', () => {
@@ -129,10 +129,25 @@ describe('resolveSwapSendRetrySlippagePct', () => {
       resolveSwapSendRetrySlippagePct({
         sendAttempt: 3,
         maxSendAttempts: 4,
-        activeSlippagePct: 30,
+        activeSlippagePct: 5,
         slippageAuto: true,
         parsedSlippage: 0.5,
-        slippageEscalationCapPct: 30,
+        slippageEscalationCapPct: 5,
+        pickNext: pickNextSwapSlippageEscalationPct,
+        sendError: preflightErr,
+        isRetryable: () => true,
+      }),
+    ).toBeNull()
+  })
+
+  it('does not return an already-active tolerance above the confirmed cap', () => {
+    expect(
+      resolveSwapSendRetrySlippagePct({
+        sendAttempt: 0,
+        activeSlippagePct: 10,
+        slippageAuto: false,
+        parsedSlippage: 5,
+        slippageEscalationCapPct: 5,
         pickNext: pickNextSwapSlippageEscalationPct,
         sendError: preflightErr,
         isRetryable: () => true,
@@ -145,6 +160,6 @@ describe('formatSlippagePctForDisplay', () => {
   it('formats integers and decimals cleanly', () => {
     expect(formatSlippagePctForDisplay(5)).toBe('5')
     expect(formatSlippagePctForDisplay(0.5)).toBe('0.5')
-    expect(formatSlippagePctForDisplay(10)).toBe('10')
+    expect(formatSlippagePctForDisplay(5)).toBe('5')
   })
 })

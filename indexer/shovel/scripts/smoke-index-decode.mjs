@@ -27,6 +27,8 @@ const LOTTERY_IGS = [
   'protocol_lottery_winners',
   'protocol_lottery_multi_jackpot',
   'protocol_lottery_entries',
+  'protocol_lottery_winner_callbacks',
+  'protocol_lottery_winner_callback_drops',
 ]
 
 function pgUrl() {
@@ -40,7 +42,7 @@ function rpcUrl() {
 function lotteryManager() {
   return (
     process.env.LOTTERY_MANAGER ||
-    '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1'
+    '0xB45E68a5867935a5734E4185977F81c528006650'
   ).trim()
 }
 

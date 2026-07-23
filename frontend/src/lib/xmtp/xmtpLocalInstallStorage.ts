@@ -30,33 +30,20 @@ export function readStoredEncKeyHex(env: XmtpEnv, address: string): string | nul
   const key = encKeyStorageKey(env, address)
   const fromMemory = inMemoryEncKeys.get(key) ?? null
   if (fromMemory && ENC_KEY_HEX_RE.test(fromMemory)) return fromMemory
-
-  if (typeof window === 'undefined') return null
-  try {
-    const fromStorage = window.localStorage.getItem(key)
-    if (!fromStorage || !ENC_KEY_HEX_RE.test(fromStorage)) return null
-    inMemoryEncKeys.set(key, fromStorage)
-    return fromStorage
-  } catch {
-    return null
-  }
+  return null
 }
 
 export function writeStoredEncKeyHex(env: XmtpEnv, address: string, encKeyHex: string): void {
   if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
   const key = encKeyStorageKey(env, address)
   inMemoryEncKeys.set(key, encKeyHex)
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(key, encKeyHex)
-  } catch {
-    // ignore storage errors
-  }
 }
 
 export function clearStoredEncKeyHex(env: XmtpEnv, address: string): void {
   const key = encKeyStorageKey(env, address)
   inMemoryEncKeys.delete(key)
+  // Remove keys written by older releases. Encryption keys are intentionally
+  // process-memory-only so an XSS cannot recover them from persistent storage.
   if (typeof window === 'undefined') return
   try {
     window.localStorage.removeItem(key)

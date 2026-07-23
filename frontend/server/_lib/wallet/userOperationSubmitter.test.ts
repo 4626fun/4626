@@ -143,6 +143,27 @@ describe('submitUserOpOrRefuse — caps', () => {
     })
     expect(result.ok).toBe(true)
   })
+
+  it('refuses when the atomic reservation loses a concurrent daily-cap race', async () => {
+    readDailySpendMock.mockResolvedValue(ISSUER.dailyCapWei - 10n)
+    recordDailySpendMock.mockResolvedValue({ ok: false, error: 'cap_exceeded' })
+    const mod = await importModule()
+    const result = await mod.submitUserOpOrRefuse({
+      issuer: ISSUER,
+      calls: CALLS,
+      valueWei: 10n,
+      bundlerUrl: 'https://bundler.example',
+      publicClient: { getBalance: async () => 0n } as any,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('cap_exceeded')
+    expect(recordDailySpendMock).toHaveBeenCalledWith({
+      profileId: ISSUER.profileId,
+      amountWei: 10n,
+      dailyCapWei: ISSUER.dailyCapWei,
+    })
+    expect(sendUserOpMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('submitUserOpOrRefuse — bundler + preflight', () => {
@@ -246,8 +267,26 @@ describe('submitUserOpOrRefuse — submission path', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.txHash).toBe('0xtxhash')
-    expect(recordDailySpendMock).toHaveBeenCalledWith({ profileId: 42, amountWei: 1_000n })
+    expect(recordDailySpendMock).toHaveBeenCalledWith({
+      profileId: 42,
+      amountWei: 1_000n,
+      dailyCapWei: ISSUER.dailyCapWei,
+    })
     expect(rollbackDailySpendMock).not.toHaveBeenCalled()
+  })
+
+  it('maps an atomic reservation race to a daily cap refusal before submission', async () => {
+    recordDailySpendMock.mockResolvedValue({ ok: false, error: 'cap_exceeded' })
+    const mod = await importModule()
+    const result = await mod.submitUserOpOrRefuse({
+      issuer: ISSUER,
+      calls: CALLS,
+      valueWei: 1_000n,
+      bundlerUrl: 'https://bundler.example',
+      publicClient: {} as any,
+    })
+    expect(result).toMatchObject({ ok: false, code: 'cap_exceeded', scope: 'daily' })
+    expect(sendUserOpMock).not.toHaveBeenCalled()
   })
 
   it('maps thrown insufficient-funds errors to insufficient_funds refusal and rolls back', async () => {

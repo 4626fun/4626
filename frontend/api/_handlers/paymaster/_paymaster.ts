@@ -1176,6 +1176,23 @@ const UNISWAP_UNIVERSAL_ROUTER_ABI = [
   },
 ] as const
 
+const UNISWAP_SWAP_PROXY_EXECUTE_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'tokenOut', type: 'address' },
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'swapData', type: 'bytes' },
+      { name: 'calls', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
+
 type InnerCall = { target: Address; value: bigint; data: Hex }
 
 type RateLimitBucket = { count: number; resetAtMs: number }
@@ -1418,6 +1435,39 @@ function assertRelayOwnerInstallPart1InnerCalls(params: {
   }
 }
 
+function assertCustomOwnerInstallSelfCall(params: {
+  sender: Address
+  innerCalls: InnerCall[]
+  customOwnerSponsorship: {
+    sessionAddress: Address
+    smartWalletAddress: Address
+    ownerToAdd: Address
+  }
+  sessionAddress: Address
+}): void {
+  if (params.customOwnerSponsorship.sessionAddress !== params.sessionAddress) {
+    throw new Error('custom_owner_policy_session_mismatch')
+  }
+  if (params.customOwnerSponsorship.smartWalletAddress !== params.sender) {
+    throw new Error('custom_owner_policy_sender_mismatch')
+  }
+  if (params.innerCalls.length !== 1) throw new Error('custom_owner_policy_call_count_invalid')
+  const only = params.innerCalls[0]
+  if (!only || only.target !== params.sender || only.value !== 0n) {
+    throw new Error('custom_owner_policy_self_call_invalid')
+  }
+  const decoded = decodeFunctionData({
+    abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+    data: only.data,
+  })
+  if (decoded.functionName !== 'addOwnerAddress') {
+    throw new Error('custom_owner_policy_selector_not_allowed')
+  }
+  if (getAddress(decoded.args[0] as Address) !== params.customOwnerSponsorship.ownerToAdd) {
+    throw new Error('custom_owner_policy_owner_mismatch')
+  }
+}
+
 async function validateActivationOwnerBinding(params: {
   token: DecodedActivationOwnerToken
   sender: Address
@@ -1579,16 +1629,22 @@ export async function validateSponsoredSmartWalletCalls(params: {
     }
     const relayPart1Only =
       innerCalls.length === 1 && isRelayPart1DepositoryInnerCall(innerCalls[0]!)
+    const client = await getBaseClient()
+    await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
     if (relayPart1Only) {
       assertRelayOwnerInstallPart1InnerCalls({
         sender: params.sender,
         innerCalls,
         customOwnerSponsorship,
       })
-      const client = await getBaseClient()
-      await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
       return { expectedCreatorToken: null, mode: 'relay_owner_install_part1' }
     }
+    assertCustomOwnerInstallSelfCall({
+      sender: params.sender,
+      innerCalls,
+      customOwnerSponsorship,
+      sessionAddress: params.sessionAddress,
+    })
   }
   const activationOwnerPolicyToken =
     typeof params.activationOwnerPolicyToken === 'string' &&
@@ -1659,6 +1715,9 @@ export async function validateSponsoredSmartWalletCalls(params: {
     activationOwnerSponsorship,
     debug: params.debug,
   })
+  if (customOwnerSponsorship && validated.mode !== 'deploy_session_setup') {
+    throw new Error('custom_owner_policy_mode_not_allowed')
+  }
   if (
     validated.mode !== 'deploy_session_setup' &&
     validated.mode !== 'relay_owner_install_part1' &&
@@ -1842,6 +1901,44 @@ export function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address
 function assertRawSwapPayloadReferencesToken(data: Hex, token: Address): void {
   const tokenNeedle = token.slice(2).toLowerCase()
   if (!data.toLowerCase().includes(tokenNeedle)) throw new Error('swap_router_token_not_referenced')
+}
+
+function assertSwapProxyPayloadSafety(params: {
+  data: Hex
+  allowedUniversalSwapRouters: Set<Address>
+  allowedPayoutRouterV3Routers: Set<Address>
+}): { tokenIn: Address } {
+  let decoded: any
+  try {
+    decoded = decodeFunctionData({ abi: UNISWAP_SWAP_PROXY_EXECUTE_ABI, data: params.data })
+  } catch {
+    throw new Error('swap_proxy_decode_failed')
+  }
+
+  if (decoded.functionName !== 'execute') {
+    throw new Error('swap_proxy_selector_not_allowed')
+  }
+
+  const tokenIn = getAddress(decoded.args[0] as Address)
+  const nestedPayloads = [decoded.args[3] as Hex, ...((decoded.args[4] as Hex[]) ?? [])]
+  const allowedTargets = new Set<Address>([
+    ...params.allowedUniversalSwapRouters,
+    ...params.allowedPayoutRouterV3Routers,
+  ])
+  const hasAllowedNestedTarget = nestedPayloads.some((payload) =>
+    typeof payload === 'string' &&
+    Array.from(allowedTargets).some((target) => payload.toLowerCase().includes(target.slice(2).toLowerCase())),
+  )
+  if (!hasAllowedNestedTarget) {
+    throw new Error('swap_proxy_nested_target_not_allowed')
+  }
+  const tokenReferenced = nestedPayloads.some(
+    (payload) => typeof payload === 'string' && payload.toLowerCase().includes(tokenIn.slice(2).toLowerCase()),
+  )
+  if (!tokenReferenced) {
+    throw new Error('swap_proxy_nested_token_not_referenced')
+  }
+  return { tokenIn }
 }
 
 function resolveSwapInputTokenFromRouterCalldata(
@@ -2761,6 +2858,7 @@ async function validateInnerCalls(params: {
         let swapRouterTarget: Address | null = null
         let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | 'zora-universal' | null = null
         let approvalSpender: Address | null = null
+        let swapProxyInputToken: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
           if (c.target === expectedWethToken && selector === SELECTOR_WETH_DEPOSIT) {
@@ -2779,6 +2877,14 @@ async function validateInnerCalls(params: {
           if (isUniversalRouterCall || isZoraUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
             if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
             if (isUniversalRouterCall) assertCanonicalSwapRouterExecuteEncoding(c.data)
+            if (isSwapProxyCall) {
+              const decodedSwapProxy = assertSwapProxyPayloadSafety({
+                data: c.data,
+                allowedUniversalSwapRouters,
+                allowedPayoutRouterV3Routers,
+              })
+              swapProxyInputToken = decodedSwapProxy.tokenIn
+            }
             sawSwapRouter = true
             swapRouterCalls += 1
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
@@ -2825,6 +2931,14 @@ async function validateInnerCalls(params: {
         const configuredUsdc =
           contracts.usdc && isAddress(contracts.usdc) ? getAddress(contracts.usdc) : BASE_USDC
         let swapInputToken = approvedToken ?? wrappedToken
+        if (approvedToken && swapProxyInputToken && approvedToken !== swapProxyInputToken) {
+          throw new Error('swap_proxy_token_mismatch')
+        }
+
+        if (!swapInputToken && swapRouterKind === 'swap-proxy' && swapProxyInputToken) {
+          swapInputToken = swapProxyInputToken
+        }
+
         if (
           !swapInputToken &&
           (swapRouterKind === 'zora-universal' || swapRouterKind === 'universal') &&
@@ -4062,15 +4176,11 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
       // FIX: FINDING-05 — enforce per-sender hourly UserOp sponsorship limit.
       // Preflight methods are intentionally weight 0; otherwise one visible
       // swap can consume several quota units before the actual submit.
-      // Activation owner-install UserOps (valid policy token present) are weight 0
-      // so Enable 4626 silent retries do not burn swap sponsorship quota.
-      const activationPolicyLooksValid = Boolean(
-        activationOwnerPolicyTokenHeader &&
-          readActivationOwnerToken(activationOwnerPolicyTokenHeader),
-      )
-      const sponsorshipWeight = activationPolicyLooksValid
-        ? 0
-        : sponsorshipWeightForMethod(method)
+      // Every final sponsorship operation consumes quota, including
+      // activation owner-install calls. Activation claims remain reusable
+      // until completion, so exempting them would make the financial limit
+      // bypassable with one valid token.
+      const sponsorshipWeight = sponsorshipWeightForMethod(method)
       const sponsorshipLimit = checkSponsorshipLimit(sender, sponsorshipWeight)
       if (!sponsorshipLimit.allowed) {
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((sponsorshipLimit.resetAtMs - Date.now()) / 1000))))

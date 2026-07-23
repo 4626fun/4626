@@ -28,6 +28,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | [wallet-csw-lifecycle.md](./archives/wallet-csw-lifecycle.md) | — | Server CSW delegation, XMTP, ERC-8004, deploy-session steps |
 | [wallet-relay-owner-install.md](./archives/wallet-relay-owner-install.md) | — | Relay, owner-install |
 | [infra-ops.md](./archives/infra-ops.md) | [core](./archives/infra-ops-core.md) · [ops](./archives/infra-ops-ops.md) · [prefs](./archives/infra-ops-prefs.md) | Supabase, Vercel, Railway, Solana |
+| [tribe-run.md](./archives/tribe-run.md) | — | Tribe.run token launch, `4626fun/4626` public face, sponsor badge, permissionless swaps |
 | [ui-shipped-preferences.md](./archives/ui-shipped-preferences.md) | — | **Reference only — excluded from index** |
 | [historical-audits.md](./archives/historical-audits.md) | — | Retired epoch history |
 
@@ -50,6 +51,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | Deploy-session owner delegation, ERC-8004, Privy agent wallet | `wallet-csw-lifecycle.md` |
 | Solana hook upgrade, KPR, Vercel deploy | `infra-ops-core.md` |
 | Supabase migration, feature flags | `infra-ops-ops.md` |
+| Tribe.run, sponsor badge, `4626fun/4626` public repo | `tribe-run.md` |
 
 **Search tip:** Cursor Grep often returns zero hits — use shell `rg` scoped to `frontend/src`, `frontend/server`, or `contracts/`.
 

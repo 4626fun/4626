@@ -146,13 +146,23 @@
     },
     {
       "src": "/explore/rooms(.*)",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://app.4626.fun/explore/keys$1"
     },
     {
       "src": "/rooms(.*)",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://app.4626.fun/keys$1"
     },
@@ -198,31 +208,56 @@
     },
     {
       "src": "/arena(.*)",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/arena$1"
     },
     {
       "src": "/explore/rooms(.*)",
-      "has": [{ "type": "host", "value": "4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://app.4626.fun/explore/keys$1"
     },
     {
       "src": "/explore/rooms(.*)",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://app.4626.fun/explore/keys$1"
     },
     {
       "src": "/inverseakita(.*)",
-      "has": [{ "type": "host", "value": "4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/inverseakita$1"
     },
     {
       "src": "/inverseakita(.*)",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/inverseakita$1"
     },
@@ -239,115 +274,210 @@
     },
     {
       "src": "/alfaclub/key-safety",
-      "has": [{ "type": "host", "value": "4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
     },
     {
       "src": "/alfaclub/?",
-      "has": [{ "type": "host", "value": "4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/explore/rooms"
     },
     {
       "src": "/alfaclub/trading-rooms",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/explore/rooms"
     },
     {
       "src": "/alfaclub/?",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/explore/rooms"
     },
     {
       "src": "/alfaclub/liquidity-pools",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/liquidity",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/explore/pools"
     },
     {
       "src": "/alfaclub/key-safety",
-      "has": [{ "type": "host", "value": "app.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
     },
     {
       "src": "/trading-rooms",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/rooms"
     },
     {
       "src": "/safety",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/rooms?tab=safety"
     },
     {
       "src": "/pools",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/pools"
     },
     {
       "src": "/key-safety",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/rooms?tab=safety"
     },
     {
       "src": "/liquidity-pools",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/pools"
     },
     {
       "src": "/liquidity",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/trading-rooms",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/rooms"
     },
     {
       "src": "/alfaclub/key-safety",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/rooms?tab=safety"
     },
     {
       "src": "/alfaclub/liquidity-pools",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/liquidity",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/pools"
     },
     {
       "src": "/alfaclub/?",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/rooms"
     },
     {
       "src": "/",
-      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        }
+      ],
       "status": 308,
       "dest": "/explore/rooms"
     },
@@ -369,6 +499,7 @@
           "value": "4626.fun"
         }
       ],
+      "status": 308,
       "dest": "https://pinata.4626.fun/ipfs/$1"
     },
     {
@@ -449,7 +580,56 @@
       "continue": true
     },
     {
-      "src": "/explore/(.*)",
+      "src": "/explore/pools/?",
+      "headers": {
+        "x-robots-tag": "index, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/creators(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/content(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/vaults(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/trends(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/transactions(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/keys(.*)",
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
+      "continue": true
+    },
+    {
+      "src": "/explore/rooms(.*)",
       "headers": {
         "x-robots-tag": "noindex, follow"
       },
@@ -616,6 +796,46 @@
       "dest": "/api/sitemap.xml"
     },
     {
+      "src": "/explore/pools/?",
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
+      "dest": "/api/seo/key-markets"
+    },
+    {
+      "src": "/explore/pools/?",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Gg]ooglebot|[Bb]ingbot|[Dd]uck[Dd]uck[Bb]ot|[Ss]lurp|[Bb]aiduspider|[Yy]andex(Bot)?|[Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/seo/key-markets"
+    },
+    {
+      "src": "/explore/pools/?",
+      "has": [
+        {
+          "type": "host",
+          "value": "alfaclub.4626.fun"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Gg]ooglebot|[Bb]ingbot|[Dd]uck[Dd]uck[Bb]ot|[Ss]lurp|[Bb]aiduspider|[Yy]andex(Bot)?|[Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/seo/key-markets"
+    },
+    {
       "src": "/explore/creators",
       "has": [
         {
@@ -741,6 +961,14 @@
       "dest": "/api/telegram/hermit-webhook"
     },
     {
+      "src": "/api/x/account-activity/webhook",
+      "dest": "/api/x/account-activity/webhook"
+    },
+    {
+      "src": "/api/creator/strategy/stripe/webhook",
+      "dest": "/api/creator/strategy/stripe/webhook"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/[...path]?path=$1"
     },
@@ -755,12 +983,16 @@
     {
       "src": "/immersive/?",
       "status": 308,
-      "headers": { "location": "/" }
+      "headers": {
+        "location": "/"
+      }
     },
     {
       "src": "/immersive/index\\.html",
       "status": 308,
-      "headers": { "location": "/" }
+      "headers": {
+        "location": "/"
+      }
     },
     {
       "src": "/",

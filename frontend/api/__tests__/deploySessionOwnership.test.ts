@@ -574,7 +574,7 @@ describe('deploy session ownership guardrails', () => {
           {
             to: '0x0000000000000000000000000000000000000010',
             value: '0',
-            data: '0x4154f24e',
+            data: '0x8287b529',
           },
         ],
       },
@@ -855,8 +855,9 @@ describe('deploy session ownership guardrails', () => {
         phase4Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x02afdbcb' }],
         solanaOvault: {
           enabled: true,
+          mode: 'b2',
           assetMintOrigin: 'existing',
-          shareMeshMint: '22222222222222222222222222222222',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
           solanaEid: 30168,
           mintCompatibilityHints: {
             tokenProgram: 'token-2022',
@@ -906,7 +907,9 @@ describe('deploy session ownership guardrails', () => {
         phase4Calls: [],
         solanaOvault: {
           enabled: true,
+          mode: 'b2',
           assetMintOrigin: 'existing',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
         },
       },
     })
@@ -915,6 +918,92 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('post-Phase-2 stage')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects enabled OVault mesh sessions without an explicit B1/B2 mode', async () => {
+    const db = makeCanonicalDb()
+    const baseSql = (db.sql as any).getMockImplementation()
+    ;(db.sql as any).mockImplementation(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from creator_strategy_features')) return { rows: [{}] }
+      return baseSql ? baseSql(strings) : { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: makeFinalizePhase2Data(),
+          },
+        ],
+        phase3Calls: [],
+        phase4Calls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: '0x02afdbcb',
+          },
+        ],
+        solanaOvault: {
+          enabled: true,
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('explicit mode b1 or b2')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects enabled OVault mesh sessions that omit shareMeshMint', async () => {
+    const db = makeCanonicalDb()
+    const baseSql = (db.sql as any).getMockImplementation()
+    ;(db.sql as any).mockImplementation(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from creator_strategy_features')) return { rows: [{}] }
+      return baseSql ? baseSql(strings) : { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: makeFinalizePhase2Data(),
+          },
+        ],
+        phase3Calls: [],
+        phase4Calls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: '0x02afdbcb',
+          },
+        ],
+        solanaOvault: {
+          enabled: true,
+          mode: 'b2',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('requires the exact shareMeshMint')
     expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 

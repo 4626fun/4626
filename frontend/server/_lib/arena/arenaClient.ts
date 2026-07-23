@@ -57,7 +57,7 @@ type BuiltCommand = {
 type DgclawCommandResolution = {
   commandPath: string
   workingDirectory: string
-  source: 'configured' | 'fallback'
+  source: 'configured'
   candidatePaths: string[]
   /**
    * True when ARENA_DGCLAW_BIN includes inline args (e.g. `pnpm exec`).
@@ -71,8 +71,6 @@ type ParsedCommandOverride = {
   command: string
   args: string[]
 }
-
-const DGCLAW_FALLBACK_DIRS = ['/app/dgclaw-skill']
 
 /** Split env bin overrides like `pnpm exec` or `/bin/echo hello` into command + args. */
 function parseCommandOverride(rawValue: string): ParsedCommandOverride {
@@ -222,17 +220,10 @@ async function runCommand(command: BuiltCommand, config: ArenaConfig): Promise<A
 function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
   const override = parseCommandOverride(config.dgclawBin)
   const dgclawBin = override.command || config.dgclawBin
-  const candidatePaths: string[] = []
   const configuredWorkingDirectory = config.dgclawDir ?? process.cwd()
-  const fallbackWorkingDirectories: string[] = []
-  for (const fallback of DGCLAW_FALLBACK_DIRS) {
-    if (!fallbackWorkingDirectories.includes(fallback) && fallback !== configuredWorkingDirectory) {
-      fallbackWorkingDirectories.push(fallback)
-    }
-  }
 
-  // Inline-arg overrides (e.g. `pnpm exec`, `/bin/echo hello`) are explicit exec targets.
-  // Never fall back to dgclaw.sh here — that would attach override args to the wrong binary.
+  // ARENA_DGCLAW_BIN is an explicit trust boundary. Never discover or execute
+  // an alternate wrapper when the configured command is absent.
   if (override.args.length > 0) {
     return {
       commandPath: dgclawBin,
@@ -245,53 +236,21 @@ function resolveDgclawCommand(config: ArenaConfig): DgclawCommandResolution {
   }
 
   if (isAbsolute(dgclawBin)) {
-    const directResolution = {
+    return {
       commandPath: dgclawBin,
       workingDirectory: config.dgclawDir ?? dirname(dgclawBin),
       source: 'configured' as const,
       candidatePaths: [dgclawBin],
       explicitCommandOverride: false,
     }
-    if (existsSync(directResolution.commandPath)) return directResolution
-    return directResolution
   }
 
-  const candidates: Array<{ commandPath: string; workingDirectory: string; source: 'configured' | 'fallback' }> = []
-  const candidateWorkingDirectories = [configuredWorkingDirectory, ...fallbackWorkingDirectories]
-  for (let index = 0; index < candidateWorkingDirectories.length; index += 1) {
-    const workingDirectory = candidateWorkingDirectories[index]
-    const source = index === 0 ? 'configured' : 'fallback'
-    const candidatePathSet = new Set<string>([
-      resolve(workingDirectory, dgclawBin),
-      resolve(workingDirectory, 'dgclaw.sh'),
-      resolve(workingDirectory, 'scripts/dgclaw.sh'),
-    ])
-    for (const commandPath of candidatePathSet) {
-      candidates.push({ commandPath, workingDirectory, source })
-    }
-  }
-
-  for (const candidate of candidates) {
-    if (!candidatePaths.includes(candidate.commandPath)) {
-      candidatePaths.push(candidate.commandPath)
-    }
-    if (existsSync(candidate.commandPath)) {
-      return {
-        ...candidate,
-        candidatePaths,
-        explicitCommandOverride: false,
-      }
-    }
-  }
-
-  const primaryCandidate = candidates[0] ?? {
-    commandPath: resolve(configuredWorkingDirectory, dgclawBin),
+  const commandPath = resolve(configuredWorkingDirectory, dgclawBin)
+  return {
+    commandPath,
     workingDirectory: configuredWorkingDirectory,
     source: 'configured' as const,
-  }
-  return {
-    ...primaryCandidate,
-    candidatePaths: candidatePaths.length > 0 ? candidatePaths : [primaryCandidate.commandPath],
+    candidatePaths: [commandPath],
     explicitCommandOverride: false,
   }
 }
@@ -1032,10 +991,16 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     return fail('Arena trading is disabled. Set ARENA_TRADING_ENABLED=1 to submit trades.')
   }
 
-  const pairCheck = validateArenaPair(request.pair, config)
+  const action = request.action
+  // An allowlist may prevent new exposure, but it must never strand an
+  // already-open position. Close/reduce-only operations retain syntax checks
+  // while bypassing membership policy.
+  const pairCheck = validateArenaPair(
+    request.pair,
+    action === 'close' ? { ...config, assetAllowlist: null } : config,
+  )
   if (!pairCheck.ok) return fail(pairCheck.message, { reason: pairCheck.reason })
 
-  const action = request.action
   const subaccountAddress = normalizeAddress(request.subaccountAddress) ?? config.hlSubaccountAddress
   if (action === 'close') {
     // dgclaw v2 trade.ts only accepts flag-style options; positional args are silently ignored.
@@ -1208,63 +1173,15 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
   // initialized with a valid access+refresh pair, acp commands auto-refresh the short-lived
   // access token using the refresh_token and update local storage. You only need to re-rotate
   // the envs when the refresh_token itself expires. No extra "refresh thing" in our code for now.
-  const acpAccess = String(process.env.ACP_ACCESS_TOKEN ?? '').trim()
-  const acpRefresh = String(process.env.ACP_REFRESH_TOKEN ?? '').trim()
-  const configuredAcpOwner = normalizeAddress(process.env.ACP_OWNER_WALLET)
-  const ownerAddressFallback = normalizeAddress(ownerAddress)
-  const acpOwner = configuredAcpOwner ?? ownerAddressFallback ?? ''
-  const hasAnyAcpRotationEnv = Boolean(acpAccess || acpRefresh || acpOwner)
-  const hasAllAcpRotationEnv = Boolean(acpAccess && acpRefresh && acpOwner)
-  if (hasAnyAcpRotationEnv && !hasAllAcpRotationEnv) {
-    const missing: string[] = []
-    if (!acpAccess) missing.push('ACP_ACCESS_TOKEN')
-    if (!acpRefresh) missing.push('ACP_REFRESH_TOKEN')
-    if (!acpOwner) missing.push('ACP_OWNER_WALLET')
+  const hasAcpRotationEnv = Boolean(
+    String(process.env.ACP_ACCESS_TOKEN ?? '').trim() ||
+      String(process.env.ACP_REFRESH_TOKEN ?? '').trim() ||
+      String(process.env.ACP_OWNER_WALLET ?? '').trim(),
+  )
+  if (hasAcpRotationEnv) {
     return fail(
-      `ACP session rotation env is partially configured. Missing: ${missing.join(', ')}. Refusing to continue with agent create.`,
+      'Runtime ACP token rotation is disabled because CLI arguments expose credentials. Preconfigure the isolated ACP state directory out of band and remove ACP_ACCESS_TOKEN/ACP_REFRESH_TOKEN from the service.',
     )
-  }
-
-  if (!configuredAcpOwner && ownerAddressFallback && acpAccess && acpRefresh) {
-    auditLog('acp_session_rotation_owner_fallback', {
-      ownerAddressFallback,
-    })
-  }
-
-  if (hasAllAcpRotationEnv && isEnvSeedConsumed()) {
-    // The env triplet already seeded this state dir once. ACP refresh tokens are
-    // single-use, so re-running configure with it would overwrite the rotated
-    // (live) on-volume session with dead tokens — the create proceeds under the
-    // current session instead, which is the identity that triplet established.
-    auditLog('acp_session_rotation_skipped_consumed_seed', {
-      owner: acpOwner,
-      dryRun: config.dryRun,
-    })
-  } else if (hasAllAcpRotationEnv) {
-    const configureArgs = [
-      'configure',
-      '--token', acpAccess,
-      '--refresh-token', acpRefresh,
-      '--wallet', acpOwner,
-    ]
-    const configureCommand = buildAcpCommand(config, configureArgs)
-    const configureRun = await runCommand(configureCommand, config)
-    auditLog('acp_session_rotation', {
-      ok: configureRun.ok,
-      owner: acpOwner,
-      dryRun: config.dryRun,
-    })
-    if (!configureRun.ok) {
-      return {
-        ok: false,
-        message: 'acp configure failed; refusing to run agent create under a potentially stale ACP session.',
-        run: configureRun,
-      }
-    }
-    const rotationFingerprint = computeAcpSeedFingerprint()
-    if (rotationFingerprint && !config.dryRun) {
-      markAcpSeedConsumed(rotationFingerprint)
-    }
   }
 
   // Note: buildAcpCommand + buildArenaCommandEnv will inject any currently resolved
@@ -1300,10 +1217,5 @@ export async function runArenaCreateAgent(config = readArenaConfig(), ownerAddre
   if (parsed.agentId) base.agentId = parsed.agentId
   if (parsed.agentWalletAddress) base.agentWalletAddress = parsed.agentWalletAddress
   if (parsed.hlApiWalletAddress) base.hlApiWalletAddress = parsed.hlApiWalletAddress
-  if (!run.ok && run.stdout) {
-    // Sanitize before attaching to result (may surface in logs or error details)
-    const sanitized = run.stdout.replace(/\/[^\s"]*dgclaw[^\s"]*/gi, '[dgclaw-path]').slice(0, 400)
-    ;(base as any).details = { ...(base.details || {}), stdoutPreview: sanitized }
-  }
   return base
 }

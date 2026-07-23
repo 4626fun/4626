@@ -4,10 +4,24 @@ import {
   PRIVY_INTERACTIVE_LOGIN_METHODS,
   deriveInitialAuthSessionState,
   deriveSiweSessionState,
+  isTrustedAuthHandoffReferrer,
   shouldAutoBridgeConnectedPrivySession,
   shouldAutoBridgeRestoredPrivySession,
   shouldResetPrivyBridgeState,
 } from './useSiweAuth'
+
+describe('isTrustedAuthHandoffReferrer', () => {
+  it('allows first-party shell navigation', () => {
+    expect(isTrustedAuthHandoffReferrer('https://4626.fun/waitlist')).toBe(true)
+    expect(isTrustedAuthHandoffReferrer('https://alfaclub.4626.fun/rooms')).toBe(true)
+  })
+
+  it('rejects direct and attacker-initiated handoff links', () => {
+    expect(isTrustedAuthHandoffReferrer('')).toBe(false)
+    expect(isTrustedAuthHandoffReferrer('https://evil.example/phish')).toBe(false)
+    expect(isTrustedAuthHandoffReferrer('https://4626.fun.evil.example/')).toBe(false)
+  })
+})
 
 describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
   it('keeps explicit Privy sign-in email-only by default', () => {

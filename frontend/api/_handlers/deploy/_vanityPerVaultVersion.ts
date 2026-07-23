@@ -4,6 +4,10 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import {
   type ApiEnvelope,
   handleOptions,
+  checkDurableRateLimit,
+  getClientIp,
+  rateLimitKey,
+  readBoundedJsonObjectBody,
   readRequestPrincipalAddress,
   setCors,
   setNoStore,
@@ -44,7 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (req.body ?? {}) as VanityPerVaultVersionBody
+  const limiter = await checkDurableRateLimit(
+    rateLimitKey('deploy-vanity-search', principalAddress, getClientIp(req)),
+    { windowMs: 60_000, maxRequests: 2 },
+    { failClosed: true },
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Vanity search rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = ((await readBoundedJsonObjectBody(req, { maxBytes: 512_000 })) ?? {}) as VanityPerVaultVersionBody
   const create2Deployer = typeof body.create2Deployer === 'string' && isAddress(body.create2Deployer)
     ? getAddress(body.create2Deployer)
     : null
@@ -66,6 +80,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!create2Deployer || !creatorToken || !owner || !baseVersion || !vaultInitCode || !shareOftInitCode || !shareSymbol || !chainId) {
     return res.status(400).json({ success: false, error: 'Invalid vanity search payload' } satisfies ApiEnvelope<never>)
+  }
+  if (owner.toLowerCase() !== principalAddress.toLowerCase()) {
+    return res.status(403).json({
+      success: false,
+      error: 'Vanity search owner must match the authenticated principal',
+    } satisfies ApiEnvelope<never>)
   }
   if (!vaultPrefix && !shareSuffix) {
     return res.status(400).json({ success: false, error: 'At least one vanity target is required' } satisfies ApiEnvelope<never>)

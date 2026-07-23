@@ -156,9 +156,9 @@ describe('hermit.4626.fun webhook ingress', () => {
       ALFACLUB_TELEGRAM_WEBHOOK_SECRET: 'hermit-only-secret',
       ALFACLUB_TELEGRAM_BOT_TOKEN: 'hermit-token',
       TELEGRAM_TO_ALFACLUB_ROOM_ID: '1659',
-      TELEGRAM_TO_ALFACLUB_DM_ENABLED: undefined,
+      TELEGRAM_TO_ALFACLUB_DM_ENABLED: '1',
       TELEGRAM_TO_ALFACLUB_DM_ROOM_ID: undefined,
-      TELEGRAM_TO_ALFACLUB_DM_USER_IDS: undefined,
+      TELEGRAM_TO_ALFACLUB_DM_USER_IDS: '424242',
     })
 
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
@@ -186,7 +186,7 @@ describe('hermit.4626.fun webhook ingress', () => {
     expect(res.body?.data?.dm?.status).toBe('replied')
     expect(res.body?.data?.dm?.roomId).toBe('1659')
     expect(executeDeterministicCommandMock).toHaveBeenCalledWith(
-      expect.objectContaining({ chatId: 'alfaclub:1659', text: '/halp' }),
+      expect.objectContaining({ chatId: 'telegram:dm:424242', text: '/halp' }),
     )
     expect(sendTelegramMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({

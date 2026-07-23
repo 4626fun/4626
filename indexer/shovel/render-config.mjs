@@ -78,7 +78,7 @@ const deploymentBatcher = addrFilter(
   requireEnv('DEPLOYMENT_BATCHER', '0x02D7abC547F8B1e7E2D7a919D8D1005918361750'),
 )
 const lotteryManager = addrFilter(
-  requireEnv('LOTTERY_MANAGER', '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1'),
+  requireEnv('LOTTERY_MANAGER', '0xB45E68a5867935a5734E4185977F81c528006650'),
 )
 
 const baseSource = {
@@ -253,6 +253,64 @@ const config = {
           { indexed: true, name: 'triggeringCoin', type: 'address', column: 'triggering_coin' },
           { indexed: true, name: 'winner', type: 'address', column: 'winner' },
           { indexed: false, name: 'numVaultsPaid', type: 'uint256', column: 'num_vaults_paid' },
+        ],
+      },
+    },
+    {
+      name: 'protocol_lottery_winner_callbacks',
+      enabled: true,
+      sources: sourceRef,
+      table: {
+        name: 'protocol_lottery_winner_callbacks',
+        columns: [
+          ...blockMetaColumns(),
+          { name: 'dst_eid', type: 'numeric' },
+          { name: 'winner', type: 'bytea' },
+          { name: 'token', type: 'bytea' },
+          { name: 'total_shares_paid', type: 'numeric' },
+        ],
+        index: [['winner'], ['token'], ['block_num DESC']],
+      },
+      block: [...blockMetaBindings(), logAddrFilter([lotteryManager])],
+      event: {
+        name: 'WinnerCallbackSent',
+        type: 'event',
+        anonymous: false,
+        inputs: [
+          { indexed: true, name: 'dstEid', type: 'uint32', column: 'dst_eid' },
+          { indexed: true, name: 'winner', type: 'address', column: 'winner' },
+          { indexed: true, name: 'token', type: 'address', column: 'token' },
+          { indexed: false, name: 'totalSharesPaid', type: 'uint256', column: 'total_shares_paid' },
+        ],
+      },
+    },
+    {
+      name: 'protocol_lottery_winner_callback_drops',
+      enabled: true,
+      sources: sourceRef,
+      table: {
+        name: 'protocol_lottery_winner_callback_drops',
+        columns: [
+          ...blockMetaColumns(),
+          { name: 'dst_eid', type: 'numeric' },
+          { name: 'winner', type: 'bytea' },
+          { name: 'token', type: 'bytea' },
+          { name: 'total_shares_paid', type: 'numeric' },
+          { name: 'reason', type: 'numeric' },
+        ],
+        index: [['winner'], ['token'], ['block_num DESC']],
+      },
+      block: [...blockMetaBindings(), logAddrFilter([lotteryManager])],
+      event: {
+        name: 'WinnerCallbackDropped',
+        type: 'event',
+        anonymous: false,
+        inputs: [
+          { indexed: true, name: 'dstEid', type: 'uint32', column: 'dst_eid' },
+          { indexed: true, name: 'winner', type: 'address', column: 'winner' },
+          { indexed: true, name: 'token', type: 'address', column: 'token' },
+          { indexed: false, name: 'totalSharesPaid', type: 'uint256', column: 'total_shares_paid' },
+          { indexed: false, name: 'reason', type: 'uint8', column: 'reason' },
         ],
       },
     },

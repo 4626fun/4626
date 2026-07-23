@@ -4,7 +4,6 @@ import { getAddress, type Address } from 'viem'
 
 import type { DeploySessionRecord } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
-import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
 import { verifyPrivyRequest } from '../../../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { classifyLinkedAccounts } from '../../../../../server/_lib/wallet/walletMapping.js'
 
@@ -97,10 +96,9 @@ export async function loadAuthorizedDeploySession(params: {
   // SIWA deploy automation has its own signed-agent authentication and does
   // not carry a Privy user token. Browser session mutations require both a
   // verified recent token and a wallet link matching the cookie principal.
-  // Server-admin operator sessions (Creator/Agent production canaries, ops
-  // autopilot) authenticate via HMAC session token alone — they cannot mint
-  // end-user Privy JWTs.
-  if (params.requireFreshPrivyJwt && auth.type === 'session' && !isServerAdminAddress(sessionAddress)) {
+  // Privileged addresses do not bypass reauthentication: an old or stolen
+  // browser HMAC session must never be enough to mutate a deploy session.
+  if (params.requireFreshPrivyJwt && auth.type === 'session') {
     await assertFreshVerifiedPrivyJwt(params.req, sessionAddress)
   }
 

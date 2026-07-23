@@ -93,6 +93,7 @@ export async function resolvePrivyUserIdForTwitterActor(
     SELECT DISTINCT account_linked_methods.privy_user_id AS privy_user_id
     FROM account_linked_methods
     WHERE account_linked_methods.type = 'twitter'
+      AND account_linked_methods.verified = TRUE
       AND (
         (${userId}::text IS NOT NULL AND account_linked_methods.value = ${userId})
         OR (
@@ -187,6 +188,28 @@ export async function readLinkedTwitterIdentityForPrivyUser(
   return { id, username }
 }
 
+/** Resolve only the Twitter identity asserted by the freshly verified Privy JWT. */
+export function readTwitterIdentityFromPrivyUser(
+  privyUser: unknown,
+): { id: string | null; username: string | null } {
+  const record =
+    privyUser && typeof privyUser === 'object' ? (privyUser as Record<string, unknown>) : null
+  const accounts = [
+    ...(Array.isArray(record?.linkedAccounts) ? record.linkedAccounts : []),
+    ...(Array.isArray(record?.linked_accounts) ? record.linked_accounts : []),
+  ]
+  let id: string | null = null
+  let username: string | null = null
+  for (const account of accounts) {
+    const value = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
+    const type = String(value?.type ?? '').trim().toLowerCase()
+    if (!value || (!type.includes('twitter') && type !== 'x')) continue
+    id ??= normalizeTwitterUserId(value.subject ?? value.userId ?? value.user_id ?? value.id)
+    username ??= normalizeTwitterUsername(value.username ?? value.screen_name)
+  }
+  return { id, username }
+}
+
 export type WaitlistTwitterEngagementVerifyFailureReason =
   | 'out_of_order'
   | Exclude<TwitterEngagementVerifyReason, 'verified'>
@@ -212,6 +235,7 @@ export async function verifyAndAwardWaitlistTwitterEngagementStep(params: {
   db: Db
   privyUserId: string
   step: WaitlistTwitterEngagementStepId
+  verifiedActor: { id: string | null; username: string | null }
 }): Promise<WaitlistTwitterEngagementVerifyOutcome> {
   const progress = await readWaitlistTwitterEngagementProgressForPrivyUser(params.db, params.privyUserId)
 
@@ -222,7 +246,7 @@ export async function verifyAndAwardWaitlistTwitterEngagementStep(params: {
   const active = resolveActiveStep(progress)
   if (active !== params.step) return { ok: false, reason: 'out_of_order', progress }
 
-  const actor = await readLinkedTwitterIdentityForPrivyUser(params.db, params.privyUserId)
+  const actor = params.verifiedActor
   if (!actor.id && !actor.username) return { ok: false, reason: 'not_linked', progress }
 
   const verification = await verifyTwitterEngagementStep({

@@ -141,7 +141,7 @@ Options:
   )
   process.stdout.write('3. Grandfathered AKITA wrapper lacks isBeneficiaryOperator — configureTokenMesh reverts until wrapper upgrade/wiring\n')
   process.stdout.write('4. Solana LZ asset mesh + share mesh OFTs/peers not deployed — no OVAULT_ASSET_MESH_TOKEN / OVAULT_SHARE_MESH_TOKEN in env\n')
-  process.stdout.write('5. relay_entries paused — KEEPER_SOLANA_RECONCILE_ACTIONS must stay settle_fees,winner_relay only\n\n')
+  process.stdout.write('5. legacy relay_entries/winner_relay actions are retired; B2 ingest/submit/confirm/winner workers remain independently off\n\n')
 
   process.stdout.write('--- Operator sequence ---\n\n')
   process.stdout.write('A. Deploy/peers: Solana asset mesh + share mesh OFTs (LayerZero), record Base addresses + Solana peers\n')

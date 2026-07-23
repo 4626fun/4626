@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Allow: /creator-vaults
 Allow: /erc-4626
+Allow: /explore/pools
 Allow: /risks
 Allow: /security
 Allow: /about

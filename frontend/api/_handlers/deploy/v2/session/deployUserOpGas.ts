@@ -19,8 +19,9 @@
  *
  * CDP paymaster validation is not reliable when the same UserOp is submitted via
  * our own handleOps (short-lived sponsorship windows / bundler-bound context).
- * Fat self-bundled ops therefore omit the paymaster and pull gas from the
- * sender's EntryPoint deposit (topped up by the self-bundle key when needed).
+ * Fat self-bundled ops therefore omit the paymaster and can only spend an
+ * EntryPoint deposit already owned by the sender. The service never donates a
+ * withdrawable deposit to a user-controlled account.
  */
 import {
   BaseError,
@@ -163,13 +164,6 @@ const ENTRY_POINT_V06_ABI = [
   },
   {
     type: 'function',
-    name: 'depositTo',
-    stateMutability: 'payable',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
     name: 'balanceOf',
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
@@ -224,20 +218,11 @@ export function readUserOperationEventSuccess(
   return null
 }
 
-function readSelfBundlePrivateKey(): Hex | null {
-  // Prefer an explicitly funded deploy bundler key, then the ops Safe owner key
-  // (PRIVATE_KEY), before KPR automation which is often gas-poor on Base.
-  for (const key of [
-    'DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY',
-    'PRIVATE_KEY',
-    'KPR_PRIVATE_KEY',
-  ]) {
-    const raw = String(process.env[key] ?? '').trim()
-    if (!raw) continue
-    const normalized = (raw.startsWith('0x') || raw.startsWith('0X') ? raw : `0x${raw}`) as Hex
-    if (/^0x[0-9a-fA-F]{64}$/.test(normalized)) return normalized
-  }
-  return null
+export function readSelfBundlePrivateKey(): Hex | null {
+  const raw = String(process.env.DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY ?? '').trim()
+  if (!raw) return null
+  const normalized = (raw.startsWith('0x') || raw.startsWith('0X') ? raw : `0x${raw}`) as Hex
+  return /^0x[0-9a-fA-F]{64}$/.test(normalized) ? normalized : null
 }
 
 function hexToBigInt(value: unknown): bigint {
@@ -270,12 +255,11 @@ function shouldSelfBundleUserOp(userOp: Record<string, unknown>): boolean {
   return userOpExplicitGasSum(userOp) > CDP_SELF_BUNDLE_EXPLICIT_GAS_SUM
 }
 
-function requiredPrefundWei(userOp: Record<string, unknown>): bigint {
+export function requiredPrefundWei(userOp: Record<string, unknown>): bigint {
   const gas = userOpExplicitGasSum(userOp)
   const maxFeePerGas = hexToBigInt(userOp.maxFeePerGas)
-  // EP0.6: requiredPrefund = (call+verification+preVerification) * maxFeePerGas
-  // Add 10% buffer for tip / rounding during validation.
-  return (gas * maxFeePerGas * 110n) / 100n
+  // Exact EP0.6 prefund. Any extra remains withdrawable by the sender.
+  return gas * maxFeePerGas
 }
 
 function safeErrorMessage(err: unknown): string {
@@ -297,7 +281,7 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
   const pk = readSelfBundlePrivateKey()
   if (!pk) {
     throwSelfBundleError(
-      'deploy_session_self_bundle_key_missing: set DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY (or KPR_PRIVATE_KEY / PRIVATE_KEY) for UserOps above the CDP 14.5M gas cap',
+      'deploy_session_self_bundle_key_missing: set the dedicated DEPLOY_SESSION_SELF_BUNDLE_PRIVATE_KEY for UserOps above the CDP 14.5M gas cap',
     )
   }
 
@@ -350,33 +334,9 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
       })) as bigint
 
       if (balance < requiredWei) {
-        const shortfall = requiredWei - balance
-        const funderBalance = await publicClient.getBalance({ address: account.address })
-        // Leave a small native reserve for the outer handleOps tx itself.
-        const outerTxReserve = 250_000n * 50_000_000n // ~0.0000125 ETH at 0.05 gwei
-        if (funderBalance <= shortfall + outerTxReserve) {
-          throwSelfBundleError(
-            `deploy_session_self_bundle_deposit_underfunded: need ${shortfall} wei EntryPoint deposit for ${opTuple.sender}; ` +
-              `funder ${account.address} has ${funderBalance} wei`,
-          )
-        }
-        const depositData = encodeFunctionData({
-          abi: ENTRY_POINT_V06_ABI,
-          functionName: 'depositTo',
-          args: [opTuple.sender],
-        })
-        const depositTx = await walletClient.sendTransaction({
-          to: entryPoint06Address,
-          data: depositData,
-          value: shortfall,
-          // Explicit gas/fees skip eth_estimateGas; some RPC revert shapes are not
-          // viem BaseErrors and trip getNodeError's err.walk assumption.
-          gas: 120_000n,
-          maxFeePerGas: opTuple.maxFeePerGas > 0n ? opTuple.maxFeePerGas * 2n : 50_000_000n,
-          maxPriorityFeePerGas:
-            opTuple.maxPriorityFeePerGas > 0n ? opTuple.maxPriorityFeePerGas : 1_000_000n,
-        })
-        await publicClient.waitForTransactionReceipt({ hash: depositTx, timeout: 120_000 })
+        throwSelfBundleError(
+          `deploy_session_self_bundle_deposit_underfunded: sender ${opTuple.sender} needs ${requiredWei} wei but has ${balance} wei; service-funded EntryPoint deposits are forbidden`,
+        )
       }
     }
 
@@ -395,6 +355,12 @@ async function selfBundleUserOp(userOp: Record<string, unknown>): Promise<Hex> {
         `deploy_session_self_bundle_gas_exceeds_aa95_budget: call+verification=${opExecutionGas} exceeds EntryPoint AA95 budget ${aa95Budget} under Base tx gas cap ${BASE_MAX_TX_GAS}`,
       )
     }
+    await publicClient.call({
+      account: account.address,
+      to: entryPoint06Address,
+      data: handleOpsData,
+      gas: handleOpsGas,
+    })
     const txHash = await walletClient.sendTransaction({
       to: entryPoint06Address,
       data: handleOpsData,

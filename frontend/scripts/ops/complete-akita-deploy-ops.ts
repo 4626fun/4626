@@ -22,6 +22,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { PublicKey } from '@solana/web3.js'
 import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
 
 import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'
@@ -36,10 +37,17 @@ declare const process: {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '../..')
 const REPO_ROOT = resolve(FRONTEND_ROOT, '..')
-const SHARE_MESH_MINT = '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv'
-const BATCHER_DEFAULT_PEER =
+const RETIRED_B1_SHARE_MESH_MINT = '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv'
+const RETIRED_B1_OFT_STORE = 'G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN'
+const RETIRED_B1_SHARE_PEER =
   '0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f'
 const HUB_COMPOSER = '0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1'
+
+type B2MeshConfig = {
+  shareMeshMint: string
+  oftStore: string
+  peerBytes32: `0x${string}`
+}
 
 type DeployAddresses = {
   shareOft: Address
@@ -61,6 +69,67 @@ function getArg(name: string, fallback = ''): string {
   const next = process.argv[idx + 1]
   if (!next || next.startsWith('--')) return fallback
   return String(next).trim()
+}
+
+function requireFreshB2MeshConfig(): B2MeshConfig {
+  const shareMeshMint =
+    getArg('--share-mesh-mint') || String(process.env.AKITA_B2_SHARE_MESH_MINT ?? '').trim()
+  const oftStore = getArg('--oft-store') || String(process.env.AKITA_B2_OFT_STORE ?? '').trim()
+  const peerBytes32Raw =
+    getArg('--solana-share-peer') || String(process.env.AKITA_B2_SHARE_PEER_BYTES32 ?? '').trim()
+
+  const missing = [
+    !shareMeshMint ? '--share-mesh-mint' : null,
+    !oftStore ? '--oft-store' : null,
+    !peerBytes32Raw ? '--solana-share-peer' : null,
+  ].filter((value): value is string => Boolean(value))
+  if (missing.length > 0) {
+    process.stdout.write(
+      `Missing fresh B2 mesh inputs: ${missing.join(', ')}.\n` +
+        'Provision and verify a new Token-2022 TransferHook mint and its new OFT Store after Phase 1.\n' +
+        'The retired standard-SPL B1 mint/store are intentionally rejected.\n',
+    )
+    process.exit(1)
+  }
+
+  let mintKey: PublicKey
+  let storeKey: PublicKey
+  try {
+    mintKey = new PublicKey(shareMeshMint)
+    storeKey = new PublicKey(oftStore)
+  } catch {
+    process.stdout.write('Invalid --share-mesh-mint or --oft-store Solana public key.\n')
+    process.exit(1)
+  }
+
+  const peerBytes32 = peerBytes32Raw.toLowerCase()
+  if (!/^0x[0-9a-f]{64}$/.test(peerBytes32)) {
+    process.stdout.write('Invalid --solana-share-peer; expected one 32-byte 0x-prefixed value.\n')
+    process.exit(1)
+  }
+  const expectedPeer = `0x${Buffer.from(storeKey.toBytes()).toString('hex')}`
+  if (peerBytes32 !== expectedPeer) {
+    process.stdout.write(
+      `OFT Store/peer mismatch: ${storeKey.toBase58()} encodes as ${expectedPeer}, not ${peerBytes32}.\n`,
+    )
+    process.exit(1)
+  }
+  if (
+    mintKey.toBase58() === RETIRED_B1_SHARE_MESH_MINT ||
+    storeKey.toBase58() === RETIRED_B1_OFT_STORE ||
+    peerBytes32 === RETIRED_B1_SHARE_PEER
+  ) {
+    process.stdout.write(
+      'Refusing retired AKITA B1 mesh identity. B2 requires a fresh Token-2022 TransferHook mint and OFT Store.\n',
+    )
+    process.exit(1)
+  }
+
+  return {
+    shareMeshMint: mintKey.toBase58(),
+    oftStore: storeKey.toBase58(),
+    peerBytes32: peerBytes32 as `0x${string}`,
+  }
 }
 
 function loadEnvFile(path: string): void {
@@ -130,7 +199,7 @@ function printLzWireBlock(shareOft: Address): void {
   process.stdout.write('  4. Re-run post-phase1 until mesh verify passes\n\n')
 }
 
-function printComposerBlock(addrs: DeployAddresses): void {
+function printComposerBlock(addrs: DeployAddresses, mesh: B2MeshConfig): void {
   const setBeneficiaryData = encodeFunctionData({
     abi: [
       {
@@ -169,7 +238,7 @@ function printComposerBlock(addrs: DeployAddresses): void {
       `  --asset-mesh <BASE_ASSET_MESH_OFT_ADDRESS> \\\n` +
       `  --share-mesh ${addrs.shareOft} \\\n` +
       `  --solana-asset-peer <SOLANA_ASSET_PEER_BYTES32> \\\n` +
-      `  --solana-share-peer ${BATCHER_DEFAULT_PEER} \\\n` +
+      `  --solana-share-peer ${mesh.peerBytes32} \\\n` +
       `  --solana-eid 30168\n\n`,
   )
   process.stdout.write(
@@ -194,13 +263,13 @@ function writeDefaultsPatch(addrs: DeployAddresses): void {
   process.stdout.write(`✓ Updated ${defaultsPath} (AKITA_DEFAULTS + ERC4626_DEFAULTS aliases)\n`)
 }
 
-function saveStateFile(phase: string, addrs: DeployAddresses): void {
+function saveStateFile(phase: string, addrs: DeployAddresses, mesh: B2MeshConfig): void {
   const outDir = resolve(FRONTEND_ROOT, 'scripts/ops/.akita-redeploy-state')
   mkdirSync(outDir, { recursive: true })
   const path = resolve(outDir, `${phase}.json`)
   writeFileSync(
     path,
-    `${JSON.stringify({ phase, savedAt: new Date().toISOString(), addresses: addrs, shareMeshMint: SHARE_MESH_MINT }, null, 2)}\n`,
+    `${JSON.stringify({ phase, savedAt: new Date().toISOString(), addresses: addrs, b2Mesh: mesh }, null, 2)}\n`,
   )
   process.stdout.write(`Saved state: ${path}\n`)
 }
@@ -212,7 +281,8 @@ function cmdPrelaunch(): void {
 
 function cmdPostPhase1(): void {
   const addrs = requireAddresses()
-  saveStateFile('post-phase1', addrs)
+  const mesh = requireFreshB2MeshConfig()
+  saveStateFile('post-phase1', addrs, mesh)
 
   const meshOk = run('pnpm', [
     '-C',
@@ -226,6 +296,12 @@ function cmdPostPhase1(): void {
     addrs.vault,
     '--wrapper',
     addrs.wrapper,
+    '--share-mesh-mint',
+    mesh.shareMeshMint,
+    '--oft-store',
+    mesh.oftStore,
+    '--solana-share-peer',
+    mesh.peerBytes32,
   ])
 
   if (hasFlag('--update-vultr')) {
@@ -234,7 +310,7 @@ function cmdPostPhase1(): void {
       'frontend',
       'ops:update-vultr-mapping',
       '--mint',
-      SHARE_MESH_MINT,
+      mesh.shareMeshMint,
       '--share-oft',
       addrs.shareOft,
     ])
@@ -254,7 +330,8 @@ function cmdPostPhase1(): void {
 
 function cmdPostFinalize(): void {
   const addrs = requireAddresses()
-  saveStateFile('post-finalize', addrs)
+  const mesh = requireFreshB2MeshConfig()
+  saveStateFile('post-finalize', addrs, mesh)
   const failures: string[] = []
 
   if (hasFlag('--update-vultr')) {
@@ -263,7 +340,7 @@ function cmdPostFinalize(): void {
       'frontend',
       'ops:update-vultr-mapping',
       '--mint',
-      SHARE_MESH_MINT,
+      mesh.shareMeshMint,
       '--share-oft',
       addrs.shareOft,
     ])
@@ -293,7 +370,7 @@ function cmdPostFinalize(): void {
     process.stdout.write('Commit + push + Vercel production deploy to publish new defaults.\n')
   }
 
-  printComposerBlock(addrs)
+  printComposerBlock(addrs, mesh)
 
   if (failures.length > 0) {
     process.stdout.write(
@@ -321,11 +398,15 @@ function main(): void {
 
   pnpm -C frontend ops:complete-akita-deploy post-phase1 \\
     --share-oft 0x... --vault 0x... --wrapper 0x... \\
+    --share-mesh-mint <TOKEN_2022_MINT> --oft-store <NEW_OFT_STORE> \\
+    --solana-share-peer <NEW_OFT_STORE_BYTES32> \\
     [--gauge 0x... --cca 0x... --oracle 0x...] \\
     [--update-vultr]
 
   pnpm -C frontend ops:complete-akita-deploy post-finalize \\
     --share-oft 0x... --vault 0x... --wrapper 0x... \\
+    --share-mesh-mint <TOKEN_2022_MINT> --oft-store <NEW_OFT_STORE> \\
+    --solana-share-peer <NEW_OFT_STORE_BYTES32> \\
     [--gauge 0x... --cca 0x... --oracle 0x...] \\
     [--update-vultr] [--backfill] [--write-defaults]
 `)

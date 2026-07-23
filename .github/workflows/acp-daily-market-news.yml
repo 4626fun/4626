@@ -7,13 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       slot:
-        description: "Run slot (morning|checkpoint)"
+        description: "Run slot"
+        type: choice
         required: false
         default: "morning"
+        options:
+          - morning
+          - checkpoint
       dry_run:
         description: "Skip onchain create/fund actions"
+        type: boolean
         required: false
-        default: "false"
+        default: false
 
 permissions:
   contents: read
@@ -44,11 +49,37 @@ jobs:
 
       - name: Resolve slot
         id: resolve
+        env:
+          DISPATCH_SLOT: ${{ github.event_name == 'workflow_dispatch' && inputs.slot || '' }}
+          DISPATCH_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '' }}
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            SLOT="${{ inputs.slot }}"
-            DRY="${{ inputs.dry_run }}"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            case "${DISPATCH_SLOT}" in
+              morning|checkpoint)
+                SLOT="${DISPATCH_SLOT}"
+                ;;
+              "")
+                SLOT="morning"
+                ;;
+              *)
+                echo "Invalid slot input: ${DISPATCH_SLOT}" >&2
+                exit 1
+                ;;
+            esac
+
+            case "${DISPATCH_DRY_RUN}" in
+              true|false)
+                DRY="${DISPATCH_DRY_RUN}"
+                ;;
+              "")
+                DRY="false"
+                ;;
+              *)
+                echo "Invalid dry_run input: ${DISPATCH_DRY_RUN}" >&2
+                exit 1
+                ;;
+            esac
           else
             HOUR="$(date -u +%H)"
             if [[ "$HOUR" == "07" ]]; then
@@ -58,8 +89,8 @@ jobs:
             fi
             DRY="false"
           fi
-          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
-          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+          printf 'slot=%s\n' "$SLOT" >> "$GITHUB_OUTPUT"
+          printf 'dry=%s\n' "$DRY" >> "$GITHUB_OUTPUT"
 
       - name: Run ACP daily market-news runner
         env:
@@ -78,10 +109,30 @@ jobs:
           PULSE_FUND_AMOUNT: ${{ vars.ACP_PULSE_FUND_AMOUNT }}
           FUND_CHECK_TIMEOUT_SECONDS: ${{ vars.ACP_FUND_CHECK_TIMEOUT_SECONDS }}
           FUND_CHECK_INTERVAL_SECONDS: ${{ vars.ACP_FUND_CHECK_INTERVAL_SECONDS }}
+          RESOLVED_SLOT: ${{ steps.resolve.outputs.slot }}
+          RESOLVED_DRY_RUN: ${{ steps.resolve.outputs.dry }}
         shell: bash
         run: |
           EXTRA_ARGS=()
-          if [[ "${{ steps.resolve.outputs.dry }}" == "true" ]]; then
-            EXTRA_ARGS+=(--dry-run)
-          fi
-          scripts/ops/acp-daily-market-news-runner.sh --slot "${{ steps.resolve.outputs.slot }}" "${EXTRA_ARGS[@]}"
+          case "${RESOLVED_DRY_RUN}" in
+            true)
+              EXTRA_ARGS+=(--dry-run)
+              ;;
+            false)
+              ;;
+            *)
+              echo "Invalid resolved dry_run value: ${RESOLVED_DRY_RUN}" >&2
+              exit 1
+              ;;
+          esac
+
+          case "${RESOLVED_SLOT}" in
+            morning|checkpoint)
+              ;;
+            *)
+              echo "Invalid resolved slot value: ${RESOLVED_SLOT}" >&2
+              exit 1
+              ;;
+          esac
+
+          scripts/ops/acp-daily-market-news-runner.sh --slot "${RESOLVED_SLOT}" "${EXTRA_ARGS[@]}"

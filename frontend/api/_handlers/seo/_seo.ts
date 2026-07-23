@@ -17,6 +17,7 @@ const INDEXABLE_ROUTES: CanonicalRouteConfig[] = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
   { path: '/creator-vaults', changefreq: 'weekly', priority: '0.9' },
   { path: '/erc-4626', changefreq: 'weekly', priority: '0.9' },
+  { path: '/explore/pools', changefreq: 'weekly', priority: '0.8' },
   { path: '/risks', changefreq: 'weekly', priority: '0.8' },
   { path: '/security', changefreq: 'weekly', priority: '0.7' },
   { path: '/about', changefreq: 'weekly', priority: '0.7' },

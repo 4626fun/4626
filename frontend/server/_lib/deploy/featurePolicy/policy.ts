@@ -120,6 +120,7 @@ export async function listActiveCreatorFeatureKeys(params: {
   const rawKeys: string[] = []
   for (const row of rows) {
     if (row.status !== 'active' && row.status !== 'pending') continue
+    if (!row.paymentVerifiedAt) continue
     const raw = String(row.featureKey ?? '').trim()
     if (raw) rawKeys.push(raw)
   }

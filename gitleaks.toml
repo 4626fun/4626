@@ -28,16 +28,9 @@ paths = [
   '''^bAlanciaga-master/''',
 ]
 
-# NOTE on `kpr/secrets.example.env`:
-# This is a distribution template with placeholder values. The historical
-# `generic-api-key` findings against it (26 in the full-history walk) are
-# silenced by the rule-scoped allowlist below — see the
-# `(^|/)[A-Za-z0-9_-]+\.example\.env$` entry under the `generic-api-key`
-# rule. We deliberately do NOT add this path to the global `[allowlist]`
-# above, because doing so would disable EVERY detector for this file —
-# including provider-specific ones (aws-access-token, github-pat,
-# stripe-access-token, private-key, etc.) — and create a credential blind
-# spot if a real cloud secret were ever committed under that path.
+# Example env files are intentionally not path-allowlisted. Generic service
+# credentials are common in this repository and are often caught only by the
+# generic-api-key detector, so a template filename must never suppress it.
 
 # Rule-scoped allowlist for the `generic-api-key` heuristic.
 #
@@ -59,9 +52,6 @@ paths = [
 #
 # The allowlist was extended (4626-399) with three further categories of
 # false positives:
-#   • `.env.example` template files — by definition placeholders, and
-#     provider-specific detectors still apply so a committed real AWS /
-#     Stripe / GitHub credential in an example file still fails CI.
 #   • EVM contract / EOA addresses (`0x` + 40 hex chars, optional trailing
 #     `.`) — these are public on-chain identifiers, not secrets.
 #   • Specific well-known public constants (Anvil default test key,
@@ -77,13 +67,6 @@ paths = [
   '''^frontend/server/.+\.test\.ts$''',
   '''^frontend/server/.+/__tests__/''',
   '''^kpr/tests/''',
-  # env.example files are distribution templates, not secret stores.
-  # Provider-specific detectors still scan them.
-  '''(^|/)\.env\.example$''',
-  # Same posture for the alt naming convention used by `kpr/`:
-  # `<name>.example.env` (placeholder values; comment-documented).
-  '''(^|/)secrets\.example\.env$''',
-  '''(^|/)[A-Za-z0-9_-]+\.example\.env$''',
   # Legacy tracked env fixtures with placeholder-like values that trip
   # generic detectors in full-history scans. Provider-specific rules still apply.
   '''^frontend/\.env\.backup$''',

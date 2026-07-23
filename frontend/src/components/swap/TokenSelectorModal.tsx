@@ -1,9 +1,9 @@
 import { Check, KeyRound, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
-import { erc20Abi, isAddress, type Address } from 'viem'
+import { erc20Abi, getAddress, isAddress, type Address } from 'viem'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { Alert } from '@/components/ui/Alert'
@@ -19,6 +19,8 @@ import {
 } from '@/lib/swap/useSwapAssetBalance'
 import {
   fetchAlfaClubRoomsForTokenModal,
+  formatAlfaClubKeyLabel,
+  resolveAlfaClubKeyImageUrl,
   resolveAlfaClubKeys,
   type AlfaClubKeyOption,
 } from '@/lib/swap/alfaclubRoomTokens'
@@ -27,7 +29,7 @@ import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { apiFetch } from '@/lib/api/apiBase'
-import { ALFACLUB } from '@/lib/alfaclub/contracts'
+import { ALFACLUB, FRIEND_KEY_ABI } from '@/lib/alfaclub/contracts'
 import { sameSwapAsset, type SwapAssetRef } from '@/lib/swap/swapAssetIdentity'
 import {
   BASE_CHAIN_ID,
@@ -103,6 +105,8 @@ type TokenSelectorModalProps = {
   recentTokenAddresses: string[]
   chainId?: SupportedChainId
   balanceOwnerAddress?: Address | null
+  /** Owner used for on-chain FriendKey balances (execution sender). Falls back to balanceOwnerAddress. */
+  keyBalanceOwnerAddress?: Address | null
   /** USD value per held token (lowercased address), e.g. from the Zora wallet-holdings API. */
   usdValueByAddress?: Map<string, number>
   isSearchLoading?: boolean
@@ -211,7 +215,6 @@ function NetworkChip({ chainId }: { chainId: SupportedChainId }) {
 
 function TokenSelectorRow(props: {
   option: SwapTokenOption
-  section?: string
   isActive: boolean
   isSelected: boolean
   balanceLabel?: string | null
@@ -219,7 +222,7 @@ function TokenSelectorRow(props: {
   onChoose: () => void
   onHover: () => void
 }) {
-  const { option, section, isActive, isSelected, balanceLabel, usdLabel, onChoose, onHover } = props
+  const { option, isActive, isSelected, balanceLabel, usdLabel, onChoose, onHover } = props
   const isUnverified = option.verified === false
   const showAddressHint =
     isUnverified ||
@@ -312,40 +315,63 @@ function TokenSelectorRow(props: {
 
 function KeySelectorRow(props: {
   option: AlfaClubKeyOption
+  isActive: boolean
   isSelected: boolean
   onChoose: () => void
+  onHover: () => void
 }) {
-  const { option, isSelected, onChoose } = props
+  const { option, isActive, isSelected, onChoose, onHover } = props
   const disabled = !option.marketReady
   return (
     <button
       type="button"
+      data-key-row={option.keyId}
       disabled={disabled}
       onClick={onChoose}
+      onMouseEnter={onHover}
+      onFocus={onHover}
+      tabIndex={isActive ? 0 : -1}
       className={cn(
-        'flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors',
-        isSelected ? 'bg-sky-500/14' : 'hover:bg-white/[0.05]',
-        disabled ? 'cursor-not-allowed opacity-55' : null,
+        'group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors duration-150',
+        isSelected
+          ? 'bg-[rgb(var(--brand-primary)/0.14)] ring-1 ring-[rgb(var(--brand-primary)/0.28)]'
+          : isActive
+            ? 'bg-white/[0.06]'
+            : 'hover:bg-white/[0.05]',
+        disabled ? 'cursor-not-allowed opacity-50' : null,
       )}
     >
-      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-300/30 bg-sky-500/[0.08]">
-        {option.imageUrl ? <img src={option.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
-        <KeyRound className="absolute h-4 w-4 text-sky-100" aria-hidden="true" />
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.1] bg-white/[0.04]">
+        {option.imageUrl ? (
+          <img src={option.imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <KeyRound className="h-4 w-4 text-zinc-300" aria-hidden="true" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[15px] font-semibold text-white">{option.label}</span>
-          <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-100">Key</span>
+          {option.marketReady ? (
+            <span className="shrink-0 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-200/90">
+              Live
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+              Soon
+            </span>
+          )}
         </div>
         <div className="truncate text-xs text-zinc-500">
           {option.marketReady
-            ? `${option.creatorHandle ? `${option.creatorHandle} · ` : ''}AKITA access · AlfaClub`
-            : 'No market'}
+            ? `${option.creatorHandle ? `@${option.creatorHandle.replace(/^@+/, '')} · ` : ''}AlfaClub · ERC-1155`
+            : 'Market not available yet'}
         </div>
       </div>
       <div className="flex min-w-[4.75rem] shrink-0 flex-col items-end gap-0.5 pl-1">
-        {option.balance != null ? <span className="text-sm font-medium tabular-nums text-zinc-200">{option.balance.toString()}</span> : null}
-        {isSelected ? <Check className="h-4 w-4 text-sky-200" strokeWidth={2.5} /> : null}
+        {option.balance != null ? (
+          <span className="text-sm font-medium tabular-nums text-zinc-200">{option.balance.toString()}</span>
+        ) : null}
+        {isSelected ? <Check className="h-4 w-4 text-[rgb(var(--brand-primary))]" strokeWidth={2.5} /> : null}
       </div>
     </button>
   )
@@ -359,6 +385,7 @@ export function TokenSelectorModal({
   recentTokenAddresses,
   chainId,
   balanceOwnerAddress,
+  keyBalanceOwnerAddress = null,
   usdValueByAddress,
   isSearchLoading = false,
   onQueryChange,
@@ -448,35 +475,81 @@ export function TokenSelectorModal({
     },
   })
 
-  const alfaclubKeys = useMemo(() => {
-    if (chainIdForLookup !== BASE_CHAIN_ID) return []
+  const keyBalanceOwner = keyBalanceOwnerAddress ?? balanceOwnerAddress ?? null
+
+  const alfaclubKeysSeed = useMemo(() => {
+    if (chainIdForLookup !== BASE_CHAIN_ID) return [] as AlfaClubKeyOption[]
     const directory = resolveAlfaClubKeys({ rooms: alfaclubRoomsQuery.data ?? [] })
     const byId = new Map(directory.map((key) => [key.keyId, key]))
     for (const holding of friendKeyHoldingsQuery.data ?? []) {
       const existing = byId.get(holding.tokenId)
       const balance = /^\d+$/.test(holding.balance) ? BigInt(holding.balance) : 0n
       if (existing) {
-        existing.balance = balance
+        byId.set(holding.tokenId, { ...existing, balance })
         continue
       }
       byId.set(holding.tokenId, {
         assetKind: 'erc1155-key',
         contractAddress: ALFACLUB.friendKey,
         keyId: holding.tokenId,
-        label: `Key #${holding.tokenId}`,
+        label: formatAlfaClubKeyLabel({ keyId: holding.tokenId }),
+        imageUrl: resolveAlfaClubKeyImageUrl({ keyId: holding.tokenId }),
         balance,
         marketReady: holding.tokenId === '1659',
         asset: { kind: 'erc1155-key', chainId: 8453, contractAddress: ALFACLUB.friendKey, tokenId: BigInt(holding.tokenId) },
       })
     }
     const normalized = trimmedQuery.replace(/^key\s*/i, '').replace(/^#/, '').trim().toLowerCase()
+    // Swap picker only surfaces executable markets — hide Soon dead-ends.
     return [...byId.values()]
+      .filter((key) => key.marketReady)
       .filter((key) => !normalized || [key.keyId, key.label, key.creatorHandle ?? ''].some((value) => value.toLowerCase().includes(normalized)))
       .sort((a, b) => {
         const balanceOrder = (b.balance ?? 0n) > (a.balance ?? 0n) ? 1 : (b.balance ?? 0n) < (a.balance ?? 0n) ? -1 : 0
         return balanceOrder || Number(b.marketReady) - Number(a.marketReady)
       })
   }, [alfaclubRoomsQuery.data, chainIdForLookup, friendKeyHoldingsQuery.data, trimmedQuery])
+
+  const friendKeyBalanceQueries = useQueries({
+    queries: alfaclubKeysSeed.map((key) => ({
+      queryKey: [
+        'swap',
+        'token-selector',
+        'friend-key-balance',
+        keyBalanceOwner?.toLowerCase() ?? '',
+        key.keyId,
+      ],
+      enabled:
+        open &&
+        Boolean(keyBalanceOwner) &&
+        Boolean(publicClient) &&
+        chainIdForLookup === BASE_CHAIN_ID,
+      staleTime: 15_000,
+      queryFn: async () => {
+        if (!publicClient || !keyBalanceOwner) return 0n
+        return publicClient.readContract({
+          address: ALFACLUB.friendKey,
+          abi: FRIEND_KEY_ABI,
+          functionName: 'balanceOf',
+          args: [keyBalanceOwner, BigInt(key.keyId)],
+        })
+      },
+    })),
+  })
+
+  const onChainBalanceKey = friendKeyBalanceQueries
+    .map((query) => (typeof query.data === 'bigint' ? query.data.toString() : ''))
+    .join('|')
+
+  const alfaclubKeys = useMemo(() => {
+    const balances = onChainBalanceKey.split('|')
+    return alfaclubKeysSeed.map((key, index) => {
+      const raw = balances[index]
+      if (raw) return { ...key, balance: BigInt(raw) }
+      return key
+    })
+  }, [alfaclubKeysSeed, onChainBalanceKey])
+
   const heldKeys = useMemo(
     () => alfaclubKeys.filter((key) => key.balance != null && key.balance > 0n),
     [alfaclubKeys],
@@ -816,60 +889,104 @@ export function TokenSelectorModal({
     [filteredSections],
   )
 
+  type NavRow =
+    | { kind: 'erc20'; option: SwapTokenOption }
+    | { kind: 'key'; key: AlfaClubKeyOption }
+
+  const listLoading = isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive
+
+  const flatNavRows = useMemo<NavRow[]>(() => {
+    const tokenRows: NavRow[] = flatDisplayRows.map(({ option }) => ({ kind: 'erc20', option }))
+    // Match list render order: tokens, then held keys, then market keys (hidden while search loads).
+    if (listLoading) return tokenRows
+    const keyRows: NavRow[] = [...heldKeys, ...marketKeys].map((key) => ({ kind: 'key', key }))
+    return [...tokenRows, ...keyRows]
+  }, [flatDisplayRows, heldKeys, listLoading, marketKeys])
+
   useEffect(() => {
     if (!open) return
     searchInputRef.current?.focus()
   }, [open])
 
   useEffect(() => {
-    if (activeIndex >= flatDisplayRows.length) setActiveIndex(0)
-  }, [activeIndex, flatDisplayRows.length])
+    if (activeIndex >= flatNavRows.length) setActiveIndex(0)
+  }, [activeIndex, flatNavRows.length])
+
+  const selectErc20Option = useCallback((option: SwapTokenOption) => {
+    // TokenOption is a display type whose chain/address fields are optional
+    // strings. The selector only emits execution-ready ERC-20 references.
+    if (!isAddress(option.address)) return false
+    onSelectAsset({
+      ref: {
+        kind: 'erc20',
+        chainId: toSupportedChainId(option.chainId, chainIdForLookup),
+        address: getAddress(option.address),
+      },
+      token: option,
+    })
+    return true
+  }, [chainIdForLookup, onSelectAsset])
+
+  const selectKeyOption = useCallback((key: AlfaClubKeyOption) => {
+    if (!key.marketReady) return false
+    onSelectAsset({ ref: key.asset, key })
+    onClose()
+    return true
+  }, [onClose, onSelectAsset])
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (!open) return
+      const count = Math.max(1, flatNavRows.length)
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setActiveIndex((prev) => (prev + 1) % Math.max(1, flatDisplayRows.length))
+        setActiveIndex((prev) => (prev + 1) % count)
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setActiveIndex((prev) => (prev - 1 + Math.max(1, flatDisplayRows.length)) % Math.max(1, flatDisplayRows.length))
+        setActiveIndex((prev) => (prev - 1 + count) % count)
       }
-      if (event.key === 'Enter' && flatDisplayRows[activeIndex]) {
+      if (event.key === 'Enter' && flatNavRows[activeIndex]) {
         event.preventDefault()
-        const option = flatDisplayRows[activeIndex].option
+        const row = flatNavRows[activeIndex]
+        if (row.kind === 'key') {
+          selectKeyOption(row.key)
+          return
+        }
+        const option = row.option
         if (option.verified === false) {
           setNeedsUnverifiedConfirm(option)
           return
         }
-        onSelectAsset({ ref: { kind: 'erc20', chainId: option.chainId, address: option.address }, token: option })
+        selectErc20Option(option)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [activeIndex, onSelectAsset, open, flatDisplayRows])
+  }, [activeIndex, open, flatNavRows, selectErc20Option, selectKeyOption])
 
   useEffect(() => {
-    const active = flatDisplayRows[activeIndex]
+    const active = flatNavRows[activeIndex]
     if (!active) return
-    const selector = `[data-token-row="${active.option.address.toLowerCase()}"]`
+    const selector =
+      active.kind === 'key'
+        ? `[data-key-row="${active.key.keyId}"]`
+        : `[data-token-row="${active.option.address.toLowerCase()}"]`
     const node = listRef.current?.querySelector<HTMLButtonElement>(selector)
     node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [activeIndex, flatDisplayRows])
+  }, [activeIndex, flatNavRows])
 
   function choose(option: SwapTokenOption) {
     if (option.verified === false) {
       setNeedsUnverifiedConfirm(option)
       return
     }
-    onSelectAsset({ ref: { kind: 'erc20', chainId: option.chainId, address: option.address }, token: option })
-    onClose()
+    if (selectErc20Option(option)) onClose()
   }
 
   function confirmUnverified() {
     if (!needsUnverifiedConfirm) return
-    onSelectAsset({ ref: { kind: 'erc20', chainId: needsUnverifiedConfirm.chainId, address: needsUnverifiedConfirm.address }, token: needsUnverifiedConfirm })
+    if (!selectErc20Option(needsUnverifiedConfirm)) return
     setNeedsUnverifiedConfirm(null)
     onClose()
   }
@@ -879,7 +996,6 @@ export function TokenSelectorModal({
     setAddressLookupAttempt((attempt) => attempt + 1)
   }
 
-  const listLoading = isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive
 
   return (
     <Modal
@@ -920,26 +1036,38 @@ export function TokenSelectorModal({
           {alfaclubKeys.length > 0 && !trimmedQuery ? (
             <div className="mt-3">
               <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-                AlfaClub keys
+                AlfaClub
               </div>
               <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {alfaclubKeys.map((key) => (
+                {alfaclubKeys.map((key) => {
+                  const isSelected = sameSwapAsset(selectedAsset, key.asset)
+                  return (
                   <button
                     key={`alfaclub-key-${key.keyId}`}
                     type="button"
                     disabled={!key.marketReady}
-                    onClick={() => onSelectAsset({ ref: key.asset, key })}
-                    className="flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-2xl border border-sky-400/20 bg-sky-500/[0.06] px-2.5 py-2 transition hover:border-sky-300/35 hover:bg-sky-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      onSelectAsset({ ref: key.asset, key })
+                      onClose()
+                    }}
+                    className={cn(
+                      'flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-2xl border px-2.5 py-2 transition duration-150 disabled:cursor-not-allowed disabled:opacity-50',
+                      isSelected
+                        ? 'border-[rgb(var(--brand-primary)/0.35)] bg-[rgb(var(--brand-primary)/0.12)]'
+                        : 'border-white/[0.08] bg-white/[0.03] hover:border-white/[0.14] hover:bg-white/[0.06]',
+                    )}
                   >
-                    <div className="relative">
-                      <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border border-sky-300/30 bg-sky-500/[0.08]">
-                        {key.imageUrl ? <img src={key.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
-                        <KeyRound className="absolute h-3.5 w-3.5 text-sky-100" />
-                      </div>
+                    <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/[0.1] bg-white/[0.04]">
+                      {key.imageUrl ? (
+                        <img src={key.imageUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <KeyRound className="h-3.5 w-3.5 text-zinc-300" />
+                      )}
                     </div>
-                    <span className="text-[11px] font-semibold text-zinc-100">Key #{key.keyId}</span>
+                    <span className="max-w-[4.25rem] truncate text-[11px] font-semibold text-zinc-100">{key.label}</span>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ) : null}
@@ -1065,7 +1193,6 @@ export function TokenSelectorModal({
                               <TokenSelectorRow
                                 key={`${section}-${option.address}`}
                                 option={option}
-                                section={section}
                                 isActive={isActive}
                                 isSelected={isSelected}
                                 balanceLabel={balanceLabel}
@@ -1086,37 +1213,43 @@ export function TokenSelectorModal({
 
           {!listLoading && heldKeys.length > 0 ? (
             <div>
-              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">Your keys</div>
-              {heldKeys.map((key) => (
+              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium tracking-[0.01em] text-zinc-500 backdrop-blur-sm">Your collection</div>
+              {heldKeys.map((key, heldIndex) => {
+                const navIndex = flatDisplayRows.length + heldIndex
+                return (
                 <KeySelectorRow
                   key={`held-key-${key.keyId}`}
                   option={key}
+                  isActive={activeIndex === navIndex}
                   isSelected={sameSwapAsset(selectedAsset, key.asset)}
+                  onHover={() => setActiveIndex(navIndex)}
                   onChoose={() => {
-                    if (!key.marketReady) return
-                    onSelectAsset({ ref: key.asset, key })
-                    onClose()
+                    selectKeyOption(key)
                   }}
                 />
-              ))}
+                )
+              })}
             </div>
           ) : null}
 
           {!listLoading && marketKeys.length > 0 ? (
             <div>
-              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">AlfaClub keys</div>
-              {marketKeys.map((key) => (
+              <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium tracking-[0.01em] text-zinc-500 backdrop-blur-sm">AlfaClub markets</div>
+              {marketKeys.map((key, marketIndex) => {
+                const navIndex = flatDisplayRows.length + heldKeys.length + marketIndex
+                return (
                 <KeySelectorRow
                   key={`market-key-${key.keyId}`}
                   option={key}
+                  isActive={activeIndex === navIndex}
                   isSelected={sameSwapAsset(selectedAsset, key.asset)}
+                  onHover={() => setActiveIndex(navIndex)}
                   onChoose={() => {
-                    if (!key.marketReady) return
-                    onSelectAsset({ ref: key.asset, key })
-                    onClose()
+                    selectKeyOption(key)
                   }}
                 />
-              ))}
+                )
+              })}
             </div>
           ) : null}
         </div>

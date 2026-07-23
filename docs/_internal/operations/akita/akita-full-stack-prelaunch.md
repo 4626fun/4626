@@ -19,7 +19,7 @@ Related:
 | Creator coin | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | **Same** |
 | Vault / wrapper / ShareOFT | `0x82C06…` / `0x58Cd1…` / `0x4df30…` | **New CREATE2 addresses (`■AKITA`)** |
 | Registry row | Absent in the historical snapshot | Creator registered and explicit Solana peer seeded before Phase 2 finalize |
-| Solana mesh | AKITA LZ OFT store/mint already live | Reuse that identity, but seed AKITA's explicit `Registry4626` peer before finalize |
+| Solana mesh | Historical standard-SPL B1 identity | Provision a fresh Token-2022 hook mint and regular-OFT Store after Base Phase 1; never reuse B1 for B2 |
 | Keeper DB | Points at current vault | **Re-backfill** after new addresses |
 
 Wire LayerZero to the **new** `CreatorShareOFT` deployed in Phase 1 (`■AKITA` symbol).
@@ -28,8 +28,8 @@ Wire LayerZero to the **new** `CreatorShareOFT` deployed in Phase 1 (`■AKITA` 
 
 | When | You (deploy UI) | One command (automates the rest) |
 |------|-----------------|----------------------------------|
-| **Now** | — | `pnpm -C frontend ops:complete-akita-deploy prelaunch` |
-| **Phase 1 done** | Copy vault / wrapper / ShareOFT (+ gauge/cca/oracle if shown) | `ops:complete-akita-deploy post-phase1 … --update-vultr` |
+| **Now** | — | `pnpm -C frontend ops:verify-akita-prelaunch --production --phase1-only` |
+| **Phase 1 done** | Provision fresh B2 mint/PDAs/Store, wire LZ + registry, then copy all addresses | `ops:complete-akita-deploy post-phase1 … --share-mesh-mint … --oft-store … --solana-share-peer … --update-vultr` |
 | **Before finalize** | Wait for Pipe A panel **ready**; run finalize in UI | (included in post-phase1 gate) |
 | **After finalize** | — | `ops:complete-akita-deploy post-finalize … --update-vultr --backfill --write-defaults` |
 
@@ -130,19 +130,19 @@ with the new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
 | `KEEPER_SOLANA_RECONCILE_ENABLED` | `1` |
 | `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,price_monitor` |
 
-### Solana share mesh (AKITA #1 — reuse on redeploy)
+### Solana share mesh (fresh AKITA B2 identity required)
 
 | Item | Value |
 |------|--------|
-| Solana LZ OFT program | `6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s` |
-| OFT store | `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` |
-| Share mesh mint | `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` (`■AKITA`) |
-| AKITA registry peer | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` — seed explicitly for `(AKITA, 30168)` |
-| ULN | 6-of-9 optional DVNs Base ↔ Solana (configured on Solana oftStore) |
+| Retired B1 identity | mint `5puV…XHQv`, Store `G3rf…XeN`, peer `0xdf9a…cd3f` — forbidden for B2 |
+| Fresh B2 mint | Created after Base Phase 1; Token-2022, canonical TransferHook, zero fee |
+| Fresh OFT Store | Regular-OFT Store bound to that exact mint after hook PDA initialization |
+| AKITA registry peer | Fresh OFT Store encoded as bytes32; seed explicitly for `(AKITA, 30168)` |
+| ULN | 3-of-5 optional DVNs Base ↔ Solana, verified on the fresh Store and Base ShareOFT |
 
-No new Solana OFT deploy is required for AKITA redeploy if you keep this mesh
-identity. This reuse does **not** create a global default: the peer still must be
-written explicitly to the active `Registry4626` row before finalize.
+Use two Base deploy sessions: Phase 1 only creates the new vault/wrapper/ShareOFT;
+then provision and wire the fresh B2 mint/Store; only then create the remaining
+Phase 2+ session with explicit `solanaOvault.mode=b2` and `shareMeshMint`.
 
 ## Before you click Deploy (your side)
 
@@ -185,7 +185,7 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
      --asset-mesh <base-asset-mesh-if-any> \
      --share-mesh <new-share-oft> \
      --solana-asset-peer 0x... \
-     --solana-share-peer 0xdf9a9ef7...
+     --solana-share-peer <FRESH_OFT_STORE_BYTES32>
    ```
    Submit `configureCreatorMesh` on `OVaultHubComposer` (`0x7dF44cBB…`). New wrapper bytecode supports `setBeneficiaryOperator(composer, true)` — run from wrapper owner before composer call if preflight requires it.
 

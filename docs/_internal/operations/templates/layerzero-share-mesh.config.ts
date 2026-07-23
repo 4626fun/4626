@@ -20,20 +20,16 @@ import { OAppEnforcedOption, OmniPointHardhat } from '@layerzerolabs/toolbox-har
 
 import { getOftStoreAddress } from './tasks/solana'
 
-/** Base ↔ Solana — 6-of-9 optional (all nine on both `base` and `solana` metadata keys). */
+/** Base ↔ Solana — 3-of-5 optional (Solana pathways support at most five DVNs). */
 export const MAINNET_BASE_SOLANA_OPTIONAL_DVNS = [
   'LayerZero Labs',
   'Google',
   'Nethermind',
   'Horizen',
   'Deutsche Telekom',
-  'Nansen',
-  'Frax',
-  'Wyoming',
-  'P-OPS',
 ] as const
 
-export const MAINNET_BASE_SOLANA_OPTIONAL_THRESHOLD = 6
+export const MAINNET_BASE_SOLANA_OPTIONAL_THRESHOLD = 3
 
 /**
  * Base ↔ Hyperliquid (and Solana ↔ Hyperliquid if wired) — 6-of-6 optional.

@@ -95,6 +95,7 @@ async function readProfileWalletAuthorityRow(
       LIMIT 1
     ) canonical ON true
     WHERE p.id = ${profileId}
+      AND p.merged_into_profile_id IS NULL
     LIMIT 1;
   `
   return (result.rows?.[0] as ProfileWalletAuthorityRow | undefined) ?? null
@@ -161,22 +162,25 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
         AND pw.is_canonical_smart_wallet = true
       LIMIT 1
     ) canonical ON true
-    WHERE LOWER(p.primary_wallet) = ${input}
-       OR LOWER(p.embedded_wallet) = ${input}
-       OR LOWER(p.primary_embedded_eoa) = ${input}
-       OR LOWER(p.csw_address) = ${input}
-       OR LOWER(p.base_sub_account) = ${input}
-       OR LOWER(canonical.address) = ${input}
-       OR p.id IN (
-         SELECT pw.profile_id
-         FROM profile_wallets pw
-         WHERE LOWER(pw.address) = ${input}
-           AND (
-             pw.is_primary = true
-             OR pw.is_embedded_eoa = true
-             OR pw.is_canonical_smart_wallet = true
-           )
-       )
+    WHERE (
+      LOWER(p.primary_wallet) = ${input}
+      OR LOWER(p.embedded_wallet) = ${input}
+      OR LOWER(p.primary_embedded_eoa) = ${input}
+      OR LOWER(p.csw_address) = ${input}
+      OR LOWER(p.base_sub_account) = ${input}
+      OR LOWER(canonical.address) = ${input}
+      OR p.id IN (
+        SELECT pw.profile_id
+        FROM profile_wallets pw
+        WHERE LOWER(pw.address) = ${input}
+          AND (
+            pw.is_primary = true
+            OR pw.is_embedded_eoa = true
+            OR pw.is_canonical_smart_wallet = true
+          )
+      )
+    )
+      AND p.merged_into_profile_id IS NULL
     LIMIT 1;
   `
 
@@ -225,16 +229,19 @@ async function findProfilesForAddress(
   const profileResult = await db.sql`
     SELECT id, privy_user_id
     FROM profiles
-    WHERE LOWER(primary_wallet) = ${input}
-       OR LOWER(embedded_wallet) = ${input}
-       OR LOWER(primary_embedded_eoa) = ${input}
-       OR LOWER(csw_address) = ${input}
-       OR LOWER(base_sub_account) = ${input}
-       OR id IN (
-         SELECT profile_id
-         FROM profile_wallets
-         WHERE LOWER(address) = ${input}
-       )
+    WHERE (
+      LOWER(primary_wallet) = ${input}
+      OR LOWER(embedded_wallet) = ${input}
+      OR LOWER(primary_embedded_eoa) = ${input}
+      OR LOWER(csw_address) = ${input}
+      OR LOWER(base_sub_account) = ${input}
+      OR id IN (
+        SELECT profile_id
+        FROM profile_wallets
+        WHERE LOWER(address) = ${input}
+      )
+    )
+      AND merged_into_profile_id IS NULL
     LIMIT 10;
   `
 
@@ -331,6 +338,7 @@ export async function resolvePersistedWalletIdentityForProfileId(profileId: numb
     SELECT id, privy_user_id
     FROM profiles
     WHERE id = ${Math.floor(profileId)}
+      AND merged_into_profile_id IS NULL
     LIMIT 1;
   `
 
@@ -363,12 +371,15 @@ export async function resolveCanonicalSmartWalletAddress(address: string): Promi
   const profileResult = await db.sql`
     SELECT id, csw_address
     FROM profiles
-    WHERE LOWER(csw_address) = ${input}
-       OR id IN (
-         SELECT profile_id
-         FROM profile_wallets
-         WHERE LOWER(address) = ${input}
-       )
+    WHERE (
+      LOWER(csw_address) = ${input}
+      OR id IN (
+        SELECT profile_id
+        FROM profile_wallets
+        WHERE LOWER(address) = ${input}
+      )
+    )
+      AND merged_into_profile_id IS NULL
     LIMIT 1;
   `
 

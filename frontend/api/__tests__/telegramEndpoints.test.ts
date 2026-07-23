@@ -472,6 +472,36 @@ describe('telegram endpoint handlers', () => {
     )
   })
 
+  it('POST /api/telegram/miniapp/session requires TELEGRAM_BOT_TOKEN specifically', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_miniapp-session.ts')
+    const restoreBotEnv = applyEnv({
+      TELEGRAM_BOT_TOKEN: undefined,
+      HERMIT_TELEGRAM_BOT_TOKEN: 'hermit-bot-token',
+      ALFACLUB_TELEGRAM_BOT_TOKEN: 'alfaclub-bot-token',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          initData: buildTelegramMiniAppInitData({
+            botToken: 'hermit-bot-token',
+            authDate: Math.floor(Date.now() / 1000),
+            userId: '42',
+          }),
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.code).toBe('TELEGRAM_BOT_NOT_CONFIGURED')
+      expect(createTelegramMiniAppSessionMock).not.toHaveBeenCalled()
+    } finally {
+      restoreBotEnv()
+    }
+  })
+
   it('POST /api/telegram/miniapp/session rejects invalid initData', async () => {
     const { default: handler } = await import('../_handlers/telegram/_miniapp-session.ts')
     const req = createMockReq({

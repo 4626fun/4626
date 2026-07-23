@@ -27,7 +27,7 @@ export default async function handler(req: any, res: any) {
 
   const rawPage = typeof (req.query as any)?.page === 'string' ? Number((req.query as any).page) : NaN
   const rawLimit = typeof (req.query as any)?.limit === 'string' ? Number((req.query as any).limit) : NaN
-  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1
+  const page = Number.isFinite(rawPage) ? Math.min(10_000, Math.max(1, Math.floor(rawPage))) : 1
   const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 10
 
   const pointsTypeParam = typeof (req.query as any)?.pointsType === 'string' ? String((req.query as any).pointsType).toLowerCase() : ''

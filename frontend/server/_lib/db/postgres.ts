@@ -146,12 +146,13 @@ type DbPool = {
   sql: <T = any>(strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult<T>>
   // Preferred: explicit query API (helps satisfy scanners and is unambiguous parameterization).
   query?: (text: string, params?: any[]) => Promise<DbResult>
+  transaction?: <T>(fn: (db: DbPool) => Promise<T>) => Promise<T>
 }
 
 export type { DbPool }
 
 function buildClientDb(client: { query: (text: string, params?: any[]) => Promise<any> }): DbPool {
-  return {
+  const db: DbPool = {
     sql: async (strings: TemplateStringsArray, ...values: any[]) => {
       let text = ''
       for (let i = 0; i < strings.length; i++) {
@@ -173,7 +174,10 @@ function buildClientDb(client: { query: (text: string, params?: any[]) => Promis
         rowCount: Number.isFinite(Number(res.rowCount)) ? Number(res.rowCount) : rows.length,
       }
     },
+    // Already bound to the checked-out transaction client.
+    transaction: async <T>(fn: (txDb: DbPool) => Promise<T>) => fn(db),
   }
+  return db
 }
 
 export async function runInTransaction<T>(fn: (db: DbPool) => Promise<T>): Promise<T | null> {
@@ -588,6 +592,11 @@ export async function getDb(): Promise<DbPool | null> {
                   queryRetries,
                 ),
               ),
+            transaction: async <T>(fn: (txDb: DbPool) => Promise<T>) => {
+              const result = await runInTransaction(fn)
+              if (result === null) throw new Error('db_unavailable')
+              return result
+            },
           }
           // Sanity check connectivity on the raw pool (avoid runOnCurrentDb → getDb during init).
           let initCheckErr: unknown
@@ -743,4 +752,3 @@ export function withChartContext(db: DbPool, chartId: string): DbPool {
     } : undefined,
   };
 }
-

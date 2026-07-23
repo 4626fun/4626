@@ -32,7 +32,7 @@ function normalizeSql(strings: TemplateStringsArray): string {
   return strings.join(' ').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
-function createDb(options: { alreadyLinked: boolean }) {
+function createDb(options: { alreadyLinked: boolean; previouslyRewarded?: boolean }) {
   const calls: Array<{ text: string; values: unknown[] }> = []
   return {
     calls,
@@ -40,8 +40,10 @@ function createDb(options: { alreadyLinked: boolean }) {
       const text = normalizeSql(strings)
       calls.push({ text, values })
 
-      if (text.includes('from account_linked_methods') && text.includes('limit 1')) {
-        return options.alreadyLinked ? { rows: [{ n: 1 }] } : { rows: [] }
+      if (text.includes('provider_link_history') && text.includes('limit 1')) {
+        return options.alreadyLinked || options.previouslyRewarded
+          ? { rows: [{ n: 1 }] }
+          : { rows: [] }
       }
       if (text.includes("to_regclass('public.profiles') is not null as has_profiles")) {
         return {
@@ -118,6 +120,17 @@ const twitterPrivyUser = {
   linkedAccounts: [{ type: 'twitter_oauth', subject: '12345', username: 'creator' }],
 }
 
+const externalWalletPrivyUser = {
+  linkedAccounts: [
+    {
+      type: 'wallet',
+      chainType: 'ethereum',
+      walletClientType: 'metamask',
+      address: '0x1111111111111111111111111111111111111111',
+    },
+  ],
+}
+
 describe('recordProviderLink link points', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -150,5 +163,38 @@ describe('recordProviderLink link points', () => {
 
     const pointInserts = db.calls.filter((call) => call.text.includes('insert into points'))
     expect(pointInserts).toHaveLength(0)
+  })
+
+  it('does not award another external-wallet link after unlinking and rotating addresses', async () => {
+    const db = createDb({ alreadyLinked: false, previouslyRewarded: true })
+    await recordProviderLink({
+      db,
+      privyUserId: 'did:privy:abc',
+      provider: 'external_eoa',
+      privyUser: externalWalletPrivyUser,
+    })
+
+    const pointInserts = db.calls.filter((call) => call.text.includes('insert into points'))
+    expect(pointInserts).toHaveLength(0)
+    const historyLookup = db.calls.find((call) => call.text.includes('provider_link_history'))
+    expect(historyLookup?.values).toEqual(
+      expect.arrayContaining(['did:privy:abc', 'external_eoa', 'link_external_eoa']),
+    )
+  })
+
+  it('uses a provider-scoped event key for a first external-wallet reward', async () => {
+    const db = createDb({ alreadyLinked: false })
+    await recordProviderLink({
+      db,
+      privyUserId: 'did:privy:abc',
+      provider: 'external_eoa',
+      privyUser: externalWalletPrivyUser,
+    })
+
+    const pointInserts = db.calls.filter((call) => call.text.includes('insert into points'))
+    expect(pointInserts).toHaveLength(1)
+    expect(pointInserts[0]?.values).toEqual(
+      expect.arrayContaining([42, 'link_external_eoa', 'link_external_eoa', 10]),
+    )
   })
 })

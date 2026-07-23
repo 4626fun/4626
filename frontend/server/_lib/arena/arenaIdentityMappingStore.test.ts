@@ -39,12 +39,12 @@ function baseConfig(): ArenaConfig {
   }
 }
 
-describe('arenaIdentityMappingStore in-memory fallback', () => {
+describe('arenaIdentityMappingStore fail-closed persistence', () => {
   beforeEach(() => {
     __resetArenaIdentityMappingsForTests()
   })
 
-  it('upserts and resolves room default mapping without db', async () => {
+  it('refuses an unpersisted room default mapping when db is unavailable', async () => {
     const roomId = '1659-memory-default'
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
 
@@ -55,19 +55,19 @@ describe('arenaIdentityMappingStore in-memory fallback', () => {
       arenaWalletAddress: '0x74ab91cd845ff0d2006404440af49c3bc8c1df96',
       updatedBy: sender,
     })
-    expect(saved).toBe(true)
+    expect(saved).toBe(false)
 
     const resolved = await resolveArenaIdentityForContext({
       roomId,
       senderAddress: sender,
       baseConfig: baseConfig(),
     })
-    expect(resolved.source).toBe('room_default')
-    expect(resolved.agentId).toBe('019e90fa-3c8c-7ba0-8547-bf6f81698c3d')
-    expect(resolved.agentWalletAddress).toBe('0x74ab91cd845ff0d2006404440af49c3bc8c1df96')
+    expect(resolved.source).toBe('env_default')
+    expect(resolved.agentId).toBeNull()
+    expect(resolved.agentWalletAddress).toBeNull()
   })
 
-  it('prefers sender-specific mapping over room default and clears without db', async () => {
+  it('does not keep stale mappings or report an unpersisted clear as successful', async () => {
     const roomId = '1659-memory-precedence'
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
     const senderAgentId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -75,32 +75,32 @@ describe('arenaIdentityMappingStore in-memory fallback', () => {
     const defaultAgentId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff'
     const defaultWallet = '0x2222222222222222222222222222222222222222'
 
-    await upsertArenaIdentityMapping({
+    expect(await upsertArenaIdentityMapping({
       roomId,
       senderAddress: '*',
       arenaAgentId: defaultAgentId,
       arenaWalletAddress: defaultWallet,
       updatedBy: sender,
-    })
-    await upsertArenaIdentityMapping({
+    })).toBe(false)
+    expect(await upsertArenaIdentityMapping({
       roomId,
       senderAddress: sender,
       arenaAgentId: senderAgentId,
       arenaWalletAddress: senderWallet,
       updatedBy: sender,
-    })
+    })).toBe(false)
 
     const resolved = await resolveArenaIdentityForContext({
       roomId,
       senderAddress: sender,
       baseConfig: baseConfig(),
     })
-    expect(resolved.source).toBe('user')
-    expect(resolved.agentId).toBe(senderAgentId)
-    expect(resolved.agentWalletAddress).toBe(senderWallet)
+    expect(resolved.source).toBe('env_default')
+    expect(resolved.agentId).toBeNull()
+    expect(resolved.agentWalletAddress).toBeNull()
 
     const cleared = await clearArenaIdentityMapping({ roomId, senderAddress: '*' })
-    expect(cleared).toBe(true)
+    expect(cleared).toBe(false)
 
     const otherSenderResolved = await resolveArenaIdentityForContext({
       roomId,

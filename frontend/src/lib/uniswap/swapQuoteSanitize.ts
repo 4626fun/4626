@@ -1,3 +1,7 @@
+import { permit2Address } from '@zoralabs/protocol-deployments'
+import { getAddress, isAddress, type Address } from 'viem'
+import { base } from 'viem/chains'
+
 /**
  * Sanitize Uniswap Trading API /swap payloads before upstream submission.
  * Upstream RequestValidationError often surfaces as:
@@ -8,6 +12,12 @@
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const HEX_DATA_RE = /^0x[0-9a-fA-F]+$/
 const DECIMAL_RE = /^\d+$/
+const BASE_PERMIT2_VERIFIER = getAddress(permit2Address[base.id])
+export const BASE_PERMIT2_ALLOWED_SPENDERS = new Set<Address>([
+  getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43'),
+  getAddress('0x2626664c2603336E57B271c5C0b26F421741e481'),
+  getAddress('0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9'),
+])
 
 const INTERNAL_QUOTE_KEYS = new Set([
   '_provider',
@@ -56,6 +66,23 @@ const QUOTE_GAS_STRING_FIELDS = new Set([
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeAddress(value: unknown): Address | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!isAddress(trimmed)) return null
+  return getAddress(trimmed)
+}
+
+function normalizeChainId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'bigint') return Number(value)
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || !DECIMAL_RE.test(trimmed)) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function looksLikeTransaction(value: Record<string, unknown>): boolean {
@@ -254,6 +281,62 @@ export function sanitizePermitDataForSwapApi(
   }
 
   return next
+}
+
+export function assertBasePermit2Safety(params: {
+  permitData: Record<string, unknown>
+  expectedTokenAddress?: string | null
+  allowedSpenders?: Iterable<string | Address>
+}): { token: Address | null; spender: Address } {
+  const domain = isPlainObject(params.permitData.domain) ? params.permitData.domain : null
+  const valuesRaw = isPlainObject(params.permitData.values)
+    ? params.permitData.values
+    : isPlainObject(params.permitData.message)
+      ? params.permitData.message
+      : null
+  if (!domain || !valuesRaw) {
+    throw new Error('Permit2 payload is malformed. Please refresh the quote and try again.')
+  }
+
+  const chainId = normalizeChainId(domain.chainId)
+  if (chainId !== base.id) {
+    throw new Error('Permit2 payload must target Base mainnet. Refresh the quote and try again.')
+  }
+
+  const verifyingContract = normalizeAddress(domain.verifyingContract)
+  if (!verifyingContract || verifyingContract !== BASE_PERMIT2_VERIFIER) {
+    throw new Error('Permit2 payload must use the canonical Permit2 contract. Refresh the quote and try again.')
+  }
+
+  const spender = normalizeAddress(valuesRaw.spender)
+  if (!spender) {
+    throw new Error('Permit2 payload is missing token/spender details. Refresh the quote and try again.')
+  }
+
+  const allowedSpenders = new Set<Address>(
+    Array.from(params.allowedSpenders ?? BASE_PERMIT2_ALLOWED_SPENDERS).map((value) => getAddress(String(value))),
+  )
+  if (!allowedSpenders.has(spender)) {
+    throw new Error('Permit2 payload spender is not allowlisted. Refresh the quote and try again.')
+  }
+
+  const token = isPlainObject(valuesRaw.details)
+    ? normalizeAddress(resolvePermitTokenAddress(valuesRaw.details.token))
+    : null
+  const expectedToken =
+    params.expectedTokenAddress && isAddress(params.expectedTokenAddress)
+      ? getAddress(params.expectedTokenAddress)
+      : null
+  if (expectedToken) {
+    if (!token) {
+      throw new Error('Permit2 payload is missing the expected token. Refresh the quote and try again.')
+    }
+    if (token !== expectedToken) {
+      throw new Error('Permit2 payload token does not match the sell token. Refresh the quote and try again.')
+    }
+  }
+
+  return { token, spender }
 }
 
 export function sanitizeCreateSwapRequestPayload(body: Record<string, unknown>): Record<string, unknown> {

@@ -21,7 +21,12 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
-import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+import {
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE2_MODULE,
+  SPLIT_PHASE1_SHARE_MESH_HELPER,
+  SPLIT_PHASE1_UTILS_HELPER,
+} from '../../src/config/contracts.defaults.js'
 
 declare const process: {
   argv: string[]
@@ -88,6 +93,16 @@ function normalizePrivateKey(value: string): `0x${string}` {
   return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as `0x${string}`
 }
 
+function getRequiredPinnedAddress(name: string, fallback: Address, envKeys: string[] = []): Address {
+  const cliValue = getArg(`--expected-${name}`, '')
+  const envValue = envKeys.map((key) => process.env[key] || '').find((value) => value.trim().length > 0) || ''
+  const resolved = cliValue || envValue || fallback
+  if (!isAddress(resolved)) {
+    throw new Error(`Missing --expected-${name} <address> or configured env pin`)
+  }
+  return getAddress(resolved as Address)
+}
+
 async function main(): Promise<void> {
   const batcher = getAddress(
     getArg('--batcher', SPLIT_PHASE1_DEPLOYMENT_BATCHER) as Address,
@@ -107,12 +122,37 @@ async function main(): Promise<void> {
   )
 
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
+  const expectedPhase2Module = getRequiredPinnedAddress('phase2-module', SPLIT_PHASE1_PHASE2_MODULE, [
+    'EXPECTED_PHASE2_MODULE',
+    'PHASE2_MODULE',
+  ])
+  const expectedShareMeshHelper = getRequiredPinnedAddress('share-mesh-helper', SPLIT_PHASE1_SHARE_MESH_HELPER, [
+    'EXPECTED_SHARE_MESH_HELPER',
+    'EXPECTED_UNIV4_HELPER',
+    'SHARE_MESH_HELPER',
+    'UNIV4_HELPER',
+  ])
+  const expectedUtilsHelper = getRequiredPinnedAddress('utils-helper', SPLIT_PHASE1_UTILS_HELPER, [
+    'EXPECTED_UTILS_HELPER',
+    'UTILS_HELPER',
+  ])
   const [phase2Module, uniV4Helper, utilsHelper, currentHelper] = await Promise.all([
     client.readContract({ address: batcher, abi: BATCHER_ABI, functionName: 'phase2Module' }),
     client.readContract({ address: batcher, abi: BATCHER_ABI, functionName: 'uniV4Helper' }),
     client.readContract({ address: batcher, abi: BATCHER_ABI, functionName: 'utilsHelper' }),
     client.readContract({ address: batcher, abi: BATCHER_ABI, functionName: 'phase3Helper' }),
   ])
+  if (getAddress(phase2Module as Address) !== expectedPhase2Module) {
+    throw new Error(`Unexpected phase2Module on batcher: expected ${expectedPhase2Module}, got ${String(phase2Module)}`)
+  }
+  if (getAddress(uniV4Helper as Address) !== expectedShareMeshHelper) {
+    throw new Error(
+      `Unexpected shareMeshHelper on batcher: expected ${expectedShareMeshHelper}, got ${String(uniV4Helper)}`,
+    )
+  }
+  if (getAddress(utilsHelper as Address) !== expectedUtilsHelper) {
+    throw new Error(`Unexpected utilsHelper on batcher: expected ${expectedUtilsHelper}, got ${String(utilsHelper)}`)
+  }
 
   const data = encodeFunctionData({
     abi: BATCHER_ABI,

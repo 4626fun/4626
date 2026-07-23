@@ -512,9 +512,11 @@ export function AlfaClubLiquidityPools() {
   return (
     <PageShell>
       <PageMeta
-        title="AlfaClub markets"
-        description="Browse the official Creator Coin and FriendKey Sudoswap market, then buy or sell through the AlfaClub router on Base."
+        title="AlfaClub Key Markets"
+        description="Browse official AlfaClub FriendKey secondary markets on Base. ERC-1155 keys trade in-app against Creator Coins on Sudoswap v2 pairs — not Uniswap token swap."
         canonicalPath={ALFACLUB_EXPLORE_POOLS_PATH}
+        canonicalOrigin="https://4626.fun"
+        robots="noindex,follow"
       />
 
       <main className="mx-auto w-full max-w-[1400px] px-3 pt-6 sm:px-6 sm:pt-10">

@@ -29,7 +29,7 @@ Tier 2. Load on demand when skill paths match.
 - Cross-chain security:
   - LayerZero OApps rely on `setPeer(eid, peer)` / `peers(eid)` relationships to authenticate remote senders.
   - Misconfigured peers are the #1 cause of “messages not delivered / unauthorized” errors.
-  - Share-mesh wiring uses **6-of-9 optional DVNs** on mainnet Base ↔ Solana: `[[], [[...nine names], 6]]` in `layerzero.config.ts`. Never ship single-DVN `1/1`. Devnet arbsep ↔ solana-testnet can only rehearse **2-of-3** optional (three shared DVNs in metadata).
+  - Share-mesh wiring uses **3-of-5 optional DVNs** on mainnet Base ↔ Solana: `[[], [[...five names], 3]]` in `layerzero.config.ts`. Never ship single-DVN `1/1`. Devnet arbsep ↔ solana-testnet uses **2-of-3** optional.
 
 ## Required Inputs
 
@@ -101,4 +101,3 @@ Return a structured result:
 - Actions taken (if any): tx hashes, functions called, and the new peer/endpoints
 - Verification: post-state reads confirming peers/mappings
 - Follow-ups: missing reverse-peers, required off-chain config, or rollout steps
-

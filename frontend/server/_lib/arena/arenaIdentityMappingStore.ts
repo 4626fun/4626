@@ -16,14 +16,10 @@ type ArenaIdentityRow = {
   updated_at: string
 }
 
-const inMemoryArenaIdentityMappings = new Map<string, ArenaIdentityRow>()
-
 /**
- * Test helper to ensure deterministic fallback state across cases.
- * Not used in production flows.
+ * Retained as a no-op test helper for callers that reset module state.
  */
 export function __resetArenaIdentityMappingsForTests(): void {
-  inMemoryArenaIdentityMappings.clear()
 }
 
 export type ArenaIdentitySource = 'user' | 'room_default' | 'env_default'
@@ -67,40 +63,6 @@ function mapRowToIdentity(row: ArenaIdentityRow): ResolvedArenaIdentity {
   }
 }
 
-function toMemoryKey(roomId: string, senderAddress: string): string {
-  return `${roomId}:${senderAddress}`
-}
-
-function resolveInMemoryIdentity(roomId: string, senderAddress: string): ResolvedArenaIdentity | null {
-  const senderRow = inMemoryArenaIdentityMappings.get(toMemoryKey(roomId, senderAddress))
-  if (senderRow) return mapRowToIdentity(senderRow)
-  const defaultRow = inMemoryArenaIdentityMappings.get(toMemoryKey(roomId, DEFAULT_ROOM_SENDER_KEY))
-  if (defaultRow) return mapRowToIdentity(defaultRow)
-  return null
-}
-
-function upsertInMemoryIdentity(params: {
-  roomId: string
-  senderAddress: string
-  arenaAgentId: string
-  arenaWalletAddress: string
-  hlApiWalletAddress: string | null
-}): void {
-  inMemoryArenaIdentityMappings.set(toMemoryKey(params.roomId, params.senderAddress), {
-    room_id: params.roomId,
-    sender_address: params.senderAddress,
-    enabled: true,
-    arena_agent_id: params.arenaAgentId,
-    arena_wallet_address: params.arenaWalletAddress,
-    hl_api_wallet_address: params.hlApiWalletAddress,
-    updated_at: new Date().toISOString(),
-  })
-}
-
-function clearInMemoryIdentity(roomId: string, senderAddress: string): void {
-  inMemoryArenaIdentityMappings.delete(toMemoryKey(roomId, senderAddress))
-}
-
 function envFallback(baseConfig: ArenaConfig, senderAddress: string, roomId: string | null): ResolvedArenaIdentity {
   return {
     source: 'env_default',
@@ -122,9 +84,8 @@ export async function resolveRoomDefaultArenaIdentity(params: {
     return envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, null)
   }
 
-  const memoryResolved = resolveInMemoryIdentity(roomId, DEFAULT_ROOM_SENDER_KEY)
   const db = await getDb()
-  if (!db) return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
+  if (!db) return envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
 
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
@@ -143,21 +104,14 @@ export async function resolveRoomDefaultArenaIdentity(params: {
       LIMIT 1;
     `
     const row = ((result.rows ?? [])[0] ?? null) as ArenaIdentityRow | null
-    if (!row) return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
-    upsertInMemoryIdentity({
-      roomId: row.room_id,
-      senderAddress: row.sender_address,
-      arenaAgentId: row.arena_agent_id,
-      arenaWalletAddress: row.arena_wallet_address,
-      hlApiWalletAddress: row.hl_api_wallet_address,
-    })
+    if (!row) return envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
     return mapRowToIdentity(row)
   } catch (error) {
     logger.warn('[arena.identity] room-default resolve failed; using env defaults', {
       roomId,
       message: error instanceof Error ? error.message : String(error),
     })
-    return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
+    return envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
   }
 }
 
@@ -169,10 +123,8 @@ export async function resolveArenaIdentityForContext(params: {
   const roomId = normalizeRoomId(params.roomId)
   const senderAddress = normalizeAddress(params.senderAddress) ?? '0x0000000000000000000000000000000000000000'
   if (!roomId) return envFallback(params.baseConfig, senderAddress, null)
-  const memoryResolved = resolveInMemoryIdentity(roomId, senderAddress)
-
   const db = await getDb()
-  if (!db) return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
+  if (!db) return envFallback(params.baseConfig, senderAddress, roomId)
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
     const result = await db.sql`
@@ -191,14 +143,7 @@ export async function resolveArenaIdentityForContext(params: {
       LIMIT 1;
     `
     const row = ((result.rows ?? [])[0] ?? null) as ArenaIdentityRow | null
-    if (!row) return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
-    upsertInMemoryIdentity({
-      roomId: row.room_id,
-      senderAddress: row.sender_address,
-      arenaAgentId: row.arena_agent_id,
-      arenaWalletAddress: row.arena_wallet_address,
-      hlApiWalletAddress: row.hl_api_wallet_address,
-    })
+    if (!row) return envFallback(params.baseConfig, senderAddress, roomId)
     return mapRowToIdentity(row)
   } catch (error) {
     logger.warn('[arena.identity] resolve failed; using env defaults', {
@@ -206,7 +151,7 @@ export async function resolveArenaIdentityForContext(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    return memoryResolved ?? envFallback(params.baseConfig, senderAddress, roomId)
+    return envFallback(params.baseConfig, senderAddress, roomId)
   }
 }
 
@@ -231,18 +176,11 @@ export async function upsertArenaIdentityMapping(params: {
   if (!roomId || !senderAddress || !arenaAgentId || !arenaWalletAddress) return false
   const db = await getDb()
   if (!db) {
-    logger.warn('[arena.identity] db unavailable; using in-memory fallback for upsert', {
+    logger.warn('[arena.identity] db unavailable; refusing unpersisted upsert', {
       roomId,
       senderAddress,
     })
-    upsertInMemoryIdentity({
-      roomId,
-      senderAddress,
-      arenaAgentId,
-      arenaWalletAddress,
-      hlApiWalletAddress,
-    })
-    return true
+    return false
   }
 
   try {
@@ -277,13 +215,6 @@ export async function upsertArenaIdentityMapping(params: {
           updated_by = EXCLUDED.updated_by,
           updated_at = NOW();
     `
-    upsertInMemoryIdentity({
-      roomId,
-      senderAddress,
-      arenaAgentId,
-      arenaWalletAddress,
-      hlApiWalletAddress,
-    })
     return true
   } catch (error) {
     logger.warn('[arena.identity] upsert failed', {
@@ -291,14 +222,7 @@ export async function upsertArenaIdentityMapping(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    upsertInMemoryIdentity({
-      roomId,
-      senderAddress,
-      arenaAgentId,
-      arenaWalletAddress,
-      hlApiWalletAddress,
-    })
-    return true
+    return false
   }
 }
 
@@ -315,12 +239,11 @@ export async function clearArenaIdentityMapping(params: {
 
   const db = await getDb()
   if (!db) {
-    logger.warn('[arena.identity] db unavailable; using in-memory fallback for clear', {
+    logger.warn('[arena.identity] db unavailable; refusing unpersisted clear', {
       roomId,
       senderAddress,
     })
-    clearInMemoryIdentity(roomId, senderAddress)
-    return true
+    return false
   }
   try {
     await ensureAlfaclubArenaIdentityMappingSchema(db)
@@ -329,7 +252,6 @@ export async function clearArenaIdentityMapping(params: {
       WHERE room_id = ${roomId}
         AND sender_address = ${senderAddress};
     `
-    clearInMemoryIdentity(roomId, senderAddress)
     return true
   } catch (error) {
     logger.warn('[arena.identity] clear failed', {
@@ -337,7 +259,6 @@ export async function clearArenaIdentityMapping(params: {
       senderAddress,
       message: error instanceof Error ? error.message : String(error),
     })
-    clearInMemoryIdentity(roomId, senderAddress)
-    return true
+    return false
   }
 }

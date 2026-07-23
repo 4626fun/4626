@@ -33,7 +33,7 @@ AKITA ──lock──► OFTAdapter ◄──LZ──► Solana OFT (SPL mint, 
 - **Base:** LZ V2 `OFTAdapter` wrapping AKITA. No token admin rights needed — the adapter only needs ERC-20 `transferFrom`. Owner/delegate: protocol treasury Safe (`0x7d429e…`).
 - **Solana:** LZ Solana OFT program + SPL mint, same `create-lz-oapp` / `lz:oft:solana:create` pipeline as the share mesh. This is a **new mint** — distinct from the current bridge-wrapped creator SPL (`9JWh…LJdp` via `SolanaBridgeAdapter`) and from the share mesh mint. Do not register it on `SolanaBridgeAdapter` (that lane is the creator-SPL wrap grain, and `registerToken` hard-reverts on re-registration anyway).
 - **Other EVM chains:** standard OFT contract per chain, peered to the Base adapter hub. Ethereum→Solana transfers route through LZ directly between spokes or via the hub depending on peer wiring; simplest mesh is hub-routed.
-- **DVN security:** reuse the mainnet share-mesh policy — **no required DVNs, 6-of-9 optional** (LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom, Nansen, Frax, Wyoming, P-OPS). Never single-DVN `1/1`. See [budget paths § ULN](../operations/solana-share-mesh-budget-paths.md#uln-security--6-of-9-optional-dvns-mainnet).
+- **DVN security:** reuse the mainnet share-mesh policy — **no required DVNs, 3-of-5 optional** (LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom). Never single-DVN `1/1`.
 
 ### Cost estimate
 
@@ -44,7 +44,7 @@ Mirrors measured share-mesh Path 1 numbers ([budget doc](../operations/solana-sh
 | Solana LZ OFT program deploy (~560 KB) | ~4.0 SOL one-time |
 | Solana mint + OFT store + peer | ~0.02 SOL |
 | Base `OFTAdapter` + per-EVM-spoke OFT deploys | gas only (Base/L2s trivial; Ethereum mainnet the largest) |
-| Per-message DVN fees | ~6 verifiers billed per transfer (6-of-9 threshold) |
+| Per-message DVN fees | ~3 verifiers billed per transfer (3-of-5 threshold) |
 
 ## Pipe B reactivation (compose deposits)
 
@@ -76,7 +76,7 @@ Evaluated and ruled out 2026-06-12. CCIP v1.6 is live on Solana and CCT supports
 ## Activation checklist
 
 1. Deploy Base `OFTAdapter` (owner = treasury Safe); deploy Solana OFT + mint (EID 30168) and any EVM spoke OFTs.
-2. Wire peers both directions; apply 6-of-9 optional DVN config; `lz:oapp:wire --ci` + debug-verify thresholds.
+2. Wire peers both directions; apply 3-of-5 optional DVN config; `lz:oapp:wire --ci` + debug-verify thresholds.
 3. Smoke-bridge a small amount Base → Solana → Base; confirm lock/release accounting.
 4. `configureCreatorMesh(...)` on `OVaultHubComposer` with the Base adapter as `assetMeshToken`.
 5. Compose-deposit smoke test from Solana; confirm ShareOFT delivery on Base.

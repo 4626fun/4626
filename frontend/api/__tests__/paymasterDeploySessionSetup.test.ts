@@ -633,6 +633,48 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/not_owner/i)
   })
 
+
+
+  it('rejects swap mode when a custom-owner policy token is reused', async () => {
+    const customOwner = getAddress('0x7777777777777777777777777777777777777777')
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+    const UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const baseSwapRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const swapData = encodeFunctionData({
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: ['0x0a', [`0x${baseUsdc.slice(2)}${'0'.repeat(64)}`], 0n],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: baseSwapRouter, value: 0n, data: swapData }],
+        customOwnerPolicyToken: policyToken,
+        initCode: '0x',
+      }),
+    ).rejects.toThrow(/custom_owner_policy_self_call_invalid|custom_owner_policy_mode_not_allowed/)
+  })
+
   it('accepts custom-owner policy token even when canonical embedded owner resolves', async () => {
     getActiveDeploySessionMock.mockResolvedValue(null)
     const customOwner = getAddress('0x6666666666666666666666666666666666666666')
@@ -2085,6 +2127,45 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/missing_primary_call/i)
     expect(errMsg).not.toMatch(/swap_router_command_not_allowed/i)
+  })
+
+
+
+  it('rejects Swap Proxy payloads whose nested target is not allowlisted', async () => {
+    const SWAP_PROXY_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'tokenIn', type: 'address' },
+          { name: 'tokenOut', type: 'address' },
+          { name: 'amountIn', type: 'uint256' },
+          { name: 'swapData', type: 'bytes' },
+          { name: 'calls', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const swapProxy = getAddress('0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9')
+    const baseUsdc = getAddress('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
+    const baseEth = getAddress('0x4200000000000000000000000000000000000006')
+    const badNestedTarget = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    const swapData = `0x${badNestedTarget.slice(2)}${baseUsdc.slice(2)}` as `0x${string}`
+    const callData = encodeFunctionData({
+      abi: SWAP_PROXY_ABI,
+      functionName: 'execute',
+      args: [baseUsdc, baseEth, 1_000_000n, swapData, [], 0n],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: swapProxy, value: 0n, data: callData }],
+      }),
+    ).rejects.toThrow(/swap_proxy_nested_target_not_allowed/)
   })
 
   it('accepts captured production canonical-CSW USDC universal-router swap calldata', async () => {

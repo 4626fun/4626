@@ -27,6 +27,7 @@ function main(): void {
     process.stdout.write(`RPC: ${report.rpcUrl}\n\n`)
     process.stdout.write(`${report.programShow}\n\n`)
     process.stdout.write(`Dump bytes: ${report.dumpBytes ?? 'n/a'}\n`)
+    process.stdout.write(`SHA-256: ${report.sha256 ?? 'n/a'}\n`)
     process.stdout.write(`Classification: ${report.kind}\n`)
     process.stdout.write(`Recommended SOLANA_HOOK_IX_SCHEMA: ${recommendedHookIxSchema(report.kind)}\n`)
 

@@ -1,35 +1,78 @@
-import { type ComponentProps, type CSSProperties, type ReactNode, useMemo } from 'react'
+import { type ComponentProps, type CSSProperties, type ReactNode, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import {
   CanonicalIdentityDropdown,
 } from '@/components/account/CanonicalIdentityCard'
-import { CreatorEconomyTrayModule } from '@/components/account/CreatorEconomyTrayModule'
-import type { CreatorEconomyView } from '@/lib/creatorEconomy/types'
+import type { AccountTraySection } from '@/components/account/trayEvents'
+import { AccountTray } from '@/components/ui/AccountTray'
 import { getMarketingBaseUrl } from '@/lib/env/host'
 
-export type RelayAccountTraySection = 'identity' | 'portfolio' | 'points'
+/** Site-wide account tray section ids — shared by app + waitlist. */
+export type RelayAccountTraySection = AccountTraySection
 
-export function useRelayAccountTrayStyles(isPhoneViewport: boolean) {
-  return useMemo(
-    () => ({
-      header: {
-        minHeight: '0px',
-      } satisfies CSSProperties,
-      content: {
-        paddingTop: isPhoneViewport ? '0.5rem' : '0.5rem',
-        paddingBottom: '0.75rem',
-      } satisfies CSSProperties,
-    }),
-    [isPhoneViewport],
+const RELAY_ACCOUNT_TRAY_STYLES = {
+  header: {
+    minHeight: '0px',
+  } satisfies CSSProperties,
+  content: {
+    paddingTop: '0.5rem',
+    paddingBottom: '0.75rem',
+  } satisfies CSSProperties,
+}
+
+export function useRelayAccountTrayStyles() {
+  return RELAY_ACCOUNT_TRAY_STYLES
+}
+
+export function useIsPhoneViewport(): boolean {
+  const [isPhone, setIsPhone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(max-width: 767px)').matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const handleChange = (event: MediaQueryListEvent) => setIsPhone(event.matches)
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  return isPhone
+}
+
+export function RelayTrayPrimaryTabs(props: {
+  section: RelayAccountTraySection
+  onChange: (section: RelayAccountTraySection) => void
+  /** Defaults to all three tabs. */
+  sections?: readonly RelayAccountTraySection[]
+}) {
+  const sections = props.sections ?? (['identity', 'portfolio', 'points'] as const)
+  return (
+    <div className="px-4 pt-1 pb-2">
+      <div className="inline-flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1">
+        {sections.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => props.onChange(value)}
+            className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+              props.section === value
+                ? 'bg-white/[0.08] text-white'
+                : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
+            }`}
+          >
+            {value === 'identity' ? 'Wallets' : value === 'portfolio' ? 'Portfolio' : 'Points'}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
+/** Wallets tab body: connected wallets first, optional extras below. */
 export function RelayAccountTrayIdentityPanel(props: {
-  economyView: CreatorEconomyView
-  economyLoading: boolean
-  economyVariant: 'app' | 'waitlist'
-  absoluteAppLinks?: boolean
   banner?: ReactNode
   walletSection?: ReactNode
   identityDropdown: ComponentProps<typeof CanonicalIdentityDropdown>
@@ -38,19 +81,6 @@ export function RelayAccountTrayIdentityPanel(props: {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
       {props.banner ? <div className="mb-2">{props.banner}</div> : null}
-      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
-        {props.economyView.symbolDisplay} economy
-      </div>
-      <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
-        {props.economyView.statusLabel}
-      </div>
-      <CreatorEconomyTrayModule
-        variant={props.economyVariant}
-        absoluteAppLinks={props.absoluteAppLinks}
-        loading={props.economyLoading}
-        view={props.economyView}
-      />
-      <div className="mt-4 h-px bg-white/[0.06]" />
       {props.walletSection ?? <CanonicalIdentityDropdown {...props.identityDropdown} />}
       {props.children ? (
         <>
@@ -67,7 +97,7 @@ export function RelayAccountTrayPortfolioUnavailable(props: {
   onNavigate?: () => void
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-2 pb-3">
       <div className="text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">—</div>
       <div className="mt-1 text-[10px] text-zinc-500 truncate">Portfolio · Base</div>
       <p className="mt-6 text-sm leading-relaxed text-zinc-400">
@@ -151,5 +181,73 @@ export function RelayAccountTrayFooter(props: RelayAccountTrayFooterProps) {
         </button>
       </div>
     </>
+  )
+}
+
+type RelayAccountTrayShellProps = {
+  open: boolean
+  onClose: () => void
+  onCloseComplete?: () => void
+  section: RelayAccountTraySection
+  onSectionChange: (section: RelayAccountTraySection) => void
+  sections?: readonly RelayAccountTraySection[]
+  wallets: ReactNode
+  portfolio?: ReactNode
+  /** Shown on Portfolio when `portfolio` is omitted (e.g. waitlist). */
+  portfolioUnavailableHref?: string
+  points: ReactNode
+  footer: Omit<RelayAccountTrayFooterProps, 'onClose'>
+  error?: string | null
+  accessibilityLabel?: string
+  closeAccessibilityLabel?: string
+}
+
+/**
+ * One account sidebar for the whole site (app nav + waitlist).
+ * Callers supply tab bodies; shell owns chrome, tabs, and footer.
+ */
+export function RelayAccountTrayShell(props: RelayAccountTrayShellProps) {
+  const isPhoneViewport = useIsPhoneViewport()
+  const trayStyles = useRelayAccountTrayStyles()
+
+  if (!props.open) return null
+
+  const portfolioBody =
+    props.portfolio ??
+    (props.portfolioUnavailableHref ? (
+      <RelayAccountTrayPortfolioUnavailable
+        enterAppHref={props.portfolioUnavailableHref}
+        onNavigate={props.onClose}
+      />
+    ) : null)
+
+  return (
+    <AccountTray
+      pin={isPhoneViewport ? 'bottom' : 'right'}
+      showHandleBar={isPhoneViewport}
+      accessibilityLabel={props.accessibilityLabel ?? '4626 account menu'}
+      closeAccessibilityLabel={props.closeAccessibilityLabel ?? 'Close account menu'}
+      onRequestClose={props.onClose}
+      onCloseComplete={props.onCloseComplete}
+      styles={trayStyles}
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
+        <RelayTrayPrimaryTabs
+          section={props.section}
+          onChange={props.onSectionChange}
+          sections={props.sections}
+        />
+
+        {props.section === 'identity' ? props.wallets : null}
+        {props.section === 'portfolio' ? portfolioBody : null}
+        {props.section === 'points' ? props.points : null}
+
+        {props.error ? (
+          <div className="px-4 text-[11px] text-red-400/90">{props.error}</div>
+        ) : null}
+
+        <RelayAccountTrayFooter {...props.footer} onClose={props.onClose} />
+      </div>
+    </AccountTray>
   )
 }

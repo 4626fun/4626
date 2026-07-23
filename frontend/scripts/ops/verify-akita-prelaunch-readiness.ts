@@ -8,17 +8,15 @@
  * Does NOT deploy the vault. Surfaces what is ready vs what you / ops must still do
  * before launching AKITA via app.4626.fun/deploy.
  *
- * LAUNCH-002: Deploy status and preflight checks are read-only — they do NOT
- * mutate deploy state. However, this script DOES exercise the keeper
- * control-plane (Solana bridge fee settlement, winner relay, entry relay) via
- * the keeper reconcile endpoint. These are normal idempotent keeper operations
- * (checkpoint-based), not deploy mutations.
+ * LAUNCH-002: Deploy status and preflight checks are read-only. This script
+ * never invokes keeper reconciliation or any Solana/Base mutation endpoint.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { PublicKey } from '@solana/web3.js'
 import type { Address } from 'viem'
 
 import { AKITA_DEFAULTS, SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
@@ -37,14 +35,64 @@ const REPO_ROOT = resolve(FRONTEND_ROOT, '..')
 const AKITA_CREATOR = AKITA_DEFAULTS.token as Address
 const BATCHER = SPLIT_PHASE1_DEPLOYMENT_BATCHER
 
-/** Platform Solana share-mesh (AKITA #1 bootstrap — reuse for redeploy finalize peer). */
-export const AKITA_SHARE_MESH = {
+/** Retired B1 identity. It is standard SPL and must never be reused for B2. */
+export const RETIRED_AKITA_B1_SHARE_MESH = {
   oftStore: 'G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN',
   shareMeshMint: '5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv',
   peerBytes32: '0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f',
   solanaEid: 30168,
   hubComposer: '0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1',
 } as const
+
+function checkFreshB2MeshInputs(): Check[] {
+  const shareMeshMint = String(process.env.AKITA_B2_SHARE_MESH_MINT ?? '').trim()
+  const oftStore = String(process.env.AKITA_B2_OFT_STORE ?? '').trim()
+  const peerBytes32 = String(process.env.AKITA_B2_SHARE_PEER_BYTES32 ?? '').trim().toLowerCase()
+
+  if (!shareMeshMint || !oftStore || !peerBytes32) {
+    return [
+      {
+        section: 'platform',
+        id: 'akita_b2_fresh_mesh_identity',
+        ok: false,
+        detail:
+          'set AKITA_B2_SHARE_MESH_MINT, AKITA_B2_OFT_STORE, and AKITA_B2_SHARE_PEER_BYTES32 after provisioning the fresh Token-2022 B2 mint',
+      },
+    ]
+  }
+
+  try {
+    const mintKey = new PublicKey(shareMeshMint)
+    const storeKey = new PublicKey(oftStore)
+    const expectedPeer = `0x${Buffer.from(storeKey.toBytes()).toString('hex')}`
+    const isFresh =
+      mintKey.toBase58() !== RETIRED_AKITA_B1_SHARE_MESH.shareMeshMint &&
+      storeKey.toBase58() !== RETIRED_AKITA_B1_SHARE_MESH.oftStore &&
+      peerBytes32 !== RETIRED_AKITA_B1_SHARE_MESH.peerBytes32
+    const peerMatches = /^0x[0-9a-f]{64}$/.test(peerBytes32) && peerBytes32 === expectedPeer
+    return [
+      {
+        section: 'platform',
+        id: 'akita_b2_fresh_mesh_identity',
+        ok: isFresh && peerMatches,
+        detail: !isFresh
+          ? 'retired B1 mint/store/peer rejected'
+          : peerMatches
+            ? `fresh mint=${mintKey.toBase58()},store=${storeKey.toBase58()}`
+            : `OFT Store peer mismatch; expected ${expectedPeer}`,
+      },
+    ]
+  } catch {
+    return [
+      {
+        section: 'platform',
+        id: 'akita_b2_fresh_mesh_identity',
+        ok: false,
+        detail: 'invalid AKITA_B2_SHARE_MESH_MINT or AKITA_B2_OFT_STORE public key',
+      },
+    ]
+  }
+}
 
 function safeJson(value: unknown, max = 120): string {
   try {
@@ -90,8 +138,6 @@ function run(cmd: string, args: string[], cwd = REPO_ROOT): { ok: boolean; detai
 }
 
 const DEFAULT_FETCH_TIMEOUT_MS = 20_000
-/** Vercel serverless → orchestrator can cold-start beyond 20s; smoke uses 90s. */
-const VERCEL_RECONCILE_TIMEOUT_MS = 90_000
 
 async function fetchResponse(
   url: string,
@@ -123,34 +169,12 @@ async function fetchResponse(
   }
 }
 
-async function fetchResponseWithRetry(
-  url: string,
-  init: RequestInit,
-  opts: { timeoutMs: number; attempts: number; delayMs: number },
-): Promise<{ ok: boolean; status: number; detail: string; data?: unknown; headers?: Headers }> {
-  let last = await fetchResponse(url, init, opts.timeoutMs)
-  for (let attempt = 2; attempt <= opts.attempts && !last.ok; attempt++) {
-    const timedOut = /timeout|aborted/i.test(last.detail)
-    if (!timedOut) break
-    await new Promise((resolve) => setTimeout(resolve, opts.delayMs))
-    last = await fetchResponse(url, init, opts.timeoutMs)
-    if (last.ok) {
-      return { ...last, detail: `${last.detail} (retry ${attempt}/${opts.attempts})` }
-    }
-  }
-  return last
-}
-
 async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
   const checks: Check[] = []
-  const orchKey = process.env.SOLANA_ORCHESTRATOR_API_KEY?.trim()
   const provSecret =
     process.env.SOLANA_HOOK_PROVISIONER_SECRET?.trim() ||
     process.env.SOLANA_METEORA_POOL_PROVISIONER_SECRET?.trim() ||
     process.env.METEORA_IX_PROVISIONER_SECRET?.trim()
-  const kprKey = process.env.KPR_API_KEY?.trim()
-  const checkpoint = `prelaunch-${Date.now()}`
-  let directOrchestratorSettleOk = false
 
   const orchHealth = await fetchResponse('https://orchestrator.4626.fun/healthz')
   checks.push({
@@ -160,81 +184,24 @@ async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
     detail: orchHealth.detail,
   })
 
-  if (!orchKey) {
-    checks.push({
-      section: 'vultr',
-      id: 'vultr_orchestrator_auth',
-      ok: false,
-      detail: 'Set SOLANA_ORCHESTRATOR_API_KEY in frontend/.env to probe /reconcile',
-    })
-  } else {
-    const settle = await fetchResponse('https://orchestrator.4626.fun/reconcile', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${orchKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'settle_fees',
-        workflow: 'prelaunch',
-        checkpointKey: `${checkpoint}-settle`,
-      }),
-    })
-    directOrchestratorSettleOk = settle.ok && (settle.data as { ok?: boolean })?.ok === true
-    checks.push({
-      section: 'vultr',
-      id: 'vultr_orchestrator_settle_fees',
-      ok: directOrchestratorSettleOk,
-      detail: settle.ok ? 'settle_fees reconcile OK' : `${settle.detail}: ${safeJson(settle.data)}`,
-    })
-
-    const winner = await fetchResponse('https://orchestrator.4626.fun/reconcile', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${orchKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'winner_relay',
-        workflow: 'prelaunch',
-        checkpointKey: `${checkpoint}-winner`,
-      }),
-    })
-    checks.push({
-      section: 'vultr',
-      id: 'vultr_orchestrator_winner_relay',
-      ok: winner.ok && (winner.data as { ok?: boolean })?.ok === true,
-      detail: winner.ok ? 'winner_relay reconcile OK' : `${winner.detail}: ${safeJson(winner.data)}`,
-    })
-
-    const relay = await fetchResponse('https://orchestrator.4626.fun/reconcile', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${orchKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'relay_entries',
-        workflow: 'prelaunch',
-        checkpointKey: `${checkpoint}-relay`,
-      }),
-    })
-    const relayError = String((relay.data as { error?: string })?.error ?? '')
-    // Accept full lane code (preferred) or bare action_disabled from older orchestrator builds.
-    const relayDisabled =
-      relay.status === 503 &&
-      (relayError.includes('action_disabled:relay_entries') ||
-        relayError === 'action_disabled' ||
-        relayError.includes('action_disabled'))
-    checks.push({
-      section: 'vultr',
-      id: 'vultr_relay_entries_paused',
-      ok: relayDisabled,
-      detail: relayDisabled
-        ? 'relay_entries correctly disabled until B2 pool live'
-        : `Expected action_disabled (relay_entries), got ${relay.status} ${safeJson(relay.data)}`,
-    })
-  }
+  const b2FlagNames = [
+    'SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED',
+    'SOLANA_ORCHESTRATOR_LOTTERY_INGEST_ENABLED',
+    'SOLANA_ORCHESTRATOR_LOTTERY_SUBMIT_ENABLED',
+    'SOLANA_ORCHESTRATOR_LOTTERY_CONFIRM_ENABLED',
+    'SOLANA_ORCHESTRATOR_LOTTERY_WINNER_SETTLE_ENABLED',
+  ] as const
+  const enabledB2Flags = b2FlagNames.filter((key) =>
+    ['1', 'true', 'yes'].includes(String(process.env[key] ?? '').trim().toLowerCase()),
+  )
+  checks.push({
+    section: 'vultr',
+    id: 'b2_mutation_flags_off',
+    ok: enabledB2Flags.length === 0,
+    detail: enabledB2Flags.length === 0
+      ? 'legacy relay and replacement B2 workers are disabled in the loaded environment'
+      : `unexpected enabled flags: ${enabledB2Flags.join(',')}`,
+  })
 
   const provUrl =
     process.env.SOLANA_PROVISIONER_HEALTH_URL?.trim() ||
@@ -270,51 +237,12 @@ async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
       : 'Provisioner may be pointing at Vercel SPA — fix DNS A-record to Vultr host',
   })
 
-  if (!kprKey) {
-    checks.push({
-      section: 'vercel',
-      id: 'vercel_solana_reconcile_chain',
-      ok: false,
-      detail: 'Set KPR_API_KEY to probe app → orchestrator chain',
-    })
-  } else {
-    const chain = await fetchResponseWithRetry(
-      `${appBase}/api/keeper/solana/reconcile`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${kprKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          workflow: 'solana-orchestrator',
-          action: 'settle_fees',
-          checkpointKey: `${checkpoint}-vercel-chain`,
-        }),
-      },
-      { timeoutMs: VERCEL_RECONCILE_TIMEOUT_MS, attempts: 2, delayMs: 4_000 },
-    )
-    const chainData = (chain.data as { success?: boolean; data?: { status?: string; executed?: boolean } })
-      ?.data
-    const chainOk =
-      chain.ok &&
-      (chain.data as { success?: boolean })?.success === true &&
-      chainData?.status === 'completed' &&
-      chainData?.executed === true
-    const vercelTimedOut = /timeout|aborted/i.test(chain.detail)
-    const advisoryBypass = !chainOk && vercelTimedOut && directOrchestratorSettleOk
-    checks.push({
-      section: 'vercel',
-      id: 'vercel_solana_reconcile_chain',
-      ok: chainOk || advisoryBypass,
-      detail: chainOk
-        ? `Vercel → orchestrator: status=${chainData?.status ?? '?'} executed=${String(chainData?.executed)}`
-        : advisoryBypass
-          ? `ADVISORY: Vercel reconcile probe timed out; direct orchestrator settle_fees already OK (not a deploy blocker)`
-          : `${chain.detail}: ${safeJson(chain.data)}`,
-    })
-
-  }
+  checks.push({
+    section: 'vercel',
+    id: 'vercel_solana_reconcile_chain',
+    ok: true,
+    detail: `SKIP mutation probe for ${appBase}; preflight is read-only`,
+  })
 
   return checks
 }
@@ -475,10 +403,19 @@ async function main(): Promise<void> {
     vultrVercel.push(...sshChecks)
   }
 
-  process.stdout.write('\n--- Solana share mesh (reuse for AKITA redeploy finalize) ---\n')
-  process.stdout.write(`  oftStore:     ${AKITA_SHARE_MESH.oftStore}\n`)
-  process.stdout.write(`  share mint:   ${AKITA_SHARE_MESH.shareMeshMint} (■AKITA)\n`)
-  process.stdout.write(`  peer bytes32: ${AKITA_SHARE_MESH.peerBytes32}\n`)
+  process.stdout.write('\n--- Retired AKITA B1 mesh identity (DO NOT REUSE FOR B2) ---\n')
+  process.stdout.write(`  oftStore:     ${RETIRED_AKITA_B1_SHARE_MESH.oftStore}\n`)
+  process.stdout.write(`  share mint:   ${RETIRED_AKITA_B1_SHARE_MESH.shareMeshMint} (standard SPL)\n`)
+  process.stdout.write(`  peer bytes32: ${RETIRED_AKITA_B1_SHARE_MESH.peerBytes32}\n`)
+
+  const b2MeshChecks = checkFreshB2MeshInputs()
+  printSection('Fresh AKITA B2 mesh identity', b2MeshChecks)
+  const phase1Only = hasFlag('--phase1-only')
+  if (phase1Only) {
+    process.stdout.write(
+      'Phase-1-only mode: fresh B2 mesh identity is a documented continuation gate, not a Base Phase 1 blocker.\n',
+    )
+  }
 
   const strategyChecks = await checkStrategyEntitlements()
   printSection('Creator entitlements (DB)', strategyChecks)
@@ -512,13 +449,21 @@ async function main(): Promise<void> {
     process.stdout.write(`${grant.ok ? '✓' : '✗'} grant_comp: ${grant.detail}\n`)
   }
 
-  const blocking = [...platform, ...vultrVercel, ...strategyChecks]
+  const blocking = [
+    ...platform,
+    ...vultrVercel,
+    ...strategyChecks,
+    ...(phase1Only ? [] : b2MeshChecks),
+  ]
   const platformOk = blocking.every((c) => c.ok)
 
   process.stdout.write('\n')
   if (platformOk) {
-    process.stdout.write('ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.\n')
-    process.stdout.write('You can launch the deploy session. Post-phase-1 LZ wire + composer mesh still required before finalize bridge.\n\n')
+    process.stdout.write(
+      phase1Only
+        ? 'BASE PHASE 1 GATES PASS — use a Phase-1-only deploy session. B2 remains blocked pending a fresh Token-2022 mint/OFT Store.\n\n'
+        : 'ALL CONFIGURATION GATES PASS — live onchain B2 canary gates are still required before production relay enablement.\n\n',
+    )
     process.exit(0)
   }
 

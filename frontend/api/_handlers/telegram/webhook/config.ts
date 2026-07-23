@@ -142,12 +142,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
 
   return {
     botToken,
-    // Keep webhook auth strict, but allow legacy Telegram server secrets as
-    // compatibility fallbacks so production bots don't hard-fail during env
-    // cutovers where TELEGRAM_WEBHOOK_SECRET was not explicitly duplicated.
-    webhookSecret: asTrimmed(
-      raw.TELEGRAM_WEBHOOK_SECRET ?? raw.TELEGRAM_BOT_CONFIG_SECRET ?? raw.TELEGRAM_LINK_API_SECRET ?? '',
-    ),
+    webhookSecret: asTrimmed(raw.TELEGRAM_WEBHOOK_SECRET ?? ''),
     webhookUrl: asTrimmed(raw.TELEGRAM_WEBHOOK_URL ?? ''),
     targetChatId,
     allowedChatIdsRaw,

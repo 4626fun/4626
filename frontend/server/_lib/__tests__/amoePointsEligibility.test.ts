@@ -27,7 +27,7 @@ describe('AMOE points eligibility bifurcation', () => {
   const lotteryAmoeSource = readLocalSource('../lottery/lotteryAmoe.ts')
   const migrationSource = readFileSync(
     new URL(
-      '../../../../supabase/migrations/20260427180000_amoe_eligible_points_view.sql',
+      '../../../../supabase/migrations/20260723000000_amoe_exclude_checkin_feedback.sql',
       import.meta.url,
     ),
     'utf8',
@@ -75,6 +75,7 @@ describe('AMOE points eligibility bifurcation', () => {
 
   describe('paid-action sources are excluded from AMOE eligibility', () => {
     const paidActionSources = [
+      'amoe_checkin',
       'has_creator_coin',
       'referral_passthrough',
       'referral_signup',
@@ -226,7 +227,6 @@ describe('AMOE points eligibility bifurcation', () => {
     // For each, the unified reader must also weight them at >= 1.00x.
     const fullCreditSources = [
       'amoe_twitter_daily',
-      'amoe_checkin',
       'waitlist_signup',
       'csw_link',
     ]
@@ -243,11 +243,9 @@ describe('AMOE points eligibility bifurcation', () => {
       })
     }
 
-    it('unified reader has an explicit branch for amoe_checkin (regression: PR #394 review)', () => {
-      // If this branch ever drops back into the ELSE * 0.30 fallback,
-      // amoe_checkin under-counts in unified points while still being
-      // 1.00x in the eligibility view — the exact bug Codex flagged.
+    it('keeps amoe_checkin in unified waitlist points but out of spendable AMOE credits', () => {
       expect(unifiedReaderBody().includes("source = 'amoe_checkin'")).toBe(true)
+      expect(viewBody().includes("source = 'amoe_checkin'")).toBe(false)
     })
   })
 })

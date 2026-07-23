@@ -17,11 +17,27 @@ import type { CreatorStrategyFeatureKey } from './catalog'
 
 const CREATOR = getAddress('0x1111111111111111111111111111111111111111')
 
-function mockDb(activeFeatureKeys: CreatorStrategyFeatureKey[]) {
+function mockDb(
+  activeFeatureKeys: CreatorStrategyFeatureKey[],
+  options: { paymentVerifiedAt?: string | null } = {},
+) {
   return {
-    sql: async (_strings: TemplateStringsArray, ..._values: unknown[]) => ({
-      rows: activeFeatureKeys.map((feature_key) => ({ feature_key })),
-    }),
+    sql: async (strings: TemplateStringsArray, ..._values: unknown[]) => {
+      const query = strings.join(' ')
+      const paymentVerifiedAt =
+        options.paymentVerifiedAt === undefined
+          ? '2026-07-22T00:00:00.000Z'
+          : options.paymentVerifiedAt
+      const rows = activeFeatureKeys
+        .map((feature_key) => ({
+          feature_key,
+          payment_verified_at: paymentVerifiedAt,
+        }))
+        .filter((row) =>
+          query.includes('payment_verified_at IS NOT NULL') ? row.payment_verified_at !== null : true,
+        )
+      return { rows }
+    },
   }
 }
 
@@ -130,6 +146,15 @@ describe('resolveCreatorStrategyPlan', () => {
     expect(plan.activeFeatureKeys).toContain('vault_full_deploy')
     expect(plan.activeFeatureKeys).toContain('charm_active_lp')
     expect(plan.activeFeatureKeys).toContain('solana_ovault_mesh')
+  })
+
+  it('ignores unpaid pending rows whose payment_verified_at is null', async () => {
+    const db = mockDb(['vault_full_deploy'], { paymentVerifiedAt: null })
+    const result = await resolveCreatorStrategyPlan(db, CREATOR)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toBe('no_paid_strategies')
+    }
   })
 })
 

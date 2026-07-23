@@ -38,6 +38,8 @@ export type WaitlistLeaderboardResponse = {
 }
 
 const LEADERBOARD_CACHE_TTL_MS = 60_000
+const LEADERBOARD_CACHE_MAX_ENTRIES = 256
+const LEADERBOARD_PAGE_MAX = 10_000
 
 type LeaderboardCacheEntry = {
   expiresAt: number
@@ -45,6 +47,25 @@ type LeaderboardCacheEntry = {
 }
 
 const leaderboardCache = new Map<string, LeaderboardCacheEntry>()
+
+export function __resetWaitlistLeaderboardCacheForTests(): void {
+  leaderboardCache.clear()
+}
+
+export function __waitlistLeaderboardCacheSizeForTests(): number {
+  return leaderboardCache.size
+}
+
+function pruneLeaderboardCache(now: number): void {
+  for (const [key, entry] of leaderboardCache) {
+    if (entry.expiresAt <= now) leaderboardCache.delete(key)
+  }
+  while (leaderboardCache.size >= LEADERBOARD_CACHE_MAX_ENTRIES) {
+    const oldest = leaderboardCache.keys().next().value as string | undefined
+    if (!oldest) break
+    leaderboardCache.delete(oldest)
+  }
+}
 
 function leaderboardCacheKey(params: {
   page: number
@@ -139,10 +160,13 @@ export async function getWaitlistLeaderboardData(params: {
   pointsType: WaitlistLeaderboardPointsType
   authorizedProfileId: number | null
 }): Promise<WaitlistLeaderboardResponse> {
-  const { db, page, limit, pointsType, authorizedProfileId } = params
+  const { db, limit, pointsType, authorizedProfileId } = params
+  const page = Math.min(LEADERBOARD_PAGE_MAX, Math.max(1, Math.floor(params.page)))
   const cacheKey = leaderboardCacheKey({ page, limit, pointsType, authorizedProfileId })
   const cached = leaderboardCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
+    leaderboardCache.delete(cacheKey)
+    leaderboardCache.set(cacheKey, cached)
     return cached.value
   }
 
@@ -634,8 +658,10 @@ export async function getWaitlistLeaderboardData(params: {
     leaderboard,
     me,
   }
+  const now = Date.now()
+  pruneLeaderboardCache(now)
   leaderboardCache.set(cacheKey, {
-    expiresAt: Date.now() + LEADERBOARD_CACHE_TTL_MS,
+    expiresAt: now + LEADERBOARD_CACHE_TTL_MS,
     value: response,
   })
   return response

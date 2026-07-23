@@ -56,7 +56,7 @@ The following are generally out of scope unless they directly enable a practical
 
 ## How to Report a Vulnerability
 
-Please email **keepr@4626.fun** with the subject line:
+Please email **hello@4626.fun** with the subject line:
 
 `[SECURITY] short description`
 

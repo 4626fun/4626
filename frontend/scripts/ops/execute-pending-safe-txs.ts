@@ -22,6 +22,21 @@ function getArg(name: string, fallback = ''): string {
   return String(next).trim()
 }
 
+function collectHashArgs(argv: readonly string[]): string[] {
+  const flagsWithValues = new Set(['--safe-address', '--rpc', '--safe-owner-pk', '--safe-api-key'])
+  const hashes: string[] = []
+  for (let i = 2; i < argv.length; i += 1) {
+    const arg = String(argv[i] ?? '')
+    if (!arg) continue
+    if (flagsWithValues.has(arg)) {
+      i += 1
+      continue
+    }
+    if (/^0x[a-fA-F0-9]{64}$/.test(arg)) hashes.push(arg)
+  }
+  return hashes
+}
+
 function normalizePrivateKey(value: string): `0x${string}` {
   const trimmed = value.trim()
   if (!trimmed) throw new Error('Missing private key')
@@ -49,11 +64,16 @@ function isGs026(error: unknown): boolean {
 async function executeSafeTransaction(params: {
   protocolKit: Safe
   publicClient: ReturnType<typeof createPublicClient>
+  safeAddress: Address
   safeTxHash: string
   apiKit: SafeApiKit
 }): Promise<{ safeTxHash: string; txHash: string; status: string; blockNumber: string; lane: string }> {
-  const { protocolKit, publicClient, safeTxHash, apiKit } = params
+  const { protocolKit, publicClient, safeAddress, safeTxHash, apiKit } = params
   const tx = await apiKit.getTransaction(safeTxHash)
+  const txSafe = normalizeAddress((tx as { safe?: unknown }).safe)
+  if (!txSafe || txSafe !== safeAddress) {
+    throw new Error(`Safe tx ${safeTxHash} is not bound to ${safeAddress}`)
+  }
   const to = normalizeAddress(tx.to)
   const data = typeof tx.data === 'string' ? tx.data : ''
   if (!to || !data.startsWith('0x')) {
@@ -75,6 +95,12 @@ async function executeSafeTransaction(params: {
             ],
             options: { nonce: toNumberInt(tx.nonce, undefined) },
           })
+    if (lane === 'recreate') {
+      const recreatedHash = await protocolKit.getTransactionHash(safeTransaction)
+      if (recreatedHash.toLowerCase() !== safeTxHash.toLowerCase()) {
+        throw new Error(`Safe tx ${safeTxHash} hash mismatch for ${safeAddress}`)
+      }
+    }
     const exec = await protocolKit.executeTransaction(safeTransaction)
     const hash = (exec.hash ?? exec.transactionResponse?.hash) as `0x${string}` | undefined
     if (!hash) throw new Error(`missing tx hash for ${safeTxHash}`)
@@ -97,10 +123,11 @@ function normalizeAddress(value: unknown): Address | null {
 }
 
 async function main() {
-  const safeAddress = getArg('--safe-address', process.env.PROTOCOL_TREASURY || '')
-  if (!safeAddress) throw new Error('Missing --safe-address or PROTOCOL_TREASURY')
+  const safeAddressRaw = getArg('--safe-address', process.env.PROTOCOL_TREASURY || '')
+  if (!safeAddressRaw) throw new Error('Missing --safe-address or PROTOCOL_TREASURY')
+  const safeAddress = getAddress(safeAddressRaw)
 
-  const hashArgs = process.argv.filter((arg) => arg.startsWith('0x') && arg.length === 66)
+  const hashArgs = collectHashArgs(process.argv)
   if (hashArgs.length === 0) {
     throw new Error('Pass one or more safeTxHash values as arguments')
   }
@@ -117,7 +144,7 @@ async function main() {
 
   const results = []
   for (const safeTxHash of hashArgs) {
-    results.push(await executeSafeTransaction({ protocolKit, publicClient, safeTxHash, apiKit }))
+    results.push(await executeSafeTransaction({ protocolKit, publicClient, safeAddress, safeTxHash, apiKit }))
   }
 
   process.stdout.write(`${JSON.stringify({ executed: true, results }, null, 2)}\n`)

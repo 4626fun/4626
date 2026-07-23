@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pull production keeper secrets from Vercel into kpr/.env (non-destructive merge).
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTEND="$ROOT/frontend"
@@ -14,6 +15,7 @@ if [[ ! -f "$KPR_ENV" ]]; then
   cp "$ROOT/kpr/secrets.example.env" "$KPR_ENV"
   echo "Created $KPR_ENV from secrets.example.env"
 fi
+chmod 600 "$KPR_ENV"
 
 cd "$FRONTEND"
 vercel env run -e production -- node -e "

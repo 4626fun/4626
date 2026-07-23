@@ -1,9 +1,9 @@
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
 
-/** Max slippage auto mode may use for quotes, simulation escalation, and bundler retries. */
-export const SWAP_AUTO_SLIPPAGE_ESCALATION_CAP_PCT = 30
+/** Maximum tolerance auto mode may present to and obtain from the user before submission. */
+export const SWAP_AUTO_SLIPPAGE_ESCALATION_CAP_PCT = 5
 
-const SLIPPAGE_LADDER_PCT = [0.5, 1, 2, 5, 10, 15, 20, 25, 30] as const
+const SLIPPAGE_LADDER_PCT = [0.5, 1, 2, 5] as const
 
 export type ResolveAutoSwapSlippageInput = {
   preferZoraTradeRoute?: boolean
@@ -29,8 +29,8 @@ function snapSlippageToLadder(pct: number): number {
 }
 
 /**
- * Picks a slippage tolerance for thin creator pools and sponsored CSW Zora paths.
- * Floors match production escalation notes in zoraTradeApi (≥5% on CSW).
+ * Picks a slippage tolerance for thin creator pools. The returned value is the
+ * tolerance shown for review and is also the hard execution cap.
  */
 export function resolveAutoSwapSlippagePct(input: ResolveAutoSwapSlippageInput): number {
   const isZora = input.quotedProvider === 'zora' || Boolean(input.preferZoraTradeRoute)
@@ -38,10 +38,7 @@ export function resolveAutoSwapSlippagePct(input: ResolveAutoSwapSlippageInput):
 
   let floor = 0.5
   if (isZora) {
-    // Zora's own production frontend quotes creator coins at 10% slippage
-    // (uniswapSwapRouterV2.getQuoteStrict sends slippage: 0.1) — match it on
-    // canonical CSW paths so we do not burn retries climbing from 5%.
-    floor = isCanonical ? 10 : 2
+    floor = 2
   } else if (isCanonical) {
     // Creator-coin Uniswap routes on CSW need more than API DEFAULT auto slippage.
     floor = 2
@@ -80,6 +77,11 @@ export function resolveSwapSendRetrySlippagePct(params: {
   const retriesRemain =
     params.maxSendAttempts == null || params.sendAttempt + 1 < params.maxSendAttempts
   if (!retriesRemain || !params.isRetryable(params.sendError)) return null
+  const confirmedCap = Math.min(
+    params.slippageEscalationCapPct,
+    params.slippageAuto ? params.slippageEscalationCapPct : params.parsedSlippage,
+  )
+  if (params.activeSlippagePct > confirmedCap + 1e-9) return null
 
   let retrySlippagePct = params.pickNext(params.activeSlippagePct)
   if (
@@ -89,7 +91,7 @@ export function resolveSwapSendRetrySlippagePct(params: {
   ) {
     retrySlippagePct = null
   }
-  if (retrySlippagePct != null && retrySlippagePct > params.slippageEscalationCapPct + 1e-9) {
+  if (retrySlippagePct != null && retrySlippagePct > confirmedCap + 1e-9) {
     retrySlippagePct = null
   }
   if (retrySlippagePct != null && retrySlippagePct > params.activeSlippagePct + 1e-9) {

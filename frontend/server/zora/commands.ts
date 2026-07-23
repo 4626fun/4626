@@ -22,6 +22,7 @@ import {
   submitUserOpOrRefuse,
 } from '../_lib/wallet/userOperationSubmitter.js'
 import { checkRouterTarget } from './routerAllowlist.js'
+import { assertBasePermit2Safety } from '../../src/lib/uniswap/swapQuoteSanitize.js'
 import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { readCswReplaySafeHash, wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
@@ -36,6 +37,29 @@ declare const process: { env: Record<string, string | undefined> }
 // ---------------------------------------------------------------------------
 
 const BASE_CHAIN_ID = 8453
+const PERMIT2_VERIFIER = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3') as Address
+
+function assertSellPermitMatchesQuote(params: {
+  permit: unknown
+  expectedToken: Address
+  expectedSpender: Address
+}): void {
+  const permitRecord = params.permit && typeof params.permit === 'object'
+    ? params.permit as Record<string, unknown>
+    : null
+  assertBasePermit2Safety({
+    permitData: {
+      domain: {
+        name: 'Permit2',
+        chainId: BASE_CHAIN_ID,
+        verifyingContract: PERMIT2_VERIFIER,
+      },
+      message: permitRecord ?? {},
+    },
+    expectedTokenAddress: params.expectedToken,
+    allowedSpenders: [params.expectedSpender],
+  })
+}
 
 /**
  * Platform referrer address for Zora revenue.
@@ -689,6 +713,11 @@ async function handleSell(params: {
       const signedPermits: any[] = []
       for (const permit of permits) {
         if (!permit.signature || permit.signature === '0x') {
+          assertSellPermitMatchesQuote({
+            permit: permit.permit,
+            expectedToken: getAddress(coinAddress),
+            expectedSpender: getAddress(call.target as Address),
+          })
           // Need to sign Permit2 typed data via the agent wallet
           const typedData = {
             types: {
@@ -1015,6 +1044,11 @@ async function handleSellViaArchB(params: {
     for (let i = 0; i < permits.length; i++) {
       const permit = permits[i]
       if (!permit.signature || permit.signature === '0x') {
+        assertSellPermitMatchesQuote({
+          permit: permit.permit,
+          expectedToken: getAddress(coinAddress),
+          expectedSpender: getAddress(initialCall.target as Address),
+        })
         // Compute the Permit2 typed-data digest off-chain using the same
         // domain/types as the legacy handleSell path.
         const typedDataDigest = hashTypedData({

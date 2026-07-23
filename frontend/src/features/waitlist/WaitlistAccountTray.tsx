@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
@@ -7,23 +7,14 @@ import {
 } from '@/components/account/CanonicalIdentityCard'
 import {
   RelayTrayPointsModule,
-  RelayTrayPrimaryTabs,
-  useIsPhoneViewport,
   type TrayPointsOverview,
-} from '@/components/account/ConnectButton'
+} from '@/components/account/relayAccountTrayPoints'
 import {
-  RelayAccountTrayFooter,
   RelayAccountTrayIdentityPanel,
-  RelayAccountTrayPortfolioUnavailable,
-  useRelayAccountTrayStyles,
+  RelayAccountTrayShell,
   type RelayAccountTraySection,
 } from '@/components/account/relayAccountTrayShared'
-import { AccountTray } from '@/components/ui/AccountTray'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
-import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
-import { useCreatorCoinBadge } from '@/hooks/useCreatorCoinBadge'
-import { useCreatorEconomySummary } from '@/hooks/useCreatorEconomySummary'
-import type { CreatorEconomySigningStatus } from '@/lib/creatorEconomy/types'
 import { APP_ORIGIN } from '@/lib/env/host'
 import { fetchAccountTrayPoints, isAccountTrayPointsAuthError } from '@/lib/waitlist/accountTrayPoints'
 import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
@@ -31,20 +22,6 @@ import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore
 import { WaitlistPostJoinShell } from './WaitlistPostJoinShell'
 import { useWaitlistCanonicalIdentity } from './useWaitlistCanonicalIdentity'
 import { useWaitlistPostJoinAttention } from './useWaitlistPostJoinAttention'
-
-function resolveWaitlistSigningStatus(params: {
-  setupRequired: boolean
-  hasCsw: boolean
-  embeddedAuthorized: boolean | null
-  hasExternal: boolean
-}): CreatorEconomySigningStatus {
-  if (params.setupRequired) return 'action_required'
-  if (params.hasExternal && !params.hasCsw) return 'external'
-  if (!params.hasCsw) return 'setup'
-  if (params.embeddedAuthorized === false && !params.hasExternal) return 'unavailable'
-  if (params.embeddedAuthorized === true || params.hasExternal) return 'ready'
-  return 'setup'
-}
 
 export type WaitlistAccountTrayProps = {
   accountMe: AccountSetupMe | null
@@ -64,17 +41,14 @@ export type WaitlistAccountTrayProps = {
 }
 
 /**
- * Top-right account tray for the waitlist route — same shell, tabs, identity
- * panel, portfolio placeholder, points module, and footer as the app tray.
- * Wagmi-free via `useWaitlistCanonicalIdentity`; waitlist-only linking UI
- * renders as an extra block on the Identity tab.
+ * Waitlist entry for the site-wide account tray shell.
+ * Wagmi-free via `useWaitlistCanonicalIdentity`; waitlist-only linked-account
+ * UI renders as an extras block on the Wallets tab.
  */
 export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   const hasSession = Boolean(props.joinedSessionAddress)
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState<RelayAccountTraySection>('identity')
-  const isPhoneViewport = useIsPhoneViewport()
-  const trayStyles = useRelayAccountTrayStyles(isPhoneViewport)
   const [autoOpened, setAutoOpened] = useState(false)
 
   const identity = useWaitlistCanonicalIdentity({
@@ -84,43 +58,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
     externalEoaAddress: props.externalEoaAddress,
   })
 
-  const cswBasename = useBasenameForAddress(identity.cswAddress)
-  const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
   const { setupRequired } = useWaitlistPostJoinAttention()
-
-  const signingStatus = useMemo(
-    () =>
-      resolveWaitlistSigningStatus({
-        setupRequired,
-        hasCsw: Boolean(identity.cswAddress),
-        embeddedAuthorized: identity.embeddedSignerAuthorizedOnCsw,
-        hasExternal: Boolean(identity.externalEoaAddress),
-      }),
-    [
-      setupRequired,
-      identity.cswAddress,
-      identity.embeddedSignerAuthorizedOnCsw,
-      identity.externalEoaAddress,
-    ],
-  )
-
-  const handleOrBasename =
-    cswBasename.displayName ??
-    props.accountMe?.accountSignals?.basename ??
-    props.accountMe?.accountSignals?.zoraHandle ??
-    null
-
-  const economy = useCreatorEconomySummary({
-    creatorCoinAddress: identity.creatorCoinAddress,
-    cswAddress: identity.cswAddress,
-    holderAddress: identity.cswAddress,
-    handleOrBasename,
-    accountMe: props.accountMe,
-    accountSigningStatus: signingStatus,
-    ownsCreatorEconomy: Boolean(identity.creatorCoinAddress),
-    enabled: hasSession && open,
-    mode: 'waitlist',
-  })
 
   useEffect(() => {
     if (!hasSession || !setupRequired || autoOpened) return
@@ -155,7 +93,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   if (!hasSession) return null
 
   const avatarAddress = identity.cswAddress ?? identity.externalEoaAddress ?? identity.privyEmbeddedAddress
-  const hasCreatorCoin = Boolean(coinBadge && !coinBadge.loading && coinBadge.symbol)
+  const closeTray = () => setOpen(false)
 
   return (
     <>
@@ -169,19 +107,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
       >
         <span className="relative flex-shrink-0">
           {identity.cswAddress ? (
-            <CoinbaseSmartWalletAvatar
-              address={identity.cswAddress}
-              basenameAvatar={cswBasename.avatar}
-              size={22}
-            />
-          ) : cswBasename.avatar ? (
-            <img
-              src={cswBasename.avatar}
-              alt=""
-              width={22}
-              height={22}
-              className="size-[22px] rounded-full object-cover"
-            />
+            <CoinbaseSmartWalletAvatar size={22} />
           ) : (
             <JazziconAvatar address={avatarAddress} size={22} />
           )}
@@ -198,81 +124,55 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
         </span>
       </button>
 
-      {open ? (
-        <AccountTray
-          pin={isPhoneViewport ? 'bottom' : 'right'}
-          showHandleBar={isPhoneViewport}
-          accessibilityLabel="4626 account menu"
-          closeAccessibilityLabel="Close account menu"
-          onRequestClose={() => setOpen(false)}
-          styles={trayStyles}
-        >
-          <div className="flex min-h-0 flex-1 flex-col">
-            <RelayTrayPrimaryTabs section={section} onChange={setSection} />
-
-            {section === 'identity' ? (
-              <RelayAccountTrayIdentityPanel
-                economyView={economy.view}
-                economyLoading={economy.loading}
-                economyVariant="waitlist"
-                absoluteAppLinks
-                identityDropdown={{
-                  identity,
-                  omitPrimaryIdentity: !hasCreatorCoin,
-                  onRequestConnectWallet: props.onRequestConnectWallet,
-                  onRequestDisconnectMainWallet: props.onRequestDisconnectMainWallet,
-                  disconnectingMainWallet: props.disconnectingMainWallet,
-                  onRequestSignOut: props.onSignOut,
-                  signingOut: props.signOutBusy,
-                  signOutDisabled: props.signOutDisabled,
-                }}
-              >
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-                  Identities
-                </div>
-                {props.identitiesPanel}
-                <WaitlistPostJoinShell
-                  enabled
-                  onSignOut={props.onSignOut}
-                  signOutBusy={props.signOutBusy}
-                />
-              </RelayAccountTrayIdentityPanel>
-            ) : null}
-
-            {section === 'portfolio' ? (
-              <RelayAccountTrayPortfolioUnavailable
-                enterAppHref={`${APP_ORIGIN}/swap`}
-                onNavigate={() => setOpen(false)}
-              />
-            ) : null}
-
-            {section === 'points' ? (
-              <RelayTrayPointsModule
-                pointsTotal={trayPointsDisplay.points}
-                position={trayPointsOverview}
-                pointsLoading={trayAccountPointsQuery.isLoading}
-                activity={trayAccountPointsQuery.data?.activity ?? []}
-                activityLoading={trayAccountPointsQuery.isLoading}
-                activityError={trayAccountPointsQuery.isError && !trayPointsAuthRequired}
-                activityAuthRequired={trayPointsAuthRequired}
-                leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
-                hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
-                signupId={trayAccountPointsQuery.data?.signupId ?? 0}
-              />
-            ) : null}
-
-            <RelayAccountTrayFooter
-              linkMode="anchor"
-              accountsHref={`${APP_ORIGIN}/accounts`}
-              settingsHref={`${APP_ORIGIN}/accounts`}
-              onClose={() => setOpen(false)}
+      <RelayAccountTrayShell
+        open={open}
+        onClose={closeTray}
+        section={section}
+        onSectionChange={setSection}
+        portfolioUnavailableHref={`${APP_ORIGIN}/swap`}
+        wallets={
+          <RelayAccountTrayIdentityPanel
+            identityDropdown={{
+              identity,
+              onRequestConnectWallet: props.onRequestConnectWallet,
+              onRequestDisconnectMainWallet: props.onRequestDisconnectMainWallet,
+              disconnectingMainWallet: props.disconnectingMainWallet,
+            }}
+          >
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+              Linked accounts
+            </div>
+            {props.identitiesPanel}
+            <WaitlistPostJoinShell
+              enabled
               onSignOut={props.onSignOut}
               signOutBusy={props.signOutBusy}
-              signOutDisabled={props.signOutDisabled}
             />
-          </div>
-        </AccountTray>
-      ) : null}
+          </RelayAccountTrayIdentityPanel>
+        }
+        points={
+          <RelayTrayPointsModule
+            pointsTotal={trayPointsDisplay.points}
+            position={trayPointsOverview}
+            pointsLoading={trayAccountPointsQuery.isLoading}
+            activity={trayAccountPointsQuery.data?.activity ?? []}
+            activityLoading={trayAccountPointsQuery.isLoading}
+            activityError={trayAccountPointsQuery.isError && !trayPointsAuthRequired}
+            activityAuthRequired={trayPointsAuthRequired}
+            leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
+            hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
+            signupId={trayAccountPointsQuery.data?.signupId ?? 0}
+          />
+        }
+        footer={{
+          linkMode: 'anchor',
+          accountsHref: `${APP_ORIGIN}/accounts`,
+          settingsHref: `${APP_ORIGIN}/accounts`,
+          onSignOut: props.onSignOut,
+          signOutBusy: props.signOutBusy,
+          signOutDisabled: props.signOutDisabled,
+        }}
+      />
     </>
   )
 }

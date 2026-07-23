@@ -15,7 +15,7 @@ import {
   assertCswAcceptsErc1271Signature,
   signOwnerSignatureForCswErc1271,
 } from '@/lib/wallet/cswOwnerSignature'
-import { sanitizePermitDataForSwapApi } from '@/lib/uniswap/swapQuoteSanitize'
+import { assertBasePermit2Safety, sanitizePermitDataForSwapApi } from '@/lib/uniswap/swapQuoteSanitize'
 import { toPermitSignPayload } from '@/lib/uniswap/tradingApi'
 
 type Permit2WalletClient = {
@@ -80,22 +80,6 @@ function mergePermitDataChainNonce(
   })
 }
 
-function readPermitTokenSpender(message: Record<string, unknown>): {
-  token: Address
-  spender: Address
-} | null {
-  const details = message.details
-  if (!isPlainObject(details)) return null
-  const tokenRaw = details.token
-  const spenderRaw = message.spender
-  if (typeof tokenRaw !== 'string' || typeof spenderRaw !== 'string') return null
-  if (!isAddress(tokenRaw) || !isAddress(spenderRaw)) return null
-  return {
-    token: getAddress(tokenRaw),
-    spender: getAddress(spenderRaw),
-  }
-}
-
 /**
  * Sign Uniswap Permit2 typed data for either an EOA or a parent CSW execution wallet.
  * CSW paths wrap the embedded owner signature for ERC-1271 and sync Permit2 nonce from chain.
@@ -106,11 +90,17 @@ export async function signPermit2ForExecutionWallet(params: {
   executionAddress?: string | null
   walletClient: Permit2WalletClient
   publicClient: PublicClient
+  expectedTokenAddress?: string | null
 }): Promise<{ permitData: Record<string, unknown>; signature: Hex }> {
   const typed = toPermitSignPayload(params.permitData)
   if (!typed) {
     throw new Error('Permit2 payload is malformed. Please refresh the quote and try again.')
   }
+
+  const permitSafety = assertBasePermit2Safety({
+    permitData: params.permitData,
+    expectedTokenAddress: params.expectedTokenAddress ?? null,
+  })
 
   const signer = getAddress(params.signerAddress)
   const executionRaw = String(params.executionAddress ?? '').trim()
@@ -125,8 +115,7 @@ export async function signPermit2ForExecutionWallet(params: {
   let messageForSign = typed.message
 
   if (permitOwnerIsCsw && executionAddress) {
-    const tokenSpender = readPermitTokenSpender(typed.message)
-    if (!tokenSpender) {
+    if (!permitSafety.token) {
       throw new Error('Permit2 payload is missing token/spender details. Refresh the quote and try again.')
     }
 
@@ -134,14 +123,18 @@ export async function signPermit2ForExecutionWallet(params: {
     const chainNonce = await readPermit2AllowanceNonce({
       readClient,
       permitOwner: executionAddress,
-      token: tokenSpender.token,
-      spender: tokenSpender.spender,
+      token: permitSafety.token,
+      spender: permitSafety.spender,
     })
     permitDataForBuild = mergePermitDataChainNonce(params.permitData, chainNonce)
     const refreshed = toPermitSignPayload(permitDataForBuild)
     if (!refreshed) {
       throw new Error('Permit2 payload is malformed after nonce refresh. Refresh the quote and try again.')
     }
+    assertBasePermit2Safety({
+      permitData: permitDataForBuild,
+      expectedTokenAddress: params.expectedTokenAddress ?? null,
+    })
     messageForSign = refreshed.message
 
     const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({

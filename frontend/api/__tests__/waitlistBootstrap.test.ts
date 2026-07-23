@@ -255,14 +255,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(syncEmailIdentityMock).toHaveBeenCalledTimes(2)
-    expect(upsertLinkedMethodMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        privyUserId: 'did:privy:test-user',
-        type: 'email',
-        value: 'user@example.com',
-        verified: true,
-      }),
-    )
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
   })
 
   it('rebinds an existing waitlist profile when Privy verifies the same email on a new session', async () => {
@@ -528,7 +521,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     expect(res.body?.error).toBe('Invalid referral code')
   })
 
-  it('uses an authenticated bootstrap email hint when Privy server hydration lags', async () => {
+  it('does not promote a bootstrap email hint to a verified canonical email', async () => {
     verifyPrivyForAccountsMock.mockResolvedValueOnce({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: null },
@@ -544,13 +537,37 @@ describe('POST /api/waitlist/bootstrap', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(upsertAccountMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        privyUserId: 'did:privy:test-user',
-        email: 'user@example.com',
-        emailVerified: true,
-      }),
-    )
+    expect(res.body?.success).toBe(true)
+    expect(upsertAccountMock).not.toHaveBeenCalled()
+  })
+
+  it('does not rebind by bootstrap email hint when Privy has not verified the colliding email', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'user@example.com',
+      requestedPrivyUserId: 'did:privy:test-user',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    verifyPrivyForAccountsMock.mockResolvedValueOnce({
+      privyUserId: 'did:privy:test-user',
+      privyUser: { id: 'did:privy:test-user', email: null },
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
   })
 
   it('returns 401 for explicit session email mismatch errors', async () => {

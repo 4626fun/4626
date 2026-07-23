@@ -86,8 +86,11 @@ export function AccountTray({
         ) : null}
         <div
           className={cn(
-            'flex min-h-0 flex-1 flex-col overflow-y-auto',
-            pin === 'bottom' ? 'px-4 pb-4 pt-2' : 'px-3 pb-3 pt-2',
+            // Horizontal padding lives on tab/panel/footer rows so app + waitlist
+            // share one alignment. Overflow stays on the active tab body so the
+            // footer can remain pinned.
+            'flex min-h-0 flex-1 flex-col overflow-hidden',
+            pin === 'bottom' ? 'pb-4 pt-2' : 'pb-3 pt-2',
           )}
           style={styles?.content}
         >

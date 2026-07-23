@@ -276,6 +276,22 @@ function readAuthHandoffCodeFromLocation(): string | null {
   return normalized.length > 0 ? normalized : null
 }
 
+const TRUSTED_HANDOFF_SOURCE_HOSTS = new Set([
+  '4626.fun',
+  'www.4626.fun',
+  'app.4626.fun',
+  'alfaclub.4626.fun',
+])
+
+export function isTrustedAuthHandoffReferrer(referrer: string | null | undefined): boolean {
+  try {
+    const url = new URL(String(referrer ?? '').trim())
+    return url.protocol === 'https:' && TRUSTED_HANDOFF_SOURCE_HOSTS.has(url.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 function clearAuthHandoffCodeFromLocation() {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
@@ -500,6 +516,13 @@ export function useSiweAuth() {
       const handoffCode = readAuthHandoffCodeFromLocation()
       if (handoffCode) {
         clearAuthHandoffCodeFromLocation()
+        // Direct/external bearer links are login CSRF. Handoffs are only
+        // redeemed after navigation from a first-party 4626 shell.
+        if (!isTrustedAuthHandoffReferrer(document.referrer)) {
+          await refresh()
+          if (!cancelled) setSessionHydrated(true)
+          return
+        }
         const redeemed = await redeemAuthHandoffCode(handoffCode)
         if (redeemed?.address) {
           // Cookie was issued by the redeem response. Clear any stale

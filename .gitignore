@@ -51,6 +51,7 @@ Cargo.lock
 
 # Solana keypairs (NEVER commit private keys!)
 programs/creator-share-hook/target/deploy/*-keypair.json
+programs/lottery-relay-oapp/target/
 *.keypair.json
 *keypair.json
 

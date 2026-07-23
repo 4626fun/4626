@@ -125,6 +125,16 @@ contract DeployRandomnessRouter is Script {
         router = new RandomnessRouter(owner, IRandomnessSource(address(adapter)));
         console.log("RandomnessRouter:   ", address(router));
 
+        if (owner == deployer) {
+            adapter.setRequester(address(router));
+            console.log("Adapter requester set to RandomnessRouter");
+        } else {
+            console.log("WARNING: deployer is NOT ROUTER_OWNER.");
+            console.log("WARNING: ROUTER_OWNER must call adapter.setRequester(router)");
+            console.log("  adapter:", address(adapter));
+            console.log("  router: ", address(router));
+        }
+
         vm.stopBroadcast();
 
         // Post-broadcast assertion. With ALLOW_UNAUTHORIZED_ADAPTER=1 the

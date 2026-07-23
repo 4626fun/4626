@@ -3,6 +3,12 @@ import { encodeFunctionData } from 'viem'
 
 import { verifyDeployPhase2Invariants } from './deployPhase2Invariants.ts'
 
+function missingSelectorError(): Error {
+  const error = new Error('returned no data')
+  error.name = 'ContractFunctionZeroDataError'
+  return error
+}
+
 function makeFinalizePhase2Data(params?: {
   creatorToken?: `0x${string}`
   shareToken?: `0x${string}`
@@ -122,7 +128,7 @@ describe('verifyDeployPhase2Invariants', () => {
         case 'gaugeController':
           return gaugeController
         case 'payoutRecipient':
-          throw new Error('execution reverted')
+          throw missingSelectorError()
         case 'creatorShareBps':
           return 0n
         case 'creatorTreasury':
@@ -156,6 +162,26 @@ describe('verifyDeployPhase2Invariants', () => {
     expect(result.violations.map((entry) => entry.code)).not.toContain('creator_coin_payout_recipient_mismatch')
     expect(result.violations.map((entry) => entry.code)).not.toContain('creator_coin_payout_recipient_unresolved')
     expect(result.violations).toEqual([])
+
+    const providerFailure = await verifyDeployPhase2Invariants({
+      publicClient: {
+        readContract: async (args: { functionName: string }) => {
+          if (args.functionName === 'payoutRecipient') throw new Error('provider timeout')
+          return readContract(args)
+        },
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+      },
+      phase2FinalizeCalls: [{
+        to: '0x0000000000000000000000000000000000000010',
+        value: 0n,
+        data: makeFinalizePhase2Data(),
+      }],
+      payload: {},
+      enforceProductionReadiness: true,
+    })
+    expect(providerFailure.violations.map((entry) => entry.code))
+      .toContain('creator_coin_payout_recipient_read_failed')
   })
 
   it('uses Agent gauge treasury split when creatorShareBps/creatorTreasury selectors are absent', async () => {
@@ -169,7 +195,7 @@ describe('verifyDeployPhase2Invariants', () => {
         case 'gaugeController':
           return gaugeController
         case 'payoutRecipient':
-          throw new Error('execution reverted')
+          throw missingSelectorError()
         case 'creatorShareBps':
         case 'creatorTreasury':
           throw new Error('execution reverted')

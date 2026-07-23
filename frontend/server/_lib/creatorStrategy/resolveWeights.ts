@@ -67,7 +67,8 @@ export type ResolvedStrategyPlan = StrategyWeights & {
 
 /**
  * Read which gated features the creator currently has active or pending
- * payment for. Both `pending` and `active` count as "paid".
+ * payment verification for. Unpaid checkout rows must not unlock Phase 3 /
+ * paymaster / deploy entitlements.
  */
 export async function readActiveCreatorFeatureKeys(
   db: Db,
@@ -79,6 +80,7 @@ export async function readActiveCreatorFeatureKeys(
     FROM creator_strategy_features
     WHERE creator_token = ${key}
       AND status IN ('pending', 'active')
+      AND payment_verified_at IS NOT NULL
   `
   const rawKeys: string[] = []
   for (const row of result.rows ?? []) {

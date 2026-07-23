@@ -23,11 +23,34 @@ ROUTER="${1:?router address required}"
 shift
 
 TREASURY="${PROTOCOL_TREASURY:-0xB05Cf01231cF2fF99499682E64D3780d57c80FdD}"
-CANONICAL_CSW="${AMOE_PUBLISHER:-0xAb6d5C10b03300326CD7fAb7267Ae192842967b5}"
+CANONICAL_CSW="${AMOE_PUBLISHER:-0x793ca28123cba3ca3c20b9c6c67f37510c89c145}"
+
+publishers_changed=0
+restore_publishers() {
+  if [[ "$publishers_changed" -ne 1 ]]; then
+    return
+  fi
+  publishers_changed=0
+  set +e
+  echo "==> Restore publishers to canonical CSW $CANONICAL_CSW"
+  cast send "$ROUTER" "setAllowlistPublisher(address)" "$CANONICAL_CSW" \
+    --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
+  allowlist_restore_status=${PIPESTATUS[0]}
+  cast send "$ROUTER" "setPointsLedgerPublisher(address)" "$CANONICAL_CSW" \
+    --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
+  ledger_restore_status=${PIPESTATUS[0]}
+  set -e
+  if [[ "$allowlist_restore_status" -ne 0 || "$ledger_restore_status" -ne 0 ]]; then
+    echo "ERROR: failed to restore one or more AMOE publisher roles" >&2
+    return 1
+  fi
+}
+trap restore_publishers EXIT
 
 echo "==> Temporarily set publishers to treasury EOA $TREASURY"
 cast send "$ROUTER" "setAllowlistPublisher(address)" "$TREASURY" \
   --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
+publishers_changed=1
 cast send "$ROUTER" "setPointsLedgerPublisher(address)" "$TREASURY" \
   --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
 
@@ -46,10 +69,7 @@ for spec in "$@"; do
   fi
 done
 
-echo "==> Restore publishers to canonical CSW $CANONICAL_CSW"
-cast send "$ROUTER" "setAllowlistPublisher(address)" "$CANONICAL_CSW" \
-  --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
-cast send "$ROUTER" "setPointsLedgerPublisher(address)" "$CANONICAL_CSW" \
-  --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
+restore_publishers
+trap - EXIT
 
 echo "Done."

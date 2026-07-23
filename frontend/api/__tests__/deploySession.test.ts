@@ -37,6 +37,9 @@ const {
   verifyDeployPhase2InvariantsMock,
   checkRateLimitMock,
   ensureShareMeshOvaultPreflightMock,
+  upsertSolanaShareMeshMappingMock,
+  enqueueKeeperJobMock,
+  enqueueSolanaShareMeshProvisioningMock,
   verifyPrivyRequestMock,
   classifyLinkedAccountsMock,
 } = vi.hoisted(() => ({
@@ -78,6 +81,17 @@ const {
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   })),
+  upsertSolanaShareMeshMappingMock: vi.fn(async (params: any) => ({
+    id: 1,
+    creatorToken: params.creatorToken,
+    shareOft: params.shareOft,
+    shareMeshMint: params.shareMeshMint,
+  })),
+  enqueueKeeperJobMock: vi.fn(async () => ({ id: 1 })),
+  enqueueSolanaShareMeshProvisioningMock: vi.fn(async () => ({
+    enqueued: true,
+    jobId: 2,
+  })),
   verifyPrivyRequestMock: vi.fn(),
   classifyLinkedAccountsMock: vi.fn(),
 }))
@@ -99,6 +113,20 @@ vi.mock('@4626/server-core', () => ({
     deploySessionCancel: { windowMs: 60_000, maxRequests: 20 },
   },
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+  isDbConfigured: vi.fn(() => true),
+  getDbForCron: vi.fn(async () => ({ sql: vi.fn() })),
+}))
+
+vi.mock('../../server/_lib/onchain/solanaShareMeshMappings.js', () => ({
+  upsertSolanaShareMeshMapping: upsertSolanaShareMeshMappingMock,
+}))
+
+vi.mock('../../server/_lib/keeperJobs/keeperJobs.js', () => ({
+  enqueueKeeperJob: enqueueKeeperJobMock,
+}))
+
+vi.mock('../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js', () => ({
+  enqueueSolanaShareMeshProvisioning: enqueueSolanaShareMeshProvisioningMock,
 }))
 
 vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
@@ -171,6 +199,7 @@ vi.mock('viem', async (importOriginal) => {
       args: [
         {
           creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+          shareToken: '0x7000000000000000000000000000000000000007',
           depositAmount: '5000000000000000000000000',
         },
       ],
@@ -324,6 +353,17 @@ describe('deploy session optimistic concurrency', () => {
       redeemEligible: true,
       sharePeerSet: true,
       meshStep: 'ovault_mesh_confirmed',
+    })
+    upsertSolanaShareMeshMappingMock.mockImplementation(async (params: any) => ({
+      id: 1,
+      creatorToken: params.creatorToken,
+      shareOft: params.shareOft,
+      shareMeshMint: params.shareMeshMint,
+    }))
+    enqueueKeeperJobMock.mockResolvedValue({ id: 1 })
+    enqueueSolanaShareMeshProvisioningMock.mockResolvedValue({
+      enqueued: true,
+      jobId: 2,
     })
   })
 
@@ -3016,7 +3056,11 @@ describe('deploy session optimistic concurrency', () => {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
-        solanaOvault: { enabled: true },
+        solanaOvault: {
+          enabled: true,
+          mode: 'b2',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
+        },
       },
     }
 
@@ -3049,7 +3093,11 @@ describe('deploy session optimistic concurrency', () => {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
-        solanaOvault: { enabled: true },
+        solanaOvault: {
+          enabled: true,
+          mode: 'b2',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
+        },
       },
     }
 
@@ -3070,6 +3118,43 @@ describe('deploy session optimistic concurrency', () => {
     expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
+  it('keeps the OVault mesh session retryable when mapping persistence fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [],
+        solanaOvault: {
+          enabled: true,
+          mode: 'b2',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
+        },
+      },
+    }
+    upsertSolanaShareMeshMappingMock.mockRejectedValueOnce(new Error('database unavailable'))
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(500)
+    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        fromStep: 'phase2_confirmed',
+        toStep: 'ovault_mesh_sent',
+      }),
+    )
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ toStep: 'ovault_mesh_confirmed' }),
+    )
+    expect(enqueueKeeperJobMock).not.toHaveBeenCalled()
+  })
+
   it('continue blocks ovault mesh gate when ShareOFT preflight fails', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
@@ -3077,7 +3162,11 @@ describe('deploy session optimistic concurrency', () => {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
-        solanaOvault: { enabled: true },
+        solanaOvault: {
+          enabled: true,
+          mode: 'b2',
+          shareMeshMint: 'So11111111111111111111111111111111111111112',
+        },
       },
     }
     ensureShareMeshOvaultPreflightMock.mockRejectedValueOnce(

@@ -35,6 +35,22 @@ async function upsertPrivyUserAlias(params: {
   }
 }
 
+async function prunePrivyUserAliasesToCurrent(params: {
+  db: Db
+  privyUserId: string
+  profileId: number
+}): Promise<void> {
+  try {
+    await params.db.sql`
+      DELETE FROM privy_user_aliases
+      WHERE profile_id = ${params.profileId}
+        AND LOWER(privy_user_id) <> ${normalizeLower(params.privyUserId)};
+    `
+  } catch {
+    // privy_user_aliases may not exist in legacy envs — safe to ignore.
+  }
+}
+
 function collectPrivyOwnedEvmAddresses(privyUser: PrivyUserLike): Set<string> {
   const classification = classifyLinkedAccounts(privyUser)
   const ownedAddresses = new Set<string>()
@@ -161,8 +177,9 @@ async function rebindEmailCollisionProfile(params: {
   collision: IdentityRecoveryRequiredError
   email: string
   privyUserId: string
+  markEmailVerified: boolean
 }): Promise<boolean> {
-  const { collision, db, email, privyUserId } = params
+  const { collision, db, email, markEmailVerified, privyUserId } = params
   if (collision.reason !== 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER') return false
 
   const profileResult = await db.sql`
@@ -210,31 +227,38 @@ async function rebindEmailCollisionProfile(params: {
     targetProfileId: profileId,
   })
 
-  await db.sql`
-    UPDATE profiles
-    SET
-      privy_user_id = ${privyUserId},
-      email_verified = TRUE,
-      updated_at = NOW()
-    WHERE LOWER(email) = LOWER(${email})
-      AND (
-        privy_user_id IS NULL
-        OR LOWER(privy_user_id) = ${existingPrivyUserId}
-        OR LOWER(privy_user_id) = ${normalizeLower(collision.requestedPrivyUserId)}
-      );
-  `
-  await upsertLinkedMethod({
-    db: db as any,
-    privyUserId,
-    type: 'email',
-    value: email,
-    verified: true,
-  })
+  if (markEmailVerified) {
+    await db.sql`
+      UPDATE profiles
+      SET
+        privy_user_id = ${privyUserId},
+        email_verified = TRUE,
+        updated_at = NOW()
+      WHERE LOWER(email) = LOWER(${email})
+        AND (
+          privy_user_id IS NULL
+          OR LOWER(privy_user_id) = ${existingPrivyUserId}
+          OR LOWER(privy_user_id) = ${normalizeLower(collision.requestedPrivyUserId)}
+        );
+    `
+    await upsertLinkedMethod({
+      db: db as any,
+      privyUserId,
+      type: 'email',
+      value: email,
+      verified: true,
+    })
+  }
   await upsertPrivyUserAlias({
     db,
     privyUserId,
     profileId,
     source: 'waitlist_email_rebind',
+  })
+  await prunePrivyUserAliasesToCurrent({
+    db,
+    privyUserId,
+    profileId,
   })
   return true
 }
@@ -244,8 +268,9 @@ async function rebindWalletCollisionProfile(params: {
   collision: IdentityRecoveryRequiredError
   email: string
   privyUserId: string
+  markEmailVerified: boolean
 }): Promise<boolean> {
-  const { collision, db, email, privyUserId } = params
+  const { collision, db, email, markEmailVerified, privyUserId } = params
   if (collision.reason !== 'WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE') return false
 
   const profileId = collision.canonicalProfileId
@@ -293,24 +318,31 @@ async function rebindWalletCollisionProfile(params: {
     targetProfileId: profileId,
   })
 
-  await db.sql`
-    UPDATE profiles
-    SET
-      privy_user_id = ${privyUserId},
-      email_verified = TRUE,
-      updated_at = NOW()
-    WHERE LOWER(email) = LOWER(${email})
-      AND (
-        privy_user_id IS NULL
-        OR LOWER(privy_user_id) = ${requestedPrivyUserId}
-      );
-  `
-  await upsertLinkedMethod({
-    db: db as any,
+  if (markEmailVerified) {
+    await db.sql`
+      UPDATE profiles
+      SET
+        privy_user_id = ${privyUserId},
+        email_verified = TRUE,
+        updated_at = NOW()
+      WHERE LOWER(email) = LOWER(${email})
+        AND (
+          privy_user_id IS NULL
+          OR LOWER(privy_user_id) = ${requestedPrivyUserId}
+        );
+    `
+    await upsertLinkedMethod({
+      db: db as any,
+      privyUserId,
+      type: 'email',
+      value: email,
+      verified: true,
+    })
+  }
+  await prunePrivyUserAliasesToCurrent({
+    db,
     privyUserId,
-    type: 'email',
-    value: email,
-    verified: true,
+    profileId,
   })
   return true
 }
@@ -403,6 +435,7 @@ async function adoptOwnedEmailCollision(params: {
     db,
     collision,
     email,
+    markEmailVerified: false,
     privyUserId,
   })
 }
@@ -421,6 +454,7 @@ async function adoptWaitlistVerifiedEmailRebind(params: {
     db: params.db,
     collision: params.collision,
     email: params.email,
+    markEmailVerified: true,
     privyUserId: params.privyUserId,
   })
 }
@@ -437,26 +471,6 @@ function isMatchingEmailCollision(params: {
   return Boolean(errorEmail) && errorEmail === params.email && requestedPrivyUserId === currentPrivyUserId
 }
 
-async function adoptWaitlistBootstrapEmailHintRebind(params: {
-  db: Db
-  collision: IdentityRecoveryRequiredError
-  email: string
-  privyUserId: string
-  bootstrapEmailHint: string | null | undefined
-}): Promise<boolean> {
-  if (params.collision.reason !== 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER') return false
-  const hint = normalizeLower(params.bootstrapEmailHint)
-  const collisionEmail = normalizeLower(params.email)
-  if (!hint || hint !== collisionEmail) return false
-
-  return rebindEmailCollisionProfile({
-    db: params.db,
-    collision: params.collision,
-    email: params.email,
-    privyUserId: params.privyUserId,
-  })
-}
-
 async function adoptEmailCollision(params: {
   db: Db
   collision: IdentityRecoveryRequiredError
@@ -464,7 +478,6 @@ async function adoptEmailCollision(params: {
   privyUserId: string
   privyUser: PrivyUserLike
   allowVerifiedEmailRebind: boolean
-  bootstrapEmailHint?: string | null
 }): Promise<boolean> {
   if (
     await adoptOwnedEmailCollision({
@@ -492,13 +505,7 @@ async function adoptEmailCollision(params: {
     return true
   }
 
-  return adoptWaitlistBootstrapEmailHintRebind({
-    db: params.db,
-    collision: params.collision,
-    email: params.email,
-    privyUserId: params.privyUserId,
-    bootstrapEmailHint: params.bootstrapEmailHint,
-  })
+  return false
 }
 
 function isMatchingWalletCollision(params: {
@@ -539,6 +546,7 @@ async function adoptWalletBoundCollision(params: {
     db: params.db,
     collision: params.collision,
     email: canonicalEmail,
+    markEmailVerified: verified,
     privyUserId: params.privyUserId,
   })
 }
@@ -548,24 +556,21 @@ export async function runWithWaitlistWalletCollisionAdoption<T>(params: {
   email: string | null | undefined
   privyUserId: string
   privyUser: PrivyUserLike
-  bootstrapEmailHint?: string | null
   action: () => Promise<T>
 }): Promise<T> {
-  const { action, bootstrapEmailHint, db, email, privyUser, privyUserId } = params
+  const { action, db, email, privyUser, privyUserId } = params
   try {
     return await action()
   } catch (error: unknown) {
     const verifiedEmail = normalizeLower(extractPrivyVerifiedEmail(privyUser))
     const requestedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
-    const hintEmail =
-      typeof bootstrapEmailHint === 'string' ? bootstrapEmailHint.trim().toLowerCase() : ''
     const collisionEmail =
       isIdentityRecoveryRequiredError(error) &&
       error.reason === 'WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE' &&
       typeof error.canonicalEmail === 'string'
         ? error.canonicalEmail.trim().toLowerCase()
         : ''
-    const normalizedEmail = verifiedEmail || requestedEmail || hintEmail || collisionEmail
+    const normalizedEmail = verifiedEmail || requestedEmail || collisionEmail
     const canAdopt =
       normalizedEmail &&
       isIdentityRecoveryRequiredError(error) &&
@@ -624,24 +629,21 @@ export async function runWithWaitlistEmailCollisionAdoption<T>(params: {
   email: string | null | undefined
   privyUserId: string
   privyUser: PrivyUserLike
-  bootstrapEmailHint?: string | null
   action: () => Promise<T>
 }): Promise<T> {
-  const { action, bootstrapEmailHint, db, email, privyUser, privyUserId } = params
+  const { action, db, email, privyUser, privyUserId } = params
   try {
     return await action()
   } catch (error: unknown) {
     const verifiedEmail = normalizeLower(extractPrivyVerifiedEmail(privyUser))
     const requestedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
-    const hintEmail =
-      typeof bootstrapEmailHint === 'string' ? bootstrapEmailHint.trim().toLowerCase() : ''
     const collisionEmail =
       isIdentityRecoveryRequiredError(error) &&
       error.reason === 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER' &&
       typeof error.email === 'string'
         ? error.email.trim().toLowerCase()
         : ''
-    const normalizedEmail = verifiedEmail || requestedEmail || hintEmail || collisionEmail
+    const normalizedEmail = verifiedEmail || requestedEmail || collisionEmail
     const canAdopt =
       normalizedEmail &&
       isIdentityRecoveryRequiredError(error) &&
@@ -657,8 +659,6 @@ export async function runWithWaitlistEmailCollisionAdoption<T>(params: {
         privyUserId,
         privyUser,
         allowVerifiedEmailRebind: true,
-        bootstrapEmailHint:
-          typeof bootstrapEmailHint === 'string' ? bootstrapEmailHint.trim().toLowerCase() : null,
       }))
     if (!canAdopt) throw error
     return action()

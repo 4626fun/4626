@@ -7,6 +7,8 @@ export interface ChainSelectorProps {
   walletChainId?: number | null
   onSelect: (chainId: SupportedChainId) => void
   compact?: boolean
+  /** When set, only these networks are offered. A single id renders a static badge. */
+  allowedChainIds?: readonly SupportedChainId[]
 }
 
 const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
@@ -45,15 +47,24 @@ export const ChainSelector = memo(function ChainSelector({
   walletChainId,
   onSelect,
   compact = false,
+  allowedChainIds,
 }: ChainSelectorProps) {
   const listboxId = useId()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
 
+  const availableChains = useMemo(() => {
+    if (!allowedChainIds?.length) return SUPPORTED_CHAINS
+    const allow = new Set(allowedChainIds)
+    const filtered = SUPPORTED_CHAINS.filter((chain) => allow.has(chain.id))
+    return filtered.length > 0 ? filtered : SUPPORTED_CHAINS
+  }, [allowedChainIds])
+
   const selected = useMemo(
-    () => SUPPORTED_CHAINS.find((c) => c.id === selectedChainId) ?? SUPPORTED_CHAINS[0] ?? null,
-    [selectedChainId],
+    () => availableChains.find((c) => c.id === selectedChainId) ?? availableChains[0] ?? null,
+    [availableChains, selectedChainId],
   )
+  const chainLocked = availableChains.length <= 1
 
   useEffect(() => {
     if (!open) return
@@ -89,6 +100,20 @@ export const ChainSelector = memo(function ChainSelector({
   const triggerSize = compact ? 16 : 20
   const optionSize = compact ? 18 : 22
 
+  if (chainLocked) {
+    return (
+      <div
+        className={`inline-flex items-center gap-1 rounded-lg ${compact ? 'px-1.5 py-1' : 'px-2 py-1.5'} text-vault-text`}
+        aria-label={`${selected.name} network`}
+      >
+        <ChainLogo src={selected.logoUrl} name={selected.name} size={triggerSize} />
+        {!compact ? (
+          <span className="text-xs font-medium text-vault-subtext">{selected.name}</span>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div ref={wrapperRef} className="relative inline-flex">
       <button
@@ -114,7 +139,7 @@ export const ChainSelector = memo(function ChainSelector({
           aria-label="Select network"
           className="absolute right-0 top-full z-50 mt-1.5 min-w-[220px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-white/10 bg-black/90 p-1 shadow-xl backdrop-blur"
         >
-          {SUPPORTED_CHAINS.map((chain) => {
+          {availableChains.map((chain) => {
             const isSelected = chain.id === selectedChainId
             const isWalletChain = chain.id === walletChainId
             return (

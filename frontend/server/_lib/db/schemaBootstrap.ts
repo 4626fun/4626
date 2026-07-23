@@ -1127,6 +1127,12 @@ export async function ensureSolanaLotteryEntryInboxSchema(db: Db): Promise<void>
       undefined,
       { strict: true },
     )
+    await ensureMigrationApplied(
+      db,
+      '20260720030000_solana_b2_canary_authorizations.sql',
+      undefined,
+      { strict: true },
+    )
   })
 }
 

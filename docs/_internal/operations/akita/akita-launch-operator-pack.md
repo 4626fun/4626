@@ -5,9 +5,12 @@
 > [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md) and
 > `frontend/scripts/ops/complete-akita-deploy-ops.ts`.
 >
-> Release truth: v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
-> Share mesh mint (reused): `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` (`■AKITA`).
-> Batcher default Solana share peer: `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f`.
+> Release truth: v1.19.4 Creator core repair on batcher
+> `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> The prior AKITA standard-SPL mint `5puV…XHQv`, OFT Store `G3rf…XeN`, and
+> peer `0xdf9a…cd3f` are retired for B2 and must not be reused.
+> Record the fresh Token-2022 mint, regular-OFT Store, and Store bytes32 peer
+> after the Base Phase-1-only session.
 > Hub composer: `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1`.
 
 Rules for the operator:
@@ -27,11 +30,11 @@ Rules for the operator:
 ### PRE-1. Is prelaunch green?
 
 ```bash
-pnpm -C frontend ops:complete-akita-deploy prelaunch
-# (equivalent to: pnpm -C frontend ops:verify-akita-prelaunch --production)
+pnpm -C frontend ops:verify-akita-prelaunch --production --phase1-only
 ```
 
-Required result: exit `0`, `ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.`
+Required result: exit `0`, `BASE PHASE 1 GATES PASS`. This does not clear the
+fresh B2 mint/Store, funded canary, relay, or winner gates.
 If any gate fails, stop and fix per the blocker table in
 [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md). Known env quirk: if
 `hook_mainnet_canonical` fails with "No default signer found", run
@@ -84,11 +87,12 @@ In the deploy session, use a **NEW `deploymentVersion` salt** so CREATE2 address
 from the current stack (`vault 0x82C06…`, `wrapper 0x58Cd1…`, `shareOFT 0x4df30…`).
 If the deploy UI previews any of those three current addresses, the salt is stale — bump it.
 
-### PRE-6. Start deploy
+### PRE-6. Start Base Phase 1 only
 
 - URL: `https://app.4626.fun/deploy/vault`
 - Creator coin: `0x5b674196812451b7cec024fe9d22d2c0b172fa75`
-- Enable **Solana OVault mesh** in the session (Pipe A 30% ShareOFT auto-bridge at finalize).
+- Submit only the two Phase 1 calls. Do not include `solanaOvault`, finalize,
+  strategy, or auction calls until the fresh B2 mint/Store is known and wired.
 - Optional rehearsal first: `pnpm -C frontend run dev:deploy-dry-run` (local Anvil fork).
 
 ---
@@ -104,6 +108,8 @@ recording step (it writes `.akita-redeploy-state/post-phase1.json`):
 ```bash
 pnpm -C frontend ops:complete-akita-deploy post-phase1 \
   --share-oft 0xNEW_SHARE_OFT --vault 0xNEW_VAULT --wrapper 0xNEW_WRAPPER \
+  --share-mesh-mint <FRESH_TOKEN_2022_MINT> --oft-store <FRESH_OFT_STORE> \
+  --solana-share-peer <FRESH_OFT_STORE_BYTES32> \
   --gauge 0xNEW_GAUGE --cca 0xNEW_CCA --oracle 0xNEW_ORACLE \
   --update-vultr
 ```
@@ -155,6 +161,8 @@ ShareOFT if needed, and bridge 30% ShareOFT to Solana (attach LZ fee — payable
 ```bash
 pnpm -C frontend ops:complete-akita-deploy post-finalize \
   --share-oft 0xNEW_SHARE_OFT --vault 0xNEW_VAULT --wrapper 0xNEW_WRAPPER \
+  --share-mesh-mint <FRESH_TOKEN_2022_MINT> --oft-store <FRESH_OFT_STORE> \
+  --solana-share-peer <FRESH_OFT_STORE_BYTES32> \
   --gauge 0xNEW_GAUGE --cca 0xNEW_CCA --oracle 0xNEW_ORACLE \
   --update-vultr --backfill --write-defaults
 ```
@@ -165,7 +173,7 @@ What each flag answers:
 |----------|---------------|
 | Update `AKITA_DEFAULTS`? | `--write-defaults` rewrites vault/wrapper/shareOFT/gauge/cca/oracle in `frontend/src/config/contracts.defaults.ts` (covers `ERC4626_DEFAULTS` aliases too). **Then commit + push + Vercel production deploy**, and update any Vercel env overrides. |
 | Backfill keeper vault? | `--backfill` runs `scripts/ops/backfill-keepr-vault.ts --vault 0xNEW_VAULT --creator <akita> --execute` (upserts `keepr_vaults` + `ajna_vaults`; settlement auto-bootstrap is a backstop, not a substitute). |
-| Update `SOLANA_SHARE_OFT_MAPPING`? | `--update-vultr` runs `ops:update-vultr-mapping --mint 5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv --share-oft 0xNEW_SHARE_OFT` — merges the mapping into `/etc/4626/solana-keeper-orchestrator.env`, ensures `SOLANA_CREATOR_MINTS` contains the mint, and restarts the service. Needs `VULTR_USERNAME`/`VULTR_IP_ADDRESS` (or `VULTR_SSH`) in `frontend/.env`; if SSH fails it prints the manual env lines + `sudo systemctl restart solana-keeper-orchestrator`. |
+| Update `SOLANA_SHARE_OFT_MAPPING`? | `--update-vultr` uses the explicitly supplied fresh Token-2022 mint. The wrapper rejects the retired B1 mint/Store/peer and Store/peer mismatches before SSH. |
 
 **Stop condition:** the wrapper exits non-zero and prints `✗ Post-finalize INCOMPLETE`
 naming any failed substep (`update-vultr-mapping`, `backfill-keepr-vault`) — fix and
@@ -194,7 +202,7 @@ treating the mesh as live; the `✓` only covers the automatable substeps.
      --asset-mesh 0xBASE_AKITA_OFT_ADAPTER \
      --share-mesh 0xNEW_SHARE_OFT \
      --solana-asset-peer 0xAKITA_SOLANA_OFT_PEER_BYTES32 \
-     --solana-share-peer 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f \
+     --solana-share-peer <FRESH_OFT_STORE_BYTES32> \
      --solana-eid 30168
    ```
    Running it with fewer flags prints a checklist only ("Calldata preview skipped") —

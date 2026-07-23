@@ -4,6 +4,7 @@ import type { Address } from 'viem'
 
 import { buildAlfaRoomChart } from '../_lib/alfaclub/roomCharts.js'
 import { logger } from '../_lib/infra/logger.js'
+import { downloadPublicHttpsImage } from '../_lib/security/publicImageDownload.js'
 import {
   hasAnyHermitTwitterOauth1EnvConfigured,
   isHermitTwitterStrictModeEnabled,
@@ -370,37 +371,37 @@ const TWEET_MEDIA_FETCH_HEADERS = {
   'user-agent':
     'Mozilla/5.0 (compatible; 4626Hermit/1.0; +https://4626.fun) TwitterMediaFetcher',
 } as const
+const TWEET_MEDIA_MAX_BYTES = 12 * 1024 * 1024
+const TWEET_MEDIA_FETCH_TIMEOUT_MS = 20_000
 
 async function downloadTweetMedia(input: TweetMediaInput): Promise<
   | { ok: true; bytes: Uint8Array; filename: string; contentType: string }
   | { ok: false; response: string }
 > {
   const url = String(input.url ?? '').trim()
-  if (!/^https:\/\//i.test(url)) {
-    return { ok: false, response: 'Twitter media URL must be a public HTTPS URL.' }
-  }
-
   try {
-    const response = await fetch(url, {
-      method: 'GET',
+    const downloaded = await downloadPublicHttpsImage({
+      sourceUrl: url,
+      maxBytes: TWEET_MEDIA_MAX_BYTES,
+      timeoutMs: TWEET_MEDIA_FETCH_TIMEOUT_MS,
       headers: TWEET_MEDIA_FETCH_HEADERS,
-      redirect: 'follow',
     })
-    if (!response.ok) {
-      return { ok: false, response: `Failed to download Twitter media (${response.status}).` }
+    if (!downloaded.ok) {
+      if (downloaded.error === 'source_url_forbidden') {
+        return { ok: false, response: 'Twitter media URL must be a public HTTPS URL.' }
+      }
+      if (downloaded.error === 'media_too_large') {
+        return { ok: false, response: 'Twitter media exceeds the 12 MiB download limit.' }
+      }
+      if (downloaded.error === 'unsupported_media_type') {
+        return { ok: false, response: 'Unsupported Twitter media content-type.' }
+      }
+      if (downloaded.status) {
+        return { ok: false, response: `Failed to download Twitter media (${downloaded.status}).` }
+      }
+      return { ok: false, response: 'Failed to download Twitter media due to a network/runtime error.' }
     }
-    const arrayBuffer = await response.arrayBuffer()
-    const bytes = new Uint8Array(arrayBuffer)
-    if (bytes.byteLength === 0) {
-      return { ok: false, response: 'Downloaded Twitter media was empty.' }
-    }
-    const contentType = String(input.contentType ?? response.headers.get('content-type') ?? 'image/png')
-      .split(';', 1)[0]
-      .trim()
-      .toLowerCase()
-    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'].includes(contentType)) {
-      return { ok: false, response: `Unsupported Twitter media content-type: ${contentType || 'unknown'}` }
-    }
+    const { bytes, contentType } = downloaded
     const pathName = (() => {
       try {
         return new URL(url).pathname.split('/').pop() ?? ''
@@ -419,7 +420,7 @@ async function downloadTweetMedia(input: TweetMediaInput): Promise<
     const filename =
       String(input.filename ?? '').trim() ||
       (pathName && /\.[A-Za-z0-9]+$/.test(pathName) ? pathName : `twitter-media.${ext}`)
-    return { ok: true, bytes, filename, contentType: contentType === 'image/jpg' ? 'image/jpeg' : contentType }
+    return { ok: true, bytes, filename, contentType }
   } catch (error) {
     logger.error('[x/media] download error', error)
     return { ok: false, response: 'Failed to download Twitter media due to a network/runtime error.' }

@@ -30,9 +30,8 @@ function main(): void {
   process.stdout.write('Orchestrator (/etc/4626/solana-keeper-orchestrator.env):\n')
   if (schema === 'canonical') {
     process.stdout.write('  unset SOLANA_HOOK_IX_SCHEMA   # or SOLANA_HOOK_IX_SCHEMA=canonical\n')
-    process.stdout.write('  SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0   # until B2 pool verified\n')
+    process.stdout.write('  SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0   # retired legacy action; keep off\n')
     process.stdout.write('  SOLANA_ORCHESTRATOR_SETTLE_FEES_ENABLED=1\n')
-    process.stdout.write('  SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED=1\n')
   } else {
     process.stdout.write('  SOLANA_HOOK_IX_SCHEMA=legacy   # required until mainnet upgrade\n')
     process.stdout.write('  SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0\n')
@@ -48,12 +47,9 @@ function main(): void {
   process.stdout.write('  curl -sS https://orchestrator.4626.fun/healthz\n\n')
 
   if (schema === 'canonical') {
-    process.stdout.write('B2 enablement (after share-mesh pool + hook mint verified):\n')
-    process.stdout.write('  SOLANA_CREATOR_MINTS=<share_mesh_token2022_mint>\n')
-    process.stdout.write('  SOLANA_SHARE_OFT_MAPPING=\'{"<mint>":"<base_share_oft>"}\'\n')
-    process.stdout.write('  SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1\n')
-    process.stdout.write('  KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries\n\n')
-    process.stdout.write('PASS: mainnet hook upgraded — keepers may use canonical ix schema\n')
+    process.stdout.write('B2 remains BLOCKED here: this bytecode check does not authorize relay enablement.\n')
+    process.stdout.write('Use docs/operations/solana-b2-production-gates.md and keep all B2 flags off until every gate passes.\n\n')
+    process.stdout.write('PASS: mainnet hook upgraded — canonical ix schema confirmed only\n')
     process.exit(0)
   }
 

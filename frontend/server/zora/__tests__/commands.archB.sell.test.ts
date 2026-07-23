@@ -80,6 +80,60 @@ vi.mock('viem', async (importOriginal) => {
       readContract: (...args: unknown[]) => readContractMock(...args),
     })),
   }
+
+  it('blocks the sell before signing when the Permit2 spender is not allowlisted', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        call: MOCK_CALL,
+        permits: [{
+          ...MOCK_PERMIT,
+          permit: {
+            ...MOCK_PERMIT.permit,
+            spender: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          },
+        }],
+      }),
+      text: async () => '',
+    })
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('spender is not allowlisted')
+    expect(secp256k1SignHashMock).not.toHaveBeenCalled()
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks the sell before signing when the Permit2 token differs from the sell token', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        call: MOCK_CALL,
+        permits: [{
+          ...MOCK_PERMIT,
+          permit: {
+            ...MOCK_PERMIT.permit,
+            details: {
+              ...MOCK_PERMIT.permit.details,
+              token: '0x4200000000000000000000000000000000000006',
+            },
+          },
+        }],
+      }),
+      text: async () => '',
+    })
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('does not match the sell token')
+    expect(secp256k1SignHashMock).not.toHaveBeenCalled()
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
 })
 
 // Stub the legacy agent-wallet path -- should never be reached under Arch B.
@@ -619,7 +673,7 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
             call: { target: '0x6ff5693b99212da76ad316178a184ab56d299b43', data: '0xdead', value: '0' },
             permits: [{
               signature: '0x',
-              permit: { details: { token: COIN, amount: '0', expiration: 0, nonce: 0 }, spender: COIN, sigDeadline: 0 },
+              permit: { details: { token: COIN, amount: '0', expiration: 0, nonce: 0 }, spender: MOCK_CALL.target, sigDeadline: 0 },
             }],
           }),
           text: async () => '',

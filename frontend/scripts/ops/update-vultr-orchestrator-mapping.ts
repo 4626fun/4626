@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 
 import { getAddress, isAddress, type Address } from 'viem'
 
+import { isSolanaMintArgument, requireSolanaMintArgument } from './solanaMintArgument.js'
+
 declare const process: {
   argv: string[]
   env: Record<string, string | undefined>
@@ -130,10 +132,6 @@ function bytes32ToBase58(value: string): string | null {
   return bytesToBase58(bytes)
 }
 
-function looksLikeSolanaPubkey(value: string): boolean {
-  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value)
-}
-
 function deepFindString(value: unknown, keys: string[]): string | null {
   if (!value || typeof value !== 'object') return null
   const obj = value as Record<string, unknown>
@@ -203,7 +201,7 @@ async function resolveFromDeploySession(params: {
     deepFindString(payload, ['mintBytes32']) ??
     deepFindString(payload, ['solanaMintBytes32'])
   const mintFromBytes32 = mintBytes32Raw ? bytes32ToBase58(mintBytes32Raw) : null
-  const mintCandidate = mintPubkeyRaw && looksLikeSolanaPubkey(mintPubkeyRaw) ? mintPubkeyRaw : mintFromBytes32
+  const mintCandidate = mintPubkeyRaw && isSolanaMintArgument(mintPubkeyRaw) ? mintPubkeyRaw : mintFromBytes32
   if (!mintCandidate) {
     throw new Error(
       `Could not resolve share-mesh mint from session ${String(row.id)} payload. Pass --mint explicitly with --share-oft.`,
@@ -242,6 +240,7 @@ function main(): void {
     if (!mint || !shareOftRaw) {
       throw new Error('Missing mint/shareOFT after resolution')
     }
+    mint = requireSolanaMintArgument(mint)
     if (!isAddress(shareOftRaw)) throw new Error(`Invalid --share-oft: ${shareOftRaw}`)
     const shareOft = getAddress(shareOftRaw as Address).toLowerCase()
 

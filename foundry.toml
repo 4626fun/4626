@@ -61,10 +61,14 @@ remappings = [
 ]
 
 additional_compiler_profiles = [
+    { name = "lottery-manager-size", via_ir = true, optimizer_runs = 10 },
     { name = "alfaclub-universal-router", via_ir = true, optimizer_runs = 1 }
 ]
 
 compilation_restrictions = [
+    # Lottery manager is EIP-170 constrained; low-run optimization preserves
+    # the full admin/VRF ABI while leaving audited runtime headroom.
+    { paths = "contracts/shared/lottery/manager/LotteryManager4626.sol", optimizer_runs = 10 },
     { paths = "contracts/other/alfaclub/universal-router/AlfaClubSudoswapAdapter.sol", version = "=0.8.26", optimizer_runs = 1 },
     { paths = "contracts/other/alfaclub/universal-router/AlfaClubUniversalRouter.sol", version = "=0.8.26", optimizer_runs = 1 }
 ]

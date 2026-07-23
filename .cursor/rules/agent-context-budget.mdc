@@ -41,6 +41,7 @@ Use [docs/agent-context/INDEX.md](docs/agent-context/INDEX.md). Do **not** load 
 | Server CSW delegation / XMTP / deploy-session | `archives/wallet-csw-lifecycle.md` |
 | Relay / owner-install | `archives/wallet-relay-owner-install.md` |
 | Infra / Supabase / Vercel | `archives/infra-ops.md` → core / ops / prefs |
+| Tribe.run / public face repo | `archives/tribe-run.md` |
 | Shipped UI reference only | `archives/ui-shipped-preferences.md` — **indexed out; do not load** |
 
 Templates: `docs/agent-context/prompt-templates.md` or `.cursor/commands/`.

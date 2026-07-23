@@ -353,8 +353,24 @@ export async function submitUserOpOrRefuse(
     const reserve = await recordIssuerDailySpend({
       profileId: issuer.profileId,
       amountWei: input.valueWei,
+      dailyCapWei: issuer.dailyCapWei,
     })
     if (!reserve.ok) {
+      if (reserve.error === 'cap_exceeded') {
+        return {
+          ok: false,
+          code: 'cap_exceeded',
+          scope: 'daily',
+          limitWei: issuer.dailyCapWei,
+          requestedWei: input.valueWei,
+          alreadySpentWei: caps.dailyAlreadySpentWei,
+          response: buildCapExceededRefusal({
+            scope: 'daily',
+            limitWei: issuer.dailyCapWei,
+            requestedWei: input.valueWei,
+          }),
+        }
+      }
       logger.error('[arch-b/userop] failed to reserve daily spend; refusing', {
         correlationId,
         profileId: issuer.profileId,

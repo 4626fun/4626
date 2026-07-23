@@ -10,6 +10,7 @@ import {
   setNoStore,
 } from '@4626/server-core'
 import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
+import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
 import {
   getAjnaVaultRegistryEntry,
   updateAjnaVaultAutomationConfig,
@@ -92,7 +93,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ success: false, error: 'Ajna vault registry entry not found' } satisfies ApiEnvelope<never>)
   }
 
-  const chainScopedOwner = normalizeAddress(registryRow.ownerAddress)
+  // Ajna automation is currently Base-only. The registry owner is deployment
+  // metadata and can become stale after a CreatorCoin ownership transfer.
+  if (chainId !== 8453) {
+    return res.status(400).json({
+      success: false,
+      error: 'Ajna automation control is only supported on Base',
+    } satisfies ApiEnvelope<never>)
+  }
+  const parties = await resolveCoinPartiesAndOwner(creatorToken as `0x${string}`)
+  const chainScopedOwner = normalizeAddress(parties.owner)
   const normalizedPrincipal = getAddress(principalAddress as Address)
   const isAdmin = isServerAdminAddress(normalizedPrincipal)
   if (!isAdmin && (!chainScopedOwner || chainScopedOwner.toLowerCase() !== normalizedPrincipal.toLowerCase())) {
