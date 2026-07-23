@@ -225,6 +225,29 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
   })
 
+  it('keeps room-member /gmeow local and does not authorize an official X post', async () => {
+    restoreEnv = applyEnv({ HERMIT_ALFACLUB_POST_X_FIRST: '1' })
+    isHermitUserAllowedMock.mockReturnValue(false)
+    executeHermitCommandMock.mockResolvedValueOnce({
+      kind: 'gmeow',
+      provider: 'hermit',
+      reply: 'local room meme',
+      mediaAttachments: [{ url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif', type: 'image' }],
+    })
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/gmeow',
+      chatId: 'alfaclub:1043',
+      userId: ALICE,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(postTweetFromSystemMock).not.toHaveBeenCalled()
+  })
+
   it('when HERMIT_NON_ALFACLUB_POST_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
     restoreEnv = applyEnv({
       HERMIT_NON_ALFACLUB_POST_X_FIRST: '1',

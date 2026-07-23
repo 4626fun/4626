@@ -3,7 +3,7 @@
  * One-shot: Send a message as hermit4626 to room 1659
  * using the live JWT from Supabase (alfaclub_runtime_secret.chat_jwt).
  *
- * This is a hardened direct version for when the normal DB layer has SSL issues.
+ * This direct ops path keeps normal certificate validation enabled.
  */
 
 import { Pool } from 'pg'
@@ -44,10 +44,9 @@ async function getChatJwtFromSupabase(): Promise<string | null> {
     return null
   }
 
-  // Force relaxed SSL – this is the common fix for Supabase self-signed cert issues in ops contexts
   const pool = new Pool({
     connectionString: cs,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
   })
 
   try {

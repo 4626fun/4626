@@ -112,6 +112,7 @@ import {
   type CounterTradeBias,
   type CounterTradePreset,
 } from '../alfaclub/counterTradeConfig.js'
+
 import {
   pauseCounterTradeOptIn,
   readCounterTradeUserOptIn,
@@ -149,6 +150,17 @@ import {
 } from '../alfaclub/inverseAkitaStakerPilot.js'
 
 declare const process: { env: Record<string, string | undefined> }
+
+const ARENA_BACKTEST_COOLDOWN_MS = 5 * 60_000
+const ARENA_BACKTEST_MAX_CONCURRENT = 2
+const ARENA_BACKTEST_GUARD_MAX_KEYS = 512
+const activeArenaBacktests = new Set<string>()
+const lastArenaBacktestStartedAt = new Map<string, number>()
+
+export function __resetHermitBacktestGuardsForTests(): void {
+  activeArenaBacktests.clear()
+  lastArenaBacktestStartedAt.clear()
+}
 
 type PinataChatResult = {
   text: string
@@ -567,19 +579,7 @@ function summarizeArenaRunFailure(
   run: { error?: string; stderr?: string; stdout?: string } | undefined,
 ): string | null {
   if (!run) return null
-  const lines: string[] = []
-  for (const part of [run.error, run.stderr, run.stdout]) {
-    for (const line of String(part ?? '').split('\n')) {
-      const trimmed = line.trim()
-      if (trimmed && !lines.includes(trimmed)) lines.push(trimmed)
-    }
-  }
-  if (lines.length === 0) return null
-  // Node exec's "Command failed: <cmd>" line carries no signal — prefer the
-  // underlying tool output (e.g. the ACP signer error) when present.
-  const informative = lines.filter((line) => !/^command failed:/i.test(line))
-  const summary = (informative.length > 0 ? informative : lines).slice(0, 2).join(' — ')
-  return summary.length > 280 ? `${summary.slice(0, 277)}...` : summary
+  return 'Subprocess failed; inspect restricted service logs for diagnostics.'
 }
 
 function formatStrategyUsage(roomId?: string | null): string {
@@ -630,16 +630,11 @@ async function autoProvisionArenaIdentityForStrategy(params: {
 }): Promise<{ ok: true; summary: string } | { ok: false; message: string }> {
   const createResult = await runArenaCreateAgent(params.baseConfig, params.senderAddress)
   if (!createResult.agentId || !createResult.agentWalletAddress) {
-    const out = sanitizeArenaOutputForReply(
-      createResult.run?.stdout || createResult.run?.stderr,
-      params.baseConfig.dgclawDir,
-    )
     return {
       ok: false,
       message: [
         'Unable to enable automation: auto-setup could not create an Arena identity.',
         createResult.message || 'Create failed or produced no parsable ids.',
-        out ? `acp output (sanitized): ${out}` : '',
         'Run /h arena register first, then retry.',
       ]
         .filter(Boolean)
@@ -692,11 +687,8 @@ async function autoProvisionArenaIdentityForStrategy(params: {
         'Arena identity was created, but onboarding steps failed.',
         `steps: ${summaries.join(' ')}`,
         ...failed.map((step) => {
-          const detail = sanitizeArenaOutputForReply(
-            [step.result.message, step.result.run?.error, step.result.run?.stderr].filter(Boolean).join(' | '),
-            params.baseConfig.dgclawDir,
-          )
-          return `- ${step.name}: ${detail || 'unknown failure'}`
+          const timeout = step.result.run?.timedOut ? ' (timed out)' : ''
+          return `- ${step.name}: ${step.result.message || 'subprocess failed'}${timeout}`
         }),
         'Run /h arena register manually, then retry.',
       ].join('\n'),
@@ -956,7 +948,7 @@ function readHermitAgentConfig(): { endpoint: string; bearer: string } | null {
 /**
  * Whether /gmeow should call Hermit agent for an extra caption line.
  *
- * Default (env unset): Hermit-agent one-liner when configured; else local hooks + rotating GIFs.
+ * Default (env unset): bare /gmeow stays local; prompted /gmeow may request a caption.
  * - `HERMIT_GMEOW_HERMIT_CAPTION=always` — call Hermit agent on every /gmeow when configured.
  * - `HERMIT_GMEOW_HERMIT_CAPTION=prompt` — call Hermit agent only when the user adds text after /gmeow.
  * - `HERMIT_GMEOW_HERMIT_CAPTION=0` — never call Hermit agent for /gmeow (local hooks only).
@@ -985,8 +977,10 @@ export function shouldRequestPinataGmeowCaption(userPromptAfterCommand: string):
   if (normalizedMode === 'prompt' || normalizedMode === 'args' || normalizedMode === 'text') {
     return userPromptAfterCommand.trim().length > 0
   }
-  // Env unset: creative Hermit-agent line when endpoint is configured (caller still gates on config).
-  return true
+  // Unset or unrecognised modes fail closed to the documented prompt-only
+  // behavior. This prevents an open room command from silently becoming a
+  // paid remote inference call because of a typo or missing deployment env.
+  return userPromptAfterCommand.trim().length > 0
 }
 
 function toPinataHttpChatUrl(rawEndpoint: string): string {
@@ -3050,7 +3044,7 @@ export async function executeHermitCommand(
         baseConfig,
       })
       let hasMappedIdentity =
-        identity.source !== 'env_default' &&
+        identity.source === 'user' &&
         Boolean(identity.agentId) &&
         Boolean(identity.agentWalletAddress)
       if (!hasMappedIdentity) {
@@ -3072,7 +3066,7 @@ export async function executeHermitCommand(
           baseConfig,
         })
         hasMappedIdentity =
-          identity.source !== 'env_default' &&
+          identity.source === 'user' &&
           Boolean(identity.agentId) &&
           Boolean(identity.agentWalletAddress)
         if (!hasMappedIdentity) {
@@ -3080,7 +3074,7 @@ export async function executeHermitCommand(
             kind: 'hermit',
             provider: 'local',
             reply: [
-              'Auto-setup ran, but no Arena identity mapping was found for your account.',
+              'Auto-setup ran, but no per-user Arena identity mapping was found for your account.',
               'Run /h arena register first, then retry.',
             ].join('\n'),
           }
@@ -3097,7 +3091,7 @@ export async function executeHermitCommand(
           kind: 'hermit',
           provider: 'local',
           reply: [
-            'Unable to enable automation: no Arena identity mapping found for your account.',
+            'Unable to enable automation: no per-user Arena identity mapping found for your account.',
             'Run /h arena register first, then retry.',
           ].join('\n'),
         }
@@ -3401,6 +3395,13 @@ export async function executeHermitCommand(
       }
     }
     if (parsed.kind === 'backtest') {
+      if (!config.enabled) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Arena commands are disabled. Set ARENA_ENABLED=1 to enable the control lane.',
+        }
+      }
       // Gate on resolved identity — only users with a mapped arena identity
       // can trigger compute-intensive backtest runs, consistent with other
       // arena subcommands (trade, deposit, etc.).
@@ -3412,12 +3413,39 @@ export async function executeHermitCommand(
             'Arena backtest requires a mapped identity. Run `/h arena identity show` or `/h arena register` first.',
         }
       }
+      const guardKey = `${params.roomId ?? 'no-room'}:${params.senderAddress.toLowerCase()}`
+      const now = Date.now()
+      const lastStartedAt = lastArenaBacktestStartedAt.get(guardKey) ?? 0
+      if (activeArenaBacktests.has(guardKey) || activeArenaBacktests.size >= ARENA_BACKTEST_MAX_CONCURRENT) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Arena backtest capacity is busy. Try again after the current run finishes.',
+        }
+      }
+      if (now - lastStartedAt < ARENA_BACKTEST_COOLDOWN_MS) {
+        const retryAfterSec = Math.ceil((ARENA_BACKTEST_COOLDOWN_MS - (now - lastStartedAt)) / 1000)
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Arena backtest cooldown active. Try again in ${retryAfterSec}s.`,
+        }
+      }
+      if (lastArenaBacktestStartedAt.size >= ARENA_BACKTEST_GUARD_MAX_KEYS) {
+        const oldest = lastArenaBacktestStartedAt.keys().next().value
+        if (oldest) lastArenaBacktestStartedAt.delete(oldest)
+      }
+      activeArenaBacktests.add(guardKey)
+      lastArenaBacktestStartedAt.set(guardKey, now)
       try {
         // 60s timeout — a 90-day 1m backtest with cached bars finishes in
         // ~5-10s, but HL chunked fallback can take much longer. Don't let
         // a single backtest block the XMTP consumer indefinitely.
+        const backtestJob = runRealBacktestJob(parsed.request).finally(() => {
+          activeArenaBacktests.delete(guardKey)
+        })
         const backtest = await Promise.race([
-          runRealBacktestJob(parsed.request),
+          backtestJob,
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Backtest timed out after 60s')), 60_000),
           ),
@@ -3428,6 +3456,8 @@ export async function executeHermitCommand(
           reply: backtest.responseText,
         }
       } catch (error) {
+        // Timeout/failure should not burn the cooldown — only successful starts stick.
+        lastArenaBacktestStartedAt.delete(guardKey)
         const message =
           error instanceof Error
             ? error.message
@@ -3528,9 +3558,6 @@ export async function executeHermitCommand(
           [
             step.result.message,
             timeoutHint,
-            step.result.run?.error ?? '',
-            step.result.run?.stderr ?? '',
-            step.result.run?.stdout ?? '',
           ]
             .map((part) => String(part).trim())
             .filter(Boolean)
@@ -3579,8 +3606,6 @@ export async function executeHermitCommand(
         const cr = await runArenaCreateAgent(config, targetSenderForBind === '*' ? params.senderAddress : targetSenderForBind)
 
         if (cr.agentId && cr.agentWalletAddress) {
-          const out = sanitizeOutputForReply(cr.run?.stdout)
-
           // For both default and personal create: auto-bind the mapping + run onboarding.
           // The mapping + activeConfig gives the bot control for arena cmds under that sender.
           // The ACP creator of the agent is the runtime session (see audit + ACP_OWNER_WALLET).
@@ -3625,7 +3650,6 @@ export async function executeHermitCommand(
               cr.run?.dryRun
                 ? `Dry-run: created agent and would have bound as ${what} + onboarded.`
                 : `Created agent via acp and bound as ${what} + onboarded.`,
-              out ? `acp output (sanitized, truncated):\n${out}` : '',
               `agentId=${cr.agentId} arenaWallet=${cr.agentWalletAddress}${effectiveHlApiWalletAddress ? ` hl=${effectiveHlApiWalletAddress}` : ''}`,
               saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
               `steps: ${stepSummaries.join(' ')}`,
@@ -3637,7 +3661,6 @@ export async function executeHermitCommand(
         }
 
         // Create failed or no parsable ids
-        const out = sanitizeOutputForReply(cr.run?.stdout || cr.run?.stderr)
         const guidance = isDefault
           ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /h arena register default <id> <wallet>, or run /h arena register default (no args) again. (No-args create uses the runtime ACP session currently active on the service.)'
           : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /h arena register <id> <wallet>. (No-args create uses the runtime ACP session currently active on the service.)'
@@ -3646,7 +3669,6 @@ export async function executeHermitCommand(
           provider: 'local',
           reply: [
             cr.message || 'Create failed or produced no parsable ids.',
-            out ? `acp output (sanitized, truncated):\n${out}` : '',
             guidance,
           ].filter(Boolean).join('\n'),
         }

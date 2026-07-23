@@ -179,6 +179,59 @@ describe('eliza llm service', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('does not count in-flight client cancellations against the provider circuit', async () => {
+    process.env.OPENAI_API_KEY = 'openai-key'
+    process.env.ELIZA_LLM_PROVIDER_PRIORITY = 'OpenAI'
+    process.env.ELIZA_LLM_MAX_RETRIES = '0'
+    process.env.ELIZA_LLM_TIMEOUT_MS = '5_000'
+    process.env.ELIZA_PROVIDER_CIRCUIT_FAILS = '1'
+    process.env.ELIZA_PROVIDER_CIRCUIT_OPEN_MS = '60000'
+
+    let cancelled = false
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (!cancelled) {
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            cancelled = true
+            reject(new DOMException('aborted', 'AbortError'))
+          }, { once: true })
+        })
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: 'provider remains healthy' } }] }),
+        { status: 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const { getElizaLlmService } = await import('../llm.ts')
+    const service = getElizaLlmService()
+    const controller = new AbortController()
+    const cancelledRequest = service.generateResponse({
+      agentKey: 'agent-client-abort',
+      userMessage: 'hello',
+      systemPrompt: 'system',
+      vaultContext: '',
+      correlationId: 'corr-client-abort',
+      abortSignal: controller.signal,
+    })
+    await Promise.resolve()
+    controller.abort()
+
+    const cancelledResult = await cancelledRequest
+    expect(cancelledResult.attempts[0]?.error).toBe('request_cancelled')
+
+    const healthyResult = await service.generateResponse({
+      agentKey: 'agent-client-abort',
+      userMessage: 'hello again',
+      systemPrompt: 'system',
+      vaultContext: '',
+      correlationId: 'corr-after-client-abort',
+    })
+    expect(healthyResult.text).toBe('provider remains healthy')
+    expect(healthyResult.attempts[0]?.error).not.toBe('circuit_open')
+  })
+
   it('routes complex prompts with complex-provider priority', async () => {
     process.env.GROQ_API_KEY = 'groq-key'
     process.env.OPENAI_API_KEY = 'openai-key'
@@ -324,4 +377,3 @@ describe('eliza llm service', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
-

@@ -25,9 +25,9 @@ vi.mock('../_handlers/telegram/webhook/telegramApi/messaging.js', () => ({
 }))
 
 describe('readHermitTelegramDmConfig', () => {
-  it('defaults to enabled with no allowlist', () => {
+  it('defaults to disabled with no allowlist', () => {
     const config = readHermitTelegramDmConfig({})
-    expect(config.enabled).toBe(true)
+    expect(config.enabled).toBe(false)
     expect(config.allowedUserIds.size).toBe(0)
     expect(config.roomId).toBeNull()
   })
@@ -60,13 +60,15 @@ describe('readHermitTelegramDmConfig', () => {
   it('can be disabled explicitly', () => {
     expect(readHermitTelegramDmConfig({ TELEGRAM_TO_ALFACLUB_DM_ENABLED: '0' }).enabled).toBe(false)
     expect(readHermitTelegramDmConfig({ TELEGRAM_TO_ALFACLUB_DM_ENABLED: 'off' }).enabled).toBe(false)
-    expect(readHermitTelegramDmConfig({ TELEGRAM_TO_ALFACLUB_DM_ENABLED: '1' }).enabled).toBe(true)
+    expect(readHermitTelegramDmConfig({ TELEGRAM_TO_ALFACLUB_DM_ENABLED: '1' }).enabled).toBe(false)
   })
 
-  it('parses the DM allowlist', () => {
+  it('requires opt-in and a non-empty DM allowlist', () => {
     const config = readHermitTelegramDmConfig({
+      TELEGRAM_TO_ALFACLUB_DM_ENABLED: '1',
       TELEGRAM_TO_ALFACLUB_DM_USER_IDS: '42, 77,nonsense',
     })
+    expect(config.enabled).toBe(true)
     expect(isHermitDmUserAllowed('42', config)).toBe(true)
     expect(isHermitDmUserAllowed('77', config)).toBe(true)
     expect(isHermitDmUserAllowed('99', config)).toBe(false)
@@ -96,11 +98,12 @@ describe('buildHermitDmCommandText', () => {
 describe('handleHermitTelegramDm', () => {
   afterEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   const baseConfig = {
     enabled: true,
-    allowedUserIds: new Set<string>(),
+    allowedUserIds: new Set<string>(['424242']),
     roomId: '1659',
   }
 
@@ -124,7 +127,7 @@ describe('handleHermitTelegramDm', () => {
     expect(result).toEqual({ status: 'replied', roomId: '1659', ok: true })
     expect(executeDeterministicCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        chatId: 'alfaclub:1659',
+        chatId: 'telegram:dm:424242',
         groupId: 'alfaclub-room-1659',
         text: '/halp',
         userId: 'tg:424242',
@@ -184,6 +187,29 @@ describe('handleHermitTelegramDm', () => {
 
     expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
     expect(sendTelegramMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('denies privileged commands for unmapped DM senders', async () => {
+    vi.stubEnv('TELEGRAM_DEFAULT_SENDER_WALLET', '0x1111111111111111111111111111111111111111')
+    sendTelegramMessageMock.mockResolvedValue({ messageId: 12 })
+
+    const result = await handleHermitTelegramDm({
+      botToken: 'hermit-token',
+      chatId: '424242',
+      userId: '424242',
+      text: '/h arena status',
+      config: baseConfig,
+    })
+
+    expect(result).toEqual({ status: 'replied', roomId: '1659', ok: false })
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+    expect(sendTelegramMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        botToken: 'hermit-token',
+        chatId: '424242',
+        text: 'This DM command requires a wallet-mapped Telegram user.',
+      }),
+    )
   })
 
   it('reports failure without throwing when the send fails', async () => {

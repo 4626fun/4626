@@ -394,13 +394,11 @@ class ElizaLlmService {
       } catch (error) {
         const externalCancelled = params.abortSignal?.aborted === true
         if (externalCancelled) {
-          // Surface as a retryable provider timeout so generateResponse can
-          // try the next provider instead of aborting the whole chain.
           throw new AgentError(
-            'UPSTREAM_TIMEOUT',
-            `provider_timeout_${params.provider.name.toLowerCase()}`,
+            'RUNTIME_ERROR',
+            'request_cancelled',
             {
-              retryable: true,
+              retryable: false,
               details: {
                 provider: params.provider.name,
                 correlationId: params.correlationId,
@@ -529,6 +527,15 @@ class ElizaLlmService {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        if (params.abortSignal?.aborted) {
+          attempts.push({
+            provider: provider.name,
+            model: selectedModel,
+            ok: false,
+            error: 'request_cancelled',
+          })
+          break
+        }
         this.markProviderFailure(provider, message)
         attempts.push({ provider: provider.name, model: selectedModel, ok: false, error: message })
         logger.warn('[eliza/llm] provider attempt failed', {
@@ -545,8 +552,6 @@ class ElizaLlmService {
           error: message,
           attempts: attempts.length,
         })
-        // Shared outer deadline spent — stop trying further providers.
-        if (params.abortSignal?.aborted) break
       }
     }
     void emitTelemetryEvent('llm_provider_exhausted', {
@@ -596,4 +601,3 @@ export function getElizaLlmService(): ElizaLlmService {
   if (!singleton) singleton = new ElizaLlmService()
   return singleton
 }
-

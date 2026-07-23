@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from '../../../api/__tests__/helpers'
 import {
+  __resetHermitBacktestGuardsForTests,
   _hermitPromptBuildersForTests,
   executeHermitCommand,
   pinataEndpointSupportsHttpDraft,
@@ -22,6 +23,7 @@ describe('executeHermitCommand', () => {
     fetchMock = vi.fn()
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
     arenaStore.__resetArenaIdentityMappingsForTests()
+    __resetHermitBacktestGuardsForTests()
   })
 
   afterEach(() => {
@@ -551,6 +553,32 @@ describe('executeHermitCommand', () => {
     expect(runBacktestSpy).not.toHaveBeenCalled()
   })
 
+  it('rejects /h arena backtest when ARENA_ENABLED is off', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '0',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaStore, 'resolveRoomDefaultArenaIdentity').mockResolvedValue({
+      source: 'room_default',
+      roomId: '1659',
+      senderAddress: '*',
+      agentId: 'agent-1',
+      agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      hlApiWalletAddress: null,
+    })
+    const runBacktestSpy = vi.spyOn(virtualsBacktestJobs, 'runRealBacktestJob')
+
+    const result = await executeHermitCommand({
+      commandText: '/h arena backtest BTC',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('Arena commands are disabled')
+    expect(runBacktestSpy).not.toHaveBeenCalled()
+  })
+
   it('surfaces backtest failure with actionable error message', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
@@ -722,7 +750,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('[dry-run]')
   })
 
-  it('supports /h arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
+  it('supports /h arena register (supplied ids) + runs onboard sequence after a persisted bind', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -730,6 +758,7 @@ describe('executeHermitCommand', () => {
       ARENA_CREATION_ENABLED: '1',
     })
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
     // Use ids that differ from the env defaults so we exercise the bind + sequence path
     // (instead of the new already-bound short-circuit).
     const result = await executeHermitCommand({
@@ -738,7 +767,6 @@ describe('executeHermitCommand', () => {
       roomId: '1659',
     })
     expect(result.reply).toContain('Arena register (supplied ids)')
-    // In the unit test env (no real getDb), the in-memory fallback keeps bind semantics working.
     expect(result.reply).toContain('Identity bound for \'mine\'')
     expect(result.reply).toContain(sender)
     expect(result.reply).toContain('join=')
@@ -784,6 +812,22 @@ describe('executeHermitCommand', () => {
       agentId: 'mock-created-agent-uuid-1234',
       agentWalletAddress: '0x3333333333333333333333333333333333333333',
       run: { dryRun: false, stdout: 'success' } as any,
+    } as any)
+    vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+    vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({
+      ok: true,
+      message: 'joined',
+      run: { dryRun: false } as any,
+    } as any)
+    vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+      ok: true,
+      message: 'activated',
+      run: { dryRun: false } as any,
+    } as any)
+    vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({
+      ok: true,
+      message: 'wallet ready',
+      run: { dryRun: false } as any,
     } as any)
 
     const result = await executeHermitCommand({
@@ -916,11 +960,11 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('steps: join=fail activate=fail add-api-wallet=fail')
     expect(result.reply).toContain('onboarding diagnostics:')
     expect(result.reply).toContain('- join: Arena join failed.')
-    expect(result.reply).toContain('join_error')
     expect(result.reply).toContain('- activate: Unified account activation failed.')
-    expect(result.reply).toContain('activate_error')
     expect(result.reply).toContain('- add-api-wallet: API wallet setup failed.')
-    expect(result.reply).toContain('api_wallet_error')
+    expect(result.reply).not.toContain('join_error')
+    expect(result.reply).not.toContain('activate denied')
+    expect(result.reply).not.toContain('api_wallet_error')
 
     upsertSpy.mockRestore()
     joinSpy.mockRestore()
@@ -1027,10 +1071,11 @@ describe('executeHermitCommand', () => {
     expect(result.mediaAttachments?.[0]?.url).toMatch(/giphy\.com|tenor\.com/)
   })
 
-  it('uses pinata for bare /gmeow when pinata is configured (creative default)', async () => {
+  it('uses pinata for bare /gmeow only when always mode is explicit', async () => {
     restoreEnv = applyEnv({
       HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
       HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      HERMIT_GMEOW_HERMIT_CAPTION: 'always',
     })
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -1154,7 +1199,10 @@ describe('executeHermitCommand', () => {
   })
 
   it('shouldRequestPinataGmeowCaption respects env modes', () => {
-    expect(shouldRequestPinataGmeowCaption('')).toBe(true)
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
+    expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
+    restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: 'typo' })
+    expect(shouldRequestPinataGmeowCaption('')).toBe(false)
     expect(shouldRequestPinataGmeowCaption('moon')).toBe(true)
     restoreEnv = applyEnv({ HERMIT_GMEOW_HERMIT_CAPTION: '0' })
     expect(shouldRequestPinataGmeowCaption('')).toBe(false)
@@ -1813,7 +1861,6 @@ describe('executeHermitCommand', () => {
         message: 'create failed',
         run: { stdout: 'boom' } as any,
       } as any)
-
       const first = await executeHermitCommand({
         commandText: '/s ?',
         senderAddress: sender,
@@ -1845,6 +1892,24 @@ describe('executeHermitCommand', () => {
         agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
         run: { dryRun: true, stdout: 'created' } as any,
       } as any)
+      vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+      vi.spyOn(arenaStore, 'resolveArenaIdentityForContext')
+        .mockResolvedValueOnce({
+          source: 'env_default',
+          roomId: '1043',
+          senderAddress: sender,
+          agentId: null,
+          agentWalletAddress: null,
+          hlApiWalletAddress: null,
+        })
+        .mockResolvedValue({
+          source: 'user',
+          roomId: '1043',
+          senderAddress: sender,
+          agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+          agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+          hlApiWalletAddress: null,
+        })
       vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
       vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
         ok: true,
@@ -1883,6 +1948,24 @@ describe('executeHermitCommand', () => {
         agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
         run: { dryRun: true, stdout: 'created' } as any,
       } as any)
+      vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
+      vi.spyOn(arenaStore, 'resolveArenaIdentityForContext')
+        .mockResolvedValueOnce({
+          source: 'env_default',
+          roomId: '1043',
+          senderAddress: sender,
+          agentId: null,
+          agentWalletAddress: null,
+          hlApiWalletAddress: null,
+        })
+        .mockResolvedValue({
+          source: 'user',
+          roomId: '1043',
+          senderAddress: sender,
+          agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+          agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+          hlApiWalletAddress: null,
+        })
       vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
       vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
         ok: true,
@@ -1910,6 +1993,47 @@ describe('executeHermitCommand', () => {
       expect(createSpy).toHaveBeenCalledTimes(1)
       expect(result.reply).toContain("**You're in**")
       expect(result.reply).toContain('/h setup')
+    })
+
+    it('rejects /s optin when only a room-default identity exists', async () => {
+      restoreEnv = applyEnv({
+        ARENA_ENABLED: '1',
+        ARENA_DGCLAW_DIR: '/tmp',
+        ARENA_DRY_RUN: '1',
+        ARENA_ALLOWED_ROOM_IDS: '1043',
+      })
+      const sender = '0x4444444444444444444444444444444444444444'
+      vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+        source: 'room_default',
+        roomId: '1043',
+        senderAddress: '*',
+        agentId: 'agent-1',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        hlApiWalletAddress: null,
+      })
+      vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+        ok: true,
+        agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
+        agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        run: { dryRun: true, stdout: 'created' } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaJoin').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      vi.spyOn(arenaClient, 'runArenaActivateUnifiedAccount').mockResolvedValue({
+        ok: true,
+        message: 'ok',
+        run: { dryRun: true } as any,
+      } as any)
+      vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
+      const upsertSpy = vi.spyOn(counterTradeStore, 'upsertCounterTradeOptIn')
+
+      const result = await executeHermitCommand({
+        commandText: '/s optin balanced',
+        senderAddress: sender,
+        roomId: '1043',
+      })
+
+      expect(result.reply).toContain('no per-user Arena identity mapping')
+      expect(upsertSpy).not.toHaveBeenCalled()
     })
   })
 })

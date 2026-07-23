@@ -139,14 +139,21 @@ RUN npm install -g "@virtuals-protocol/acp-cli@${ACP_CLI_NPM_VERSION}"
 # on Cabals. Sourced from patches/ (repo-native) rather than the dgclaw-skill
 # submodule so the Railway build context does not depend on submodule checkout.
 COPY patches/dgclaw/trade.ts /app/dgclaw-skill/scripts/trade.ts
+COPY frontend/docker/hermit-entrypoint.sh /usr/local/bin/hermit-entrypoint.sh
+RUN chmod +x /usr/local/bin/hermit-entrypoint.sh \
+  && chown -R node:node /app
 
 # Health check port
 ENV PORT=8080
 ENV ACP_CLI_DIR=/app/acp-cli
 ENV ACP_BIN=acp
+ENV ARENA_ACP_HOME=/data/acp-home
 EXPOSE 8080
+# Stay root for entrypoint so mounted ACP home can be chown'd, then drop via gosu.
+USER root
 
 # The absolute simplest possible startup for maximum reliability on Railway.
 # We use the local tsx binary directly (no npx) and exec so the process is PID 1.
 # bootstrap.ts starts the /healthz listener *before* any heavy module imports.
-CMD exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts
+ENTRYPOINT ["/usr/local/bin/hermit-entrypoint.sh"]
+CMD ["./node_modules/.bin/tsx", "server/agents/hermit/bootstrap.ts"]

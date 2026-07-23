@@ -103,21 +103,9 @@ type PriceMonitorResult = {
   action: 'none' | 'alert' | 'recenter' | 'halt'
 }
 
-type EntryRelayResult = {
-  entriesQueued: number
-  entriesRelayed: number
-  overflowCount: number
-  emergencyRelay: boolean
-}
-
 type FeeHarvestResult = {
   harvestThresholdMet: boolean
   solanaHarvestedAmount: string
-}
-
-type WinnerRelayResult = {
-  eventsProcessed: number
-  winnersRecorded: number
 }
 
 type GraduationResult = {
@@ -215,16 +203,8 @@ async function importKeeprActionQueue() {
   return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-action-queue.action.js`)
 }
 
-async function importRelayEntries() {
-  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-relay-entries.action.js`)
-}
-
 async function importFeeSettlement() {
   return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-settle-fees.action.js`)
-}
-
-async function importWinnerRelay() {
-  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-winner-relay.action.js`)
 }
 
 async function importGraduation() {
@@ -669,43 +649,15 @@ async function handleTriggerSettleFees(callback: HandlerCallback | undefined): P
 }
 
 async function handleTriggerRelayEntries(callback: HandlerCallback | undefined): Promise<void> {
-  if (!hasSolana()) {
-    await callback?.({ text: 'Solana not configured. Set `SOLANA_RPC_URL` to enable.' } as Content)
-    return
-  }
-
-  await callback?.({ text: 'Relaying Solana entries...' } as Content)
-
-  const er = await importRelayEntries()
-  const result: EntryRelayResult = await er.executeSolanaRelayEntries()
-
-  const lines = [
-    `**Entry Relay Result**`,
-    `  Entries queued: ${result.entriesQueued}`,
-    `  Entries relayed: ${result.entriesRelayed}`,
-    `  Overflow: ${result.overflowCount}`,
-    `  Emergency relay: ${result.emergencyRelay ? 'YES' : 'no'}`,
-  ]
-  await callback?.({ text: lines.join('\n') } as Content)
+  await callback?.({
+    text: 'Denied: legacy relay-entries is retired. B2 entries use the machine-auth finalized-log inbox and OApp submit worker after production gates pass.',
+  } as Content)
 }
 
 async function handleTriggerRelayWinners(callback: HandlerCallback | undefined): Promise<void> {
-  if (!hasSolana()) {
-    await callback?.({ text: 'Solana not configured. Set `SOLANA_RPC_URL` to enable.' } as Content)
-    return
-  }
-
-  await callback?.({ text: 'Running Solana winner relay...' } as Content)
-
-  const wr = await importWinnerRelay()
-  const result: WinnerRelayResult = await wr.executeSolanaWinnerRelay()
-
-  const lines = [
-    `**Winner Relay Result**`,
-    `  Events processed: ${result.eventsProcessed}`,
-    `  Winners recorded: ${result.winnersRecorded}`,
-  ]
-  await callback?.({ text: lines.join('\n') } as Content)
+  await callback?.({
+    text: 'Denied: legacy relay-winners is retired. Winner readback uses the machine-auth Base event correlation and idempotent Solana settlement worker.',
+  } as Content)
 }
 
 async function handleTriggerGraduation(callback: HandlerCallback | undefined): Promise<void> {

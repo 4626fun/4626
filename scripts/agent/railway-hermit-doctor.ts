@@ -31,6 +31,10 @@ function check(name: string, condition: boolean, required = true) {
   return condition
 }
 
+function secretStatus(value: string | undefined): string {
+  return String(value ?? '').trim() ? '<set>' : '<missing>'
+}
+
 console.log('\n=== Hermit Railway Doctor (hermit.4626.fun) ===')
 console.log('This checks the common causes of "service unavailable" on /healthz after a successful image push.')
 console.log('Death before the health server binds is almost always a missing critical env var in the import graph.\n')
@@ -101,18 +105,18 @@ console.log('# DATABASE_URL and the AlfaClub auth block are the ones that usuall
 console.log('')
 
 const railwayBlock = [
-  `DATABASE_URL=${process.env.DATABASE_URL ?? 'postgresql://...'}`,
+  `DATABASE_URL=${secretStatus(process.env.DATABASE_URL ?? process.env.POSTGRES_URL)}`,
   '',
   '# --- AlfaClub auth (at least one path) ---',
-  `ALFACLUB_CHAT_JWT=${process.env.ALFACLUB_CHAT_JWT ?? ''}`,
+  `ALFACLUB_CHAT_JWT=${secretStatus(process.env.ALFACLUB_CHAT_JWT)}`,
   '',
   '# Or the Privy refresh triplet (recommended for long-lived service):',
-  `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN ?? ''}`,
-  `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN ?? ''}`,
+  `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN=${secretStatus(process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN)}`,
+  `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN=${secretStatus(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN)}`,
   '',
   '# --- Creative brain (first-party /api/hermit/draft) + 1659 targeting ---',
   `HERMIT_AGENT_CHAT_ENDPOINT=${process.env.HERMIT_AGENT_CHAT_ENDPOINT ?? 'https://app.4626.fun/api/hermit/draft'}`,
-  `HERMIT_AGENT_BEARER_TOKEN=${process.env.HERMIT_AGENT_BEARER_TOKEN ?? ''}`,
+  `HERMIT_AGENT_BEARER_TOKEN=${secretStatus(process.env.HERMIT_AGENT_BEARER_TOKEN)}`,
   `ALFACLUB_CHAT_ROOM_ID=${process.env.ALFACLUB_CHAT_ROOM_ID ?? '1659'}`,
   `ALFACLUB_HERMIT_COMMAND_ROOMS=${process.env.ALFACLUB_HERMIT_COMMAND_ROOMS ?? '1659'}`,
 ].join('\n')

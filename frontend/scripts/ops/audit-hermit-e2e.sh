@@ -68,15 +68,6 @@ log_fail() {
   FAILURES=$((FAILURES + 1))
 }
 
-load_local_env() {
-  for env_file in "$FRONTEND/.env.local" "$FRONTEND/.env"; do
-    if [[ -f "$env_file" ]]; then
-      # shellcheck disable=SC1090
-      set -a && source "$env_file" && set +a
-    fi
-  done
-}
-
 run_in_env() {
   if [[ "$PRODUCTION_ENV" -eq 1 ]]; then
     if ! command -v vercel >/dev/null 2>&1; then
@@ -85,8 +76,18 @@ run_in_env() {
     fi
     (cd "$FRONTEND" && vercel env run -e production -- "$@")
   else
-    load_local_env
-    (cd "$FRONTEND" && "$@")
+    # Node parses dotenv records as data. Never `source` operator-managed env
+    # files, since command substitutions in them would execute as shell code.
+    local executable
+    executable="$(command -v "$1")"
+    shift
+    (
+      cd "$FRONTEND" &&
+        node \
+          --env-file-if-exists=.env \
+          --env-file-if-exists=.env.local \
+          "$executable" "$@"
+    )
   fi
 }
 

@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
+import { Agent } from 'undici'
 
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base, mainnet } from 'viem/chains'
@@ -221,15 +222,26 @@ function isForbiddenHostname(hostname: string): boolean {
   return isForbiddenIpAddress(host)
 }
 
-async function isHostnameResolutionSafe(hostname: string): Promise<boolean> {
-  if (isForbiddenHostname(hostname)) return false
-  if (isIP(hostname) !== 0) return true
+async function resolvePublicAddresses(
+  hostname: string,
+): Promise<Array<{ address: string; family: 4 | 6 }> | null> {
+  if (isForbiddenHostname(hostname)) return null
+  const literalFamily = isIP(hostname)
+  if (literalFamily === 4 || literalFamily === 6) {
+    return [{ address: hostname, family: literalFamily }]
+  }
   try {
     const resolved = await lookup(hostname, { all: true, verbatim: true })
-    if (!Array.isArray(resolved) || resolved.length === 0) return false
-    return resolved.every((entry) => !isForbiddenIpAddress(String(entry.address ?? '').trim()))
+    if (!Array.isArray(resolved) || resolved.length === 0) return null
+    if (resolved.some((entry) => isForbiddenIpAddress(String(entry.address ?? '').trim()))) {
+      return null
+    }
+    return resolved
+      .filter((entry): entry is { address: string; family: 4 | 6 } =>
+        (entry.family === 4 || entry.family === 6) && Boolean(entry.address),
+      )
   } catch {
-    return false
+    return null
   }
 }
 
@@ -246,12 +258,36 @@ function readRedirectUrl(currentUrl: URL, locationHeader: string | null): URL | 
   }
 }
 
-async function fetchPublicResource(startUrl: URL, accept: string): Promise<{ response: Response; finalUrl: URL }> {
+async function fetchPublicResource(startUrl: URL, accept: string): Promise<{
+  response: Response
+  finalUrl: URL
+  dispatcher: Agent
+}> {
   let currentUrl = startUrl
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    if (!(await isHostnameResolutionSafe(currentUrl.hostname))) {
+    const resolved = await resolvePublicAddresses(currentUrl.hostname)
+    if (!resolved?.[0]) {
       throw new Error('Resolved hostname is not publicly routable')
     }
+    const pinned = resolved[0]
+    const dispatcher = new Agent({
+      connect: {
+        // Pin the socket to the address that passed the SSRF check. TLS still
+        // validates against currentUrl.hostname; DNS is not consulted again.
+        lookup: (_hostname, options, callback) => {
+          const all =
+            typeof options === 'object' &&
+            options !== null &&
+            'all' in options &&
+            Boolean((options as { all?: boolean }).all)
+          if (all) {
+            callback(null, [{ address: pinned.address, family: pinned.family }])
+            return
+          }
+          callback(null, pinned.address, pinned.family)
+        },
+      },
+    })
 
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -261,9 +297,12 @@ async function fetchPublicResource(startUrl: URL, accept: string): Promise<{ res
         headers: { Accept: accept },
         signal: controller.signal,
         redirect: 'manual',
-      })
+        dispatcher,
+      } as RequestInit & { dispatcher: Agent })
 
       if (response.status >= 300 && response.status < 400) {
+        await response.body?.cancel().catch(() => undefined)
+        await dispatcher.close()
         if (hop >= MAX_REDIRECTS) throw new Error('Too many redirects')
         const next = readRedirectUrl(currentUrl, response.headers.get('location'))
         if (!next) throw new Error('Invalid redirect location')
@@ -271,8 +310,9 @@ async function fetchPublicResource(startUrl: URL, accept: string): Promise<{ res
         continue
       }
 
-      return { response, finalUrl: currentUrl }
+      return { response, finalUrl: currentUrl, dispatcher }
     } catch (error) {
+      await dispatcher.close().catch(() => undefined)
       if (controller.signal.aborted) throw new Error('External request timed out')
       throw error instanceof Error ? error : new Error('External request failed')
     } finally {
@@ -362,21 +402,25 @@ export async function fetchRegistrationPayload(rawUrl: string): Promise<{
   }
 
   try {
-    const { response, finalUrl } = await fetchPublicResource(parsed, 'application/json')
-    if (!response.ok) {
+    const { response, finalUrl, dispatcher } = await fetchPublicResource(parsed, 'application/json')
+    try {
+      if (!response.ok) {
+        return {
+          payload: null,
+          finalUrl: finalUrl.toString(),
+          fetched: true,
+          error: `Registration URL returned ${response.status}`,
+        }
+      }
+      const text = await readTextWithLimit(response)
       return {
-        payload: null,
+        payload: (text ? JSON.parse(text) : null) as RegistrationFile,
         finalUrl: finalUrl.toString(),
         fetched: true,
-        error: `Registration URL returned ${response.status}`,
+        error: null,
       }
-    }
-    const text = await readTextWithLimit(response)
-    return {
-      payload: (text ? JSON.parse(text) : null) as RegistrationFile,
-      finalUrl: finalUrl.toString(),
-      fetched: true,
-      error: null,
+    } finally {
+      await dispatcher.close()
     }
   } catch (error) {
     return {
@@ -449,18 +493,25 @@ export async function probeEndpoint(rawUrl: string): Promise<EndpointProbe> {
 
   const startedAt = Date.now()
   try {
-    const { response, finalUrl } = await fetchPublicResource(parsed, 'application/json, text/plain;q=0.8, */*;q=0.1')
-    void response.body?.cancel?.().catch(() => {})
-    return {
-      source: 'provided',
-      url: rawUrl,
-      finalUrl: finalUrl.toString(),
-      checked: true,
-      ok: response.ok,
-      status: response.status,
-      responseTimeMs: Date.now() - startedAt,
-      contentType: response.headers.get('content-type'),
-      error: response.ok ? null : `Endpoint returned ${response.status}`,
+    const { response, finalUrl, dispatcher } = await fetchPublicResource(
+      parsed,
+      'application/json, text/plain;q=0.8, */*;q=0.1',
+    )
+    try {
+      await response.body?.cancel().catch(() => undefined)
+      return {
+        source: 'provided',
+        url: rawUrl,
+        finalUrl: finalUrl.toString(),
+        checked: true,
+        ok: response.ok,
+        status: response.status,
+        responseTimeMs: Date.now() - startedAt,
+        contentType: response.headers.get('content-type'),
+        error: response.ok ? null : `Endpoint returned ${response.status}`,
+      }
+    } finally {
+      await dispatcher.close()
     }
   } catch (error) {
     return {
