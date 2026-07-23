@@ -69,6 +69,7 @@ import {
   type DecodedActivationOwnerToken,
 } from '../../../server/_lib/wallet/activationOwnerToken.js'
 import { validateAlfaClubLpCalls } from '../../../server/_lib/paymaster/alfaclubLpPolicy.js'
+import { ensurePaymasterUserOpFeeFields } from './userOpFeeFields.js'
 import { assertActivationOwnerTokenClaimActive } from '../../../server/_lib/wallet/activationOwnerTokenClaim.js'
 
 
@@ -89,7 +90,15 @@ declare const process: { env: Record<string, string | undefined> }
 type JsonRpcId = string | number | null
 type JsonRpcRequest = { jsonrpc?: string; id?: JsonRpcId; method?: unknown; params?: unknown }
 
-type UserOperation = { sender?: unknown; callData?: unknown; initCode?: unknown; factory?: unknown; factoryData?: unknown }
+type UserOperation = {
+  sender?: unknown
+  callData?: unknown
+  initCode?: unknown
+  factory?: unknown
+  factoryData?: unknown
+  maxFeePerGas?: unknown
+  maxPriorityFeePerGas?: unknown
+}
 
 const ALLOWED_METHODS = new Set<string>([
   // Paymaster
@@ -2181,6 +2190,12 @@ function normalizePaymasterRpcParams(method: string, params: unknown): unknown {
   if (params.length < 2) return params
 
   const normalized = [...params]
+  const userOp = normalized[0]
+  if (userOp && typeof userOp === 'object' && !Array.isArray(userOp)) {
+    // CDP requires fee fields even on zeroish stub UserOps (viem often omits them).
+    normalized[0] = ensurePaymasterUserOpFeeFields(userOp as Record<string, unknown>)
+  }
+
   const chainIdRaw = normalized[2]
   const parsedChainId = parseChainId(chainIdRaw)
   if (typeof parsedChainId === 'number') return normalized
