@@ -17,10 +17,12 @@ import {
   useWalletClient,
 } from "wagmi";
 
+import { InfoHint } from "@/components/alfaclub/InfoHint";
 import { SwapCard } from "@/components/swap/SwapCard";
 import { TokenAvatar } from "@/components/swap/TokenAvatar";
 import { toast } from "@/components/ui/Toast";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import { ALFACLUB_ORIGIN } from "@/lib/env/host";
 import { CONTRACTS } from "@/config/contracts";
 import {
   ALFACLUB,
@@ -1370,22 +1372,62 @@ export function AlfaClubLiquidity({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
               <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.01em] text-zinc-300">
-                <img
-                  src="/brands/sudoswap.png"
-                  alt=""
-                  className="h-3.5 w-3.5 rounded-full object-cover"
-                  loading="lazy"
+                <a
+                  href="https://sudoswap.xyz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1.5 truncate transition-colors hover:text-white"
+                >
+                  <img
+                    src="/brands/sudoswap.png"
+                    alt=""
+                    className="h-3.5 w-3.5 rounded-full object-cover"
+                    loading="lazy"
+                  />
+                  <span className="truncate">Sudoswap market</span>
+                </a>
+                <InfoHint
+                  label="About Sudoswap"
+                  content={
+                    <>
+                      <p>
+                        Sudoswap is an NFT AMM that prices ERC-1155 keys against an ERC-20 in a bonding-curve pool.
+                      </p>
+                      <p className="text-zinc-400">
+                        This market settles FriendKey trades on Sudoswap&apos;s Base v2 pair.
+                      </p>
+                    </>
+                  }
                 />
-                <span>Sudoswap market</span>
               </p>
               <p className="flex max-w-full items-center gap-1.5 truncate text-[11px] text-zinc-600">
-                <img
-                  src="/protocols/alfaclub.svg"
-                  alt=""
-                  className="h-3.5 w-3.5 shrink-0 object-contain"
-                  loading="lazy"
+                <a
+                  href={ALFACLUB_ORIGIN}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1.5 truncate transition-colors hover:text-zinc-300"
+                >
+                  <img
+                    src="/protocols/alfaclub.svg"
+                    alt=""
+                    className="h-3.5 w-3.5 shrink-0 object-contain"
+                    loading="lazy"
+                  />
+                  <span className="truncate">AlfaClub Key</span>
+                </a>
+                <InfoHint
+                  label="About AlfaClub"
+                  content={
+                    <>
+                      <p>
+                        AlfaClub keys are ERC-1155 FriendKeys that gate rooms and settle against the creator coin.
+                      </p>
+                      <p className="text-zinc-400">
+                        Open AlfaClub for rooms, chat, and key safety context.
+                      </p>
+                    </>
+                  }
                 />
-                <span className="truncate">Official AlfaClub pool</span>
               </p>
             </div>
             <span className="shrink-0 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium tabular-nums text-zinc-400">
