@@ -51,3 +51,66 @@ export async function readSolanaHookStatusByCreatorToken(params: {
   const row = (result.rows ?? [])[0]
   return row ? mapRow(row) : null
 }
+
+/**
+ * Persist a finalized readback result without creating a new provisioning
+ * record. This is intentionally called only from the opt-in readiness
+ * evidence path; the default verifier remains read-only.
+ */
+export async function reconcileSolanaHookStatus(params: {
+  db: Db
+  creatorToken: string
+  shareOft?: string | null
+  hookMint?: string | null
+  creatorConfig?: string | null
+  pendingEntries?: string | null
+  winnerRecord?: string | null
+  status: 'created' | 'failed'
+  lastError?: string | null
+  sourceSessionId?: string | null
+}): Promise<SolanaHookStatusRow | null> {
+  await ensureSolanaHookStatusSchema(params.db)
+  const creatorToken = String(params.creatorToken ?? '').trim().toLowerCase()
+  if (!creatorToken) return null
+  const result = await params.db.sql`
+    INSERT INTO solana_hook_status (
+      creator_token,
+      share_oft,
+      hook_mint,
+      creator_config,
+      pending_entries,
+      winner_record,
+      status,
+      provision_attempt_count,
+      last_error,
+      source_session_id,
+      updated_at
+    ) VALUES (
+      ${creatorToken},
+      ${params.shareOft ?? null},
+      ${params.hookMint ?? null},
+      ${params.creatorConfig ?? null},
+      ${params.pendingEntries ?? null},
+      ${params.winnerRecord ?? null},
+      ${params.status},
+      0,
+      ${params.lastError ?? null},
+      ${params.sourceSessionId ?? null},
+      NOW()
+    )
+    ON CONFLICT (creator_token)
+    DO UPDATE SET
+      share_oft = COALESCE(EXCLUDED.share_oft, solana_hook_status.share_oft),
+      hook_mint = COALESCE(EXCLUDED.hook_mint, solana_hook_status.hook_mint),
+      creator_config = COALESCE(EXCLUDED.creator_config, solana_hook_status.creator_config),
+      pending_entries = COALESCE(EXCLUDED.pending_entries, solana_hook_status.pending_entries),
+      winner_record = COALESCE(EXCLUDED.winner_record, solana_hook_status.winner_record),
+      status = EXCLUDED.status,
+      last_error = EXCLUDED.last_error,
+      source_session_id = COALESCE(EXCLUDED.source_session_id, solana_hook_status.source_session_id),
+      updated_at = NOW()
+    RETURNING *;
+  `
+  const row = (result.rows ?? [])[0]
+  return row ? mapRow(row) : null
+}

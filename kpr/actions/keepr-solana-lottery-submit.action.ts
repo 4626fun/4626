@@ -1,16 +1,16 @@
 /**
- * Solana lottery LZ submit action (not registered on orchestrator).
+ * Solana lottery LZ submit action registered as the default-off lottery_submit lane.
  *
  * Invokes the Keeper inbox submit worker over machine auth. Still fail-closed
- * unless SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1 and transport readiness
- * passes on the API side. Never calls processSwapLottery / Twin adapter.
+ * unless the production relay flag or the explicitly enabled single-use
+ * canary lane is active and transport readiness passes on the API side. Never
+ * calls processSwapLottery / Twin adapter.
  */
 
 import {
   assessSolanaLotteryLzTransportReadiness,
   SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN,
   SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE,
-  submitSolanaLotteryWinnerViaLz,
   truthyEnv,
 } from '../utils/solanaLotteryLzTransport.js'
 
@@ -34,8 +34,9 @@ export async function executeSolanaLotterySubmit(
     throw new Error(SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN)
   }
 
-  const readiness = assessSolanaLotteryLzTransportReadiness()
-  if (!readiness.relayEntriesEnabled) {
+  const canaryLaneEnabled = truthyEnv(process.env.SOLANA_B2_CANARY_AUTHORIZATION_ENABLED)
+  const readiness = assessSolanaLotteryLzTransportReadiness(process.env, { allowCanary: canaryLaneEnabled })
+  if (!readiness.relayEntriesEnabled && !canaryLaneEnabled) {
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:relay_flag_disabled`)
   }
   if (!readiness.ready) {
@@ -77,31 +78,4 @@ export async function executeSolanaLotterySubmit(
     )
   }
   return (json.data && typeof json.data === 'object' ? json.data : json) as Record<string, unknown>
-}
-
-export async function executeSolanaLotteryWinnerRelay(
-  payload: Record<string, unknown> = {},
-): Promise<never> {
-  const winId = typeof payload.winId === 'string' ? payload.winId : ''
-  const creatorMint = typeof payload.creatorMint === 'string' ? payload.creatorMint : ''
-  const winnerSolana = typeof payload.winnerSolana === 'string' ? payload.winnerSolana : ''
-  const sharesPaid = typeof payload.sharesPaid === 'string' || typeof payload.sharesPaid === 'number'
-    ? BigInt(payload.sharesPaid)
-    : 0n
-
-  if (!winId || !creatorMint || !winnerSolana) {
-    throw new Error('winner_relay_invalid_payload')
-  }
-  // Strict u64: reject oversized payouts (preserve SOL-P1-03).
-  if (sharesPaid < 0n || sharesPaid > 0xffffffffffffffffn) {
-    throw new Error('winner_relay_shares_paid_overflow')
-  }
-
-  await submitSolanaLotteryWinnerViaLz({
-    winId,
-    creatorMint,
-    winnerSolana,
-    sharesPaid,
-  })
-  throw new Error(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)
 }

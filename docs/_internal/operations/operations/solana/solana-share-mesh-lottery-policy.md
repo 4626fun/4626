@@ -12,9 +12,9 @@ Related: [budget paths](../../solana/solana-share-mesh-budget-paths.md) (costs +
 | 2 | **30% ShareOFT auto-bridges at `finalizePhase2`** when batcher OVault runtime is enabled. |
 | 3 | **Lottery = pool buy of tradable share token only** — not compose deposit, bridge receipt, or creator-coin trades. |
 | 4 | **Meteora base asset = share mesh mint** — not `wrap-token` creator SPL. |
-| 5 | **Solana lottery relay is unavailable.** The former KPR entry-relay and winner-relay workflows were removed with the Twin transport. A pool or hook deployment does not enable a Solana lottery. |
+| 5 | **Solana lottery relay is default-off.** The replacement finalized-inbox + LayerZero OApp workers exist, but a pool or hook deployment does not enable them; every production gate must pass first. |
 | 6 | **Share symbol = `■<TICKER>`**, name = `{Creator} Share Token` — all creators, Base deploy UI + Solana LZ deploy (`frontend/src/lib/tokens/tokenSymbols.ts`). |
-| 7 | **LZ ULN = 6-of-9 optional DVNs** on mainnet Base ↔ Solana — never single-DVN `1/1`. Nine-name pool (all on both chains): LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom, Nansen, Frax, Wyoming, P-OPS; threshold **6**. Devnet rehearsal maxes at **2-of-3** (only three shared DVNs on arbsep ↔ solana-testnet). See [budget paths § ULN](../../solana/solana-share-mesh-budget-paths.md#uln-security--6-of-9-optional-dvns-mainnet). |
+| 7 | **LZ ULN = 3-of-5 optional DVNs** on mainnet Base ↔ Solana — never single-DVN `1/1`. Solana pathways support at most five DVNs. Current shared active pool: LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom; threshold **3**. Devnet rehearsal uses **2-of-3**. Re-verify metadata immediately before wiring. |
 
 ## Two lanes (do not conflate)
 
@@ -68,7 +68,9 @@ Solana must mirror **secondary share buys**, not primary mint paths.
 
 ## Keeper config
 
-The remaining Solana orchestrator actions are maintenance-only:
+The production-default Solana orchestrator actions are maintenance-only. The
+replacement `lottery_ingest` and `lottery_submit` actions are independently
+allowlisted and default off; the broad execute flag cannot enable them:
 
 ```bash
 # Vercel
@@ -81,9 +83,8 @@ keeper ATA. The workflow must not call `receiveFeeFromSolana`, claim bridged
 funds, or mark fees as bridged without an authenticated bridge-evidence design.
 No such Base-forward lane is currently configured.
 
-The removed `relay_entries` and `winner_relay` labels are not valid
-orchestrator actions. The July relay audit is historical evidence, not an
-enablement checklist.
+The removed `relay_entries` and `winner_relay` labels remain invalid. Current
+activation authority: `docs/operations/solana-b2-production-gates.md`.
 
 ## Phase checklist
 
@@ -91,7 +92,7 @@ enablement checklist.
 |-------|-----------|
 | **A** | LZ share mesh live; batcher peer set; supply bridged; mint metadata `■<TICKER>` |
 | **B1** | Meteora pool + LP on share mesh; Meteora/Jupiter swappable; lottery remains on Base |
-| **B2** | Deferred pending a new non-Twin relay architecture and end-to-end canary |
+| **B2** | Replacement architecture implemented; production remains off pending every gate and approved canaries |
 
 Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](../../solana/solana-share-mesh-budget-paths.md). Per-creator LZ + registry checklist: [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md).
 

@@ -13,6 +13,7 @@ import {
   type SolanaLotteryInstructionKind,
 } from './solanaLotteryEntryInbox.js'
 import { buildSolanaLotterySourceEventId } from './solanaLotterySourceEventId.js'
+import { CREATOR_SHARE_HOOK_PROGRAM_ID } from './creatorShareHookPdas.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -147,6 +148,9 @@ export async function ingestFinalizedLotteryLogs(params: {
   sourceEventIds: string[]
 }> {
   const programId = params.programId.trim()
+  if (programId !== CREATOR_SHARE_HOOK_PROGRAM_ID) {
+    throw new Error('solana_lottery_ingest_noncanonical_hook_program')
+  }
   const cursorKey = params.cursorKey ?? `lottery-ingest:${programId}`
   const limit = Math.max(1, Math.min(params.limit ?? 25, 100))
   const genesis = (await params.rpc.getGenesisHash()).trim()

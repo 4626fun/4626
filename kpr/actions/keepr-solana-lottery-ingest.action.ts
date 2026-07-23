@@ -11,11 +11,16 @@ import {
   truthyEnv,
 } from '../utils/solanaLotteryLzTransport.js'
 
-export type SolanaLotteryIngestResult = {
-  ok: true
-  mode: 'dry_run' | 'disabled'
-  reason: string
-  transport: ReturnType<typeof assessSolanaLotteryLzTransportReadiness>
+export type SolanaLotteryIngestResult = Record<string, unknown>
+
+function keeperBaseUrl(): string {
+  return String(process.env.KPR_API_BASE_URL ?? process.env.KEEPR_API_BASE_URL ?? 'https://app.4626.fun/api')
+    .trim()
+    .replace(/\/$/, '')
+}
+
+function keeperApiKey(): string {
+  return String(process.env.KPR_API_KEY ?? process.env.KEEPR_API_KEY ?? '').trim()
 }
 
 /**
@@ -23,7 +28,7 @@ export type SolanaLotteryIngestResult = {
  * design is accepted. Default: report disabled and leave inbox untouched.
  */
 export async function executeSolanaLotteryIngest(
-  _payload: Record<string, unknown> = {},
+  payload: Record<string, unknown> = {},
 ): Promise<SolanaLotteryIngestResult> {
   const transport = assessSolanaLotteryLzTransportReadiness()
 
@@ -41,12 +46,21 @@ export async function executeSolanaLotteryIngest(
     }
   }
 
-  // Even when ingest env is on, keep fail-closed until a separate ops
-  // authorization wires DB+RPC (this PR ships the modules + tests only).
-  return {
-    ok: true,
-    mode: 'dry_run',
-    reason: 'ingest_modules_ready_live_rpc_not_authorized',
-    transport,
+  const apiKey = keeperApiKey()
+  if (!apiKey) throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:missing_kpr_api_key`)
+  const limit = typeof payload.limit === 'number' && Number.isFinite(payload.limit)
+    ? Math.max(1, Math.min(Math.floor(payload.limit), 100))
+    : 25
+  const response = await fetch(`${keeperBaseUrl()}/keeper/solana/lottery-ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ limit }),
+  })
+  const text = await response.text()
+  let json: Record<string, unknown> = {}
+  try { json = text ? JSON.parse(text) as Record<string, unknown> : {} } catch { json = { error: text.slice(0, 200) } }
+  if (!response.ok || json.success === false) {
+    throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:keeper_ingest_${response.status}:${String(json.error ?? text).slice(0, 200)}`)
   }
+  return (json.data && typeof json.data === 'object' ? json.data : json) as Record<string, unknown>
 }

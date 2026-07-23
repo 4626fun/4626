@@ -25,6 +25,18 @@ type Body = {
   limit?: unknown
 }
 
+function enabled(): boolean {
+  return ['1', 'true', 'yes'].includes(
+    String(
+      process.env.SOLANA_LOTTERY_SUBMIT_ENABLED ??
+        process.env.SOLANA_ORCHESTRATOR_LOTTERY_SUBMIT_ENABLED ??
+        '',
+    )
+      .trim()
+      .toLowerCase(),
+  )
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -35,6 +47,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!requireKeeprApiKey(req, res)) return
+
+  if (!enabled()) {
+    return res.status(503).json({
+      success: false,
+      error: 'solana_lottery_submit_disabled',
+    } satisfies ApiEnvelope<never>)
+  }
 
   if (!isDbConfigured()) {
     return res.status(503).json({

@@ -41,7 +41,6 @@ export async function enqueueSolanaB2ReadinessVerification(params: {
   creatorToken: string
   shareMeshMint?: string | null
   deploySessionId?: string | null
-  autoEnableRelay?: boolean
 }): Promise<{ enqueued: boolean; jobId: number | null }> {
   const creatorToken = params.creatorToken.trim().toLowerCase()
   const shareMeshMint =
@@ -60,9 +59,9 @@ export async function enqueueSolanaB2ReadinessVerification(params: {
       method: 'POST',
       body: {
         creatorToken,
+        persistEvidence: true,
         ...(shareMeshMint ? { shareMeshMint } : null),
         ...(params.deploySessionId ? { deploySessionId: params.deploySessionId } : null),
-        ...(params.autoEnableRelay ? { autoEnableRelay: true } : null),
       },
     },
     maxAttempts: 5,

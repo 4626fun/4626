@@ -29,9 +29,26 @@ describe('solana keeper orchestrator', () => {
     expect(normalizeSolanaOrchestratorAction('price_monitor')).toBe('price_monitor')
     expect(normalizeSolanaOrchestratorAction('graduation')).toBe('graduation')
     expect(normalizeSolanaOrchestratorAction('sync-mapping')).toBe('sync_mapping')
+    expect(normalizeSolanaOrchestratorAction('lottery-ingest')).toBe('lottery_ingest')
+    expect(normalizeSolanaOrchestratorAction('lottery-submit')).toBe('lottery_submit')
+    expect(normalizeSolanaOrchestratorAction('lottery-confirm')).toBe('lottery_confirm')
     // Solana rebalance was retired with the v1.15.0 strategy removal.
     expect(normalizeSolanaOrchestratorAction('rebalance')).toBeNull()
     expect(normalizeSolanaOrchestratorAction('unknown')).toBeNull()
+  })
+
+  it('does not inherit B2 worker enablement from the global execute flag', async () => {
+    process.env.SOLANA_ORCHESTRATOR_EXECUTE = '1'
+    delete process.env.SOLANA_ORCHESTRATOR_LOTTERY_INGEST_ENABLED
+    try {
+      await expect(executeSolanaOrchestratorAction({
+        workflow: 'solana-orchestrator',
+        action: 'lottery_ingest',
+        checkpointKey: 'test',
+      })).rejects.toThrow('action_disabled:lottery_ingest')
+    } finally {
+      delete process.env.SOLANA_ORCHESTRATOR_EXECUTE
+    }
   })
 
   it('fails closed when action execution is not explicitly enabled', async () => {

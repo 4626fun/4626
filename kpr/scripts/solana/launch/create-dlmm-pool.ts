@@ -22,9 +22,9 @@
  *   HAS_ALPHA_VAULT         - Alias for METEORA_HAS_ALPHA_VAULT
  */
 
-import { Connection, PublicKey, sendAndConfirmTransaction, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { createRequire } from 'node:module';
-import { loadKeeperKeypair } from '../../../utils/solana.js';
+import { loadKeeperKeypair, sendConfirmedSolanaTransaction } from '../../../utils/solana.js';
 import { requireEnv } from '../../../config.js';
 
 const require = createRequire(import.meta.url);
@@ -50,6 +50,17 @@ function envFlag(name: string): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }
 
+function redactRpcUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    return parsed.pathname === '/' && !parsed.search
+      ? parsed.origin
+      : `${parsed.origin}/<redacted>`;
+  } catch {
+    return '<redacted-rpc-url>';
+  }
+}
+
 const hasAlphaVault = envFlag('METEORA_HAS_ALPHA_VAULT') || envFlag('HAS_ALPHA_VAULT');
 
 function resolveActivationDelaySeconds(): number {
@@ -65,7 +76,7 @@ const programId = new PublicKey(DLMM.LBCLMM_PROGRAM_IDS[cluster]);
 const [poolAddress] = DLMM.deriveCustomizablePermissionlessLbPair(tokenMintX, tokenMintY, programId);
 
 console.log('=== Create Meteora DLMM Pool ===');
-console.log('RPC:        ', rpcUrl);
+console.log('RPC:        ', redactRpcUrl(rpcUrl));
 console.log('Payer:      ', payer.publicKey.toBase58());
 console.log('Token X:    ', tokenMintX.toBase58());
 console.log('Token Y:    ', tokenMintY.toBase58());
@@ -123,7 +134,10 @@ const createPoolTx = await DLMM.createCustomizablePermissionlessLbPair2(
   { cluster },
 );
 
-const sig = await sendAndConfirmTransaction(connection, createPoolTx, [payer], {
+const sig = await sendConfirmedSolanaTransaction({
+  connection,
+  transaction: createPoolTx,
+  signers: [payer],
   commitment: 'confirmed',
 });
 

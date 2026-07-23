@@ -66,6 +66,8 @@ export async function enqueueSolanaShareMeshProvisioning(params: {
   deploySessionId?: string | null
   shareMeshMint?: string | null
   shareOft?: string | null
+  /** B1 is the default product lane; B2 must be explicitly staged. */
+  b2Stage?: 'b1' | 'hook_pre_lz' | 'post_lz'
 }): Promise<SolanaShareMeshProvisioningEnqueueResult> {
   if (!isEnabled()) {
     return { enqueued: false, jobId: null, reason: 'disabled' }
@@ -111,6 +113,7 @@ export async function enqueueSolanaShareMeshProvisioning(params: {
         deploySessionId: params.deploySessionId ?? null,
         ...(shareMeshMint ? { shareMeshMint } : null),
         ...(shareOft ? { shareOft } : null),
+        b2Stage: params.b2Stage ?? 'b1',
       },
     },
     maxAttempts: shareMeshMint ? 5 : 3,

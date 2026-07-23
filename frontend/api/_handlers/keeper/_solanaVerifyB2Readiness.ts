@@ -1,9 +1,9 @@
 /**
  * POST /api/keeper/solana/verify-b2-readiness
  *
- * Machine-auth checkpoint: verify B2 readiness (mapping + pool + hook + on-chain PDAs),
- * persist solana_creator_relay_config, optionally enable per-creator relay, and sync
- * SOLANA_RELAY_ENABLED_MINTS to the Vultr orchestrator.
+ * Machine-auth checkpoint: verify B2 readiness (mapping + pool + hook + on-chain PDAs).
+ * Read-only by default. Evidence persistence requires persistEvidence=true plus
+ * its independent default-off env gate. This endpoint never enables a relay.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -21,17 +21,16 @@ import {
 } from '@4626/server-core'
 
 import { verifySolanaB2Readiness } from '../../../server/_lib/onchain/solanaB2Readiness.js'
-import {
-  markSolanaCreatorRelayEnabled,
-  upsertSolanaCreatorRelayReadiness,
-} from '../../../server/_lib/onchain/solanaCreatorRelayConfig.js'
-import { enqueueSolanaRelayConfigSync } from '../../../server/_lib/onchain/solanaRelayConfigSync.js'
+import { upsertSolanaCreatorRelayReadiness } from '../../../server/_lib/onchain/solanaCreatorRelayConfig.js'
+import { reconcileSolanaHookStatus } from '../../../server/_lib/onchain/solanaHookStatus.js'
+import { deriveCreatorShareHookPdas } from '../../../server/_lib/onchain/creatorShareHookPdas.js'
+import { reconcileSolanaMeteoraPoolStatus } from '../../../server/_lib/onchain/solanaMeteoraPoolStatus.js'
 
 type Body = {
   creatorToken?: unknown
   shareMeshMint?: unknown
   deploySessionId?: unknown
-  autoEnableRelay?: unknown
+  persistEvidence?: unknown
 }
 
 type VerifyResult = {
@@ -42,23 +41,8 @@ type VerifyResult = {
   readinessStatus: 'verified' | 'failed' | 'pending'
   relayEnabled: boolean
   relaySyncEnqueued: boolean
+  evidencePersisted: boolean
   checks: Array<{ id: string; passed: boolean; detail: string }>
-}
-
-function envFlag(name: string, fallback = false): boolean {
-  const raw = String(process.env[name] ?? '').trim().toLowerCase()
-  if (!raw) return fallback
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-function shouldAutoEnableRelay(body: Body): boolean {
-  if (body.autoEnableRelay === true) return true
-  const raw = body.autoEnableRelay
-  if (typeof raw === 'string') {
-    const normalized = raw.trim().toLowerCase()
-    return normalized === '1' || normalized === 'true' || normalized === 'yes'
-  }
-  return envFlag('SOLANA_B2_AUTO_ENABLE_RELAY', false)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -107,34 +91,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const readinessStatus = readiness.ready ? 'verified' : 'failed'
   const failedChecks = readiness.checks.filter((check) => !check.passed)
-  await upsertSolanaCreatorRelayReadiness({
-    db: db as any,
-    creatorToken: readiness.creatorToken,
-    shareOft: readiness.shareOft,
-    shareMeshMint: readiness.shareMeshMint,
-    readinessStatus,
-    readinessChecksJson: readiness.checks,
-    lastError: readiness.ready
-      ? null
-      : failedChecks.map((check) => `${check.id}:${check.detail}`).join('; ') || 'b2_not_ready',
-    sourceSessionId,
-  })
-
-  let relayEnabled = false
-  let relaySyncEnqueued = false
-
-  if (readiness.ready && shouldAutoEnableRelay(body) && readiness.shareMeshMint) {
-    const enabled = await markSolanaCreatorRelayEnabled({
+  const persistRequested = body.persistEvidence === true
+  const persistEnabled = ['1', 'true', 'yes'].includes(
+    String(process.env.SOLANA_B2_READINESS_PERSIST_ENABLED ?? '').trim().toLowerCase(),
+  )
+  const evidencePersisted = persistRequested && persistEnabled
+  if (evidencePersisted) {
+    await upsertSolanaCreatorRelayReadiness({
       db: db as any,
+      creatorToken: readiness.creatorToken,
+      shareOft: readiness.shareOft,
       shareMeshMint: readiness.shareMeshMint,
+      readinessStatus,
+      readinessChecksJson: readiness.checks,
+      lastError: readiness.ready
+        ? null
+        : failedChecks.map((check) => `${check.id}:${check.detail}`).join('; ') || 'b2_not_ready',
+      sourceSessionId,
     })
-    relayEnabled = Boolean(enabled?.relayEnabled)
-    if (relayEnabled) {
-      const sync = await enqueueSolanaRelayConfigSync({
+    await reconcileSolanaHookStatus({
+      db: db as any,
+      creatorToken: readiness.creatorToken,
+      shareOft: readiness.shareOft,
+      ...(deriveCreatorShareHookPdas(readiness.shareMeshMint) ?? {}),
+      status: readiness.ready ? 'created' : 'failed',
+      lastError: readiness.ready
+        ? null
+        : failedChecks.map((check) => `${check.id}:${check.detail}`).join('; ') || 'b2_not_ready',
+      sourceSessionId,
+    })
+    const poolChecks = readiness.checks.filter((check) => [
+      'meteora_pool_created',
+      'pool_account_onchain',
+      'meteora_pool_mint_alignment',
+    ].includes(check.id))
+    if (poolChecks.length > 0) {
+      const failedPoolChecks = poolChecks.filter((check) => !check.passed)
+      await reconcileSolanaMeteoraPoolStatus({
         db: db as any,
-        reason: 'b2_readiness_auto_enable',
+        shareMeshMint: readiness.shareMeshMint,
+        status: failedPoolChecks.length === 0 ? 'created' : 'failed',
+        lastError: failedPoolChecks.length === 0
+          ? null
+          : failedPoolChecks.map((check) => `${check.id}:${check.detail}`).join('; '),
       })
-      relaySyncEnqueued = sync.enqueued
     }
   }
 
@@ -144,8 +144,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     shareMeshMint: readiness.shareMeshMint,
     shareOft: readiness.shareOft,
     readinessStatus,
-    relayEnabled,
-    relaySyncEnqueued,
+    relayEnabled: false,
+    relaySyncEnqueued: false,
+    evidencePersisted,
     checks: readiness.checks,
   }
 
@@ -153,8 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     creatorToken,
     shareMeshMint: readiness.shareMeshMint,
     ready: readiness.ready,
-    relayEnabled,
-    relaySyncEnqueued,
+    relayEnabled: false,
+    relaySyncEnqueued: false,
+    evidencePersisted,
     failedChecks: failedChecks.map((check) => check.id),
   })
 

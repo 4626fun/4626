@@ -1,7 +1,6 @@
 import {
   Keypair,
   PublicKey,
-  sendAndConfirmTransaction,
   type Commitment,
   type Connection,
   type Transaction,
@@ -80,7 +79,26 @@ export async function sendConfirmedSolanaTransaction(params: {
   signers: Keypair[];
   commitment?: Commitment;
 }): Promise<string> {
-  return sendAndConfirmTransaction(params.connection, params.transaction, params.signers, {
-    commitment: params.commitment ?? 'confirmed',
+  const payer = params.signers[0];
+  if (!payer) throw new Error('solana_transaction_payer_missing');
+  const latestBlockhash = await params.connection.getLatestBlockhash(params.commitment ?? 'confirmed');
+  params.transaction.feePayer = payer.publicKey;
+  params.transaction.recentBlockhash = latestBlockhash.blockhash;
+  params.transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+  params.transaction.sign(...params.signers);
+  const signature = await params.connection.sendRawTransaction(params.transaction.serialize(), {
+    preflightCommitment: params.commitment ?? 'confirmed',
   });
+  const deadline = Date.now() + 90_000;
+  for (;;) {
+    const status = (await params.connection.getSignatureStatuses([signature])).value[0];
+    if (status?.err) {
+      throw new Error(`solana_transaction_failed:${signature}:${JSON.stringify(status.err)}`);
+    }
+    if (status?.confirmationStatus === 'finalized') return signature;
+    if (Date.now() >= deadline) {
+      throw new Error(`solana_transaction_confirmation_timeout:${signature}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+  }
 }

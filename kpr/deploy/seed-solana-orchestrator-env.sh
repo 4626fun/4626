@@ -100,6 +100,26 @@ optional_from_source() {
   read_env_with_legacy "${key}" 2>/dev/null || true
 }
 
+is_truthy() {
+  local raw="${1:-}"
+  local normalized=""
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  normalized="${normalized//\"/}"
+  [[ "$normalized" == "true" || "$normalized" == "1" || "$normalized" == "yes" ]]
+}
+
+is_placeholder_api_key() {
+  local raw="${1:-}"
+  local normalized=""
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    ""|replace-with-long-random-secret|replace_me|replace-me|changeme|change-me|placeholder|your-api-key|your_api_key|example|example-key|dummy|test)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 existing_api_key=""
 if [[ -f "${DEST}" ]]; then
   existing_api_key="$(grep -E '^SOLANA_ORCHESTRATOR_API_KEY=' "${DEST}" | tail -1 | cut -d= -f2- || true)"
@@ -115,6 +135,11 @@ if [[ -z "${api_key}" ]]; then
     echo "Set SOLANA_ORCHESTRATOR_API_KEY manually — openssl not available" >&2
     exit 1
   fi
+fi
+
+if is_truthy "${EXECUTE:-0}" && is_placeholder_api_key "${api_key}"; then
+  echo "Refusing to write placeholder SOLANA_ORCHESTRATOR_API_KEY with EXECUTE=1" >&2
+  exit 1
 fi
 
 quote_json_if_needed() {

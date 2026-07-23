@@ -49,7 +49,9 @@ export type SolanaLotteryInboxRow = {
   quarantineReason: string | null
   skipReason: string | null
   lzGuid: string | null
+  transportSourceTxHash: string | null
   baseTxHash: string | null
+  baseRequestId: string | null
   submittedAt: string | null
   confirmedAt: string | null
   submitAttemptId: string | null
@@ -57,6 +59,8 @@ export type SolanaLotteryInboxRow = {
   lastError: string | null
   createdAt: string
   updatedAt: string
+  /** Transient worker-only marker; never persisted in the durable inbox. */
+  canaryAuthorized?: boolean
 }
 
 export type UpsertInboxEventInput = {
@@ -114,7 +118,9 @@ function mapRow(row: any): SolanaLotteryInboxRow {
     quarantineReason: row.quarantine_reason ? String(row.quarantine_reason) : null,
     skipReason: row.skip_reason ? String(row.skip_reason) : null,
     lzGuid: row.lz_guid ? String(row.lz_guid) : null,
+    transportSourceTxHash: row.transport_source_tx_hash ? String(row.transport_source_tx_hash) : null,
     baseTxHash: row.base_tx_hash ? String(row.base_tx_hash) : null,
+    baseRequestId: row.base_request_id != null ? String(row.base_request_id) : null,
     submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
     confirmedAt: row.confirmed_at ? new Date(row.confirmed_at).toISOString() : null,
     submitAttemptId: row.submit_attempt_id ? String(row.submit_attempt_id) : null,
@@ -123,6 +129,42 @@ function mapRow(row: any): SolanaLotteryInboxRow {
     createdAt: new Date(row.created_at ?? Date.now()).toISOString(),
     updatedAt: new Date(row.updated_at ?? Date.now()).toISOString(),
   }
+}
+
+/** Attach the Base request id once Shovel has indexed the finalized delivery transaction. */
+export async function reconcileConfirmedInboxBaseRequestIds(params: {
+  db: Db
+  limit?: number
+}): Promise<number> {
+  await ensureSchema(params.db)
+  const limit = Math.max(1, Math.min(params.limit ?? 50, 200))
+  const result = await params.db.sql`
+    WITH candidates AS (
+      SELECT inbox.id, entries.request_id
+      FROM solana_lottery_entry_inbox inbox
+      JOIN solana_share_mesh_mappings mapping
+        ON mapping.share_mesh_mint = inbox.creator_mint
+       AND mapping.status = 'applied'
+      JOIN LATERAL (
+        SELECT MIN(entry.request_id) AS request_id, COUNT(*) AS match_count
+        FROM protocol_lottery_entries entry
+        WHERE lower('0x' || encode(entry.tx_hash, 'hex')) = lower(inbox.base_tx_hash)
+          AND lower('0x' || encode(entry.token, 'hex')) = lower(mapping.creator_token)
+          AND lower('0x' || encode(entry."user", 'hex')) = lower(inbox.beneficiary_csw)
+      ) entries ON entries.match_count = 1
+      WHERE inbox.status = 'confirmed'
+        AND inbox.base_request_id IS NULL
+        AND inbox.base_tx_hash IS NOT NULL
+      ORDER BY inbox.id
+      LIMIT ${limit}
+    )
+    UPDATE solana_lottery_entry_inbox inbox
+    SET base_request_id = candidates.request_id, updated_at = NOW()
+    FROM candidates
+    WHERE inbox.id = candidates.id
+    RETURNING inbox.id
+  `
+  return result.rows?.length ?? 0
 }
 
 /** Insert buy-path events; ignore relay_entries re-emits as eligibility (still upsert for audit). */
@@ -386,6 +428,52 @@ export async function markInboxQuarantined(params: {
 }
 
 /**
+ * After an OApp send succeeds but markInboxSubmitted fails, persist receipt
+ * fields and quarantine. Non-null lz_guid blocks replayQuarantinedInboxEvent
+ * from resetting the row to pending (which would risk a second packet).
+ */
+export async function quarantineInboxWithTransportReceipt(params: {
+  db: Db
+  id: number
+  leaseOwner: string
+  reason: string
+  lzGuid: string
+  transportSourceTxHash?: string | null
+  baseTxHash?: string | null
+}): Promise<SolanaLotteryInboxRow> {
+  await ensureSchema(params.db)
+  const leaseOwner = params.leaseOwner.trim()
+  if (!leaseOwner) throw new Error('invalid_lease_owner')
+  const lzGuid = String(params.lzGuid ?? '').trim()
+  if (!/^0x[a-f0-9]{64}$/i.test(lzGuid)) throw new Error('inbox_quarantine_invalid_lz_guid')
+  const transportSourceTxHash = params.transportSourceTxHash
+    ? String(params.transportSourceTxHash).trim()
+    : ''
+  const baseTxHash = params.baseTxHash ? String(params.baseTxHash).trim() : ''
+  const reason = String(params.reason ?? 'submit_receipt_persist_failed').slice(0, 500)
+  const result = await params.db.sql`
+    UPDATE solana_lottery_entry_inbox
+    SET
+      status = 'quarantined',
+      quarantine_reason = ${reason},
+      last_error = ${reason},
+      lz_guid = COALESCE(${lzGuid}, lz_guid),
+      transport_source_tx_hash = COALESCE(${transportSourceTxHash || null}, transport_source_tx_hash),
+      base_tx_hash = COALESCE(${baseTxHash || null}, base_tx_hash),
+      lease_owner = NULL,
+      lease_expires_at = NULL,
+      updated_at = NOW()
+    WHERE id = ${params.id}
+      AND lease_owner = ${leaseOwner}
+      AND status IN ('leased', 'submitting')
+    RETURNING *
+  `
+  const row = result.rows?.[0]
+  if (!row) throw new Error('inbox_quarantine_with_receipt_failed')
+  return mapRow(row)
+}
+
+/**
  * Persist submit intent before any external LZ send.
  * Requires owning an unexpired lease.
  */
@@ -433,6 +521,7 @@ export async function markInboxSubmitted(params: {
   leaseOwner: string
   submitAttemptId: string
   lzGuid?: string | null
+  transportSourceTxHash?: string | null
   baseTxHash?: string | null
 }): Promise<SolanaLotteryInboxRow> {
   await ensureSchema(params.db)
@@ -441,14 +530,21 @@ export async function markInboxSubmitted(params: {
   const submitAttemptId = params.submitAttemptId.trim()
   if (!submitAttemptId) throw new Error('invalid_submit_attempt_id')
   const lzGuid = params.lzGuid ? String(params.lzGuid).trim() : ''
+  const transportSourceTxHash = params.transportSourceTxHash ? String(params.transportSourceTxHash).trim() : ''
   const baseTxHash = params.baseTxHash ? String(params.baseTxHash).trim() : ''
   if (!lzGuid && !baseTxHash) throw new Error('inbox_submitted_requires_receipt')
+  if (lzGuid && !/^0x[a-f0-9]{64}$/i.test(lzGuid)) throw new Error('inbox_submitted_invalid_lz_guid')
+  if (baseTxHash && !/^0x[a-f0-9]{64}$/i.test(baseTxHash)) throw new Error('inbox_submitted_invalid_base_tx_hash')
+  if (transportSourceTxHash && !/^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(transportSourceTxHash)) {
+    throw new Error('inbox_submitted_invalid_source_tx_hash')
+  }
 
   const result = await params.db.sql`
     UPDATE solana_lottery_entry_inbox
     SET
       status = 'submitted',
       lz_guid = COALESCE(${lzGuid || null}, lz_guid),
+      transport_source_tx_hash = COALESCE(${transportSourceTxHash || null}, transport_source_tx_hash),
       base_tx_hash = COALESCE(${baseTxHash || null}, base_tx_hash),
       submitted_at = NOW(),
       lease_owner = NULL,
@@ -479,23 +575,91 @@ export async function markInboxConfirmed(params: {
   baseTxHash?: string | null
 }): Promise<SolanaLotteryInboxRow> {
   await ensureSchema(params.db)
+  const lzGuid = params.lzGuid ? String(params.lzGuid).trim() : ''
+  const baseTxHash = params.baseTxHash ? String(params.baseTxHash).trim() : ''
+  if (!/^0x[a-f0-9]{64}$/i.test(lzGuid)) throw new Error('inbox_confirmed_invalid_lz_guid')
+  if (!/^0x[a-f0-9]{64}$/i.test(baseTxHash)) throw new Error('inbox_confirmed_invalid_base_tx_hash')
   const result = await params.db.sql`
     UPDATE solana_lottery_entry_inbox
     SET
       status = 'confirmed',
-      lz_guid = COALESCE(${params.lzGuid ?? null}, lz_guid),
-      base_tx_hash = COALESCE(${params.baseTxHash ?? null}, base_tx_hash),
+      lz_guid = ${lzGuid},
+      base_tx_hash = ${baseTxHash},
       confirmed_at = NOW(),
       lease_owner = NULL,
       lease_expires_at = NULL,
       updated_at = NOW()
     WHERE id = ${params.id}
       AND status IN ('submitted', 'confirmed')
+      AND (lz_guid IS NULL OR lz_guid = ${lzGuid})
+      AND (base_tx_hash IS NULL OR base_tx_hash = ${baseTxHash})
     RETURNING *
   `
   const row = result.rows?.[0]
   if (!row) throw new Error('inbox_mark_confirmed_failed')
   return mapRow(row)
+}
+
+export async function markSubmittedInboxFailed(params: {
+  db: Db
+  id: number
+  reason: string
+}): Promise<SolanaLotteryInboxRow> {
+  await ensureSchema(params.db)
+  const reason = params.reason.trim().slice(0, 500) || 'layerzero_delivery_failed'
+  const result = await params.db.sql`
+    UPDATE solana_lottery_entry_inbox
+    SET
+      status = 'quarantined',
+      quarantine_reason = ${reason},
+      last_error = ${reason},
+      updated_at = NOW()
+    WHERE id = ${params.id}
+      AND status = 'submitted'
+    RETURNING *
+  `
+  const row = result.rows?.[0]
+  if (!row) throw new Error('inbox_mark_delivery_failed')
+  return mapRow(row)
+}
+
+/** Record a recoverable destination failure without reopening origin submission. */
+export async function markSubmittedInboxRetryable(params: {
+  db: Db
+  id: number
+  reason: string
+}): Promise<SolanaLotteryInboxRow> {
+  await ensureSchema(params.db)
+  const reason = params.reason.trim().slice(0, 500) || 'layerzero_delivery_retryable'
+  const result = await params.db.sql`
+    UPDATE solana_lottery_entry_inbox
+    SET
+      last_error = ${reason},
+      updated_at = NOW()
+    WHERE id = ${params.id}
+      AND status = 'submitted'
+    RETURNING *
+  `
+  const row = result.rows?.[0]
+  if (!row) throw new Error('inbox_mark_delivery_retryable_failed')
+  return mapRow(row)
+}
+
+export async function listSubmittedSolanaLotteryInboxRows(params: {
+  db: Db
+  limit?: number
+}): Promise<SolanaLotteryInboxRow[]> {
+  await ensureSchema(params.db)
+  const limit = Math.max(1, Math.min(params.limit ?? 25, 100))
+  const result = await params.db.sql`
+    SELECT *
+    FROM solana_lottery_entry_inbox
+    WHERE status = 'submitted'
+      AND lz_guid IS NOT NULL
+    ORDER BY submitted_at ASC NULLS FIRST, id ASC
+    LIMIT ${limit}
+  `
+  return (result.rows ?? []).map(mapRow)
 }
 
 /** Release a pre-submit lease after a definitely effect-free error. */

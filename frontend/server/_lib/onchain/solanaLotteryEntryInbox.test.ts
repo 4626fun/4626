@@ -10,6 +10,7 @@ import {
   claimSolanaLotteryInboxLeases,
   getInboxSubmitRecoveryState,
   markInboxIdentity,
+  markInboxConfirmed,
   markInboxSubmitted,
   reclaimStrandedSubmittingQuarantine,
   releaseInboxLease,
@@ -160,8 +161,8 @@ describe('solanaLotteryEntryInbox', () => {
           {
             ...baseRow,
             status: 'submitted',
-            lz_guid: '0xlz',
-            base_tx_hash: '0xtx',
+            lz_guid: `0x${'ab'.repeat(32)}`,
+            base_tx_hash: `0x${'cd'.repeat(32)}`,
           },
         ],
       },
@@ -171,8 +172,8 @@ describe('solanaLotteryEntryInbox', () => {
       id: 1,
       leaseOwner: 'worker-a',
       submitAttemptId: 'attempt-a',
-      lzGuid: '0xlz',
-      baseTxHash: '0xtx',
+      lzGuid: `0x${'ab'.repeat(32)}`,
+      baseTxHash: `0x${'cd'.repeat(32)}`,
     })
     expect(row.status).toBe('submitted')
     const sql = calls[0].strings.join(' ')
@@ -201,7 +202,7 @@ describe('solanaLotteryEntryInbox', () => {
         ...baseRow,
         status: 'submitted',
         submit_attempt_id: 'attempt-a',
-        lz_guid: '0xlz',
+        lz_guid: `0x${'ab'.repeat(32)}`,
       }],
     }])
     await markInboxSubmitted({
@@ -209,11 +210,50 @@ describe('solanaLotteryEntryInbox', () => {
       id: 1,
       leaseOwner: 'worker-a',
       submitAttemptId: 'attempt-a',
-      lzGuid: '0xlz',
+      lzGuid: `0x${'ab'.repeat(32)}`,
     })
     const sql = calls[0].strings.join(' ')
     expect(sql).toContain("status = 'quarantined'")
     expect(sql).toContain("quarantine_reason = 'submit_crash_unconfirmed'")
+  })
+
+  it('rejects malformed transport receipts before persistence', async () => {
+    const { db } = createDb([])
+    await expect(markInboxSubmitted({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
+      lzGuid: 'guid-not-hex',
+    })).rejects.toThrow('inbox_submitted_invalid_lz_guid')
+    await expect(markInboxSubmitted({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
+      baseTxHash: '0xshort',
+    })).rejects.toThrow('inbox_submitted_invalid_base_tx_hash')
+    await expect(markInboxSubmitted({
+      db,
+      id: 1,
+      leaseOwner: 'worker-a',
+      submitAttemptId: 'attempt-a',
+      lzGuid: `0x${'ab'.repeat(32)}`,
+      transportSourceTxHash: 'not-a-solana-signature',
+    })).rejects.toThrow('inbox_submitted_invalid_source_tx_hash')
+  })
+
+  it('requires valid confirmation receipts and preserves existing values on replay', async () => {
+    const { db, calls } = createDb([{ rows: [{ ...baseRow, status: 'confirmed' }] }])
+    const lzGuid = `0x${'ab'.repeat(32)}`
+    const baseTxHash = `0x${'cd'.repeat(32)}`
+    await expect(markInboxConfirmed({ db, id: 1 })).rejects.toThrow('inbox_confirmed_invalid_lz_guid')
+    await expect(markInboxConfirmed({ db, id: 1, lzGuid, baseTxHash: '0xshort' })).rejects.toThrow('inbox_confirmed_invalid_base_tx_hash')
+    await markInboxConfirmed({ db, id: 1, lzGuid, baseTxHash })
+    const sql = calls[0].strings.join(' ')
+    expect(sql).toContain("status IN ('submitted', 'confirmed')")
+    expect(sql).toContain('lz_guid IS NULL OR lz_guid =')
+    expect(sql).toContain('base_tx_hash IS NULL OR base_tx_hash =')
   })
 
   it('crash after send: submitting blocks auto re-submit', async () => {

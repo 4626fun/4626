@@ -6,8 +6,8 @@
 #
 # Usage:
 #   COST_PROBE_HOOK_PROGRAM_KEYPAIR=/path/to/keypair.json \
-#   SOLANA_PRIVATE_KEY=... \
-#     bash scripts/deploy-devnet.sh
+#   SOLANA_PRIVATE_KEY=... SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com \
+#     bash scripts/deploy-devnet.sh --execute
 #
 #   bash scripts/deploy-devnet.sh --dry-run
 
@@ -15,12 +15,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROGRAM_ID="EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU"
-RPC_URL="${SOLANA_RPC_URL:-${RPC_URL_SOLANA_TESTNET:-https://api.devnet.solana.com}}"
+RPC_URL="${SOLANA_DEVNET_RPC_URL:-${RPC_URL_SOLANA_TESTNET:-https://api.devnet.solana.com}}"
 DRY_RUN=0
+EXECUTE=0
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --execute) EXECUTE=1 ;;
     --help|-h)
       sed -n '2,18p' "$0"
       exit 0
@@ -31,6 +33,17 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "$DRY_RUN" -eq 1 && "$EXECUTE" -eq 1 ]]; then
+  echo "Use either --dry-run or --execute, not both" >&2
+  exit 1
+fi
+
+# Direct invocation is read-only by default. The explicit --execute flag is
+# required before this helper can deploy or upgrade the devnet program.
+if [[ "$EXECUTE" -ne 1 ]]; then
+  DRY_RUN=1
+fi
 
 if ! command -v solana >/dev/null; then
   echo "solana CLI not on PATH" >&2
@@ -62,10 +75,11 @@ resolve_payer_keypair() {
     local tmp
     tmp="$(mktemp /tmp/creator-share-hook-devnet.XXXXXX.json)"
     REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
-    pnpm -C "$REPO_ROOT/kpr" exec node - <<'NODE' "$tmp"
+    if ! pnpm -C "$REPO_ROOT/kpr" exec node - <<'NODE' "$tmp"; then
 const fs = require('node:fs')
-const bs58 = require('bs58')
-const out = process.argv[1]
+const bs58Module = require('bs58')
+const bs58 = bs58Module.default ?? bs58Module
+const out = process.argv[2]
 const raw = String(process.env.SOLANA_PRIVATE_KEY ?? '').trim()
 let sk
 if (raw.startsWith('[')) sk = Uint8Array.from(JSON.parse(raw))
@@ -73,6 +87,9 @@ else if (fs.existsSync(raw)) sk = Uint8Array.from(JSON.parse(fs.readFileSync(raw
 else sk = bs58.decode(raw)
 fs.writeFileSync(out, JSON.stringify(Array.from(sk)))
 NODE
+      rm -f "$tmp"
+      return 1
+    fi
     echo "$tmp"
     return
   fi
@@ -137,4 +154,4 @@ else
 fi
 
 echo "Devnet hook deploy complete. Run:"
-echo "  pnpm -C frontend ops:pipe-b-devnet-rehearsal -- --live-devnet"
+echo "  pnpm -C frontend ops:pipe-b-devnet-rehearsal -- --live-devnet approve"

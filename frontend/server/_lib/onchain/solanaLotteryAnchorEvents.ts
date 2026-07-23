@@ -197,7 +197,10 @@ export function decodeHookLotteryEventsFromLogs(params: {
     }
 
     if (!active) continue
-    if (!stack.includes(programId)) continue
+    // `Program data:` does not carry an emitter program id. Require the hook
+    // to be the current stack frame, not merely an ancestor, so a CPI cannot
+    // forge a LotteryEntryRecorded discriminator while the hook is active.
+    if (stack[stack.length - 1] !== programId) continue
     if (!line.startsWith(PROGRAM_DATA_PREFIX)) continue
     const decoded = decodeAnchorEventPayload(line.slice(PROGRAM_DATA_PREFIX.length).trim())
     if (!decoded) continue

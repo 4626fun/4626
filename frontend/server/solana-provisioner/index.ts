@@ -4,12 +4,27 @@ import { existsSync, readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import { Connection, Keypair } from '@solana/web3.js'
+import { Connection, Keypair, PublicKey } from '@solana/web3.js'
+import {
+  getMint,
+  getTransferFeeConfig,
+  getTransferHook,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token'
 import { type Hex } from 'viem'
 import { solanaPubkeyToBytes32Hex } from '../_lib/onchain/solanaBridgePubkey.js'
+import { CREATOR_SHARE_HOOK_PROGRAM_ID, deriveCreatorShareHookPdas } from '../_lib/onchain/creatorShareHookPdas.js'
+import { sendLotteryEntryFromSolanaOapp } from '../_lib/onchain/solanaLotteryOappClient.js'
+import { recordSolanaLotteryWinner } from '../_lib/onchain/solanaLotteryWinnerSettlement.js'
+import { CANONICAL_LOTTERY_MANAGER, hashSolanaLotterySourceEventId } from '../_lib/onchain/solanaLotteryLzTransport.js'
+import { parseSolanaLotterySourceEventId } from '../_lib/onchain/solanaLotterySourceEventId.js'
+import { decodeMeteoraTokenBadge } from '../_lib/onchain/solanaMeteoraTokenBadge.js'
+import { hasExactCreatorConfigAmmProgram } from '../_lib/onchain/solanaCreatorConfig.js'
 
 const execFileAsync = promisify(execFile)
 const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
+const DEFAULT_METEORA_DLMM_PROGRAM_ID = 'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo'
 
 type MeteoraAccountMetaBody = {
   pubkey?: string
@@ -37,6 +52,8 @@ function parseBooleanEnv(name: string, fallback: boolean): boolean {
 
 const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv('PROVISIONER_HEALTH_DEBUG', false)
 const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv('PROVISIONER_EXTENDED_ENDPOINTS', false)
+const LOTTERY_OAPP_SEND_ENABLED = parseBooleanEnv('SOLANA_LOTTERY_OAPP_SEND_ENABLED', false)
+const LOTTERY_WINNER_SETTLEMENT_ENABLED = parseBooleanEnv('SOLANA_LOTTERY_WINNER_SETTLEMENT_ENABLED', false)
 
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   const body = JSON.stringify(payload)
@@ -95,6 +112,139 @@ function toErrorText(error: unknown): string {
 
 function readStrictSolPairEnabled(): boolean {
   return envBool('SOLANA_STRICT_SOL_PAIR', true)
+}
+
+const CANONICAL_HOOK_ACCOUNT_SIZES = {
+  creatorConfig: 501,
+  pendingEntries: 12_352,
+  winnerRecord: 89,
+  extraAccountMetaList: 86,
+} as const
+
+/**
+ * Verify the exact Token-2022/hook mint before invoking the pool creator.
+ * Pool creation is a mutation, so a caller must not be able to turn an
+ * arbitrary mint into a B2 pool merely by possessing the provisioner bearer.
+ */
+async function verifyB2PoolMint(params: {
+  connection: Connection
+  tokenMintX: PublicKey
+  tokenMintY: PublicKey
+}): Promise<void> {
+  if (params.tokenMintX.equals(params.tokenMintY)) {
+    throw new Error('meteora_pool_mints_must_be_distinct')
+  }
+  const mintAccount = await params.connection.getAccountInfo(params.tokenMintX, 'finalized')
+  if (!mintAccount || !mintAccount.owner.equals(TOKEN_2022_PROGRAM_ID)) {
+    throw new Error('meteora_pool_token_x_not_token_2022')
+  }
+  const mint = await getMint(params.connection, params.tokenMintX, 'finalized', TOKEN_2022_PROGRAM_ID)
+  const transferHook = getTransferHook(mint)
+  if (!transferHook || !transferHook.programId.equals(new PublicKey(CREATOR_SHARE_HOOK_PROGRAM_ID))) {
+    throw new Error('meteora_pool_token_x_hook_mismatch')
+  }
+  const transferFees = getTransferFeeConfig(mint)
+  if (!transferFees || transferFees.olderTransferFee.transferFeeBasisPoints !== 0 || transferFees.newerTransferFee.transferFeeBasisPoints !== 0) {
+    throw new Error('meteora_pool_token_x_transfer_fee_not_zero')
+  }
+  const oftProgramRaw = String(process.env.SOLANA_OFT_PROGRAM_ID ?? '').trim()
+  if (!oftProgramRaw) throw new Error('meteora_pool_oft_program_id_missing')
+  let oftProgram: PublicKey
+  try {
+    oftProgram = new PublicKey(oftProgramRaw)
+  } catch {
+    throw new Error('meteora_pool_oft_program_id_invalid')
+  }
+  if (!mint.mintAuthority) throw new Error('meteora_pool_mint_authority_missing')
+  const authorityInfo = await params.connection.getAccountInfo(mint.mintAuthority, 'finalized')
+  if (!authorityInfo?.owner.equals(oftProgram)) {
+    throw new Error('meteora_pool_mint_authority_not_oft_store')
+  }
+
+  // Meteora's admin token_badge must already be finalized for this exact
+  // Token-2022 mint. Creating a DLMM pair before this approval produces a
+  // pool that cannot be used by the intended B2 venue, so fail closed before
+  // invoking the pool-creation script.
+  let meteoraProgram: PublicKey
+  try {
+    meteoraProgram = new PublicKey(
+      String(process.env.SOLANA_METEORA_DLMM_PROGRAM_ID ?? '').trim() || DEFAULT_METEORA_DLMM_PROGRAM_ID,
+    )
+  } catch {
+    throw new Error('meteora_pool_dlmm_program_id_invalid')
+  }
+  const [tokenBadge] = PublicKey.findProgramAddressSync(
+    [Buffer.from('token_badge'), params.tokenMintX.toBuffer()],
+    meteoraProgram,
+  )
+  const tokenBadgeInfo = await params.connection.getAccountInfo(tokenBadge, 'finalized')
+  const tokenBadgeDecoded = tokenBadgeInfo
+    ? decodeMeteoraTokenBadge(tokenBadgeInfo.data, params.tokenMintX)
+    : { valid: false, reason: 'missing' }
+  if (!tokenBadgeInfo || !tokenBadgeInfo.owner.equals(meteoraProgram) || !tokenBadgeDecoded.valid) {
+    throw new Error(`meteora_pool_token_badge_missing_or_malformed:${tokenBadgeDecoded.reason}`)
+  }
+
+  const hookPdas = deriveCreatorShareHookPdas(params.tokenMintX.toBase58())
+  if (!hookPdas) throw new Error('meteora_pool_hook_pda_derivation_failed')
+  const hookProgram = new PublicKey(CREATOR_SHARE_HOOK_PROGRAM_ID)
+  const [extraAccountMetaList] = PublicKey.findProgramAddressSync(
+    [Buffer.from('extra-account-metas'), params.tokenMintX.toBuffer()],
+    hookProgram,
+  )
+  const accounts = await params.connection.getMultipleAccountsInfo([
+    new PublicKey(hookPdas.creatorConfig),
+    new PublicKey(hookPdas.pendingEntries),
+    new PublicKey(hookPdas.winnerRecord),
+    extraAccountMetaList,
+  ], 'finalized')
+  const expected = [
+    CANONICAL_HOOK_ACCOUNT_SIZES.creatorConfig,
+    CANONICAL_HOOK_ACCOUNT_SIZES.pendingEntries,
+    CANONICAL_HOOK_ACCOUNT_SIZES.winnerRecord,
+    CANONICAL_HOOK_ACCOUNT_SIZES.extraAccountMetaList,
+  ]
+  if (accounts.some((account, index) => !account || !account.owner.equals(hookProgram) || account.data.length !== expected[index])) {
+    throw new Error('meteora_pool_hook_pdas_missing_or_malformed')
+  }
+  const creatorConfigInfo = accounts[0]
+  if (!creatorConfigInfo || !hasExactCreatorConfigAmmProgram(creatorConfigInfo.data, meteoraProgram.toBase58())) {
+    throw new Error('meteora_pool_creator_config_amm_allowlist_mismatch')
+  }
+}
+
+/**
+ * Verify the standard SPL share-mesh mint for B1. B1 deliberately has no
+ * creator-share TransferHook or relay PDAs; the lottery remains on Base. The
+ * mint authority still has to be the configured OFT Store so a bearer cannot
+ * turn an arbitrary SPL mint into a trading pool.
+ */
+async function verifyB1PoolMint(params: {
+  connection: Connection
+  tokenMintX: PublicKey
+  tokenMintY: PublicKey
+}): Promise<void> {
+  if (params.tokenMintX.equals(params.tokenMintY)) {
+    throw new Error('meteora_pool_mints_must_be_distinct')
+  }
+  const mintAccount = await params.connection.getAccountInfo(params.tokenMintX, 'finalized')
+  if (!mintAccount || !mintAccount.owner.equals(TOKEN_PROGRAM_ID)) {
+    throw new Error('meteora_pool_token_x_not_standard_spl')
+  }
+  const mint = await getMint(params.connection, params.tokenMintX, 'finalized', TOKEN_PROGRAM_ID)
+  const oftProgramRaw = String(process.env.SOLANA_OFT_PROGRAM_ID ?? '').trim()
+  if (!oftProgramRaw) throw new Error('meteora_pool_oft_program_id_missing')
+  let oftProgram: PublicKey
+  try {
+    oftProgram = new PublicKey(oftProgramRaw)
+  } catch {
+    throw new Error('meteora_pool_oft_program_id_invalid')
+  }
+  if (!mint.mintAuthority) throw new Error('meteora_pool_mint_authority_missing')
+  const authorityInfo = await params.connection.getAccountInfo(mint.mintAuthority, 'finalized')
+  if (!authorityInfo?.owner.equals(oftProgram)) {
+    throw new Error('meteora_pool_mint_authority_not_oft_store')
+  }
 }
 
 function readBody(req: IncomingMessage, maxBytes = PROVISIONER_MAX_BODY_BYTES): Promise<string> {
@@ -337,6 +487,7 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
     payerHealthy: payerHealth.payerHealthy,
     payerError: payerHealth.payerError,
     solanaRpcConfigured: String(process.env.SOLANA_RPC_URL ?? '').trim().length > 0,
+    extendedEndpointsEnabled: PROVISIONER_EXTENDED_ENDPOINTS_ENABLED,
     now: new Date().toISOString(),
   }
   if (PROVISIONER_HEALTH_DEBUG_ENABLED) {
@@ -438,6 +589,7 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
 }
 
 type SetupCreatorBody = {
+  mint?: string
   hubCreatorCoin?: string
   hubShareToken?: string
   keeperPubkey?: string
@@ -480,11 +632,14 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
 
   const hubCreatorCoin = String(body?.hubCreatorCoin ?? '').trim()
   const hubShareToken = String(body?.hubShareToken ?? '').trim()
-  if (!hubCreatorCoin || !hubShareToken) {
-    return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareToken are required.' })
+  const mint = String(body?.mint ?? '').trim()
+  if (!hubCreatorCoin || !hubShareToken || !mint) {
+    return json(res, 400, { success: false, error: 'mint, hubCreatorCoin and hubShareToken are required.' })
   }
 
-  let ammPrograms: string[] = []
+  let ammPrograms: string[] = [
+    String(process.env.SOLANA_METEORA_DLMM_PROGRAM_ID ?? '').trim() || DEFAULT_METEORA_DLMM_PROGRAM_ID,
+  ]
   if (body?.ammPrograms !== undefined) {
     if (!Array.isArray(body.ammPrograms)) {
       return json(res, 400, { success: false, error: 'ammPrograms must be an array of non-empty strings when provided.' })
@@ -493,11 +648,28 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
       .map((value) => String(value ?? '').trim())
       .filter((value) => value.length > 0)
   }
+  const canonicalAmmProgram = String(process.env.SOLANA_METEORA_DLMM_PROGRAM_ID ?? '').trim() || DEFAULT_METEORA_DLMM_PROGRAM_ID
+  let canonicalAmmProgramKey: PublicKey
+  try {
+    canonicalAmmProgramKey = new PublicKey(canonicalAmmProgram)
+    ammPrograms = ammPrograms.map((value) => new PublicKey(value).toBase58())
+  } catch {
+    return json(res, 400, { success: false, error: 'configured Meteora DLMM program or ammPrograms is invalid.' })
+  }
+  const canonicalAmmProgramBase58 = canonicalAmmProgramKey.toBase58()
+  if (ammPrograms.some((value) => value !== canonicalAmmProgramBase58)) {
+    return json(res, 400, {
+      success: false,
+      error: `ammPrograms may only contain the configured Meteora DLMM program (${canonicalAmmProgram}).`,
+    })
+  }
+  ammPrograms = [canonicalAmmProgramBase58]
 
   const args = [
     'scripts/solana/deploy/setup-creator-full.ts',
     '--hub-creator-coin', hubCreatorCoin,
     '--hub-share-token', hubShareToken,
+    '--mint', mint,
   ]
   if (body?.keeperPubkey) args.push('--keeper-pubkey', body.keeperPubkey)
   if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))
@@ -539,6 +711,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
 type CreatePoolBody = {
   tokenMintX?: string
   tokenMintY?: string
+  mode?: 'b1' | 'b2'
   binStep?: number
   activeId?: number
   baseFactor?: number
@@ -576,14 +749,48 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
 
   const tokenMintX = String(body?.tokenMintX ?? '').trim()
   const tokenMintY = String(body?.tokenMintY ?? '').trim()
+  const mode = body?.mode === 'b1' ? 'b1' : body?.mode === 'b2' ? 'b2' : 'b2'
   if (!tokenMintX || !tokenMintY) {
     return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY are required.' })
+  }
+  let tokenMintXKey: PublicKey
+  let tokenMintYKey: PublicKey
+  try {
+    tokenMintXKey = new PublicKey(tokenMintX)
+    tokenMintYKey = new PublicKey(tokenMintY)
+  } catch {
+    return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY must be valid Solana pubkeys.' })
+  }
+  if (tokenMintXKey.equals(tokenMintYKey)) {
+    return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY must be distinct.' })
   }
   if (readStrictSolPairEnabled() && tokenMintY !== SOLANA_NATIVE_MINT) {
     return json(res, 400, {
       success: false,
       error:
         `SOLANA_STRICT_SOL_PAIR is enabled. tokenMintY must be ${SOLANA_NATIVE_MINT}, received ${tokenMintY}.`,
+    })
+  }
+  const configuredQuoteMint = String(process.env.SOLANA_METEORA_POOL_QUOTE_MINT ?? '').trim()
+  if (configuredQuoteMint && tokenMintY !== configuredQuoteMint) {
+    return json(res, 400, {
+      success: false,
+      error: `tokenMintY does not match SOLANA_METEORA_POOL_QUOTE_MINT (${configuredQuoteMint}).`,
+    })
+  }
+  const rpcUrl = String(process.env.SOLANA_RPC_URL ?? '').trim()
+  if (!rpcUrl) return json(res, 503, { success: false, error: 'SOLANA_RPC_URL is not configured.' })
+  try {
+    const connection = new Connection(rpcUrl, 'finalized')
+    if (mode === 'b1') {
+      await verifyB1PoolMint({ connection, tokenMintX: tokenMintXKey, tokenMintY: tokenMintYKey })
+    } else {
+      await verifyB2PoolMint({ connection, tokenMintX: tokenMintXKey, tokenMintY: tokenMintYKey })
+    }
+  } catch (error) {
+    return json(res, 409, {
+      success: false,
+      error: `${mode.toUpperCase()} pool mint verification failed: ${toErrorText(error)}`,
     })
   }
 
@@ -611,6 +818,180 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
   }
 }
 
+type LotteryOappSendBody = {
+  payload?: string
+  payloadHash?: string
+  sourceEventId?: string
+  sourceEventDigest?: string
+  peerBytes32?: string
+  lotteryManager?: string
+}
+
+async function handleLotteryOappSend(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = readProvisionerBearerSecret().value
+  if (!secret) return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
+  if (!authOk(req, secret)) return json(res, 401, { success: false, error: 'Unauthorized' })
+  if (!LOTTERY_OAPP_SEND_ENABLED) {
+    return json(res, 503, { success: false, error: 'Solana lottery OApp sender is disabled.' })
+  }
+
+  let body: LotteryOappSendBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as LotteryOappSendBody
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const payload = String(body.payload ?? '').trim().toLowerCase()
+  const payloadHash = String(body.payloadHash ?? '').trim().toLowerCase()
+  const sourceEventId = String(body.sourceEventId ?? '').trim()
+  const sourceEventDigest = String(body.sourceEventDigest ?? '').trim().toLowerCase()
+  const idempotencyKey = String(req.headers['idempotency-key'] ?? '').trim().toLowerCase()
+  const peerBytes32 = String(body.peerBytes32 ?? '').trim().toLowerCase()
+  const lotteryManager = String(body.lotteryManager ?? '').trim().toLowerCase()
+  if (!/^0x[a-f0-9]+$/.test(payload) || payload.length % 2 !== 0 || payload.length > 8_194) {
+    return json(res, 400, { success: false, error: 'Invalid payload.' })
+  }
+  if (!sourceEventId || !/^0x[a-f0-9]{64}$/.test(payloadHash) || !/^0x[a-f0-9]{64}$/.test(sourceEventDigest)) {
+    return json(res, 400, { success: false, error: 'Invalid payloadHash or sourceEventDigest.' })
+  }
+  try {
+    parseSolanaLotterySourceEventId(sourceEventId)
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid sourceEventId.' })
+  }
+  if (/^0x0{64}$/.test(payloadHash) || /^0x0{64}$/.test(sourceEventDigest)) {
+    return json(res, 400, { success: false, error: 'Payload hash and sourceEventDigest must be non-zero.' })
+  }
+  if (idempotencyKey !== sourceEventDigest) {
+    return json(res, 400, { success: false, error: 'Idempotency-Key must match sourceEventDigest.' })
+  }
+  const payloadBytes = Buffer.from(payload.slice(2), 'hex')
+  if (payloadBytes.length !== 224 || `0x${payloadBytes.subarray(192, 224).toString('hex')}` !== sourceEventDigest) {
+    return json(res, 400, { success: false, error: 'sourceEventDigest is not bound to the V3 payload.' })
+  }
+  if (hashSolanaLotterySourceEventId(sourceEventId).toLowerCase() !== sourceEventDigest) {
+    return json(res, 400, { success: false, error: 'sourceEventDigest does not match sourceEventId.' })
+  }
+  if (!/^0x[a-f0-9]{64}$/.test(peerBytes32) || !/^0x[a-f0-9]{40}$/.test(lotteryManager)) {
+    return json(res, 400, { success: false, error: 'Invalid OApp peer or LotteryManager.' })
+  }
+  if (lotteryManager !== CANONICAL_LOTTERY_MANAGER.toLowerCase()) {
+    return json(res, 400, { success: false, error: 'Non-canonical LotteryManager.' })
+  }
+
+  const rpcUrl = String(process.env.SOLANA_RPC_URL ?? '').trim()
+  const programIdRaw = String(process.env.SOLANA_LOTTERY_OAPP_PROGRAM_ID ?? '').trim()
+  const expectedOperatorRaw = String(process.env.SOLANA_LOTTERY_OAPP_OPERATOR_PUBKEY ?? '').trim()
+  const { keypair } = resolveProvisionerPayerKeypair()
+  if (!rpcUrl || !programIdRaw || !expectedOperatorRaw || !keypair) {
+    return json(res, 503, { success: false, error: 'OApp RPC, program id, operator, or payer is not configured.' })
+  }
+  let programId: PublicKey
+  try {
+    programId = new PublicKey(programIdRaw)
+  } catch {
+    return json(res, 503, { success: false, error: 'SOLANA_LOTTERY_OAPP_PROGRAM_ID is invalid.' })
+  }
+  let expectedOperator: PublicKey
+  try {
+    expectedOperator = new PublicKey(expectedOperatorRaw)
+  } catch {
+    return json(res, 503, { success: false, error: 'SOLANA_LOTTERY_OAPP_OPERATOR_PUBKEY is invalid.' })
+  }
+  if (!expectedOperator.equals(keypair.publicKey)) {
+    return json(res, 503, { success: false, error: 'Configured OApp operator does not match the provisioner payer.' })
+  }
+
+  try {
+    const sent = await sendLotteryEntryFromSolanaOapp({
+      connection: new Connection(rpcUrl, 'finalized'),
+      programId,
+      payer: keypair,
+      request: {
+        payload: payload as Hex,
+        expectedPayloadHash: payloadHash as Hex,
+        expectedPeerBytes32: peerBytes32 as Hex,
+        expectedLotteryManager: lotteryManager as `0x${string}`,
+      },
+    })
+    return json(res, 200, {
+      success: true,
+      lzGuid: sent.lzGuid,
+      solanaSignature: sent.solanaSignature,
+      sourceEventDigest,
+      payloadHash: sent.payloadHash,
+      baseTxHash: null,
+    })
+  } catch (error) {
+    return json(res, 502, { success: false, error: `OApp send failed: ${toErrorText(error)}` })
+  }
+}
+
+type LotteryWinnerSettlementBody = {
+  creatorMint?: string
+  winnerSolana?: string
+  sharesPaid?: string
+  winId?: string
+}
+
+async function handleLotteryWinnerSettlement(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = readProvisionerBearerSecret().value
+  if (!secret) return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
+  if (!authOk(req, secret)) return json(res, 401, { success: false, error: 'Unauthorized' })
+  if (!LOTTERY_WINNER_SETTLEMENT_ENABLED) {
+    return json(res, 503, { success: false, error: 'Solana lottery winner settlement is disabled.' })
+  }
+
+  let body: LotteryWinnerSettlementBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as LotteryWinnerSettlementBody
+  } catch (error) {
+    if (error instanceof Error && error.message === 'request_body_too_large') {
+      return json(res, 413, { success: false, error: 'Request body too large.' })
+    }
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+  const creatorMint = String(body.creatorMint ?? '').trim()
+  const winnerSolana = String(body.winnerSolana ?? '').trim()
+  const winId = String(body.winId ?? '').trim().toLowerCase()
+  let sharesPaid: bigint
+  try {
+    sharesPaid = BigInt(String(body.sharesPaid ?? ''))
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid sharesPaid.' })
+  }
+  if (!/^0x[a-f0-9]{64}$/.test(winId) || sharesPaid <= 0n || sharesPaid > 0xffff_ffff_ffff_ffffn) {
+    return json(res, 400, { success: false, error: 'Invalid winId or sharesPaid.' })
+  }
+  try {
+    new PublicKey(creatorMint)
+    new PublicKey(winnerSolana)
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid creatorMint or winnerSolana.' })
+  }
+  const rpcUrl = String(process.env.SOLANA_RPC_URL ?? '').trim()
+  const { keypair } = resolveProvisionerPayerKeypair()
+  if (!rpcUrl || !keypair) {
+    return json(res, 503, { success: false, error: 'Winner settlement RPC or payer is not configured.' })
+  }
+  try {
+    const settled = await recordSolanaLotteryWinner({
+      connection: new Connection(rpcUrl, 'finalized'),
+      payer: keypair,
+      request: { creatorMint, winnerSolana, sharesPaid, winId: winId as Hex },
+    })
+    return json(res, 200, { success: true, ...settled, winId })
+  } catch (error) {
+    return json(res, 502, { success: false, error: `Winner settlement failed: ${toErrorText(error)}` })
+  }
+}
+
 async function main(): Promise<void> {
   const host = String(process.env.PROVISIONER_HOST ?? '127.0.0.1').trim() || '127.0.0.1'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
@@ -624,6 +1005,12 @@ async function main(): Promise<void> {
     }
     if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/create-pool') {
       return handleCreatePool(req, res)
+    }
+    if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/send-lottery-oapp') {
+      return handleLotteryOappSend(req, res)
+    }
+    if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/record-lottery-winner') {
+      return handleLotteryWinnerSettlement(req, res)
     }
     return json(res, 404, { success: false, error: 'Not found' })
   })

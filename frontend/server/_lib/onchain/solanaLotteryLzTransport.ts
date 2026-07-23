@@ -21,6 +21,8 @@ export const SOLANA_LOTTERY_SOURCE_EVENT_DOMAIN = '4626.solana.lottery.source-ev
 /** Solana mainnet LayerZero endpoint id. */
 export const SOLANA_LZ_EID = 30168
 export const CANONICAL_LOTTERY_MANAGER = '0xb45e68a5867935a5734e4185977f81c528006650'
+export const CANONICAL_LOTTERY_MANAGER_PEER_BYTES32 =
+  `0x${CANONICAL_LOTTERY_MANAGER.slice(2).padStart(64, '0')}` as `0x${string}`
 
 export type SolanaLotteryLzPayloadInput = {
   buyer: `0x${string}`
@@ -72,6 +74,9 @@ export function buildSolanaLotteryLzV3Payload(input: SolanaLotteryLzPayloadInput
   if (input.buyer.toLowerCase() === zero) throw new Error('invalid_buyer')
   if (input.tokenIn.toLowerCase() === zero) throw new Error('invalid_token_in')
   if (input.amount <= 0n) throw new Error('invalid_amount')
+  if (!Number.isInteger(input.sourceChainId) || input.sourceChainId < 0 || input.sourceChainId > 0xffff_ffff) {
+    throw new Error('invalid_source_chain_id')
+  }
   if (!/^0x[a-fA-F0-9]{64}$/.test(input.sourceEventId) || /^0x0{64}$/i.test(input.sourceEventId)) {
     throw new Error('invalid_source_event_id')
   }
@@ -106,6 +111,7 @@ export function hashSolanaLotterySourceEventId(sourceEventId: string): Hex {
 
 export function assessSolanaLotteryLzTransportReadiness(
   env: NodeJS.ProcessEnv = process.env,
+  options: { allowCanary?: boolean } = {},
 ): SolanaLotteryLzTransportReadiness {
   const reasons: string[] = []
   const relayEntriesEnabled = ['1', 'true', 'yes'].includes(
@@ -129,12 +135,31 @@ export function assessSolanaLotteryLzTransportReadiness(
     return /^0x[a-f0-9]{40}$/.test(raw) ? (raw as `0x${string}`) : null
   })()
 
-  if (!relayEntriesEnabled) reasons.push('relay_flag_disabled')
+  // A single-use, DB-backed canary authorization is the only path allowed to
+  // bypass the production relay flag. The caller must prove that authorization
+  // was consumed before passing allowCanary to submit.
+  if (!relayEntriesEnabled && !options.allowCanary) reasons.push('relay_flag_disabled')
   if (!transportReadyEnv) reasons.push('transport_ready_env_unset')
   if (!peerBytes32) reasons.push('missing_solana_lottery_oapp_peer')
+  else if (peerBytes32 !== CANONICAL_LOTTERY_MANAGER_PEER_BYTES32) {
+    reasons.push('noncanonical_solana_lottery_oapp_peer')
+  }
   if (!lotteryManager) reasons.push('missing_lottery_manager')
   else if (lotteryManager !== CANONICAL_LOTTERY_MANAGER) {
     reasons.push('noncanonical_lottery_manager')
+  }
+  const senderMode = String(env.SOLANA_LOTTERY_OAPP_SENDER_MODE ?? '').trim().toLowerCase()
+  if (senderMode === 'http') {
+    if (!String(env.SOLANA_LOTTERY_OAPP_SEND_URL ?? '').trim()) reasons.push('missing_oapp_send_url')
+    if (!String(env.SOLANA_LOTTERY_OAPP_SEND_TOKEN ?? '').trim()) {
+      reasons.push('missing_oapp_send_token')
+    }
+  } else if (senderMode === 'mock') {
+    if (!['1', 'true', 'yes'].includes(String(env.SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND ?? '').trim().toLowerCase())) {
+      reasons.push('mock_oapp_send_forbidden')
+    }
+  } else {
+    reasons.push(senderMode ? 'unknown_oapp_sender_mode' : 'missing_oapp_sender_mode')
   }
   // Twin adapter must never be treated as active transport.
   const twin = String(env.SOLANA_BRIDGE_ADAPTER_ADDRESS ?? '').trim().toLowerCase()
@@ -164,6 +189,7 @@ export type SolanaLotteryLzSubmitResult = {
   ok: true
   lzGuid: string
   baseTxHash: string | null
+  solanaSignature: string
   payload: Hex
 }
 
@@ -173,14 +199,16 @@ export type SolanaLotteryLzSubmitResult = {
  */
 export async function submitSolanaLotteryEntryViaLz(
   request: SolanaLotteryLzSubmitRequest,
-  options?: { sender?: SolanaLotteryOappSender | null },
+  options?: { sender?: SolanaLotteryOappSender | null; canaryAuthorized?: boolean },
 ): Promise<SolanaLotteryLzSubmitResult> {
   // Explicit guard: EOA / processSwapLottery is architecturally forbidden.
   if (envFlag('SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP')) {
     throw new Error(SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN)
   }
 
-  const readiness = assessSolanaLotteryLzTransportReadiness()
+  const readiness = assessSolanaLotteryLzTransportReadiness(process.env, {
+    allowCanary: options?.canaryAuthorized === true,
+  })
   if (!readiness.ready) {
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${readiness.reasons.join(',')}`)
   }
@@ -219,6 +247,7 @@ export async function submitSolanaLotteryEntryViaLz(
       ok: true,
       lzGuid: sent.lzGuid,
       baseTxHash: sent.baseTxHash,
+      solanaSignature: sent.solanaSignature,
       payload,
     }
   } catch (error) {
@@ -226,14 +255,4 @@ export async function submitSolanaLotteryEntryViaLz(
     if (message.startsWith(SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE)) throw error
     throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:${message}`)
   }
-}
-
-/** Winner relay stub — fail closed (Twin winner path retired). */
-export async function submitSolanaLotteryWinnerViaLz(_params: {
-  winId: `0x${string}`
-  creatorMint: string
-  winnerSolana: string
-  sharesPaid: bigint
-}): Promise<never> {
-  throw new Error(`${SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE}:winner_relay_not_implemented`)
 }

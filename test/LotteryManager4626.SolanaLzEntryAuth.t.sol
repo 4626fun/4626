@@ -161,10 +161,11 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         return Origin({srcEid: SOLANA_EID, sender: sender, nonce: 1});
     }
 
-    function test_unauthorizedSolanaRemoteOftReverts() public {
+    function test_unauthorizedSolanaRemoteOftSkippedNotBricked() public {
+        // ODA-461-11: unauthorized inbound emits+returns (does not revert / brick LZ).
         bytes memory payload = _v3Payload(keccak256("event-1"));
-        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
         lotteryManager.exposedLzReceive(_origin(bytes32(uint256(0x99))), payload);
+        assertEq(integrator.requestCount(), 0);
     }
 
     function test_unauthorizedHubForwarderReverts() public {
@@ -279,5 +280,41 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         vm.prank(hubForwarder);
         lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
         assertEq(integrator.requestCount(), 1);
+    }
+
+    /// @notice ODA-460-[2]: duplicate forwarder delivery must not assembly-return past
+    ///         `nonReentrant`'s epilogue (permanent ENTERED brick).
+    function test_forwarderDuplicateSourceEventDoesNotBrickNonReentrant() public {
+        bytes memory payload = _v3Payload(keccak256("fwd-dup"));
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
+        assertEq(integrator.requestCount(), 1);
+
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload);
+        assertEq(integrator.requestCount(), 1, "duplicate must be a no-op");
+
+        bytes memory payload2 = _v3Payload(keccak256("fwd-dup-2"));
+        vm.prank(hubForwarder);
+        lotteryManager.receiveRemoteLotteryEntry(SOLANA_EID, solanaPeer, payload2);
+        assertEq(integrator.requestCount(), 2, "nonReentrant must not stay ENTERED after duplicate");
+    }
+
+    /// @notice ODA-460-6: replay key is namespaced by (srcEid, originSender, sourceEventId).
+    function test_sameSourceEventIdDifferentOriginDoesNotCollide() public {
+        bytes32 sourceEventId = keccak256("shared-id");
+        bytes32 otherPeer = bytes32(uint256(0x52));
+
+        vm.startPrank(owner);
+        lotteryManager.setAuthorizedRemoteOFT(SOLANA_EID, otherPeer, true);
+        vm.stopPrank();
+
+        lotteryManager.exposedLzReceive(_origin(solanaPeer), _v3Payload(sourceEventId));
+        assertEq(integrator.requestCount(), 1);
+
+        lotteryManager.exposedLzReceive(
+            Origin({srcEid: SOLANA_EID, sender: otherPeer, nonce: 2}), _v3Payload(sourceEventId)
+        );
+        assertEq(integrator.requestCount(), 2, "namespaced keys must not collide across peers");
     }
 }

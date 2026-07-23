@@ -4,15 +4,18 @@
  * Measures payer SOL spent (balance delta incl. rent + fees) without mainnet funds.
  * Rent lamports/byte matches mainnet; use local validator when devnet faucet is limited.
  *
- *   pnpm -C kpr solana:cost-probe-devnet
+ *   pnpm -C kpr solana:cost-probe-devnet -- --execute
  *
  * Optional env:
- *   SOLANA_RPC_URL                 — devnet RPC (preferred)
+ *   SOLANA_DEVNET_RPC_URL          — devnet RPC (preferred when both are loaded)
+ *   SOLANA_RPC_URL                 — devnet RPC (accepted when it is actually devnet/local)
  *   RPC_URL_SOLANA_TESTNET         — LayerZero alias for devnet RPC
  *   SOLANA_PRIVATE_KEY             — fallback when COST_PROBE_KEYPAIR unset
  *   COST_PROBE_KEYPAIR             — base58, JSON array, or keypair path
  *   COST_PROBE_TARGET_SOL          — funding target (default 6)
- *   COST_PROBE_HOOK_PROGRAM_KEYPAIR — path to Ejpzi program id keypair for one-time devnet hook deploy
+ *   COST_PROBE_HOOK_PROGRAM_KEYPAIR — path to the selected hook program-id keypair for one-time devnet hook deploy
+ *   SOLANA_HOOK_PROGRAM_ID          — devnet/local-only hook program override
+ *   SOLANA_HOOK_SO_PATH             — devnet/local-only matching hook binary override
  *   SKIP_PROGRAM_DEPLOY            — "1" skip Path 1 LZ-proxy program deploy
  *   SKIP_METEORA                   — "1" skip DLMM pool create
  *   SKIP_HOOK                      — "1" skip hook mint + PDA init
@@ -20,12 +23,12 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
-import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
 import {
   ExtensionType,
   NATIVE_MINT,
@@ -43,30 +46,27 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 import { CHAINS } from '../../config.js';
-import idl from '../../../programs/creator-share-hook/target/idl/creator_share_hook.json' with {
-  type: 'json',
-};
-
+import { sendConfirmedSolanaTransaction } from '../../utils/solana.js';
 const require = createRequire(import.meta.url);
-const DLMM = require('@meteora-ag/dlmm');
 const { BN } = require('@coral-xyz/anchor');
+const DLMM = require('@meteora-ag/dlmm');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const KPR_ROOT = resolve(__dirname, '../..');
 const REPO_ROOT = resolve(KPR_ROOT, '..');
-const HOOK_SO = resolve(
+const DEFAULT_HOOK_SO = resolve(
   REPO_ROOT,
   'programs/creator-share-hook/target/deploy/creator_share_hook.so',
 );
+const HOOK_SO = String(process.env.SOLANA_HOOK_SO_PATH ?? '').trim() || DEFAULT_HOOK_SO;
 const DEFAULT_RPC = 'https://api.devnet.solana.com';
-const KEYPAIR_FILE = '/tmp/4626-devnet-cost-probe.json';
-const LZ_PROXY_PROGRAM_KEYPAIR_FILE = '/tmp/4626-devnet-lz-proxy-program.json';
-const HOOK_PROGRAM_ID = new PublicKey(CHAINS.solana.programId);
+const HOOK_PROGRAM_ID = new PublicKey(
+  String(process.env.SOLANA_HOOK_PROGRAM_ID ?? '').trim() || CHAINS.solana.programId,
+);
 
 const HOOK_PDA_RENT_BYTES = {
   creatorConfig: 501,
@@ -83,6 +83,41 @@ type StepResult = {
   estimated?: boolean;
 };
 
+export type CostProbeCli = {
+  help: boolean;
+  execute: boolean;
+  unknown: string[];
+};
+
+type LoadedPayer = {
+  keypair: Keypair;
+  keypairFile: string | null;
+  source: 'file' | 'generated_tmp' | 'inline_env';
+};
+
+/**
+ * Parse the explicit execution gate before any RPC connection or key material
+ * is touched. Unknown arguments are rejected so a typo can never fall through
+ * to a live devnet mutation.
+ */
+export function parseCostProbeArgs(args: readonly string[]): CostProbeCli {
+  const help = args.includes('--help') || args.includes('-h');
+  const execute = args.includes('--execute') || args.includes('--live-devnet');
+  const unknown = args.filter((arg) => !['--', '--help', '-h', '--execute', '--live-devnet'].includes(arg));
+  return { help, execute, unknown };
+}
+
+function printUsage(): void {
+  console.log(`Solana devnet cost probe (mutating rehearsal)
+
+Usage:
+  pnpm -C kpr solana:cost-probe-devnet -- --execute
+
+The probe is fail-closed by default. --execute (or --live-devnet) is required
+after explicit operator approval and a passing read-only devnet preflight.
+--help only prints this message and never contacts Solana.`);
+}
+
 function envFlag(name: string): boolean {
   return String(process.env[name] ?? '').trim() === '1';
 }
@@ -93,6 +128,19 @@ function isLocalRpc(rpcUrl: string): boolean {
 
 function isDevnetRpc(rpcUrl: string): boolean {
   return rpcUrl.includes('devnet') || isLocalRpc(rpcUrl);
+}
+
+function redactRpcUrl(rpcUrl: string): string {
+  try {
+    const parsed = new URL(rpcUrl);
+    // Paid providers commonly put the API key in the path. Keep only the
+    // origin so operator logs can be shared without leaking credentials.
+    return parsed.pathname === '/' && !parsed.search
+      ? parsed.origin
+      : `${parsed.origin}/<redacted>`;
+  } catch {
+    return '<redacted-rpc-url>';
+  }
 }
 
 function loadKeypairFromRaw(raw: string): Keypair {
@@ -106,28 +154,60 @@ function loadKeypairFromRaw(raw: string): Keypair {
   return Keypair.fromSecretKey(bs58.decode(raw));
 }
 
+export function createSecureEphemeralKeypairFile(
+  secretKey: Uint8Array,
+  stem = 'payer',
+): string {
+  const directory = mkdtempSync(join(tmpdir(), '4626-devnet-cost-probe-'));
+  const path = join(directory, `${stem}.json`);
+  writeFileSync(path, JSON.stringify(Array.from(secretKey)), {
+    encoding: 'utf8',
+    flag: 'wx',
+    mode: 0o600,
+  });
+  return path;
+}
+
 function resolveDevnetRpcUrl(): string {
+  const explicitDevnet = String(process.env.SOLANA_DEVNET_RPC_URL ?? '').trim();
+  if (explicitDevnet) return explicitDevnet;
   const explicit = String(process.env.SOLANA_RPC_URL ?? '').trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    if (!isDevnetRpc(explicit)) {
+      throw new Error(
+        'SOLANA_RPC_URL_FOR_DEVNET_PROBE_MUST_BE_DEVNET_OR_LOCAL: set SOLANA_DEVNET_RPC_URL for a loaded mainnet SOLANA_RPC_URL',
+      );
+    }
+    return explicit;
+  }
   const lzAlias = String(process.env.RPC_URL_SOLANA_TESTNET ?? '').trim();
   if (lzAlias) return lzAlias;
   return DEFAULT_RPC;
 }
 
-function loadOrCreateKeypair(): Keypair {
+function loadOrCreateKeypair(): LoadedPayer {
   const raw =
     String(process.env.COST_PROBE_KEYPAIR ?? '').trim() ||
     String(process.env.SOLANA_PRIVATE_KEY ?? '').trim();
-  if (raw) return loadKeypairFromRaw(raw);
-  if (existsSync(KEYPAIR_FILE)) {
-    return loadKeypairFromRaw(KEYPAIR_FILE);
+  if (raw) {
+    if (existsSync(raw)) {
+      return { keypair: loadKeypairFromRaw(raw), keypairFile: raw, source: 'file' };
+    }
+    return { keypair: loadKeypairFromRaw(raw), keypairFile: null, source: 'inline_env' };
   }
   const kp = Keypair.generate();
-  writeFileSync(KEYPAIR_FILE, JSON.stringify(Array.from(kp.secretKey)));
+  const keypairFile = createSecureEphemeralKeypairFile(kp.secretKey);
   console.warn(
-    `No COST_PROBE_KEYPAIR or SOLANA_PRIVATE_KEY — generated ephemeral payer at ${KEYPAIR_FILE}. Fund devnet SOL or set SOLANA_PRIVATE_KEY.`,
+    'No COST_PROBE_KEYPAIR or SOLANA_PRIVATE_KEY — generated a mode-0600 ephemeral payer. Fund devnet SOL or set COST_PROBE_KEYPAIR to an existing protected keypair path.',
   );
-  return kp;
+  return { keypair: kp, keypairFile, source: 'generated_tmp' };
+}
+
+function requirePayerKeypairFile(payer: LoadedPayer, context: string): string {
+  if (payer.keypairFile) return payer.keypairFile;
+  throw new Error(
+    `Refusing to persist inline env key for ${context}. Set COST_PROBE_KEYPAIR to an existing keypair file instead.`,
+  );
 }
 
 async function assertRpcReachable(connection: Connection, rpcUrl: string): Promise<void> {
@@ -142,7 +222,7 @@ async function assertRpcReachable(connection: Connection, rpcUrl: string): Promi
       if (attempt >= maxAttempts) {
         if (isRateLimit && rpcUrl.includes('api.devnet.solana.com')) {
           throw new Error(
-            `Solana devnet RPC rate-limited (429). Set SOLANA_RPC_URL or RPC_URL_SOLANA_TESTNET to a paid devnet endpoint, or use SOLANA_RPC_URL=http://127.0.0.1:8899 with solana-test-validator.`,
+            `Solana devnet RPC rate-limited (429). Set SOLANA_DEVNET_RPC_URL (or RPC_URL_SOLANA_TESTNET) to a paid devnet endpoint, or use SOLANA_RPC_URL=http://127.0.0.1:8899 with solana-test-validator.`,
           );
         }
         throw error;
@@ -152,13 +232,12 @@ async function assertRpcReachable(connection: Connection, rpcUrl: string): Promi
   }
 }
 
-function loadOrCreateProgramKeypair(path: string): Keypair {
-  if (existsSync(path)) {
-    return loadKeypairFromRaw(path);
-  }
+function createProgramKeypair(): { keypair: Keypair; path: string } {
   const kp = Keypair.generate();
-  writeFileSync(path, JSON.stringify(Array.from(kp.secretKey)));
-  return kp;
+  return {
+    keypair: kp,
+    path: createSecureEphemeralKeypairFile(kp.secretKey, 'lz-proxy-program'),
+  };
 }
 
 async function sleep(ms: number) {
@@ -168,32 +247,40 @@ async function sleep(ms: number) {
 async function fundPayer(
   connection: Connection,
   rpcUrl: string,
-  payer: Keypair,
+  payer: LoadedPayer,
   targetSol: number,
 ): Promise<number> {
   const target = targetSol * LAMPORTS_PER_SOL;
-  let bal = await connection.getBalance(payer.publicKey, 'confirmed');
+  let bal = await connection.getBalance(payer.keypair.publicKey, 'confirmed');
   if (bal >= target) return bal;
 
   if (isLocalRpc(rpcUrl)) {
-    execFileSync(
-      'solana',
-      [
-        'airdrop',
-        String(Math.ceil(targetSol)),
-        payer.publicKey.toBase58(),
-        '--url',
-        rpcUrl,
-        '--keypair',
-        KEYPAIR_FILE,
-      ],
-      { stdio: 'inherit' },
+    if (payer.keypairFile) {
+      execFileSync(
+        'solana',
+        [
+          'airdrop',
+          String(Math.ceil(targetSol)),
+          payer.keypair.publicKey.toBase58(),
+          '--url',
+          rpcUrl,
+          '--keypair',
+          payer.keypairFile,
+        ],
+        { stdio: 'inherit' },
+      );
+      return connection.getBalance(payer.keypair.publicKey, 'confirmed');
+    }
+    const sig = await connection.requestAirdrop(
+      payer.keypair.publicKey,
+      Math.ceil(targetSol * LAMPORTS_PER_SOL),
     );
-    return connection.getBalance(payer.publicKey, 'confirmed');
+    await connection.confirmTransaction(sig, 'confirmed');
+    return connection.getBalance(payer.keypair.publicKey, 'confirmed');
   }
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    bal = await connection.getBalance(payer.publicKey, 'confirmed');
+    bal = await connection.getBalance(payer.keypair.publicKey, 'confirmed');
     if (bal >= target) return bal;
     const chunkSol = Math.min(1, targetSol - bal / LAMPORTS_PER_SOL);
     try {
@@ -202,18 +289,18 @@ async function fundPayer(
         [
           'airdrop',
           String(chunkSol),
-          payer.publicKey.toBase58(),
+          payer.keypair.publicKey.toBase58(),
           '--url',
           rpcUrl,
           '--keypair',
-          KEYPAIR_FILE,
+          requirePayerKeypairFile(payer, 'devnet airdrop'),
         ],
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
       );
     } catch {
       try {
         const sig = await connection.requestAirdrop(
-          payer.publicKey,
+          payer.keypair.publicKey,
           Math.floor(chunkSol * LAMPORTS_PER_SOL),
         );
         await connection.confirmTransaction(sig, 'confirmed');
@@ -224,7 +311,7 @@ async function fundPayer(
     await sleep(4000);
   }
 
-  return connection.getBalance(payer.publicKey, 'confirmed');
+  return connection.getBalance(payer.keypair.publicKey, 'confirmed');
 }
 
 async function measureStep(
@@ -264,7 +351,7 @@ async function rentEstimateStep(
 async function ensureHookProgramDeployed(
   connection: Connection,
   rpcUrl: string,
-  payer: Keypair,
+  payer: LoadedPayer,
 ): Promise<{ deployed: boolean; note?: string }> {
   const existing = await connection.getAccountInfo(HOOK_PROGRAM_ID);
   if (existing?.executable) {
@@ -299,7 +386,7 @@ async function ensureHookProgramDeployed(
       '--url',
       rpcUrl,
       '--keypair',
-      KEYPAIR_FILE,
+      requirePayerKeypairFile(payer, 'hook program deploy'),
       '--program-id',
       programKeypairPath,
       '--with-compute-unit-price',
@@ -315,24 +402,87 @@ async function ensureHookProgramDeployed(
   return { deployed: true, note: `deployed hook to ${HOOK_PROGRAM_ID.toBase58()}` };
 }
 
+/**
+ * Validate every hook-deploy input before the probe can fund a payer or touch
+ * any unrelated Path-1/Meteora account. A missing or mismatched selected
+ * program-id keypair is an operator/configuration error, not a reason to
+ * continue with partial devnet mutations.
+ */
+export async function preflightHookMutationInputs(connection: Pick<Connection, 'getAccountInfo'>): Promise<void> {
+  if (envFlag('SKIP_HOOK')) return
+
+  const existing = await connection.getAccountInfo(HOOK_PROGRAM_ID, 'finalized')
+  if (existing?.executable) return
+
+  if (envFlag('SKIP_HOOK_DEPLOY')) {
+    throw new Error(
+      `hook_program_missing_and_skip_hook_deploy_enabled:${HOOK_PROGRAM_ID.toBase58()} (set SKIP_HOOK=1 only for a non-hook probe)`,
+    )
+  }
+
+  const programKeypairPath = String(process.env.COST_PROBE_HOOK_PROGRAM_KEYPAIR ?? '').trim()
+  if (!programKeypairPath) {
+    throw new Error(`hook_program_missing_keypair_required:${HOOK_PROGRAM_ID.toBase58()}`)
+  }
+  if (!existsSync(programKeypairPath)) {
+    throw new Error(`hook_program_keypair_not_found:${programKeypairPath}`)
+  }
+  let programKeypair: Keypair
+  try {
+    programKeypair = loadKeypairFromRaw(programKeypairPath)
+  } catch {
+    throw new Error(`hook_program_keypair_invalid:${programKeypairPath}`)
+  }
+  if (!programKeypair.publicKey.equals(HOOK_PROGRAM_ID)) {
+    throw new Error(
+      `hook_program_keypair_mismatch:${programKeypair.publicKey.toBase58()}:${HOOK_PROGRAM_ID.toBase58()}`,
+    )
+  }
+  if (!existsSync(HOOK_SO)) {
+    throw new Error(`Missing hook binary: ${HOOK_SO}`)
+  }
+}
+
 async function main() {
+  const cli = parseCostProbeArgs(process.argv.slice(2));
+  if (cli.help) {
+    printUsage();
+    return;
+  }
+  if (cli.unknown.length > 0) {
+    console.error(`Unknown cost-probe argument(s): ${cli.unknown.join(', ')}`);
+    printUsage();
+    process.exitCode = 2;
+    return;
+  }
+  if (!cli.execute) {
+    console.error('Refusing devnet mutation: pass --execute only after explicit approval and a passing read-only preflight.');
+    process.exitCode = 2;
+    return;
+  }
+
   const rpcUrl = resolveDevnetRpcUrl();
+  if (String(process.env.SOLANA_HOOK_PROGRAM_ID ?? '').trim() && !isDevnetRpc(rpcUrl)) {
+    throw new Error('SOLANA_HOOK_PROGRAM_ID_OVERRIDE_REQUIRES_DEVNET_OR_LOCAL_RPC');
+  }
+  if (String(process.env.SOLANA_HOOK_SO_PATH ?? '').trim() && !isDevnetRpc(rpcUrl)) {
+    throw new Error('SOLANA_HOOK_SO_PATH_OVERRIDE_REQUIRES_DEVNET_OR_LOCAL_RPC');
+  }
   const connection = new Connection(rpcUrl, 'confirmed');
+  await preflightHookMutationInputs(connection);
   const payer = loadOrCreateKeypair();
   const targetSol = Number(process.env.COST_PROBE_TARGET_SOL ?? '6');
 
   console.log('=== Solana share-mesh cost probe ===');
-  console.log('RPC:   ', rpcUrl);
+  console.log('RPC:   ', redactRpcUrl(rpcUrl));
   if (rpcUrl === DEFAULT_RPC) {
-    console.log('RPC note: public devnet often 429s — set SOLANA_RPC_URL or RPC_URL_SOLANA_TESTNET for rehearsal.');
+    console.log('RPC note: public devnet often 429s — set SOLANA_DEVNET_RPC_URL or RPC_URL_SOLANA_TESTNET for rehearsal.');
   }
   console.log('Cluster:', isLocalRpc(rpcUrl) ? 'local-test-validator' : isDevnetRpc(rpcUrl) ? 'devnet' : 'custom');
-  console.log('Payer: ', payer.publicKey.toBase58());
+  console.log('Payer: ', payer.keypair.publicKey.toBase58());
   console.log('Hook:  ', HOOK_PROGRAM_ID.toBase58());
-  console.log('Key:   ', KEYPAIR_FILE);
+  console.log('Key:   ', payer.keypairFile ?? '<memory-only>');
   console.log();
-
-  writeFileSync(KEYPAIR_FILE, JSON.stringify(Array.from(payer.secretKey)));
 
   await assertRpcReachable(connection, rpcUrl);
 
@@ -350,9 +500,9 @@ async function main() {
     if (!existsSync(HOOK_SO)) {
       throw new Error(`Missing proxy program binary: ${HOOK_SO}`);
     }
-    const programKp = loadOrCreateProgramKeypair(LZ_PROXY_PROGRAM_KEYPAIR_FILE);
+    const { keypair: programKp, path: programKeypairPath } = createProgramKeypair();
 
-    const r = await measureStep(connection, payer.publicKey, 'path1_lz_oft_program_proxy_deploy', async () => {
+    const r = await measureStep(connection, payer.keypair.publicKey, 'path1_lz_oft_program_proxy_deploy', async () => {
       const existing = await connection.getAccountInfo(programKp.publicKey);
       if (existing?.executable) {
         return { note: `program already deployed ${programKp.publicKey.toBase58()}` };
@@ -366,9 +516,9 @@ async function main() {
           '--url',
           rpcUrl,
           '--keypair',
-          KEYPAIR_FILE,
+          requirePayerKeypairFile(payer, 'program deploy'),
           '--program-id',
-          LZ_PROXY_PROGRAM_KEYPAIR_FILE,
+          programKeypairPath,
           '--with-compute-unit-price',
           '100000',
         ],
@@ -387,13 +537,13 @@ async function main() {
     const shareMintKp = Keypair.generate();
     let shareMintPubkey: PublicKey | null = null;
 
-    const mintShare = await measureStep(connection, payer.publicKey, 'path2_meteora_mint_share', async () => {
-      shareMintPubkey = await createMint(connection, payer, payer.publicKey, null, 9, shareMintKp);
+    const mintShare = await measureStep(connection, payer.keypair.publicKey, 'path2_meteora_mint_share', async () => {
+      shareMintPubkey = await createMint(connection, payer.keypair, payer.keypair.publicKey, null, 9, shareMintKp);
       return { note: shareMintPubkey.toBase58() };
     });
     results.push(mintShare);
 
-    const meteora = await measureStep(connection, payer.publicKey, 'path2_meteora_dlmm_pool_create', async () => {
+    const meteora = await measureStep(connection, payer.keypair.publicKey, 'path2_meteora_dlmm_pool_create', async () => {
       if (!shareMintPubkey) throw new Error('missing share mint');
       const cluster = isDevnetRpc(rpcUrl) ? 'devnet' : 'mainnet-beta';
       const programId = new PublicKey(DLMM.LBCLMM_PROGRAM_IDS[cluster]);
@@ -417,12 +567,17 @@ async function main() {
         new BN(100),
         DLMM.ActivationType.Timestamp,
         false,
-        payer.publicKey,
+        payer.keypair.publicKey,
         new BN(Math.floor(Date.now() / 1000)),
         false,
         { cluster },
       );
-      const sig = await sendAndConfirmTransaction(connection, tx, [payer], { commitment: 'confirmed' });
+      const sig = await sendConfirmedSolanaTransaction({
+        connection,
+        transaction: tx,
+        signers: [payer.keypair],
+        commitment: 'confirmed',
+      });
       return { signature: sig, note: `${poolAddress.toBase58()} (share/WSOL)` };
     });
     results.push(meteora);
@@ -457,116 +612,117 @@ async function main() {
         ),
       );
     } else {
-      const mintKp = Keypair.generate();
-      const hookMint = await measureStep(connection, payer.publicKey, 'path2_hook_token2022_mint', async () => {
-        const extensions = [ExtensionType.TransferFeeConfig, ExtensionType.TransferHook];
-        const mintLen = getMintLen(extensions);
-        const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
-        const tx = new Transaction().add(
-          SystemProgram.createAccount({
-            fromPubkey: payer.publicKey,
-            newAccountPubkey: mintKp.publicKey,
-            space: mintLen,
-            lamports,
-            programId: TOKEN_2022_PROGRAM_ID,
-          }),
-          createInitializeTransferFeeConfigInstruction(
-            mintKp.publicKey,
-            payer.publicKey,
-            payer.publicKey,
-            0,
-            BigInt(0),
-            TOKEN_2022_PROGRAM_ID,
-          ),
-          createInitializeTransferHookInstruction(
-            mintKp.publicKey,
-            payer.publicKey,
-            HOOK_PROGRAM_ID,
-            TOKEN_2022_PROGRAM_ID,
-          ),
-          createInitializeMintInstruction(
-            mintKp.publicKey,
-            9,
-            payer.publicKey,
-            null,
-            TOKEN_2022_PROGRAM_ID,
-          ),
-        );
-        const sig = await sendAndConfirmTransaction(connection, tx, [payer, mintKp], {
-          commitment: 'confirmed',
+      const configuredHookMint = String(process.env.COST_PROBE_HOOK_MINT ?? '').trim();
+      let hookMint: PublicKey;
+      if (configuredHookMint) {
+        hookMint = new PublicKey(configuredHookMint);
+        results.push({
+          step: 'path2_hook_token2022_mint',
+          spendLamports: 0,
+          spendSol: 0,
+          note: `reusing exact existing mint ${hookMint.toBase58()}`,
         });
-        return { signature: sig, note: mintKp.publicKey.toBase58() };
-      });
-      results.push(hookMint);
-
-      const wallet = new Wallet(payer);
-      const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-      const program = new Program(idl as any, provider);
+      } else {
+        const mintKp = Keypair.generate();
+        const mintResult = await measureStep(connection, payer.keypair.publicKey, 'path2_hook_token2022_mint', async () => {
+          const extensions = [ExtensionType.TransferFeeConfig, ExtensionType.TransferHook];
+          const mintLen = getMintLen(extensions);
+          const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+          const tx = new Transaction().add(
+            SystemProgram.createAccount({
+              fromPubkey: payer.keypair.publicKey,
+              newAccountPubkey: mintKp.publicKey,
+              space: mintLen,
+              lamports,
+              programId: TOKEN_2022_PROGRAM_ID,
+            }),
+            createInitializeTransferFeeConfigInstruction(
+              mintKp.publicKey,
+              payer.keypair.publicKey,
+              payer.keypair.publicKey,
+              0,
+              BigInt(0),
+              TOKEN_2022_PROGRAM_ID,
+            ),
+            createInitializeTransferHookInstruction(
+              mintKp.publicKey,
+              payer.keypair.publicKey,
+              HOOK_PROGRAM_ID,
+              TOKEN_2022_PROGRAM_ID,
+            ),
+            createInitializeMintInstruction(
+              mintKp.publicKey,
+              9,
+              payer.keypair.publicKey,
+              null,
+              TOKEN_2022_PROGRAM_ID,
+            ),
+          );
+          const sig = await sendConfirmedSolanaTransaction({
+            connection,
+            transaction: tx,
+            signers: [payer.keypair, mintKp],
+            commitment: 'confirmed',
+          });
+          return { signature: sig, note: mintKp.publicKey.toBase58() };
+        });
+        results.push(mintResult);
+        hookMint = mintKp.publicKey;
+      }
 
       const cluster = isDevnetRpc(rpcUrl) ? 'devnet' : 'mainnet-beta';
       const knownAmmPrograms = [new PublicKey(DLMM.LBCLMM_PROGRAM_IDS[cluster])];
 
       const hookPdas = await measureStep(
         connection,
-        payer.publicKey,
+        payer.keypair.publicKey,
         'path2_hook_initialize_creator_pdas',
         async () => {
           const hubCreator = '0x' + '11'.repeat(32);
           const hubShare = '0x' + '22'.repeat(32);
-          const hexToBytes32 = (hex: string): number[] => {
-            const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-            const bytes: number[] = [];
-            for (let i = 0; i < 64; i += 2) bytes.push(parseInt(clean.substring(i, i + 2), 16));
-            return bytes;
+          const output = execFileSync(
+            'pnpm',
+            [
+              'solana:setup-creator-full',
+              '--hub-creator-coin', hubCreator,
+              '--hub-share-token', hubShare,
+              '--mint', hookMint.toBase58(),
+              '--amm-programs', knownAmmPrograms.map((programId: PublicKey) => programId.toBase58()).join(','),
+            ],
+            {
+              cwd: KPR_ROOT,
+              encoding: 'utf8',
+              env: {
+                ...process.env,
+                SOLANA_RPC_URL: rpcUrl,
+                SOLANA_KEEPER_KEYPAIR: bs58.encode(payer.keypair.secretKey),
+                SOLANA_HOOK_PROGRAM_ID: HOOK_PROGRAM_ID.toBase58(),
+              },
+              maxBuffer: 4 * 1024 * 1024,
+            },
+          );
+          // pnpm/tsx may print lifecycle banners before the setup command's
+          // machine-readable JSON. Parse the final JSON record only; never
+          // treat a successful setup as failed because of wrapper noise.
+          const jsonLine = output
+            .trim()
+            .split(/\r?\n/)
+            .reverse()
+            .find(line => line.trim().startsWith('{'));
+          if (!jsonLine) throw new Error('setup_creator_full_missing_json');
+          const result = JSON.parse(jsonLine) as { signatures?: string[]; idempotent?: boolean };
+          const signatures = Array.isArray(result.signatures) ? result.signatures : [];
+          return {
+            signature: signatures.at(-1),
+            note: result.idempotent ? 'exact-mint setup already verified' : 'exact-mint setup via provisioner script',
           };
-          const sig = await program.methods
-            .initializeCreator({
-              keeperAuthority: payer.publicKey,
-              hubCreatorCoin: hexToBytes32(hubCreator),
-              hubShareOft: hexToBytes32(hubShare),
-              feeBps: 0,
-              settlementThreshold: new (require('@coral-xyz/anchor').BN)(0),
-              lotteryEnabled: true,
-              knownAmmPrograms,
-            })
-            .accounts({ creatorMint: mintKp.publicKey })
-            .rpc();
-          return { signature: sig };
         },
       );
       results.push(hookPdas);
-
-      const hookFinalize = await measureStep(
-        connection,
-        payer.publicKey,
-        'path2_hook_finalize_pending_entries',
-        async () => {
-          const sig = await program.methods
-            .finalizePendingEntries()
-            .accounts({ creatorMint: mintKp.publicKey })
-            .rpc();
-          return { signature: sig };
-        },
-      );
-      results.push(hookFinalize);
-
-      const extraMeta = await measureStep(
-        connection,
-        payer.publicKey,
-        'path2_hook_extra_account_meta_list',
-        async () => {
-          const sig = await program.methods
-            .initializeExtraAccountMetaList()
-            .accounts({ mint: mintKp.publicKey })
-            .rpc();
-          return { signature: sig };
-        },
-      );
-      results.push(extraMeta);
     }
   }
 
-  const endBal = await connection.getBalance(payer.publicKey, 'confirmed');
+  const endBal = await connection.getBalance(payer.keypair.publicKey, 'confirmed');
   const totalSpend = startBal - endBal;
 
   console.log('\n--- Step costs (payer balance delta unless marked estimated) ---');
@@ -601,7 +757,9 @@ async function main() {
   console.log('- Meteora pool uses share/WSOL pair (matches kpr/scripts/solana/launch/create-dlmm-pool.ts).');
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}

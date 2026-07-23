@@ -13,6 +13,8 @@ import {
 } from './solanaLotteryEntryInbox.js'
 import { resolveSolanaLotteryBeneficiary } from './solanaLotteryIdentity.js'
 import { resolveAppliedSolanaShareMeshMappingByMint } from './solanaShareMeshMappings.js'
+import { readSolanaCreatorRelayConfigByShareMeshMint } from './solanaCreatorRelayConfig.js'
+import { consumeSolanaB2CanaryAuthorization } from './solanaB2CanaryAuthorization.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -35,6 +37,12 @@ export async function prepareSolanaLotteryInboxForSubmit(params: {
   })
   if (!mapping) throw new Error('solana_lottery_b2_mapping_missing')
 
+  const relayConfig = await readSolanaCreatorRelayConfigByShareMeshMint({
+    db: params.db,
+    shareMeshMint: params.row.creatorMint,
+  })
+  const productionRelayEnabled = relayConfig?.relayEnabled === true && relayConfig.readinessStatus === 'verified'
+
   const readiness = await verifySolanaB2Readiness({
     db: params.db,
     creatorToken: mapping.creatorToken,
@@ -56,7 +64,17 @@ export async function prepareSolanaLotteryInboxForSubmit(params: {
     throw new Error(`solana_lottery_identity_${identity.reason}`)
   }
 
-  return markInboxIdentity({
+  let canaryAuthorized = false
+  if (!productionRelayEnabled) {
+    canaryAuthorized = await consumeSolanaB2CanaryAuthorization({
+      db: params.db,
+      sourceEventId: params.row.sourceEventId,
+      shareMeshMint: params.row.creatorMint,
+    })
+    if (!canaryAuthorized) throw new Error('solana_lottery_creator_relay_disabled')
+  }
+
+  const marked = await markInboxIdentity({
     db: params.db,
     id: params.row.id,
     beneficiaryCsw: identity.beneficiaryCsw,
@@ -65,4 +83,5 @@ export async function prepareSolanaLotteryInboxForSubmit(params: {
     amountScaled: params.amountScaled,
     leaseOwner: params.leaseOwner,
   })
+  return canaryAuthorized ? { ...marked, canaryAuthorized: true } : marked
 }

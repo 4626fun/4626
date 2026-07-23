@@ -12,6 +12,12 @@ vi.mock('./solanaLotteryIdentity.js', () => ({
 vi.mock('./solanaShareMeshMappings.js', () => ({
   resolveAppliedSolanaShareMeshMappingByMint: vi.fn(),
 }))
+vi.mock('./solanaCreatorRelayConfig.js', () => ({
+  readSolanaCreatorRelayConfigByShareMeshMint: vi.fn(),
+}))
+vi.mock('./solanaB2CanaryAuthorization.js', () => ({
+  consumeSolanaB2CanaryAuthorization: vi.fn(),
+}))
 
 import { verifySolanaB2Readiness } from './solanaB2Readiness.js'
 import {
@@ -21,6 +27,8 @@ import {
 import { resolveSolanaLotteryBeneficiary } from './solanaLotteryIdentity.js'
 import { prepareSolanaLotteryInboxForSubmit } from './solanaLotterySubmission.js'
 import { resolveAppliedSolanaShareMeshMappingByMint } from './solanaShareMeshMappings.js'
+import { readSolanaCreatorRelayConfigByShareMeshMint } from './solanaCreatorRelayConfig.js'
+import { consumeSolanaB2CanaryAuthorization } from './solanaB2CanaryAuthorization.js'
 
 const row = {
   id: 1,
@@ -50,6 +58,8 @@ const row = {
   skipReason: null,
   lzGuid: null,
   baseTxHash: null,
+  baseRequestId: null,
+  transportSourceTxHash: null,
   submittedAt: null,
   confirmedAt: null,
   submitAttemptId: null,
@@ -77,6 +87,11 @@ describe('prepareSolanaLotteryInboxForSubmit', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(resolveAppliedSolanaShareMeshMappingByMint).mockResolvedValue(mapping)
+    vi.mocked(readSolanaCreatorRelayConfigByShareMeshMint).mockResolvedValue({
+      relayEnabled: true,
+      readinessStatus: 'verified',
+    } as any)
+    vi.mocked(consumeSolanaB2CanaryAuthorization).mockResolvedValue(false)
     vi.mocked(verifySolanaB2Readiness).mockResolvedValue({
       ready: true,
       creatorToken: mapping.creatorToken,
@@ -100,6 +115,16 @@ describe('prepareSolanaLotteryInboxForSubmit', () => {
     })
   })
 
+  it('fails closed when the creator relay entry is not explicitly enabled', async () => {
+    vi.mocked(readSolanaCreatorRelayConfigByShareMeshMint).mockResolvedValue({
+      relayEnabled: false,
+      readinessStatus: 'verified',
+    } as any)
+    await expect(prepareSolanaLotteryInboxForSubmit({
+      db: { sql: vi.fn() }, row, leaseOwner: 'worker-a', amountScaled: '100',
+    })).rejects.toThrow('solana_lottery_creator_relay_disabled')
+  })
+
   it('binds only a ready B2 mint route to the unique parent CSW', async () => {
     const db = { sql: vi.fn() }
     await expect(prepareSolanaLotteryInboxForSubmit({
@@ -115,6 +140,20 @@ describe('prepareSolanaLotteryInboxForSubmit', () => {
     expect(markInboxIdentity).toHaveBeenCalledWith(expect.objectContaining({
       leaseOwner: 'worker-a',
       shareOft: mapping.shareOft,
+    }))
+  })
+
+  it('permits one exact consumed canary while production relay remains disabled', async () => {
+    vi.mocked(readSolanaCreatorRelayConfigByShareMeshMint).mockResolvedValue({ relayEnabled: false, readinessStatus: 'verified' } as any)
+    vi.mocked(consumeSolanaB2CanaryAuthorization).mockResolvedValue(true)
+    await expect(prepareSolanaLotteryInboxForSubmit({
+      db: { sql: vi.fn() }, row, leaseOwner: 'worker-a', amountScaled: '100',
+    })).resolves.toMatchObject({
+      beneficiaryCsw: '0x3333333333333333333333333333333333333333',
+      canaryAuthorized: true,
+    })
+    expect(consumeSolanaB2CanaryAuthorization).toHaveBeenCalledWith(expect.objectContaining({
+      sourceEventId: row.sourceEventId, shareMeshMint: row.creatorMint,
     }))
   })
 

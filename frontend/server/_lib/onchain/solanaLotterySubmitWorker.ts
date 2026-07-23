@@ -17,6 +17,7 @@ import {
   markInboxSkippedIdentity,
   markInboxSkippedPricing,
   markInboxSubmitted,
+  quarantineInboxWithTransportReceipt,
   releaseInboxLease,
   type SolanaLotteryInboxRow,
 } from './solanaLotteryEntryInbox.js'
@@ -89,10 +90,6 @@ export async function processSolanaLotteryInboxSubmitBatch(params: {
     errors: [],
   }
 
-  const submitFn =
-    params.submit ??
-    ((request) => submitSolanaLotteryEntryViaLz(request, { sender: params.sender }))
-
   for (const leased of claimed) {
     let row = leased
     try {
@@ -108,6 +105,22 @@ export async function processSolanaLotteryInboxSubmitBatch(params: {
           reason,
         })
         out.skippedPricing += 1
+        continue
+      }
+
+      // Effect-free infrastructure gate before identity work or consuming a
+      // single-use canary authorization. A canary may bypass only the
+      // production relay flag; all OApp/peer/sender gates still apply.
+      const readiness = assessSolanaLotteryLzTransportReadiness(undefined, { allowCanary: true })
+      if (!readiness.ready) {
+        await releaseInboxLease({
+          db: params.db,
+          id: row.id,
+          leaseOwner,
+          lastError: `transport_not_ready:${readiness.reasons.join(',')}`,
+        })
+        out.released += 1
+        out.errors.push(`${row.sourceEventId}:transport_not_ready`)
         continue
       }
 
@@ -130,6 +143,17 @@ export async function processSolanaLotteryInboxSubmitBatch(params: {
           out.skippedIdentity += 1
           continue
         }
+        if (message === 'solana_lottery_creator_relay_disabled') {
+          await releaseInboxLease({
+            db: params.db,
+            id: row.id,
+            leaseOwner,
+            lastError: message,
+          })
+          out.released += 1
+          out.errors.push(`${row.sourceEventId}:${message}`)
+          continue
+        }
         throw error
       }
 
@@ -137,43 +161,63 @@ export async function processSolanaLotteryInboxSubmitBatch(params: {
         throw new Error('solana_lottery_identity_incomplete')
       }
 
-      // Effect-free gate before fencing submit intent.
-      const readiness = assessSolanaLotteryLzTransportReadiness()
-      if (!readiness.ready) {
-        await releaseInboxLease({
-          db: params.db,
-          id: row.id,
-          leaseOwner,
-          lastError: `transport_not_ready:${readiness.reasons.join(',')}`,
-        })
-        out.released += 1
-        out.errors.push(`${row.sourceEventId}:transport_not_ready`)
-        continue
-      }
-
       const submitAttemptId = randomUUID()
+      const canaryAuthorized = row.canaryAuthorized === true
       row = await beginInboxSubmit({
         db: params.db,
         id: row.id,
         leaseOwner,
         submitAttemptId,
       })
+      if (canaryAuthorized) row = { ...row, canaryAuthorized: true }
 
+      let sent: SolanaLotteryLzSubmitResult | null = null
       try {
-        const sent = await submitFn({
+        const request = {
           sourceEventId: row.sourceEventId,
           buyer: row.beneficiaryCsw as `0x${string}`,
           tokenIn: row.shareOft as `0x${string}`,
           amount: BigInt(amountScaled),
-        })
-        await markInboxSubmitted({
+        }
+        sent = params.submit
+          ? await params.submit(request)
+          : await submitSolanaLotteryEntryViaLz(request, {
+            sender: params.sender,
+            canaryAuthorized: row.canaryAuthorized === true,
+          })
+        const persistReceipt = () => markInboxSubmitted({
           db: params.db,
           id: row.id,
           leaseOwner,
           submitAttemptId,
-          lzGuid: sent.lzGuid,
-          baseTxHash: sent.baseTxHash,
+          lzGuid: sent!.lzGuid,
+          transportSourceTxHash: sent!.solanaSignature,
+          baseTxHash: sent!.baseTxHash,
         })
+        try {
+          await persistReceipt()
+        } catch (firstPersistError) {
+          // The packet already exists. Retry only the idempotent receipt write;
+          // never call submitFn a second time for this source event.
+          try {
+            await persistReceipt()
+          } catch (secondPersistError) {
+            const first = firstPersistError instanceof Error ? firstPersistError.message : String(firstPersistError)
+            const second = secondPersistError instanceof Error ? secondPersistError.message : String(secondPersistError)
+            await quarantineInboxWithTransportReceipt({
+              db: params.db,
+              id: row.id,
+              leaseOwner,
+              reason: `submit_receipt_persist_failed:${first}:${second}`.slice(0, 500),
+              lzGuid: sent!.lzGuid,
+              transportSourceTxHash: sent!.solanaSignature,
+              baseTxHash: sent!.baseTxHash,
+            })
+            out.quarantined += 1
+            out.errors.push(`${row.sourceEventId}:submit_receipt_persist_failed`)
+            continue
+          }
+        }
         out.submitted += 1
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)

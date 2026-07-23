@@ -72,6 +72,7 @@ describe('processSolanaLotteryInboxSubmitBatch', () => {
       ok: true as const,
       lzGuid: 'guid-1',
       baseTxHash: null,
+      solanaSignature: '1'.repeat(64),
       payload: '0x' as `0x${string}`,
     }))
 
@@ -107,5 +108,75 @@ describe('processSolanaLotteryInboxSubmitBatch', () => {
     expect(skipIdentityMock).toHaveBeenCalled()
     expect(result.skippedIdentity).toBe(1)
     expect(result.submitted).toBe(0)
+  })
+
+  it('releases a production-disabled row until a creator or canary authorization exists', async () => {
+    claimMock.mockResolvedValue([leasedRow])
+    prepareMock.mockRejectedValue(new Error('solana_lottery_creator_relay_disabled'))
+    releaseMock.mockResolvedValue({ ...leasedRow, status: 'pending' })
+
+    const result = await processSolanaLotteryInboxSubmitBatch({
+      db: { sql: vi.fn() } as any,
+      leaseOwner: 'worker-a',
+      submit: vi.fn(),
+    })
+
+    expect(releaseMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: leasedRow.id,
+      lastError: 'solana_lottery_creator_relay_disabled',
+    }))
+    expect(result.released).toBe(1)
+    expect(result.quarantined).toBe(0)
+  })
+
+  it('releases before identity/canary work when transport is not ready', async () => {
+    claimMock.mockResolvedValue([leasedRow])
+    readinessMock.mockReturnValue({ ready: false, reasons: ['missing_oapp_send_url'] })
+    releaseMock.mockResolvedValue({ ...leasedRow, status: 'pending' })
+    const result = await processSolanaLotteryInboxSubmitBatch({
+      db: { sql: vi.fn() } as any, leaseOwner: 'worker-a', submit: vi.fn(),
+    })
+    expect(result.released).toBe(1)
+    expect(prepareMock).not.toHaveBeenCalled()
+    expect(beginMock).not.toHaveBeenCalled()
+  })
+
+  it('retries only receipt persistence after a successful send', async () => {
+    claimMock.mockResolvedValue([leasedRow])
+    prepareMock.mockResolvedValue({
+      ...leasedRow,
+      beneficiaryCsw: '0x1111111111111111111111111111111111111111',
+      shareOft: '0x2222222222222222222222222222222222222222',
+      amountScaled: '100',
+    })
+    beginMock.mockResolvedValue({
+      ...leasedRow,
+      status: 'submitting',
+      beneficiaryCsw: '0x1111111111111111111111111111111111111111',
+      shareOft: '0x2222222222222222222222222222222222222222',
+      amountScaled: '100',
+      submitAttemptId: 'attempt-1',
+    })
+    submittedMock
+      .mockRejectedValueOnce(new Error('db_transient'))
+      .mockResolvedValueOnce({ ...leasedRow, status: 'submitted' })
+
+    const submit = vi.fn(async () => ({
+      ok: true as const,
+      lzGuid: 'guid-1',
+      baseTxHash: null,
+      solanaSignature: '1'.repeat(64),
+      payload: '0x' as `0x${string}`,
+    }))
+    const result = await processSolanaLotteryInboxSubmitBatch({
+      db: { sql: vi.fn() } as any,
+      leaseOwner: 'worker-a',
+      submit,
+    })
+
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submittedMock).toHaveBeenCalledTimes(2)
+    expect(result.submitted).toBe(1)
+    expect(quarantineMock).not.toHaveBeenCalled()
   })
 })

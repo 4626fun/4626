@@ -6,7 +6,7 @@
  *   pnpm -C frontend exec tsx scripts/ops/smoke-solana-keepers.ts
  *   pnpm -C frontend exec tsx scripts/ops/smoke-solana-keepers.ts --production
  *
- * Loads frontend/.env (and .env.local). Exits 1 on hard blockers; relay_entries must be disabled.
+ * Loads frontend/.env (and .env.local). Exits 1 on hard blockers; all B2 mutations must be disabled.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   if (!orchKey) {
     rows.push({ id: 'orchestrator_reconcile', ok: false, detail: 'SOLANA_ORCHESTRATOR_API_KEY missing' })
   } else {
-    for (const action of ['settle_fees', 'winner_relay'] as const) {
+    for (const action of ['settle_fees'] as const) {
       const res = await fetchJson('https://orchestrator.4626.fun/reconcile', {
         method: 'POST',
         headers: {
@@ -168,30 +168,22 @@ async function main(): Promise<void> {
         detail: res.ok ? `${action} OK` : `${res.detail} ${JSON.stringify(res.data).slice(0, 200)}`,
       })
     }
-    const relay = await fetchJson('https://orchestrator.4626.fun/reconcile', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${orchKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'relay_entries',
-        workflow: 'smoke',
-        checkpointKey: `${checkpoint}-relay`,
-      }),
-    })
-    const relayError = String((relay.data as { error?: string })?.error ?? '')
-    const relayDisabled =
-      relay.status === 503 &&
-      (relayError.includes('action_disabled:relay_entries') ||
-        relayError === 'action_disabled' ||
-        relayError.includes('action_disabled'))
+    const b2FlagNames = [
+      'SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED',
+      'SOLANA_ORCHESTRATOR_LOTTERY_INGEST_ENABLED',
+      'SOLANA_ORCHESTRATOR_LOTTERY_SUBMIT_ENABLED',
+      'SOLANA_ORCHESTRATOR_LOTTERY_CONFIRM_ENABLED',
+      'SOLANA_ORCHESTRATOR_LOTTERY_WINNER_SETTLE_ENABLED',
+    ] as const
+    const enabledB2Flags = b2FlagNames.filter((key) =>
+      ['1', 'true', 'yes'].includes(String(process.env[key] ?? '').trim().toLowerCase()),
+    )
     rows.push({
-      id: 'relay_entries_paused',
-      ok: relayDisabled,
-      detail: relayDisabled
-        ? 'relay_entries correctly disabled (B2 gate)'
-        : `expected action_disabled (relay_entries), got ${relay.status}`,
+      id: 'b2_mutation_flags_off',
+      ok: enabledB2Flags.length === 0,
+      detail: enabledB2Flags.length === 0
+        ? 'legacy relay and replacement B2 workers are disabled in the loaded environment'
+        : `unexpected enabled flags: ${enabledB2Flags.join(',')}`,
     })
   }
 

@@ -46,7 +46,7 @@ Relay remains disabled (`SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED` unset/`0`). 
 ## Future enablement checklist
 
 1. Keep `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
-2. Deploy/review Solana lottery OApp; set `SOLANA_LOTTERY_OAPP_PEER_BYTES32`; authorize on LM `authorizedRemoteOFTs(30168, peer)`.
+2. Deploy/review Solana lottery OApp; set `SOLANA_LOTTERY_OAPP_PEER_BYTES32` to the padded Base LotteryManager receiver; authorize the distinct derived Solana OApp Store bytes32 on LM via `authorizedRemoteOFTs(30168, store)`.
 3. Prove live Meteora B2 buy → one `LotteryEntryRecorded` (token_badge + pool).
 4. Enable ingest (`SOLANA_LOTTERY_INGEST_ENABLED`) against finalized RPC; reconcile any buffer residue.
 5. Set `SOLANA_LOTTERY_LZ_TRANSPORT_READY=1` only after independent transport review.

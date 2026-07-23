@@ -1109,6 +1109,24 @@ export async function ensureSolanaLotteryEntryInboxSchema(db: Db): Promise<void>
       undefined,
       { strict: true },
     )
+    await ensureMigrationApplied(
+      db,
+      '20260720010000_solana_lottery_transport_receipts.sql',
+      undefined,
+      { strict: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260720020000_solana_lottery_winner_settlement.sql',
+      undefined,
+      { strict: true },
+    )
+    await ensureMigrationApplied(
+      db,
+      '20260720025000_protocol_lottery_winner_callback_tables.sql',
+      undefined,
+      { strict: true },
+    )
   })
 }
 

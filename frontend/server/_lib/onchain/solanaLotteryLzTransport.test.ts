@@ -8,7 +8,7 @@ import {
   SOLANA_LOTTERY_EOA_SUBMIT_FORBIDDEN,
   SOLANA_LOTTERY_LZ_TRANSPORT_UNAVAILABLE,
   submitSolanaLotteryEntryViaLz,
-  submitSolanaLotteryWinnerViaLz,
+  CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
 } from './solanaLotteryLzTransport.js'
 
 describe('solanaLotteryLzTransport', () => {
@@ -23,6 +23,8 @@ describe('solanaLotteryLzTransport', () => {
     'SOLANA_LOTTERY_ALLOW_EOA_PROCESS_SWAP',
     'SOLANA_LOTTERY_OAPP_SENDER_MODE',
     'SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND',
+    'SOLANA_LOTTERY_OAPP_SEND_URL',
+    'SOLANA_LOTTERY_OAPP_SEND_TOKEN',
   ] as const
 
   afterEach(() => {
@@ -48,7 +50,7 @@ describe('solanaLotteryLzTransport', () => {
     const readiness = assessSolanaLotteryLzTransportReadiness({
       SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
       SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
-      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
       LOTTERY_MANAGER_ADDRESS: '0xb68f359e01626ec5d15c624037311c70dacaba43',
       SOLANA_BRIDGE_ADAPTER_ADDRESS: '0x9A61814082A26192DD9Cb201b44058506685Be60',
     })
@@ -60,18 +62,57 @@ describe('solanaLotteryLzTransport', () => {
     const readiness = assessSolanaLotteryLzTransportReadiness({
       SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
       SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
-      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
       LOTTERY_MANAGER: '0xb45e68a5867935a5734e4185977f81c528006650',
+      SOLANA_LOTTERY_OAPP_SENDER_MODE: 'mock',
+      SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND: '1',
     })
     expect(readiness.ready).toBe(true)
     expect(readiness.lotteryManager).toBe('0xb45e68a5867935a5734e4185977f81c528006650')
+  })
+
+  it('allows only the canary lane to bypass the production relay flag', () => {
+    const readiness = assessSolanaLotteryLzTransportReadiness({
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
+      LOTTERY_MANAGER: '0xb45e68a5867935a5734e4185977f81c528006650',
+      SOLANA_LOTTERY_OAPP_SENDER_MODE: 'mock',
+      SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND: '1',
+    }, { allowCanary: true })
+    expect(readiness.ready).toBe(true)
+    expect(readiness.relayEntriesEnabled).toBe(false)
+  })
+
+  it('fails before submit fencing when the HTTP sender URL or token is missing', () => {
+    const readiness = assessSolanaLotteryLzTransportReadiness({
+      SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
+      LOTTERY_MANAGER: '0xb45e68a5867935a5734e4185977f81c528006650',
+      SOLANA_LOTTERY_OAPP_SENDER_MODE: 'http',
+    })
+    expect(readiness.ready).toBe(false)
+    expect(readiness.reasons).toEqual(expect.arrayContaining(['missing_oapp_send_url', 'missing_oapp_send_token']))
+  })
+
+  it('rejects a non-canonical OApp peer even when other transport gates are set', () => {
+    const readiness = assessSolanaLotteryLzTransportReadiness({
+      SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
+      SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      LOTTERY_MANAGER: '0xb45e68a5867935a5734e4185977f81c528006650',
+      SOLANA_LOTTERY_OAPP_SENDER_MODE: 'mock',
+      SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND: '1',
+    })
+    expect(readiness.ready).toBe(false)
+    expect(readiness.reasons).toContain('noncanonical_solana_lottery_oapp_peer')
   })
 
   it('rejects a retired LotteryManager even when other gates are set', () => {
     const readiness = assessSolanaLotteryLzTransportReadiness({
       SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED: '1',
       SOLANA_LOTTERY_LZ_TRANSPORT_READY: '1',
-      SOLANA_LOTTERY_OAPP_PEER_BYTES32: `0x${'11'.repeat(32)}`,
+      SOLANA_LOTTERY_OAPP_PEER_BYTES32: CANONICAL_LOTTERY_MANAGER_PEER_BYTES32,
       LOTTERY_MANAGER: '0xb68f359e01626ec5d15c624037311c70dacaba43',
     })
     expect(readiness.ready).toBe(false)
@@ -148,7 +189,7 @@ describe('solanaLotteryLzTransport', () => {
   it('submits via configured mock OApp sender when readiness passes', async () => {
     process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = '1'
     process.env.SOLANA_LOTTERY_LZ_TRANSPORT_READY = '1'
-    process.env.SOLANA_LOTTERY_OAPP_PEER_BYTES32 = `0x${'11'.repeat(32)}`
+    process.env.SOLANA_LOTTERY_OAPP_PEER_BYTES32 = CANONICAL_LOTTERY_MANAGER_PEER_BYTES32
     process.env.LOTTERY_MANAGER = '0xB45E68a5867935a5734E4185977F81c528006650'
     process.env.SOLANA_LOTTERY_OAPP_SENDER_MODE = 'mock'
     process.env.SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND = '1'
@@ -160,17 +201,23 @@ describe('solanaLotteryLzTransport', () => {
       amount: 1n,
     })
     expect(result.ok).toBe(true)
-    expect(result.lzGuid.startsWith('mock-')).toBe(true)
+    expect(result.lzGuid).toMatch(/^0x[0-9a-f]{64}$/)
   })
 
-  it('winner relay fails closed on win_id path', async () => {
-    await expect(
-      submitSolanaLotteryWinnerViaLz({
-        winId: `0x${'ab'.repeat(32)}`,
-        creatorMint: 'mint',
-        winnerSolana: '7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY',
-        sharesPaid: 1n,
-      }),
-    ).rejects.toThrow(/winner_relay_not_implemented/)
+  it('submits one authorized canary while production relay remains disabled', async () => {
+    process.env.SOLANA_LOTTERY_LZ_TRANSPORT_READY = '1'
+    process.env.SOLANA_LOTTERY_OAPP_PEER_BYTES32 = CANONICAL_LOTTERY_MANAGER_PEER_BYTES32
+    process.env.LOTTERY_MANAGER = '0xB45E68a5867935a5734E4185977F81c528006650'
+    process.env.SOLANA_LOTTERY_OAPP_SENDER_MODE = 'mock'
+    process.env.SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND = '1'
+
+    const result = await submitSolanaLotteryEntryViaLz({
+      sourceEventId: 'g:p:canary:0:0',
+      buyer: '0x1111111111111111111111111111111111111111',
+      tokenIn: '0x2222222222222222222222222222222222222222',
+      amount: 1n,
+    }, { canaryAuthorized: true })
+    expect(result.ok).toBe(true)
   })
+
 })

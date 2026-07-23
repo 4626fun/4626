@@ -46,6 +46,19 @@ function forgeJsonInOtherProgram() {
 }
 
 describe('solanaLotteryIngest', () => {
+  it('rejects ingestion for a non-canonical hook program', async () => {
+    const rpc = {
+      getGenesisHash: async () => 'gen',
+      getSignaturesForAddress: async () => [],
+      getParsedTransaction: async () => null,
+    }
+    await expect(ingestFinalizedLotteryLogs({
+      db: { sql: vi.fn() } as any,
+      rpc,
+      programId: OTHER,
+    })).rejects.toThrow('solana_lottery_ingest_noncanonical_hook_program')
+  })
+
   it('decodes authentic Anchor Program data in hook invoke window', () => {
     const parsed = parseLotteryEntryRecordedFromLogs({
       programId: PROGRAM,
@@ -68,6 +81,30 @@ describe('solanaLotteryIngest', () => {
       slot: 9,
       blockTime: null,
       logMessages: forgeJsonInOtherProgram(),
+    })
+    expect(parsed).toHaveLength(0)
+  })
+
+  it('rejects a matching Anchor discriminator emitted by a nested CPI', () => {
+    const forged = encodeLotteryEntryRecordedProgramData({
+      creatorMint: MINT,
+      buyer: BUYER,
+      amount: 999n,
+      slot: 1,
+      bufferCount: 1,
+    })
+    const parsed = parseLotteryEntryRecordedFromLogs({
+      programId: PROGRAM,
+      signature: 'sig',
+      slot: 9,
+      blockTime: null,
+      logMessages: [
+        `Program ${PROGRAM} invoke [1]`,
+        `Program ${OTHER} invoke [2]`,
+        `Program data: ${forged}`,
+        `Program ${OTHER} success`,
+        `Program ${PROGRAM} success`,
+      ],
     })
     expect(parsed).toHaveLength(0)
   })

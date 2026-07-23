@@ -192,12 +192,30 @@ This historical gate was superseded by removal of the relay action; see the
 Devnet hook is **not** pre-deployed at the mainnet program id. Deploy canonical bytecode first:
 
 ```bash
-# Requires COST_PROBE_HOOK_PROGRAM_KEYPAIR (derives to Ejpzi…WCSXX) + funded devnet payer
+# Requires COST_PROBE_HOOK_PROGRAM_KEYPAIR (must derive to
+# EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU) + funded devnet payer
 COST_PROBE_HOOK_PROGRAM_KEYPAIR=/path/to/program-id.json \
 SOLANA_PRIVATE_KEY=... \
-  bash programs/creator-share-hook/scripts/deploy-devnet.sh
+  bash programs/creator-share-hook/scripts/deploy-devnet.sh --execute
 
-pnpm -C frontend ops:pipe-b-devnet-rehearsal -- --live-devnet
+pnpm -C frontend ops:pipe-b-devnet-rehearsal -- --live-devnet approve
+```
+
+The program-id secret cannot be derived from the public address. Never replace
+it with `target/deploy/creator_share_hook-keypair.json` or a newly generated
+keypair. The upgrade-authority/payer keypair (`7Qi3…`) is a different signer
+and cannot substitute for it. Recover the original program-id file from the
+operator or secret store that performed the initial deploy; do not ask an
+application user to paste its contents. If the canonical secret is
+unavailable, a local validator may clone
+the verified mainnet executable for setup/PDA rehearsal, but that local run is
+diagnostic only and does not count as the required live-devnet canary:
+
+```bash
+solana-test-validator --reset \
+  --url "$SOLANA_MAINNET_RPC_URL" \
+  --clone-upgradeable-program EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU \
+  --ledger /tmp/4626-b2-hook-ledger
 ```
 
 ### Post-upgrade orchestrator
@@ -213,9 +231,12 @@ sudo bash kpr/deploy/seed-solana-orchestrator-env.sh \
   --hook-schema auto
 ```
 
-The former Mainnet B2 relay activation sequence is intentionally omitted. The
-KPR action and Twin transport were removed; a new architecture and canary are
-required before Solana lottery relay can exist.
+The former KPR/Twin activation sequence remains permanently retired. The
+replacement finalized-log inbox → authorized Solana OApp → Base LotteryManager
+pipeline is implemented, but this bytecode runbook does not authorize it.
+Follow `docs/operations/solana-b2-production-gates.md`; all B2 flags and
+per-creator relay rows stay off until its devnet, funded mainnet, retry,
+exactly-once, peer, and winner-readback evidence is complete.
 
 ## Rollback
 

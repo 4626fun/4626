@@ -10,6 +10,10 @@ import { executeSolanaFeeSettlement } from './actions/keepr-solana-settle-fees.a
 import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.action.js'
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
+import { executeSolanaLotteryIngest } from './actions/keepr-solana-lottery-ingest.action.js'
+import { executeSolanaLotterySubmit } from './actions/keepr-solana-lottery-submit.action.js'
+import { executeSolanaLotteryConfirm } from './actions/keepr-solana-lottery-confirm.action.js'
+import { executeSolanaLotteryWinnerSettle } from './actions/keepr-solana-lottery-winner-settle.action.js'
 import { ActionLeaseError, withActionLease } from './utils/actionLease.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -27,6 +31,10 @@ export type SolanaOrchestratorAction =
   | 'price_monitor'
   | 'graduation'
   | 'sync_mapping'
+  | 'lottery_ingest'
+  | 'lottery_submit'
+  | 'lottery_confirm'
+  | 'lottery_winner_settle'
 
 export type ReconcileOutcome = {
   ok: boolean
@@ -112,6 +120,10 @@ export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchest
     case 'price_monitor':
     case 'graduation':
     case 'sync_mapping':
+    case 'lottery_ingest':
+    case 'lottery_submit':
+    case 'lottery_confirm':
+    case 'lottery_winner_settle':
       return action
     default:
       return null
@@ -129,6 +141,11 @@ function actionEnabled(action: SolanaOrchestratorAction): boolean {
   const globalExecute = parseOrchestratorEnvFlag(process.env.SOLANA_ORCHESTRATOR_EXECUTE) === true
   const specificKey = `SOLANA_ORCHESTRATOR_${action.toUpperCase()}_ENABLED`
   const specific = parseOrchestratorEnvFlag(process.env[specificKey])
+  // B2 workers are never inherited from the broad execute switch. Each must
+  // be opted in independently after its documented gate passes.
+  if (action === 'lottery_ingest' || action === 'lottery_submit' || action === 'lottery_confirm' || action === 'lottery_winner_settle') {
+    return specific === true
+  }
   if (specific === false) return false
   if (specific === true) return true
   return globalExecute
@@ -147,6 +164,14 @@ async function runSolanaOrchestratorActionBody(params: {
       return executeSolanaGraduation()
     case 'sync_mapping':
       return executeSolanaSyncMapping(params.payload ?? {})
+    case 'lottery_ingest':
+      return executeSolanaLotteryIngest(params.payload ?? {})
+    case 'lottery_submit':
+      return executeSolanaLotterySubmit(params.payload ?? {})
+    case 'lottery_confirm':
+      return executeSolanaLotteryConfirm(params.payload ?? {})
+    case 'lottery_winner_settle':
+      return executeSolanaLotteryWinnerSettle(params.payload ?? {})
     default:
       params.action satisfies never
       return undefined

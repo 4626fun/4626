@@ -39,13 +39,13 @@ Rehearse Base wiring + Solana rent without touching mainnet batcher:
 pnpm -C frontend ops:pipe-a-devnet-rehearsal
 ```
 
-Runs Forge `ShareOftPeer` tests, Vitest wiring/fee suites, and optional `pnpm -C kpr solana:cost-probe-devnet` (Path 1 rent proxy). Set `SOLANA_PRIVATE_KEY` and a **paid** `SOLANA_RPC_URL` or `RPC_URL_SOLANA_TESTNET` — public `api.devnet.solana.com` often returns 429.
+Runs Forge `ShareOftPeer` tests, Vitest wiring/fee suites, and optional `pnpm -C kpr solana:cost-probe-devnet -- --execute` (Path 1 rent proxy). The cost probe is mutation-gated and requires explicit approval plus the read-only devnet preflight; set `SOLANA_PRIVATE_KEY` and a **paid** `SOLANA_RPC_URL` or `RPC_URL_SOLANA_TESTNET` — public `api.devnet.solana.com` often returns 429.
 
 Full LZ OFT store + peer bytes32 on devnet (EID **40168**) still uses LayerZero `create-lz-oapp` + `hardhat lz:oft:solana:create`. **Do not** seed mainnet `Registry4626.setRemoteOFTPeerBytes32` with a devnet peer — mainnet uses EID **30168**. Batcher-global `setSolanaShareOftPeer` is retired.
 
-### ULN security — 6-of-9 optional DVNs (mainnet)
+### ULN security — 3-of-5 optional DVNs (mainnet)
 
-Share-mesh LZ wiring must **not** use a single-DVN `1/1` stack. Production **Base ↔ Solana** (EID `30184` ↔ `30168`) uses **no required DVNs** and **6-of-9 optional** — any six of nine independent verifiers must sign:
+Share-mesh LZ wiring must **not** use a single-DVN `1/1` stack. Production **Base ↔ Solana** (EID `30184` ↔ `30168`) uses **no required DVNs** and **3-of-5 optional** — any three of five independent verifiers must sign. LayerZero currently limits Solana pathways to five DVNs.
 
 ```typescript
 // [ requiredDVN[], [ optionalDVN[], threshold ] ]
@@ -55,34 +55,30 @@ const MAINNET_SHARE_MESH_OPTIONAL_DVNS = [
   'Nethermind',
   'Horizen',
   'Deutsche Telekom',
-  'Nansen',
-  'Frax',
-  'Wyoming',
-  'P-OPS',
 ] as const
 
-[[], [[...MAINNET_SHARE_MESH_OPTIONAL_DVNS], 6]]
+[[], [[...MAINNET_SHARE_MESH_OPTIONAL_DVNS], 3]]
 ```
 
-All nine names appear on **both** `base` and `solana` in [LayerZero metadata](https://metadata.layerzero-api.com/v1/metadata) (16-chain intersection today). Re-verify before wire; do not include a name that exists on only one side.
+All five names appeared active on both `base` and `solana` in [LayerZero metadata](https://metadata.layerzero-api.com/v1/metadata) on 2026-07-20. Re-verify immediately before wire; do not include a missing or deprecated name.
 
-**Devnet ceiling:** `solana-testnet` ↔ `arbitrum-sepolia` shares only **three** DVNs (LayerZero Labs, Paxos, Anchorage). Rehearsal wiring uses **2-of-3 optional** — you cannot exercise full 6-of-9 on that pathway until mainnet or a testnet pair with ≥9 shared DVNs exists.
+**Devnet:** `solana-testnet` ↔ `arbitrum-sepolia` uses **2-of-3 optional** (LayerZero Labs, Paxos, Anchorage).
 
 After changing DVNs, re-run `hardhat lz:oft:solana:init-config` + `hardhat lz:oapp:wire --ci`, then confirm:
 
 ```bash
 pnpm hardhat lz:oft:solana:debug --eid 40168 --dst-eids 40231 --action peers
 # devnet: optionalDVNThreshold: 2, optionalDVNs: LayerZero Labs, Paxos, Anchorage
-# mainnet: optionalDVNThreshold: 6, nine optional DVNs (no required list)
+# mainnet: optionalDVNThreshold: 3, five optional DVNs (no required list)
 ```
 
-Trade-offs vs 2-of-2 required: higher DVN fees (~6 verifiers billed per message), slower tail latency (wait for sixth verifier), but no single-DVN failure mode and no two-operator collusion window.
+Trade-offs vs 2-of-2 required: broader operator diversity and one additional signer, while staying within Solana's five-DVN transaction-size ceiling.
 
 **Template + per-creator runbook:** copy [templates/layerzero-share-mesh.config.ts](../templates/layerzero-share-mesh.config.ts) into each `create-lz-oapp` scaffold; follow [solana-share-mesh-creator-provisioning.md](../operations/solana/solana-share-mesh-creator-provisioning.md) for creator #N (registry peer → preflight → finalize).
 
 ## Measured costs (2026-05-27, local validator)
 
-Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` (see `kpr/README.md`).
+Rent formula matches mainnet. Reproduce only after approval: `pnpm -C kpr solana:cost-probe-devnet -- --execute` (see `kpr/README.md`).
 
 | Component | SOL | Notes |
 |-----------|-----|--------|
@@ -125,11 +121,28 @@ Prerequisite: Path 1 complete.
 3. Bridge shares from Base; seed LP.
 4. `prepare-token-badge` (below). Lottery remains on Base.
 
-### B2 — on-chain lottery relay (blocked)
+### B2 — replacement lottery relay (implemented, production blocked)
 
-1. Meteora admin **`token_badge`** → `setup-creator-full` PDAs → allowlist Meteora program (**before** pool).
-2. Pool on **same** hook mint; seed LP.
-3. Keep orchestrator relay disabled. Source gates for finalized identity, durable inbox, and fail-closed LZ transport closed 2026-07-17; live Meteora/TransferHook buy canary + Solana lottery OApp peer authorization remain required before enablement.
+1. Create a fresh zero-fee Token-2022 TransferHook mint using a retained mint
+   keypair. The helper is dry-run by default and requires exact
+   `--execute approve`; it verifies the selected cluster genesis and executable
+   hook before sending:
+   ```bash
+   SOLANA_CLUSTER=mainnet-beta \
+   SOLANA_RPC_URL="$SOLANA_RPC_URL" \
+   SOLANA_B2_MINT_KEYPAIR_PATH=/secure/path/<creator>-b2-mint.json \
+   pnpm -C kpr solana:create-token-2022-mint
+   # rerun with: -- --execute approve only after the funded mutation is approved
+   ```
+2. While the provisioner payer still owns mint authority, run
+   `setup-creator-full`; then bind the exact mint to a fresh regular-OFT Store
+   and transfer mint authority through the LayerZero creator runbook. Never use
+   OFT-adapter mode for a TransferHook mint.
+3. Meteora admin **`token_badge`** → verify all finalized hook PDAs → allowlist
+   Meteora program (**before** pool).
+4. Pool on **the same** hook mint; seed LP.
+5. Finalized buy logs enter the durable inbox; the PendingEntries ring is reconciliation-only. The authorized Solana OApp sends V3 source-event payloads to Base, where existing LotteryManager replay protection and VRF remain authoritative; winner readback settles one WinId PDA.
+6. Keep every B2 worker, legacy `relay_entries`, and per-creator relay row disabled. The exhaustive devnet/mainnet canary, peer, retry, exactly-once, and winner-readback gates are in `docs/operations/solana-b2-production-gates.md`.
 
 ### Meteora UI + display
 

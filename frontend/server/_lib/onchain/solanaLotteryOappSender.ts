@@ -10,7 +10,7 @@
  * - mock: test/dev only when SOLANA_LOTTERY_OAPP_ALLOW_MOCK_SEND=1
  */
 
-import type { Hex } from 'viem'
+import { keccak256, type Hex } from 'viem'
 
 export const SOLANA_LOTTERY_OAPP_SENDER_UNCONFIGURED = 'solana_lottery_oapp_sender_unconfigured'
 
@@ -28,7 +28,7 @@ export type SolanaLotteryOappSendRequest = {
 export type SolanaLotteryOappSendResult = {
   lzGuid: string
   baseTxHash: string | null
-  solanaSignature: string | null
+  solanaSignature: string
 }
 
 export type SolanaLotteryOappSender = {
@@ -43,16 +43,17 @@ function senderMode(): string {
   return String(process.env.SOLANA_LOTTERY_OAPP_SENDER_MODE ?? '').trim().toLowerCase()
 }
 
+function sendTimeoutMs(): number {
+  const configured = Number(process.env.SOLANA_LOTTERY_OAPP_SEND_TIMEOUT_MS ?? 30_000)
+  if (!Number.isFinite(configured)) return 30_000
+  return Math.max(1_000, Math.min(Math.floor(configured), 120_000))
+}
+
 async function sendViaHttp(request: SolanaLotteryOappSendRequest): Promise<SolanaLotteryOappSendResult> {
   const url = String(process.env.SOLANA_LOTTERY_OAPP_SEND_URL ?? '').trim()
   if (!url) throw new Error(`${SOLANA_LOTTERY_OAPP_SENDER_UNCONFIGURED}:missing_send_url`)
 
-  const token = String(
-    process.env.SOLANA_LOTTERY_OAPP_SEND_TOKEN ??
-      process.env.KPR_API_KEY ??
-      process.env.KEEPR_API_KEY ??
-      '',
-  ).trim()
+  const token = String(process.env.SOLANA_LOTTERY_OAPP_SEND_TOKEN ?? '').trim()
   if (!token) throw new Error(`${SOLANA_LOTTERY_OAPP_SENDER_UNCONFIGURED}:missing_send_token`)
 
   const response = await fetch(url, {
@@ -60,9 +61,11 @@ async function sendViaHttp(request: SolanaLotteryOappSendRequest): Promise<Solan
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${token}`,
+      'idempotency-key': request.sourceEventDigest,
     },
     body: JSON.stringify({
       payload: request.payload,
+      payloadHash: keccak256(request.payload),
       sourceEventId: request.sourceEventId,
       sourceEventDigest: request.sourceEventDigest,
       buyer: request.buyer,
@@ -71,6 +74,7 @@ async function sendViaHttp(request: SolanaLotteryOappSendRequest): Promise<Solan
       peerBytes32: request.peerBytes32,
       lotteryManager: request.lotteryManager,
     }),
+    signal: AbortSignal.timeout(sendTimeoutMs()),
   })
 
   if (!response.ok) {
@@ -79,14 +83,27 @@ async function sendViaHttp(request: SolanaLotteryOappSendRequest): Promise<Solan
   }
 
   const json = (await response.json()) as Record<string, unknown>
+  const acknowledgedSourceEvent = typeof json.sourceEventDigest === 'string'
+    ? json.sourceEventDigest.toLowerCase() : ''
+  const acknowledgedPayloadHash = typeof json.payloadHash === 'string'
+    ? json.payloadHash.toLowerCase() : ''
+  if (acknowledgedSourceEvent !== request.sourceEventDigest.toLowerCase()) {
+    throw new Error('solana_lottery_oapp_send_source_event_ack_mismatch')
+  }
+  if (acknowledgedPayloadHash !== keccak256(request.payload).toLowerCase()) {
+    throw new Error('solana_lottery_oapp_send_payload_ack_mismatch')
+  }
   const lzGuid = typeof json.lzGuid === 'string' ? json.lzGuid.trim() : ''
-  if (!lzGuid) throw new Error('solana_lottery_oapp_send_missing_lz_guid')
+  if (!/^0x[a-fA-F0-9]{64}$/.test(lzGuid)) throw new Error('solana_lottery_oapp_send_invalid_lz_guid')
   const baseTxHash = typeof json.baseTxHash === 'string' ? json.baseTxHash.trim() : null
   const solanaSignature = typeof json.solanaSignature === 'string' ? json.solanaSignature.trim() : null
+  if (!solanaSignature || !/^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(solanaSignature)) {
+    throw new Error('solana_lottery_oapp_send_invalid_solana_signature')
+  }
   return {
     lzGuid,
     baseTxHash: baseTxHash || null,
-    solanaSignature: solanaSignature || null,
+    solanaSignature,
   }
 }
 
@@ -96,9 +113,9 @@ function sendViaMock(request: SolanaLotteryOappSendRequest): SolanaLotteryOappSe
   }
   const digest = request.sourceEventDigest.replace(/^0x/i, '').toLowerCase()
   return {
-    lzGuid: `mock-${digest.slice(0, 32)}`,
+    lzGuid: `0x${digest.padEnd(64, '0').slice(0, 64)}`,
     baseTxHash: null,
-    solanaSignature: `mock-sig-${digest.slice(0, 16)}`,
+    solanaSignature: '1'.repeat(64),
   }
 }
 

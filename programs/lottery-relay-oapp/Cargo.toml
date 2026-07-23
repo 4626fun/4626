@@ -1,0 +1,25 @@
+[package]
+name = "lottery-relay-oapp"
+version = "0.1.0"
+description = "Send-only LayerZero V2 OApp for verified Solana lottery entries"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "lottery_relay_oapp"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["anchor-lang/idl-build"]
+# A separately deployed test-only OApp build for Solana Devnet -> Base Sepolia.
+# Sepolia. This must never be used for the production program artifact.
+test-route = []
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+solana-helper = "0.1.0"
+oapp = { package = "oapp-latest", git = "https://github.com/LayerZero-Labs/LayerZero-v2.git", rev = "c09287a" }

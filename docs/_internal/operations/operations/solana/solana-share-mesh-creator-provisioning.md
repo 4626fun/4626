@@ -84,12 +84,12 @@ Verify ULN (mainnet Base ↔ Solana example):
 
 ```bash
 pnpm hardhat lz:oft:solana:debug --eid 30168 --dst-eids 30184 --action peers
-# Expect: optionalDVNThreshold: 6, nine optional DVNs, requiredDVNCount: 255 (none required)
+# Expect: optionalDVNThreshold: 3, five optional DVNs, requiredDVNCount: 255 (none required)
 ```
 
 **Hyperliquid:** when enabled, uncomment Base↔Hype (and optional Solana↔Hype) rows in the template — use **`MAINNET_HYPE_INTERSECT_SIX` (6-of-6)**, not the nine-name pool. See budget doc ULN section.
 
-**Devnet:** full 6-of-9 is impossible on arbsep ↔ solana-testnet; template documents **2-of-3** ceiling there.
+**Devnet:** arbsep ↔ solana-testnet uses **2-of-3**; mainnet uses Solana's supported **3-of-5** ceiling.
 
 ---
 
@@ -161,8 +161,10 @@ Only after Path 1 mint exists for **this** creator:
 
 - B1: `TOKEN_MINT_X=<share_mesh_mint>`, `pnpm -C kpr solana:create-dlmm-pool`
 - Upsert `creator_meteora_alpha_vaults`
-- B2: deferred until a new non-Twin lottery relay architecture exists; see the
-  [lottery policy](./solana-share-mesh-lottery-policy.md)
+- B2: provision the LZ Token-2022 mint first, then run `setup-creator` against
+  that existing mint, obtain Meteora `token_badge`, and create the B2 pool.
+  Production relay remains off until
+  [all B2 gates](../../../../operations/solana-b2-production-gates.md) pass.
 
 Update `SOLANA_SHARE_OFT_MAPPING` with **this** mint → Base `CreatorShareOFT`
 address. Do not add retired creator-coin/Twin maps.
@@ -189,6 +191,6 @@ address. Do not add retired creator-coin/Twin maps.
 | `oft_peer_not_configured` / finalize peer missing | Registry peer zero — seed `setRemoteOFTPeerBytes32` |
 | Wrong Solana mint / no supply | Peer pointed at another creator's OFT store |
 | Wire fails on DVN name | Name missing on one chain in pathway — shrink pool or pick intersection |
-| `optionalDVNThreshold` > pool size | e.g. 6-of-9 on Hyperliquid leg — use Hype six-name block |
+| `optionalDVNThreshold` > pool size | use the destination-specific DVN pool and threshold; never copy another pathway's values |
 | Finalize peer mismatch | Registry peer ≠ `shareOFT.peers(30168)` — re-seed registry or manual `setPeer` |
 | Twin `/provision` or `registerSolanaBridgeToken` | Retired — use this LZ runbook instead |

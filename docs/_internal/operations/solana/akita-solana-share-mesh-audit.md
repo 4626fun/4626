@@ -49,13 +49,18 @@ Follow [budget paths](./solana-share-mesh-budget-paths.md) and
 [per-creator provisioning](../operations/solana/solana-share-mesh-creator-provisioning.md)
 with AKITA constants:
 
-- Solana share mesh: reuse AKITA's existing LZ OFT store
-  `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` and mint
-  `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv`, or provision a replacement
-  only through the canonical runbook
-- Base ShareOFT: wire the **new** deploy's `■AKITA` ShareOFT to that store
+- Solana B1 identity is retired for the B2 canary: OFT store
+  `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` and standard-SPL mint
+  `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` must **not** be reused
+- Solana B2 share mesh: after Base Phase 1 creates the new ShareOFT, provision a
+  fresh Token-2022 mint with the canonical TransferHook and zero fee, initialize
+  its hook PDAs, then bind a fresh regular-OFT Store through the canonical
+  per-creator runbook
+- Base ShareOFT: wire the **new** deploy's `■AKITA` ShareOFT only to that fresh
+  B2 OFT Store
 - Registry: before finalize, explicitly call
-  `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f)`
+  `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, <FRESH_B2_OFT_STORE_BYTES32>)`;
+  the retired B1 peer `0xdf9a…cd3f` is forbidden
 - Batcher: verify destination + OVault runtime only; there is no adapter/global-peer requirement
 - Meteora: create the pool against the LZ share-mesh mint using the budget-path runbook
 - Creator coin: `0x5b674196812451b7cec024fe9d22d2c0b172fa75`

@@ -101,7 +101,7 @@ describe('enqueueSolanaShareMeshProvisioning', () => {
     )
   })
 
-  it('uses mint-scoped dedupe when shareMeshMint is provided', async () => {
+  it('never forwards a caller-provided mint before the applied mapping is verified', async () => {
     const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
     const shareOft = '0x2222222222222222222222222222222222222222'
     const result = await enqueueSolanaShareMeshProvisioning({
@@ -116,14 +116,17 @@ describe('enqueueSolanaShareMeshProvisioning', () => {
     expect(result).toEqual({ enqueued: true, jobId: 99 })
     expect(enqueueKeeperJobMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        source: 'creator-strategy.solana-share-mesh-pool',
-        dedupeKey: `solana-provision-pool:${shareMeshMint.toLowerCase()}`,
+        source: 'creator-strategy.solana-share-mesh',
+        dedupeKey: `solana-provision:${CREATOR.toLowerCase()}:post_deploy`,
         payload: expect.objectContaining({
-          body: expect.objectContaining({
-            shareMeshMint,
-            shareOft,
+          body: {
+            creatorToken: CREATOR,
+            activationId: 0,
+            paymentSource: 'post_deploy',
             trigger: 'post_deploy',
-          }),
+            vaultAddress: null,
+            deploySessionId: 'dep_123',
+          },
         }),
       }),
     )
