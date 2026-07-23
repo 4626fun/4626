@@ -12,13 +12,8 @@ import {
   type KeeperJobTickResult,
 } from '../../../../server/_lib/keeperJobs/keeperJobRunner.js'
 
-function getBaseUrl(req: VercelRequest): string {
-  const configured = String(process.env.KEEPER_COORDINATION_BASE_URL ?? '').trim()
-  if (configured) return configured
-  const host = typeof req.headers.host === 'string' ? req.headers.host : ''
-  if (!host) return ''
-  const proto = String(req.headers['x-forwarded-proto'] ?? 'https').split(',')[0]?.trim() || 'https'
-  return `${proto}://${host}`
+function getBaseUrl(): string {
+  return String(process.env.KEEPER_COORDINATION_BASE_URL ?? '').trim()
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -36,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const result = await runKeeperJobTick({
-      baseUrl: getBaseUrl(req),
+      baseUrl: getBaseUrl(),
       apiKey: String(process.env.KPR_API_KEY ?? ''),
       workerId: String(process.env.KEEPER_WORKER_ID ?? 'vercel-cron-keeper-worker'),
       limit: Number(process.env.KEEPER_WORKER_LIMIT ?? 1),

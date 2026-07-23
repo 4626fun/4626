@@ -123,6 +123,7 @@ describe('runKeeperJobTick control-plane internal_api jobs', () => {
             shareOft: '0x2222222222222222222222222222222222222222',
             shareMeshMint,
             sourceSessionId: 'dep_abc',
+            b2Stage: 'post_lz',
           },
         },
       },
@@ -155,6 +156,7 @@ describe('runKeeperJobTick control-plane internal_api jobs', () => {
           body: expect.objectContaining({
             shareMeshMint,
             trigger: 'post_deploy',
+            b2Stage: 'post_lz',
           }),
         }),
       }),

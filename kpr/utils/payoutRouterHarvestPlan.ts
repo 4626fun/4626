@@ -308,7 +308,11 @@ export async function planPayoutRouterHarvestConversions(
 
         if (targetApproved && spenderApproved) {
           let externalMinOut = token.minOut;
-          if (typeof quote.amountOut === 'bigint' && quote.amountOut > 0n) {
+          if (
+            externalMinOut > 0n &&
+            typeof quote.amountOut === 'bigint' &&
+            quote.amountOut > 0n
+          ) {
             const afterBuyFee = applyShareOftBuyFeeHaircut(quote.amountOut, shareOftBuyFeeBps);
             const derived = deriveMinOutFromQuote(afterBuyFee, options.externalSwapSlippageBps);
             if (derived > externalMinOut) externalMinOut = derived;

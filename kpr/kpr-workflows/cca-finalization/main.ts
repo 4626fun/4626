@@ -1,7 +1,7 @@
-import { executeCcaFinalization } from '../../actions/cca-finalization.action.js'
+import { executeCanonicalCcaFinalization } from '../../actions/cca-finalization-canonical.action.js'
 
 export async function main() {
-  const result = await executeCcaFinalization()
+  const result = await executeCanonicalCcaFinalization()
   console.log(
     JSON.stringify({
       workflow: 'cca-finalization',

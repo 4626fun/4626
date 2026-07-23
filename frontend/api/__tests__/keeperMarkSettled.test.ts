@@ -68,6 +68,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       KPR_API_KEY: 'test-keepr-key',
+      KPR_SWEEP_COMPLETION_KEY: 'test-sweep-completion-key',
     })
   })
 
@@ -80,8 +81,17 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   const NOW_ISO = new Date().toISOString()
   const AUTH = { authorization: 'Bearer test-keepr-key' }
 
-  async function postBody(body: Record<string, unknown>) {
-    const req = createMockReq({ method: 'POST', headers: AUTH, body })
+  async function postBody(body: Record<string, unknown>, withCompletionProof = false) {
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        ...AUTH,
+        ...(withCompletionProof
+          ? { 'x-keeper-sweep-completion-key': 'test-sweep-completion-key' }
+          : {}),
+      },
+      body,
+    })
     const res = createMockRes()
     await keeperMarkSettledHandler(req, res)
     return res
@@ -109,7 +119,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: NOW_ISO,
       settlementStage: 'completed',
       settledAtAuthority: 'sweep-completion',
-    })
+    }, true)
     expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
   })
@@ -120,8 +130,18 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: NOW_ISO,
       settlementStage: 'completed',
     })
-    expect(res.statusCode).toBe(403)
-    expect(String(res.body?.error ?? '')).toContain('sweep completion')
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('rejects the public authority string without the separate machine proof', async () => {
+    const res = await postBody({
+      vaultAddress: VAULT,
+      settledAt: NOW_ISO,
+      settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Unauthorized sweep completion authority')
   })
 
   it('rejects settlementStage="completed" without the sweep-completion authority (audit H2-04)', async () => {
@@ -129,8 +149,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settlementStage: 'completed',
     })
-    expect(res.statusCode).toBe(403)
-    expect(String(res.body?.error ?? '')).toContain('sweep completion')
+    expect(res.statusCode).toBe(401)
   })
 
   it('rejects a forged settledAtAuthority value', async () => {
@@ -140,11 +159,11 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settlementStage: 'completed',
       settledAtAuthority: 'admin-override',
     })
-    expect(res.statusCode).toBe(403)
+    expect(res.statusCode).toBe(401)
   })
 
   it('rejects settledAt without any settlementStage', async () => {
-    const res = await postBody({ vaultAddress: VAULT, settledAt: NOW_ISO })
+    const res = await postBody({ vaultAddress: VAULT, settledAt: NOW_ISO }, true)
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('settlementStage="completed"')
   })
@@ -154,7 +173,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settledAt: NOW_ISO,
       settlementStage: 'in_progress',
-    })
+    }, true)
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('settlementStage="completed"')
   })
@@ -165,7 +184,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: 'not-a-timestamp',
       settlementStage: 'completed',
       settledAtAuthority: 'sweep-completion',
-    })
+    }, true)
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('ISO-8601')
   })
@@ -177,7 +196,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: farFuture,
       settlementStage: 'completed',
       settledAtAuthority: 'sweep-completion',
-    })
+    }, true)
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('future')
   })
@@ -189,7 +208,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: nearFuture,
       settlementStage: 'completed',
       settledAtAuthority: 'sweep-completion',
-    })
+    }, true)
     expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
   })

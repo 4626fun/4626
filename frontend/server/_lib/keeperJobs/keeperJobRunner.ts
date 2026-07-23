@@ -190,13 +190,21 @@ async function callInternalApi(params: {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${params.apiKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }
+    if (
+      apiJob.path === '/api/keeper/mark-settled'
+      || apiJob.path === '/api/keeper/control-plane/settle'
+    ) {
+      const completionKey = String(process.env.KPR_SWEEP_COMPLETION_KEY ?? '').trim()
+      if (completionKey) headers['x-keeper-sweep-completion-key'] = completionKey
+    }
     const response = await fetch(joinUrl(params.baseUrl, apiJob.path), {
       method: apiJob.method,
-      headers: {
-        Authorization: `Bearer ${params.apiKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers,
       body: JSON.stringify(apiJob.body),
       signal: controller.signal,
     })
@@ -310,6 +318,7 @@ function readSolanaMappingFollowUp(job: KeeperJob): {
   shareOft: string
   shareMeshMint: string
   sourceSessionId: string | null
+  b2Stage: 'b1' | 'hook_pre_lz' | 'post_lz'
 } | null {
   const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
   if (path !== '/api/keeper/solana/reconcile') return null
@@ -328,11 +337,15 @@ function readSolanaMappingFollowUp(job: KeeperJob): {
   const shareMeshMint = typeof payload?.shareMeshMint === 'string' ? payload.shareMeshMint.trim() : ''
   if (!creatorToken || !shareOft || !shareMeshMint) return null
   const sourceSessionId = typeof payload?.sourceSessionId === 'string' ? payload.sourceSessionId.trim() : ''
+  const b2StageRaw = typeof payload?.b2Stage === 'string' ? payload.b2Stage.trim() : ''
+  const b2Stage =
+    b2StageRaw === 'hook_pre_lz' || b2StageRaw === 'post_lz' ? b2StageRaw : 'b1'
   return {
     creatorToken,
     shareOft,
     shareMeshMint,
     sourceSessionId: sourceSessionId || null,
+    b2Stage,
   }
 }
 
@@ -358,6 +371,7 @@ function readSyncMappingProvisionFollowUp(job: KeeperJob): {
   shareOft: string
   shareMeshMint: string
   sourceSessionId: string | null
+  b2Stage: 'b1' | 'hook_pre_lz' | 'post_lz'
 } | null {
   const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
   if (path !== '/api/keeper/solana/sync-mapping') return null
@@ -370,11 +384,15 @@ function readSyncMappingProvisionFollowUp(job: KeeperJob): {
   const shareMeshMint = typeof body?.shareMeshMint === 'string' ? body.shareMeshMint.trim() : ''
   if (!creatorToken || !shareOft || !shareMeshMint) return null
   const sourceSessionId = typeof body?.sourceSessionId === 'string' ? body.sourceSessionId.trim() : ''
+  const b2StageRaw = typeof body?.b2Stage === 'string' ? body.b2Stage.trim() : ''
+  const b2Stage =
+    b2StageRaw === 'hook_pre_lz' || b2StageRaw === 'post_lz' ? b2StageRaw : 'b1'
   return {
     creatorToken,
     shareOft,
     shareMeshMint,
     sourceSessionId: sourceSessionId || null,
+    b2Stage,
   }
 }
 
@@ -407,6 +425,7 @@ async function enqueueSolanaProvisionCreatorFollowUpIfNeeded(
         deploySessionId: mapping.sourceSessionId,
         shareOft: mapping.shareOft,
         shareMeshMint: mapping.shareMeshMint,
+        b2Stage: mapping.b2Stage,
       },
     },
     maxAttempts: 5,

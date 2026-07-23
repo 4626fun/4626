@@ -103,13 +103,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const writeEnabled = parseBooleanFlag(process.env.CRE_SOLANA_NAV_WRITE_ENABLED, false)
+  const shadowOnly = parseBooleanFlag(process.env.CRE_SOLANA_NAV_SHADOW_ONLY, true)
   const hardStop = parseBooleanFlag(process.env.CRE_KILL_SWITCH, false)
-  if (!writeEnabled || hardStop) {
+  if (!writeEnabled || hardStop || shadowOnly) {
     return res.status(200).json({
       success: true,
       data: {
         status: 'skipped',
-        reason: !writeEnabled ? 'cre_solana_nav_write_disabled' : 'cre_kill_switch_enabled',
+        reason: !writeEnabled
+          ? 'cre_solana_nav_write_disabled'
+          : hardStop
+            ? 'cre_kill_switch_enabled'
+            : 'cre_solana_nav_shadow_only',
       },
     } satisfies ApiEnvelope<CreSolanaNavUpdateResponse>)
   }

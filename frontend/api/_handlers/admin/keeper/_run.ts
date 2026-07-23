@@ -18,13 +18,8 @@ type ManualRunBody = {
   limit?: unknown
 }
 
-function getBaseUrl(req: VercelRequest): string {
-  const configured = String(process.env.KEEPER_COORDINATION_BASE_URL ?? '').trim()
-  if (configured) return configured
-  const host = typeof req.headers.host === 'string' ? req.headers.host : ''
-  if (!host) return ''
-  const proto = String(req.headers['x-forwarded-proto'] ?? 'https').split(',')[0]?.trim() || 'https'
-  return `${proto}://${host}`
+function getBaseUrl(): string {
+  return String(process.env.KEEPER_COORDINATION_BASE_URL ?? '').trim()
 }
 
 function resolveLimit(value: unknown): number {
@@ -57,13 +52,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'KPR_API_KEY is not configured on the server',
     } satisfies ApiEnvelope<never>)
   }
+  const baseUrl = getBaseUrl()
+  if (!baseUrl) {
+    return res.status(503).json({
+      success: false,
+      error: 'KEEPER_COORDINATION_BASE_URL is not configured on the server',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const bodyRaw = await readBoundedJsonObjectBody(req, { maxBytes: 2_048 })
   const body = (bodyRaw && typeof bodyRaw === 'object' && !Array.isArray(bodyRaw) ? bodyRaw : {}) as ManualRunBody
 
   try {
     const result = await runKeeperJobTick({
-      baseUrl: getBaseUrl(req),
+      baseUrl,
       apiKey,
       workerId: `admin-manual:${admin.toLowerCase()}`,
       limit: resolveLimit(body.limit),

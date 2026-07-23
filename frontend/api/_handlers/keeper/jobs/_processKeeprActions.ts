@@ -17,13 +17,8 @@ function enabled(): boolean {
   return ['1', 'true', 'yes'].includes(env('KEEPER_PROCESS_KPR_ACTIONS_ENABLED').toLowerCase())
 }
 
-function getBaseUrl(req: VercelRequest): string {
-  const configured = env('KEEPER_COORDINATION_BASE_URL')
-  if (configured) return configured
-  const host = typeof req.headers.host === 'string' ? req.headers.host : ''
-  if (!host) return ''
-  const proto = String(req.headers['x-forwarded-proto'] ?? 'https').split(',')[0]?.trim() || 'https'
-  return `${proto}://${host}`
+function getBaseUrl(): string {
+  return env('KEEPER_COORDINATION_BASE_URL')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -48,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const result = await processKeeprActions({
-      baseUrl: getBaseUrl(req),
+      baseUrl: getBaseUrl(),
       apiKey: env('KPR_API_KEY'),
       limit: Number(env('KEEPER_PROCESS_KPR_ACTIONS_LIMIT') || 1),
       retryDelaySeconds: Number(env('KEEPER_PROCESS_KPR_ACTIONS_RETRY_DELAY_SECONDS') || 60),

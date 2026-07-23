@@ -4,6 +4,7 @@ import {
   handleOptions,
   readBoundedJsonObjectBody,
   requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
   setCors,
   setNoStore,
 } from '@4626/server-core'
@@ -12,6 +13,13 @@ import {
   executeOperatorAction,
   OperatorActionExecutionError,
 } from '../../../../server/_lib/controlPlane/executors/executeOperatorAction.js'
+import {
+  formatTrustZoneDisabledError,
+  getKeeprTrustZoneEnvKey,
+  isKeeprTrustZoneWriteEnabled,
+  KPR_TRUST_ZONE_KEY_HEADER,
+  resolveKeeprTrustZone,
+} from '../../../../server/_lib/agentControl/trustZones.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -36,6 +44,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({
       success: false,
       error: error instanceof Error ? error.message : 'invalid_operator_action',
+    } satisfies ApiEnvelope<never>)
+  }
+  const trustZone = resolveKeeprTrustZone(action.type)
+  const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
+  const trustZoneSecret = String(process.env[trustZoneEnvKey] ?? '').trim()
+  const isProductionRuntime =
+    String(process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production'
+    || Boolean(String(process.env.RAILWAY_ENVIRONMENT_NAME ?? '').trim())
+  if (isProductionRuntime && !trustZoneSecret) {
+    return res.status(503).json({
+      success: false,
+      error: `Server misconfigured: ${trustZoneEnvKey} is required in production`,
+    } satisfies ApiEnvelope<never>)
+  }
+  if (
+    trustZoneSecret
+    && !requireOptionalHeaderEnvAuth(req, res, {
+      envKey: trustZoneEnvKey,
+      headerName: KPR_TRUST_ZONE_KEY_HEADER,
+      unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
+    })
+  ) {
+    return
+  }
+  if (!isKeeprTrustZoneWriteEnabled(trustZone, process.env)) {
+    return res.status(503).json({
+      success: false,
+      error: formatTrustZoneDisabledError(trustZone),
     } satisfies ApiEnvelope<never>)
   }
 

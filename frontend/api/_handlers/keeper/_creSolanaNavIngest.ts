@@ -140,8 +140,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const shadowOnlyEnv = parseBooleanFlag(process.env.CRE_SOLANA_NAV_SHADOW_ONLY, true)
   const writeEnabledEnv = parseBooleanFlag(process.env.CRE_SOLANA_NAV_WRITE_ENABLED, false)
-  const forceWrite = body.forceWrite === true
-  const shouldQueueWrite = writeEnabledEnv && (!shadowOnlyEnv || forceWrite)
+  const forceWriteRequested = body.forceWrite === true
+  // Mirror oracle handler: body forceWrite must not bypass operational shadow mode.
+  const shouldQueueWrite = writeEnabledEnv && !shadowOnlyEnv
 
   const payload: Record<string, unknown> = {
     strategyAddress,
@@ -175,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mode: shouldQueueWrite ? 'queue_write' : 'shadow_only',
       shadowOnlyEnv,
       writeEnabledEnv,
-      forceWrite,
+      forceWriteRequested,
     },
   })
 

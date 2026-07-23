@@ -140,6 +140,54 @@ describe('keeper CRE handlers', () => {
     expect(enqueueKeeperJobMock).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores body forceWrite while shadow mode is enabled', async () => {
+    applyEnv({
+      CRE_SOLANA_NAV_SHADOW_ONLY: '1',
+      CRE_SOLANA_NAV_WRITE_ENABLED: '1',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: AUTH,
+      body: {
+        strategyAddress: '0x1111111111111111111111111111111111111111',
+        reportedRemoteNav: '1000000000000000000',
+        source: 'cre-test',
+        forceWrite: true,
+      },
+    })
+    const res = createMockRes()
+
+    await creSolanaNavIngestHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.mode).toBe('shadow_only')
+    expect(enqueueKeeperJobMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores oracle forceWrite while oracle shadow mode is enabled', async () => {
+    applyEnv({
+      CRE_ORACLE_SHADOW_ONLY: '1',
+      CRE_ORACLE_VALIDATOR_WRITE_ENABLED: '1',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: AUTH,
+      body: {
+        oracleAddress: '0x3333333333333333333333333333333333333333',
+        proposedPrice: '1000',
+        source: 'cre-test',
+        forceWrite: true,
+      },
+    })
+    const res = createMockRes()
+
+    await creOracleValidateUpdateHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.status).toBe('monitor_only')
+    expect(writeContractMock).not.toHaveBeenCalled()
+  })
+
   it('persists strategy health updates', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -190,6 +238,28 @@ describe('keeper CRE handlers', () => {
     await creSolanaNavUpdateHandler(req, res)
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.status).toBe('skipped')
+    expect(writeContractMock).not.toHaveBeenCalled()
+  })
+
+  it('skips direct NAV write endpoint while shadow mode is enabled', async () => {
+    applyEnv({
+      CRE_SOLANA_NAV_SHADOW_ONLY: '1',
+      CRE_SOLANA_NAV_WRITE_ENABLED: '1',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: AUTH,
+      body: {
+        strategyAddress: '0x1111111111111111111111111111111111111111',
+        reportId: `0x${'b'.repeat(64)}`,
+        reportedRemoteNav: '123',
+        source: 'cre-test',
+      },
+    })
+    const res = createMockRes()
+    await creSolanaNavUpdateHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.reason).toBe('cre_solana_nav_shadow_only')
     expect(writeContractMock).not.toHaveBeenCalled()
   })
 })

@@ -4,13 +4,20 @@ import {
   handleOptions,
   readBoundedJsonObjectBody,
   requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
   setCors,
   setNoStore,
 } from '@4626/server-core'
 import {
   executeSettleVault,
   SettleVaultExecutionError,
+  SWEEP_COMPLETION_AUTHORITY,
 } from '../../../../server/_lib/controlPlane/executors/executeSettleVault.js'
+import {
+  requestsCompletedSettlement,
+  SWEEP_COMPLETION_AUTH_ENV_KEY,
+  SWEEP_COMPLETION_AUTH_HEADER,
+} from '../../../../server/_lib/controlPlane/settlementAuthorityAuth.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -27,6 +34,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!/^0x[a-f0-9]{40}$/.test(vaultAddress)) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
   }
+  const completedSettlement = requestsCompletedSettlement({
+    settledAt: body?.settledAt,
+    settlementStage: body?.settlementStage,
+  })
+  if (
+    completedSettlement
+    && !requireOptionalHeaderEnvAuth(req, res, {
+      envKey: SWEEP_COMPLETION_AUTH_ENV_KEY,
+      headerName: SWEEP_COMPLETION_AUTH_HEADER,
+      unauthorizedError: 'Unauthorized sweep completion authority',
+    })
+  ) {
+    return
+  }
 
   try {
     const result = await executeSettleVault({
@@ -34,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       graduatedAt: typeof body?.graduatedAt === 'string' ? body.graduatedAt : undefined,
       settledAt: typeof body?.settledAt === 'string' ? body.settledAt : undefined,
       settlementStage: typeof body?.settlementStage === 'string' ? body.settlementStage : undefined,
-      settledAtAuthority: typeof body?.settledAtAuthority === 'string' ? body.settledAtAuthority : undefined,
+      settledAtAuthority: completedSettlement ? SWEEP_COMPLETION_AUTHORITY : undefined,
     })
     return res.status(200).json({ success: true, data: result } satisfies ApiEnvelope<typeof result>)
   } catch (error) {

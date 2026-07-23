@@ -717,6 +717,33 @@ describe('keeper job coordination handlers', () => {
     }
   })
 
+  it('requires configured KEEPER_COORDINATION_BASE_URL for cron worker ticks', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: API_KEY,
+      CRON_SECRET: 'cron-secret-for-keeper-runner',
+      KEEPER_COORDINATION_BASE_URL: undefined,
+      KEEPER_WORKER_ID: 'test-cron-worker',
+    })
+    try {
+      const req = createMockReq({
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer cron-secret-for-keeper-runner',
+          host: 'attacker.invalid',
+          'x-forwarded-proto': 'https',
+        },
+      })
+      const res = createMockRes()
+
+      await runHandler(req, res)
+
+      expect(res.statusCode).toBe(500)
+      expect(res.body?.error).toBe('keeper_coordination_base_url_required')
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('enqueues mark-settled follow-up after a completed sweep job', async () => {
     const restoreEnv = applyEnv({
       KPR_API_KEY: API_KEY,

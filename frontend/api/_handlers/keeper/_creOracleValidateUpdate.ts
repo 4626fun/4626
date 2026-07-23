@@ -179,8 +179,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const shadowOnly = parseBooleanFlag(process.env.CRE_ORACLE_SHADOW_ONLY, true)
   const writeEnabled = parseBooleanFlag(process.env.CRE_ORACLE_VALIDATOR_WRITE_ENABLED, false)
   const killSwitch = parseBooleanFlag(process.env.CRE_KILL_SWITCH, false)
-  const forceWrite = body.forceWrite === true
-  const shouldWrite = !killSwitch && writeEnabled && withinDivergence && (!shadowOnly || forceWrite)
+  const forceWriteRequested = body.forceWrite === true
+  const shouldWrite = !killSwitch && writeEnabled && withinDivergence && !shadowOnly
 
   const db = await getDbForCron()
   if (db && isDbConfigured()) {
@@ -208,7 +208,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shadowOnly,
         writeEnabled,
         killSwitch,
-        forceWrite,
+        forceWriteRequested,
         withinDivergence,
       },
     })

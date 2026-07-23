@@ -19,6 +19,7 @@ import {
   readContract,
   writeContract,
   getBlockTimestamp,
+  isDryRun,
   type WriteResult,
 } from '../utils/onchain.js';
 import {
@@ -157,7 +158,9 @@ async function invokeKeeperWrite(params: {
   vaultAddress: `0x${string}`;
   action: 'tend' | 'report';
 }): Promise<WriteResult> {
-  if (shouldUseKeeperHttpBridge()) {
+  // The HTTP bridge signs live writes server-side, so it must never be used
+  // when the runner explicitly promised simulation-only behavior.
+  if (!isDryRun() && shouldUseKeeperHttpBridge()) {
     const bridge =
       params.action === 'tend'
         ? await postKeeperTend(params.vaultAddress)

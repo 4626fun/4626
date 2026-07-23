@@ -14,6 +14,7 @@ export interface VaultConfig {
   ccaLaunchArmAddress?: `0x${string}`;
   oracleAddress?: `0x${string}`;
   vrfHubAddress?: `0x${string}`;
+  gaugeControllerAddress?: `0x${string}`;
   burnStreamAddress?: `0x${string}`;
   payoutRouterAddress?: `0x${string}`;
   agentRevenueRouterAddress?: `0x${string}`;
