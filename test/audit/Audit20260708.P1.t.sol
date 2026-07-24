@@ -73,6 +73,11 @@ contract Audit20260708_P1_BatcherSecurity is Test {
         vm.expectRevert(abi.encodeWithSelector(DeploymentBatcher.CodeIdNotApproved.selector, codeId));
         batcher.requireApprovedCodeId(codeId);
 
+        // Approval now snapshots the bytecode store contents; supply a non-empty
+        // store response so this assertion exercises the allowlist path.
+        vm.mockCall(
+            address(0x1002), abi.encodeWithSignature("get(bytes32)", codeId), abi.encode(bytes("mock-code"))
+        );
         vm.prank(TREASURY);
         batcher.setApprovedCodeId(codeId, true);
         batcher.requireApprovedCodeId(codeId); // no revert

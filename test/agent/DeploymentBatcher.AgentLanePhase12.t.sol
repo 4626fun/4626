@@ -7,6 +7,7 @@ import {
     DeploymentBatcherPhase2Module
 } from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 
 interface IEndpointRegistryLike {
@@ -38,6 +39,8 @@ contract MockAgentLaneBytecodeStore {
 contract MockAgentLaneRegistry {
     address public endpoint;
 
+    mapping(address => IRegistry4626.TokenInfo) internal tokenInfos;
+
     struct AgentIntegrationMeta {
         uint8 vaultKind;
         address nativeAgentVault;
@@ -56,6 +59,30 @@ contract MockAgentLaneRegistry {
 
     function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
+    }
+
+    function seedToken(address token, address creator) external {
+        tokenInfos[token] = IRegistry4626.TokenInfo({
+            token: token,
+            name: "Agent Token",
+            symbol: "AGNT",
+            vault: address(0),
+            shareOFT: address(0),
+            wrapper: address(0),
+            oracle: address(0),
+            gaugeController: address(0),
+            creator: creator,
+            canonicalWallet: address(0),
+            pool: address(0),
+            poolFee: 0,
+            primaryChainId: 8453,
+            isActive: true,
+            registeredAt: block.timestamp
+        });
+    }
+
+    function getTokenInfo(address token) external view returns (IRegistry4626.TokenInfo memory) {
+        return tokenInfos[token];
     }
 
     function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external {
@@ -378,8 +405,11 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         vm.chainId(8453);
         bootstrap = new OFTBootstrapRegistry();
         registry = new MockAgentLaneRegistry(bootstrap.LZ_COMMON_ENDPOINT());
+        registry.seedToken(agentToken, address(this));
         store = new MockAgentLaneBytecodeStore();
         create2 = new MockAgentLaneCreate2Deployer();
+        store.setCode(VAULT_CODE_ID, bytes("mock-vault"));
+        store.setCode(WRAPPER_CODE_ID, bytes("mock-wrapper"));
         store.setCode(OFT_BOOTSTRAP_CODE_ID, bytes("mock-bootstrap"));
         store.setCode(SHARE_OFT_CODE_ID, bytes("mock-share-oft"));
         store.setCode(AGENT_GAUGE_CODE_ID, bytes("mock-agent-gauge"));

@@ -237,6 +237,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         registry = new MockRegistry4626(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
+        store.setCode(VAULT_CODE_ID, bytes("mock-vault"));
+        store.setCode(WRAPPER_CODE_ID, bytes("mock-wrapper"));
         store.setCode(OFT_BOOTSTRAP_CODE_ID, _oftBootstrapCreationCode());
         store.setCode(SHARE_OFT_CODE_ID, _shareOftCreationCode());
         create2.configureBootstrap(_oftBootstrapSalt(), OFT_BOOTSTRAP_CODE_ID, bootstrapAddress);

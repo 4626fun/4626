@@ -107,6 +107,8 @@ contract MockWrapperPermit2 {
 contract MockVaultPermit2 {
     address public protocolRescue;
     address public owner;
+    address public gaugeController;
+    address public ccaLaunchArm;
 
     constructor(address owner_) {
         owner = owner_;
@@ -116,6 +118,11 @@ contract MockVaultPermit2 {
         protocolRescue = rescue;
     }
 
+    function setPhase2Wiring(address gaugeController_, address ccaLaunchArm_) external {
+        gaugeController = gaugeController_;
+        ccaLaunchArm = ccaLaunchArm_;
+    }
+
     function transferOwnership(address newOwner) external {
         owner = newOwner;
     }
@@ -123,9 +130,14 @@ contract MockVaultPermit2 {
 
 contract MockOwnableTransferPermit2 {
     address public owner = msg.sender;
+    address public oracle;
 
     function transferOwnership(address newOwner) external {
         owner = newOwner;
+    }
+
+    function setOracle(address oracle_) external {
+        oracle = oracle_;
     }
 }
 
@@ -297,6 +309,8 @@ contract DeploymentBatcherPermit2Test is Test {
         gauge = new MockOwnableTransferPermit2();
         cca = new MockOwnableTransferPermit2();
         oracle = new MockOwnableTransferPermit2();
+        vault.setPhase2Wiring(address(gauge), address(cca));
+        gauge.setOracle(address(oracle));
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
         batcher = new DeploymentBatcherHarness(
