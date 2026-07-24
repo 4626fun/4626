@@ -62,6 +62,7 @@ interface Ive4626VoterRewardsDistributor {
  * @author 0xakita.eth
  * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, splits in ■, unwraps only the burn slice
  * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
+ *      V4 sell-tax WETH is buyback'd to ■ via keeper-quoted `processWETHFeesWithRoute` (no buyFeeBps).
  *      Split (all paths):
  *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)
  *      - 21.39% ■ ShareOFT → ve4626VoterRewardsDistributor (ve4626 voter lane)
@@ -234,13 +235,15 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @dev Default: address(0) (disabled). Owner is always authorized.
     address public wethFeeKeeper;
 
-    /// @notice Maximum WETH amount that permissionless callers may process in a single call.
-    /// @dev Default: 0 (permissionless processing disabled).
+    /// @notice Max WETH per keeper `processWETHFeesWithRoute` call (0 = keeper cannot swap; owner uncapped).
+    /// @dev Storage name preserved for ABI compatibility with prior permissionless cap.
     uint256 public maxPermissionlessWethProcess;
 
-    /// @notice If true, `receiveWETHFees()` may auto-process (only up to the permissionless cap).
-    /// @dev Default: false (intake should not trigger public mempool swaps).
+    /// @notice Deprecated: auto-swap on intake is permanently disabled (MEV). Kept for storage/ABI layout.
     bool public autoProcessWethFees;
+
+    /// @notice Allowlisted routers for keeper WETH→■ buyback calldata (Universal Router, aggregators).
+    mapping(address => bool) public allowedSwapRouters;
 
     address public pendingEmergencyWithdrawToken;
     uint256 public pendingEmergencyWithdrawAmount;
@@ -256,7 +259,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     event FeesDistributed(
         uint256 sharesBurned, uint256 toLottery, uint256 toCreator, uint256 toProtocol, uint256 newPricePerShare
     );
-    event WETHFeesProcessed(uint256 wethAmount, uint256 creatorCoinReceived, uint256 sharesReceived);
+    event WETHFeesProcessed(uint256 wethAmount, uint256 shareOftReceived, address router);
+    event SwapRouterAllowlistUpdated(address indexed router, bool allowed);
     event SharesBurned(uint256 shares, uint256 newPPS);
     event JackpotPaid(address indexed winner, uint256 shares);
 
@@ -312,6 +316,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error InvalidFeeTier();
     error InvalidDistributionInterval();
     error InvalidTwapDuration();
+    error RouterNotAllowed();
+    error RoutedSwapRequired();
 
     // ================================
     // CONSTRUCTOR
@@ -455,27 +461,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         totalWETHFeesReceived += received;
 
         emit WETHFeesReceived(msg.sender, received);
-
-        // Default: do not auto-swap on fee intake (public mempool MEV risk).
-        // If enabled, only process up to the permissionless cap to avoid large public swaps.
-        if (!autoProcessWethFees) return;
-
-        uint256 cap = maxPermissionlessWethProcess;
-        if (cap == 0) return;
-
-        // Auto-process if we have enough and enough time has passed
-        if (
-            pendingWETHFees >= distributionThreshold / 10 // Lower threshold for WETH
-                && block.timestamp >= lastWethDistribution + distributionInterval
-        ) {
-            uint256 amountToProcess = pendingWETHFees > cap ? cap : pendingWETHFees;
-
-            // Keep fee intake permissionless even during oracle outages.
-            // If oracle-derived protection is unavailable, leave fees pending.
-            if (_calculateMinOutput(amountToProcess) > 0) {
-                _processWETHFees(amountToProcess);
-            }
-        }
+        // MEV: never auto-swap on intake. Keepr submits `processWETHFeesWithRoute` privately.
     }
 
     /**
@@ -493,93 +479,104 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
+     * @notice Legacy entrypoint removed — use `processWETHFeesWithRoute`.
      */
-    function processWETHFees() external nonReentrant {
-        uint256 amountToProcess = _wethAmountToProcessForCaller(msg.sender);
-        if (amountToProcess == 0) return;
-        _processWETHFees(amountToProcess);
+    function processWETHFees() external pure {
+        revert RoutedSwapRequired();
     }
 
-    function _wethAmountToProcessForCaller(address caller) internal view returns (uint256 amountToProcess) {
-        uint256 pending = pendingWETHFees;
-        if (pending == 0) return 0;
+    /**
+     * @notice Process pending WETH fees via keeper-quoted best-path buyback into ShareOFT (■).
+     * @dev Owner or `wethFeeKeeper` only. Recipient of ■ in `swapCalldata` must be this gauge
+     *      (`NoFees`) so the conversion is not charged `buyFeeBps`. Submit privately (MEV).
+     * @param wethAmount WETH to spend (capped for keeper)
+     * @param router Allowlisted swap router / Universal Router / aggregator
+     * @param swapCalldata Opaque calldata that spends WETH and delivers ■ here
+     * @param minShareOftOut Offchain quote floor; also bounded by oracle TWAP min
+     */
+    function processWETHFeesWithRoute(
+        uint256 wethAmount,
+        address router,
+        bytes calldata swapCalldata,
+        uint256 minShareOftOut
+    ) external nonReentrant {
+        uint256 amountToProcess = _wethAmountToProcessForCaller(msg.sender, wethAmount);
+        if (amountToProcess == 0) return;
+        _processWETHFeesWithRoute(amountToProcess, router, swapCalldata, minShareOftOut);
+    }
 
-        if (caller == owner() || caller == wethFeeKeeper) {
-            return pending;
+    function _wethAmountToProcessForCaller(address caller, uint256 requested)
+        internal
+        view
+        returns (uint256 amountToProcess)
+    {
+        uint256 pending = pendingWETHFees;
+        if (pending == 0 || requested == 0) return 0;
+
+        uint256 want = requested > pending ? pending : requested;
+
+        if (caller == owner()) {
+            return want;
         }
+        if (caller != wethFeeKeeper) revert NotAuthorized();
 
         uint256 cap = maxPermissionlessWethProcess;
         if (cap == 0) revert NotAuthorized();
-        return pending > cap ? cap : pending;
+        return want > cap ? cap : want;
     }
 
-    function _processWETHFees(uint256 wethAmount) internal {
+    function _processWETHFeesWithRoute(
+        uint256 wethAmount,
+        address router,
+        bytes calldata swapCalldata,
+        uint256 minShareOftOut
+    ) internal {
         if (wethAmount == 0) return;
         if (pendingWETHFees < wethAmount) revert SwapFailed();
-        if (address(vault) == address(0)) revert VaultNotSet();
-        if (address(creatorCoin) == address(0)) revert CreatorCoinNotSet();
+        if (router == address(0) || !allowedSwapRouters[router]) revert RouterNotAllowed();
+        if (swapCalldata.length == 0) revert SwapFailed();
+
+        uint256 oracleMin = _calculateMinOutput(wethAmount);
+        if (oracleMin == 0) revert MinOutputUnavailable();
+        uint256 minOut = minShareOftOut > oracleMin ? minShareOftOut : oracleMin;
 
         // Optimistically decrement; any revert restores state.
         pendingWETHFees -= wethAmount;
 
-        // Step 1: Calculate minimum output using oracle (if enabled)
-        uint256 minAmountOut = _calculateMinOutput(wethAmount);
-        if (minAmountOut == 0) revert MinOutputUnavailable();
-
-        // ODA-424-M3: do not derive sqrtPriceLimitX96 from average minOut/amountIn.
-        // That marginal-price bound + exact-spend check made permissionless swaps
-        // griefable via partial fills. Rely on amountOutMinimum only (limit = 0).
-        uint160 sqrtPriceLimitX96 = 0;
-
-        // Step 2: Swap WETH → CreatorCoin
-        IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);
-
+        uint256 oftBefore = shareOFT.balanceOf(address(this));
         uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
 
-        uint256 creatorCoinReceived = ISwapRouter(SWAP_ROUTER)
-            .exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                tokenIn: WETH,
-                tokenOut: address(creatorCoin),
-                fee: swapFeeTier,
-                recipient: address(this),
-                // FIX: H-03 — give the swap a real 2-minute deadline window
-                // instead of block.timestamp, which provides zero slack against
-                // sequencer delays or re-orgs on L2 and effectively disables
-                // deadline protection.
-                deadline: block.timestamp + 2 minutes,
-                amountIn: wethAmount,
-                amountOutMinimum: minAmountOut,
-                sqrtPriceLimitX96: sqrtPriceLimitX96
-            })
-            );
+        IERC20(WETH).forceApprove(router, wethAmount);
+        (bool ok,) = router.call(swapCalldata);
+        IERC20(WETH).forceApprove(router, 0);
+        if (!ok) revert SwapFailed();
 
-        // Defense-in-depth: exactInputSingle should always spend `amountIn`.
         uint256 wethAfter = IERC20(WETH).balanceOf(address(this));
         if (wethAfter > wethBefore || wethBefore - wethAfter != wethAmount) revert SwapFailed();
 
-        if (creatorCoinReceived == 0) revert SwapFailed();
+        uint256 oftAfter = shareOFT.balanceOf(address(this));
+        if (oftAfter <= oftBefore) revert SwapFailed();
+        uint256 shareOftReceived = oftAfter - oftBefore;
+        if (shareOftReceived < minOut) revert SwapFailed();
 
-        // Step 3: Deposit CreatorCoin → Vault (receive vault shares)
-        creatorCoin.forceApprove(address(vault), creatorCoinReceived);
-        uint256 sharesReceived = vault.deposit(creatorCoinReceived, address(this));
+        // Credit the normal ■ fee plane (same as receiveBridgedFees / receiveFees).
+        pendingFees += shareOftReceived;
+        accountedOFTBalance += shareOftReceived;
+        totalFeesReceived += shareOftReceived;
+        lastWethDistribution = block.timestamp;
 
-        emit WETHFeesProcessed(wethAmount, creatorCoinReceived, sharesReceived);
-
-        // Step 4: Distribute the vault shares
-        _distributeVaultShares(sharesReceived);
+        emit WETHFeesProcessed(wethAmount, shareOftReceived, router);
+        // Do not auto `_distribute()` here — keeps ShareOFT `lastDistribution` independent
+        // of the WETH lane (ODA-424-L4). Permissionless `distribute()` sweeps pendingFees.
     }
 
     /**
-     * @notice Calculate minimum output for WETH → CreatorCoin swap using oracle
+     * @notice Calculate minimum ■ output for WETH → ShareOFT buyback using oracle TWAP
      * @param wethAmount Amount of WETH to swap
-     * @return minOut Minimum Creator Coin to receive (0 if oracle disabled/unavailable)
+     * @return minOut Minimum ShareOFT to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
-        // ODA-424-M1: WETH and creatorCoin are different units. A fallback derived
-        // from raw `wethAmount` collapses both slippage layers. Fail closed when
-        // oracle pricing is unavailable (parity with AgentGaugeController).
+        // Oracle V4 TWAP is ■/ETH. Fail closed when unavailable (parity with AgentGaugeController).
         if (!useOracleSlippage || address(oracle) == address(0)) {
             return 0;
         }
@@ -591,17 +588,12 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
             return 0;
         }
 
-        // Try to get TWAP price from oracle
-        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
-            if (creatorPerEth == 0) return 0;
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 sharePerEth) {
+            if (sharePerEth == 0) return 0;
 
-            // Expected output = wethAmount * creatorPerEth / 1e18
-            uint256 expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
-
-            // Apply slippage tolerance
+            uint256 expectedOut = Math.mulDiv(wethAmount, sharePerEth, 1e18);
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
         } catch {
-            // Oracle failed, return 0 (no slippage protection)
             return 0;
         }
     }
@@ -1019,17 +1011,30 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Configure permissionless WETH processing and auto-processing on intake.
-     * @param _maxPermissionlessWethProcess Max WETH per permissionless `processWETHFees()` call (0 disables).
-     * @param _autoProcessWethFees If true, `receiveWETHFees()` may auto-process (only up to the cap).
+     * @notice Configure keeper WETH buyback batch cap.
+     * @param _maxPermissionlessWethProcess Max WETH per keeper `processWETHFeesWithRoute` (0 disables keeper swaps).
+     * @param _autoProcessWethFees Ignored — auto-process on intake is permanently disabled (MEV).
      */
     function setWethProcessingConfig(uint256 _maxPermissionlessWethProcess, bool _autoProcessWethFees)
         external
         onlyOwner
     {
         maxPermissionlessWethProcess = _maxPermissionlessWethProcess;
-        autoProcessWethFees = _autoProcessWethFees;
-        emit WethProcessingConfigUpdated(_maxPermissionlessWethProcess, _autoProcessWethFees);
+        // Force-disable regardless of caller input (param kept for ABI compatibility).
+        if (_autoProcessWethFees) {
+            // no-op: intake auto-swap removed
+        }
+        autoProcessWethFees = false;
+        emit WethProcessingConfigUpdated(_maxPermissionlessWethProcess, false);
+    }
+
+    /**
+     * @notice Allowlist a router for WETH→■ buyback calldata execution.
+     */
+    function setAllowedSwapRouter(address router, bool allowed) external onlyOwner {
+        if (router == address(0)) revert ZeroAddress();
+        allowedSwapRouters[router] = allowed;
+        emit SwapRouterAllowlistUpdated(router, allowed);
     }
 
     /**
@@ -1224,10 +1229,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Preview WETH → CreatorCoin swap output with slippage protection
+     * @notice Preview oracle floor for WETH → ShareOFT (■) buyback
      * @param wethAmount Amount of WETH to swap
-     * @return expectedOut Expected Creator Coin output (from oracle)
-     * @return minOut Minimum output after slippage
+     * @return expectedOut Expected ■ output (from oracle TWAP)
+     * @return minOut Minimum ■ after slippage
      * @return oracleActive Whether oracle slippage is active
      */
     function previewSwap(uint256 wethAmount)
@@ -1241,10 +1246,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
             return (0, 0, false);
         }
 
-        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
-            if (creatorPerEth == 0) return (0, 0, false);
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 sharePerEth) {
+            if (sharePerEth == 0) return (0, 0, false);
 
-            expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
+            expectedOut = Math.mulDiv(wethAmount, sharePerEth, 1e18);
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
             oracleActive = true;
         } catch {

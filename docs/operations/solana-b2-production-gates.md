@@ -16,9 +16,9 @@ rows remain off until the gates below pass for the exact B2 mint.
    `CollectFeeMode.OnlyY`). Protocol LP positions must set `feeOwner` to the
    jackpot claim authority; keepers claim via `claim_dlmm_fees` (not
    `settle_fees`, which only harvests Token-2022 withheld fees). Repatriate
-   claimed quote to Base with `forward_dlmm_fees` (WSOL→■ on the same DLMM pool,
-   LZ ShareOFT to `hubGaugeReceiver`, then `receiveBridgedFees`) — separate from
-   lottery OApp messages.
+   claimed quote to Base with `forward_dlmm_fees` (Jupiter best-path WSOL→■ by
+   default, Jito/private submit when enabled, LZ ShareOFT to `hubGaugeReceiver`,
+   then `receiveBridgedFees`) — separate from lottery OApp messages.
 2. Meteora admin `token_badge` approval precedes DLMM pool creation.
 3. Finalized hook logs are ingested into `solana_lottery_entry_inbox`; the ring
    buffer is reconciliation-only.

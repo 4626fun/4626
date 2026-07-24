@@ -171,6 +171,13 @@ Base via `forward_dlmm_fees` (claim → DLMM WSOL→■ swap → LZ OFT helper �
 `receiveBridgedFees`); opt-in only with
 `SOLANA_ORCHESTRATOR_FORWARD_DLMM_FEES_ENABLED=1` plus `SOLANA_OFT_FORWARD_ENABLED=1`
 and `SOLANA_OFT_FORWARD_HELPER` (in-repo Solana OFT send SDK is not packaged yet).
+Forward buyback defaults to **Jupiter** best-path (`SOLANA_FORWARD_SWAP_MODE=jupiter`;
+`dlmm` fallback). Production-sized swaps should set `JITO_SUBMIT_ENABLED=1` and
+`SOLANA_FORWARD_REQUIRE_PRIVATE_SUBMIT=1`.
+
+Base V4 sell-tax WETH is buyback'd to ■ via gauge `processWETHFeesWithRoute`
+(keeper-quoted Universal Router / aggregator calldata; no ShareOFT `buyFeeBps`).
+Use `keepr-weth-fee-buyback` with private relay submission.
 
 ## Solana Launch Scripts
 

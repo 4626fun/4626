@@ -58,8 +58,8 @@ vi.mock('../actions/keepr-solana-claim-dlmm-fees.action.js', () => ({
   executeSolanaDlmmFeeClaim: executeClaimMock,
 }))
 
-vi.mock('../utils/solanaDlmmSwap.js', () => ({
-  swapWsolToShareOnDlmm: swapMock,
+vi.mock('../utils/solanaJupiterSwap.js', () => ({
+  buyShareWithWsol: swapMock,
 }))
 
 vi.mock('../utils/solanaOftForward.js', async () => {
@@ -138,6 +138,7 @@ describe('keepr Solana DLMM fee forward', () => {
       inAmount: '5000',
       minOutAmount: '4000',
       outAmountQuoted: '4200',
+      mode: 'jupiter',
     })
     forwardOftMock.mockResolvedValue({
       signature: 'oft-sig',

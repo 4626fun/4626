@@ -3,7 +3,7 @@
  *
  * Flow (hub-orchestrated spoke push):
  *   1. claim_dlmm_fees → feeOwner WSOL ATA
- *   2. DLMM swap WSOL → ShareOFT mint (same canonical pool)
+ *   2. Best-path WSOL → ShareOFT (Jupiter default; DLMM fallback) + Jito/private submit
  *   3. LZ OFT send ■ to hubGaugeReceiver (helper-gated until in-repo SDK lands)
  *   4. Base gauge.receiveBridgedFees() (same as remote EVM flush)
  *
@@ -23,7 +23,7 @@ import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
 import { loadDlmmClass } from '../utils/dlmm.js';
 import { executeSolanaDlmmFeeClaim } from './keepr-solana-claim-dlmm-fees.action.js';
-import { swapWsolToShareOnDlmm } from '../utils/solanaDlmmSwap.js';
+import { buyShareWithWsol } from '../utils/solanaJupiterSwap.js';
 import { forwardSolanaShareOftToHub, hubGaugeToBytes32 } from '../utils/solanaOftForward.js';
 import { resolveHubGaugeController } from '../utils/remoteFeeFlush.js';
 import { isDryRun, writeContract } from '../utils/onchain.js';
@@ -113,6 +113,7 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
     if (!poolRaw) throw new Error('missing_solana_meteora_pool');
 
     const minForwardQuote = BigInt(process.env.SOLANA_DLMM_FORWARD_MIN_QUOTE ?? '1000000'); // 0.001 WSOL
+    const maxForwardQuote = BigInt(process.env.SOLANA_DLMM_FORWARD_MAX_QUOTE ?? '0'); // 0 = uncapped
     const slippageBps = Number(process.env.SOLANA_DLMM_FORWARD_SLIPPAGE_BPS ?? '100');
     const skipClaim = envFlag('SOLANA_DLMM_FORWARD_SKIP_CLAIM');
     const skipOft = envFlag('SOLANA_DLMM_FORWARD_SKIP_OFT');
@@ -165,11 +166,18 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
       return result;
     }
 
-    const swap = await swapWsolToShareOnDlmm({
+    const swapInAmount =
+      maxForwardQuote > 0n && quoteBeforeSwap > maxForwardQuote ? maxForwardQuote : quoteBeforeSwap;
+
+    const dlmmPool = await Dlmm.create(connection, poolAddress, { cluster });
+    const shareMint: PublicKey = dlmmPool.tokenX.publicKey ?? dlmmPool.lbPair.tokenXMint;
+
+    const swap = await buyShareWithWsol({
       connection,
       poolAddress,
+      shareMint,
       payer: keeper,
-      inAmount: quoteBeforeSwap,
+      inAmount: swapInAmount,
       slippageBps,
       cluster,
     });
@@ -177,16 +185,15 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
     result.swappedInAmount = swap.inAmount;
     result.swappedOutQuoted = swap.outAmountQuoted;
 
-    const dlmmPool = await Dlmm.create(connection, poolAddress, { cluster });
-    const shareMint: PublicKey = dlmmPool.tokenX.publicKey ?? dlmmPool.lbPair.tokenXMint;
     const shareProgram = await resolveTokenProgram(connection, shareMint);
     const shareBalance = await readAtaAmount(connection, shareMint, feeOwner, shareProgram);
     if (shareBalance <= 0n) {
       throw new Error('dlmm_forward_share_balance_zero_after_swap');
     }
 
-    await alertInfo(WORKFLOW_NAME, 'DLMM WSOL→■ swap complete', {
+    await alertInfo(WORKFLOW_NAME, 'WSOL→■ buyback complete', {
       swapSignature: swap.signature,
+      mode: swap.mode,
       shareMint: shareMint.toBase58(),
       shareBalance: shareBalance.toString(),
     });
