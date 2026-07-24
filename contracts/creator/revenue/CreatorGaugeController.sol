@@ -571,12 +571,29 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @dev `getAssetEthTWAP` returns vault-asset tokens per ETH, not ShareOFT per ETH.
+     *      Convert via `vault.pricePerShare()` (assets per share, 1e18) so the buyback floor
+     *      tracks ShareOFT units as PPS rises above 1e18 on the burn path.
+     */
+    function _expectedShareOftFromAssetTwap(uint256 wethAmount, uint256 assetPerEth)
+        internal
+        view
+        returns (uint256 expectedShareOft)
+    {
+        if (address(vault) == address(0) || assetPerEth == 0 || wethAmount == 0) return 0;
+        uint256 pps = vault.pricePerShare();
+        if (pps == 0) return 0;
+        uint256 expectedAsset = Math.mulDiv(wethAmount, assetPerEth, 1e18);
+        return Math.mulDiv(expectedAsset, 1e18, pps);
+    }
+
+    /**
      * @notice Calculate minimum ■ output for WETH → ShareOFT buyback using oracle TWAP
      * @param wethAmount Amount of WETH to swap
      * @return minOut Minimum ShareOFT to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
-        // Oracle V4 TWAP is ■/ETH. Fail closed when unavailable (parity with AgentGaugeController).
+        // Oracle asset/ETH TWAP → ShareOFT via PPS. Fail closed when unavailable.
         if (!useOracleSlippage || address(oracle) == address(0)) {
             return 0;
         }
@@ -588,10 +605,9 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
             return 0;
         }
 
-        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 sharePerEth) {
-            if (sharePerEth == 0) return 0;
-
-            uint256 expectedOut = Math.mulDiv(wethAmount, sharePerEth, 1e18);
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 assetPerEth) {
+            uint256 expectedOut = _expectedShareOftFromAssetTwap(wethAmount, assetPerEth);
+            if (expectedOut == 0) return 0;
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
         } catch {
             return 0;
@@ -1246,10 +1262,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
             return (0, 0, false);
         }
 
-        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 sharePerEth) {
-            if (sharePerEth == 0) return (0, 0, false);
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 assetPerEth) {
+            expectedOut = _expectedShareOftFromAssetTwap(wethAmount, assetPerEth);
+            if (expectedOut == 0) return (0, 0, false);
 
-            expectedOut = Math.mulDiv(wethAmount, sharePerEth, 1e18);
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
             oracleActive = true;
         } catch {

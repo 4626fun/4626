@@ -5,7 +5,7 @@
  *   1. claim_dlmm_fees → feeOwner WSOL ATA
  *   2. Best-path WSOL → ShareOFT (Jupiter default; DLMM fallback) + Jito/private submit
  *   3. LZ OFT send ■ to hubGaugeReceiver (helper-gated until in-repo SDK lands)
- *   4. Base gauge.receiveBridgedFees() (same as remote EVM flush)
+ *   4. Base gauge.receiveBridgedFees() after destination credit is observed
  *
  * All steps are opt-in via SOLANA_ORCHESTRATOR_FORWARD_DLMM_FEES_ENABLED=1.
  */
@@ -26,11 +26,21 @@ import { executeSolanaDlmmFeeClaim } from './keepr-solana-claim-dlmm-fees.action
 import { buyShareWithWsol } from '../utils/solanaJupiterSwap.js';
 import { forwardSolanaShareOftToHub, hubGaugeToBytes32 } from '../utils/solanaOftForward.js';
 import { resolveHubGaugeController } from '../utils/remoteFeeFlush.js';
-import { isDryRun, writeContract } from '../utils/onchain.js';
+import { isDryRun, readContract, writeContract } from '../utils/onchain.js';
 import { GaugeReceiveBridgedFeesABI } from '../kpr-workflows/contracts/abi/ShareOftFeeFlush.js';
 
 const WORKFLOW_NAME = 'keepr-solana-forward-dlmm-fees';
 const Dlmm = loadDlmmClass();
+
+const ERC20_BALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+  },
+] as const;
 
 export interface SolanaDlmmFeeForwardResult {
   claimedQuoteAmount: string;
@@ -47,6 +57,10 @@ export interface SolanaDlmmFeeForwardResult {
 function envFlag(name: string): boolean {
   const raw = String(process.env[name] ?? '').trim().toLowerCase();
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readAtaAmount(
@@ -71,23 +85,74 @@ async function resolveTokenProgram(connection: Connection, mint: PublicKey): Pro
   return TOKEN_PROGRAM_ID;
 }
 
-async function maybeReceiveBridgedFeesOnHub(): Promise<{ called: boolean; txHash?: string; error?: string }> {
+async function readUnaccountedBridgedFees(hubGauge: Address): Promise<bigint> {
+  const [shareOft, accounted] = await Promise.all([
+    readContract<Address>({
+      address: hubGauge,
+      abi: GaugeReceiveBridgedFeesABI,
+      functionName: 'shareOFT',
+    }),
+    readContract<bigint>({
+      address: hubGauge,
+      abi: GaugeReceiveBridgedFeesABI,
+      functionName: 'accountedOFTBalance',
+    }),
+  ]);
+  const balance = await readContract<bigint>({
+    address: getAddress(shareOft),
+    abi: ERC20_BALANCE_ABI,
+    functionName: 'balanceOf',
+    args: [hubGauge],
+  });
+  return balance > accounted ? balance - accounted : 0n;
+}
+
+/**
+ * Sweep Base gauge only after unaccounted ShareOFT credit is visible.
+ * `waitForCredit=false` does a single check (independent sweep when no new Solana batch).
+ */
+async function maybeReceiveBridgedFeesOnHub(params?: {
+  waitForCredit?: boolean;
+}): Promise<{ called: boolean; txHash?: string; error?: string; unaccounted?: string }> {
   const hubGaugeRaw = resolveHubGaugeController();
   if (!hubGaugeRaw || !isAddress(hubGaugeRaw)) {
     return { called: false, error: 'hub_gauge_unset' };
   }
   const hubGauge = getAddress(hubGaugeRaw) as Address;
+  const waitForCredit = params?.waitForCredit !== false;
+  const timeoutMs = Number(process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_TIMEOUT_MS ?? '120000');
+  const pollMs = Number(process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_POLL_MS ?? '5000');
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+
   try {
-    const result = await writeContract({
-      address: hubGauge,
-      abi: GaugeReceiveBridgedFeesABI,
-      functionName: 'receiveBridgedFees',
-      args: [],
-    });
-    if (!result.success) {
-      return { called: false, error: result.error ?? 'receiveBridgedFees_failed' };
+    while (true) {
+      const unaccounted = await readUnaccountedBridgedFees(hubGauge);
+      if (unaccounted > 0n) {
+        const result = await writeContract({
+          address: hubGauge,
+          abi: GaugeReceiveBridgedFeesABI,
+          functionName: 'receiveBridgedFees',
+          args: [],
+        });
+        if (!result.success) {
+          return {
+            called: false,
+            error: result.error ?? 'receiveBridgedFees_failed',
+            unaccounted: unaccounted.toString(),
+          };
+        }
+        return { called: true, txHash: result.txHash, unaccounted: unaccounted.toString() };
+      }
+
+      if (!waitForCredit || Date.now() >= deadline) {
+        return {
+          called: false,
+          error: waitForCredit ? 'bridged_credit_timeout' : 'bridged_credit_not_ready',
+          unaccounted: '0',
+        };
+      }
+      await sleep(Math.max(250, pollMs));
     }
-    return { called: true, txHash: result.txHash };
   } catch (error: unknown) {
     return {
       called: false,
@@ -105,6 +170,12 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
   };
 
   try {
+    if (isDryRun()) {
+      result.skippedReason = 'dry_run';
+      await alertInfo(WORKFLOW_NAME, 'Dry run — claim/swap/OFT/Base skipped (no on-chain mutations)');
+      return result;
+    }
+
     const rpcUrl = String(process.env.SOLANA_RPC_URL ?? '').trim();
     if (!rpcUrl) throw new Error('Missing required env var: SOLANA_RPC_URL');
 
@@ -118,7 +189,6 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
     const skipClaim = envFlag('SOLANA_DLMM_FORWARD_SKIP_CLAIM');
     const skipOft = envFlag('SOLANA_DLMM_FORWARD_SKIP_OFT');
     const skipBaseSweep = envFlag('SOLANA_DLMM_FORWARD_SKIP_BASE_SWEEP');
-    const baseSweepDelayMs = Number(process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_DELAY_MS ?? '15000');
 
     const hubGauge = resolveHubGaugeController();
     const oftToBytes32 =
@@ -146,10 +216,22 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
     const quoteBeforeSwap = await readAtaAmount(connection, NATIVE_MINT, feeOwner, wsolProgram);
     if (quoteBeforeSwap < minForwardQuote) {
       result.skippedReason = `below_forward_threshold:balance=${quoteBeforeSwap},min=${minForwardQuote}`;
-      await alertInfo(WORKFLOW_NAME, 'Skipping forward — quote balance below threshold', {
+      await alertInfo(WORKFLOW_NAME, 'Skipping Solana forward — quote below threshold; attempting Base credit sweep', {
         balance: quoteBeforeSwap.toString(),
         min: minForwardQuote.toString(),
       });
+      // Prior OFT deliveries can credit later; sweep independently of a new batch.
+      if (!skipBaseSweep) {
+        const sweep = await maybeReceiveBridgedFeesOnHub({ waitForCredit: false });
+        result.receiveBridgedFeesCalled = sweep.called;
+        result.receiveBridgedFeesTxHash = sweep.txHash;
+        if (sweep.called) {
+          await alertInfo(WORKFLOW_NAME, 'Base receiveBridgedFees completed (independent sweep)', {
+            txHash: sweep.txHash,
+            unaccounted: sweep.unaccounted,
+          });
+        }
+      }
       return result;
     }
 
@@ -158,12 +240,6 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
       throw new Error(
         `dlmm_forward_requires_fee_owner_signer:keeper=${keeper.publicKey.toBase58()},feeOwner=${feeOwner.toBase58()}`,
       );
-    }
-
-    if (isDryRun()) {
-      result.skippedReason = 'dry_run';
-      await alertInfo(WORKFLOW_NAME, 'Dry run — claim observed, swap/OFT/Base skipped');
-      return result;
     }
 
     const swapInAmount =
@@ -223,20 +299,18 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
       return result;
     }
 
-    if (baseSweepDelayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, baseSweepDelayMs));
-    }
-
-    const sweep = await maybeReceiveBridgedFeesOnHub();
+    const sweep = await maybeReceiveBridgedFeesOnHub({ waitForCredit: true });
     result.receiveBridgedFeesCalled = sweep.called;
     result.receiveBridgedFeesTxHash = sweep.txHash;
     if (!sweep.called) {
       await alertWarning(WORKFLOW_NAME, 'Base receiveBridgedFees not completed', {
         error: sweep.error,
+        unaccounted: sweep.unaccounted,
       });
     } else {
       await alertInfo(WORKFLOW_NAME, 'Base receiveBridgedFees completed', {
         txHash: sweep.txHash,
+        unaccounted: sweep.unaccounted,
       });
     }
 

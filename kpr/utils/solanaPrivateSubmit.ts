@@ -67,8 +67,20 @@ export async function sendSolanaTransactionPrivate(params: {
     );
   }
 
+  const latest = await params.connection.getLatestBlockhash('confirmed');
+
   if (jitoEnabled) {
-    return sendViaJito(params.signedTransaction);
+    const sig = await sendViaJito(params.signedTransaction);
+    // Block engine accept ≠ landed; callers read post-swap balances at confirmed.
+    await params.connection.confirmTransaction(
+      {
+        signature: sig,
+        blockhash: latest.blockhash,
+        lastValidBlockHeight: latest.lastValidBlockHeight,
+      },
+      'confirmed',
+    );
+    return sig;
   }
 
   const raw = serializeSigned(params.signedTransaction);
@@ -76,7 +88,6 @@ export async function sendSolanaTransactionPrivate(params: {
     skipPreflight: false,
     maxRetries: 3,
   });
-  const latest = await params.connection.getLatestBlockhash('confirmed');
   await params.connection.confirmTransaction(
     {
       signature: sig,

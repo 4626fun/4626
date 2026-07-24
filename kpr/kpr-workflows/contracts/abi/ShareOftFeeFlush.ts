@@ -104,4 +104,11 @@ export const GaugeReceiveBridgedFeesABI = [
     outputs: [{ type: 'uint256' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'shareOFT',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
 ] as const;

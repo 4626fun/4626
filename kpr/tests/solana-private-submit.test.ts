@@ -66,5 +66,32 @@ describe('solana private submit', () => {
     })
     expect(sig).toBe('rpc-sig')
     expect(sendRawTransactionMock).toHaveBeenCalled()
+    expect(confirmTransactionMock).toHaveBeenCalled()
+  })
+
+  it('confirms Jito-accepted transactions before returning', async () => {
+    process.env.JITO_SUBMIT_ENABLED = '1'
+    delete process.env.SOLANA_FORWARD_REQUIRE_PRIVATE_SUBMIT
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ result: 'jito-sig' }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const connection = new Connection('https://solana.invalid')
+    const signed = {
+      serialize: () => new Uint8Array([1, 2, 3]),
+    } as unknown as VersionedTransaction
+
+    const sig = await sendSolanaTransactionPrivate({
+      connection,
+      signedTransaction: signed,
+    })
+    expect(sig).toBe('jito-sig')
+    expect(fetchMock).toHaveBeenCalled()
+    expect(confirmTransactionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signature: 'jito-sig' }),
+      'confirmed',
+    )
   })
 })

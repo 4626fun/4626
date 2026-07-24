@@ -6,15 +6,19 @@ const {
   swapMock,
   forwardOftMock,
   writeContractMock,
+  readContractMock,
   getAccountMock,
   createMock,
+  isDryRunMock,
 } = vi.hoisted(() => ({
   executeClaimMock: vi.fn(),
   swapMock: vi.fn(),
   forwardOftMock: vi.fn(),
   writeContractMock: vi.fn(),
+  readContractMock: vi.fn(),
   getAccountMock: vi.fn(),
   createMock: vi.fn(),
+  isDryRunMock: vi.fn(() => false),
 }))
 
 vi.mock('@solana/web3.js', async () => {
@@ -73,8 +77,9 @@ vi.mock('../utils/solanaOftForward.js', async () => {
 })
 
 vi.mock('../utils/onchain.js', () => ({
-  isDryRun: () => false,
+  isDryRun: () => isDryRunMock(),
   writeContract: writeContractMock,
+  readContract: readContractMock,
 }))
 
 vi.mock('../utils/remoteFeeFlush.js', () => ({
@@ -100,20 +105,32 @@ describe('keepr Solana DLMM fee forward', () => {
     'SOLANA_DLMM_FORWARD_SKIP_CLAIM',
     'SOLANA_DLMM_FORWARD_SKIP_OFT',
     'SOLANA_DLMM_FORWARD_SKIP_BASE_SWEEP',
-    'SOLANA_DLMM_FORWARD_BASE_SWEEP_DELAY_MS',
+    'SOLANA_DLMM_FORWARD_BASE_SWEEP_TIMEOUT_MS',
+    'SOLANA_DLMM_FORWARD_BASE_SWEEP_POLL_MS',
     'SOLANA_OFT_FORWARD_TO_BYTES32',
   ] as const
   const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]))
 
+  function mockBridgedCreditReady() {
+    readContractMock.mockImplementation(async (params: { functionName: string }) => {
+      if (params.functionName === 'shareOFT') return '0x2222222222222222222222222222222222222222'
+      if (params.functionName === 'accountedOFTBalance') return 0n
+      if (params.functionName === 'balanceOf') return 4200n
+      return 0n
+    })
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     getAccountMock.mockReset()
+    isDryRunMock.mockReturnValue(false)
     const keeper = loadKeeperKeypair()
     process.env.SOLANA_RPC_URL = 'https://solana.invalid'
     process.env.SOLANA_METEORA_POOL = '11111111111111111111111111111111'
     process.env.SOLANA_DLMM_FEE_OWNER = keeper.publicKey.toBase58()
     process.env.SOLANA_DLMM_FORWARD_MIN_QUOTE = '1000'
-    process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_DELAY_MS = '0'
+    process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_TIMEOUT_MS = '0'
+    process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_POLL_MS = '1'
     delete process.env.SOLANA_DLMM_FORWARD_SKIP_CLAIM
     delete process.env.SOLANA_DLMM_FORWARD_SKIP_OFT
     delete process.env.SOLANA_DLMM_FORWARD_SKIP_BASE_SWEEP
@@ -149,6 +166,7 @@ describe('keepr Solana DLMM fee forward', () => {
       success: true,
       txHash: '0xabc',
     })
+    mockBridgedCreditReady()
   })
 
   afterEach(() => {
@@ -165,7 +183,15 @@ describe('keepr Solana DLMM fee forward', () => {
     )
   })
 
-  it('skips when quote balance is below forward threshold', async () => {
+  it('skips claim/swap when dry-run is enabled', async () => {
+    isDryRunMock.mockReturnValue(true)
+    const result = await executeSolanaDlmmFeeForward()
+    expect(result.skippedReason).toBe('dry_run')
+    expect(executeClaimMock).not.toHaveBeenCalled()
+    expect(swapMock).not.toHaveBeenCalled()
+  })
+
+  it('skips swap below threshold but still attempts independent Base sweep', async () => {
     process.env.SOLANA_DLMM_FORWARD_MIN_QUOTE = '100000'
     getAccountMock.mockReset()
     getAccountMock.mockResolvedValueOnce({ amount: 5000n })
@@ -174,6 +200,10 @@ describe('keepr Solana DLMM fee forward', () => {
     expect(result.skippedReason).toMatch(/^below_forward_threshold/)
     expect(swapMock).not.toHaveBeenCalled()
     expect(forwardOftMock).not.toHaveBeenCalled()
+    expect(writeContractMock).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: 'receiveBridgedFees' }),
+    )
+    expect(result.receiveBridgedFeesCalled).toBe(true)
   })
 
   it('fails closed when feeOwner is not the keeper signer', async () => {
@@ -184,7 +214,7 @@ describe('keepr Solana DLMM fee forward', () => {
     expect(swapMock).not.toHaveBeenCalled()
   })
 
-  it('claims, swaps, OFTs, then sweeps Base receiveBridgedFees', async () => {
+  it('claims, swaps, OFTs, then sweeps Base receiveBridgedFees after credit', async () => {
     const result = await executeSolanaDlmmFeeForward()
 
     expect(executeClaimMock).toHaveBeenCalledTimes(1)
@@ -195,6 +225,7 @@ describe('keepr Solana DLMM fee forward', () => {
         toBytes32: '0x0000000000000000000000001111111111111111111111111111111111111111',
       }),
     )
+    expect(readContractMock).toHaveBeenCalled()
     expect(writeContractMock).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: 'receiveBridgedFees' }),
     )
@@ -202,5 +233,18 @@ describe('keepr Solana DLMM fee forward', () => {
     expect(result.oftSignature).toBe('oft-sig')
     expect(result.receiveBridgedFeesCalled).toBe(true)
     expect(result.receiveBridgedFeesTxHash).toBe('0xabc')
+  })
+
+  it('does not mark Base sweep success when credit never arrives', async () => {
+    readContractMock.mockImplementation(async (params: { functionName: string }) => {
+      if (params.functionName === 'shareOFT') return '0x2222222222222222222222222222222222222222'
+      if (params.functionName === 'accountedOFTBalance') return 100n
+      if (params.functionName === 'balanceOf') return 100n
+      return 0n
+    })
+
+    const result = await executeSolanaDlmmFeeForward()
+    expect(result.receiveBridgedFeesCalled).toBe(false)
+    expect(writeContractMock).not.toHaveBeenCalled()
   })
 })

@@ -53,6 +53,7 @@ contract MockToken is IERC20 {
 
     contract MockVault is MockToken {
         IERC20 public immutable creatorAsset;
+        uint256 public pps = 1e18;
 
         constructor(address _creatorAsset) MockToken("Mock Vault Share", "mVS") {
             creatorAsset = IERC20(_creatorAsset);
@@ -64,8 +65,12 @@ contract MockToken is IERC20 {
             emit Transfer(msg.sender, address(0), shares);
         }
 
-        function pricePerShare() external pure returns (uint256) {
-            return 1e18;
+        function setPricePerShare(uint256 _pps) external {
+            pps = _pps;
+        }
+
+        function pricePerShare() external view returns (uint256) {
+            return pps;
         }
 
         function totalAssets() external view returns (uint256) {
@@ -228,9 +233,24 @@ contract MockToken is IERC20 {
             return abi.encodeCall(MockBuybackRouter.buyback, (wethAmount));
         }
 
-        function _oracleMinOut(uint256 wethAmount, uint256 sharePerEth) internal view returns (uint256) {
-            uint256 expectedOut = (wethAmount * sharePerEth) / 1e18;
-            return (expectedOut * (10000 - gauge.swapSlippageBps())) / 10000;
+        function _oracleMinOut(uint256 wethAmount, uint256 assetPerEth) internal view returns (uint256) {
+            uint256 expectedAsset = (wethAmount * assetPerEth) / 1e18;
+            uint256 expectedShareOft = (expectedAsset * 1e18) / vault.pricePerShare();
+            return (expectedShareOft * (10000 - gauge.swapSlippageBps())) / 10000;
+        }
+
+        function test_previewSwap_convertsAssetTwapThroughPricePerShare() public {
+            uint256 wethAmount = 5 ether;
+            uint256 assetPerEth = 2e18;
+            vault.setPricePerShare(2e18);
+            gauge.setOracle(address(oracle));
+            oracle.setCreatorPerEth(assetPerEth);
+
+            (uint256 expectedOut, uint256 minOut, bool active) = gauge.previewSwap(wethAmount);
+            assertTrue(active);
+            // asset expected = 10e18; at PPS=2e18 → ShareOFT expected = 5e18
+            assertEq(expectedOut, 5 ether);
+            assertEq(minOut, _oracleMinOut(wethAmount, assetPerEth));
         }
 
         function test_processWETHFees_legacyRevertsRoutedRequired() public {

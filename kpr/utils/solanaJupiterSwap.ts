@@ -75,7 +75,8 @@ async function jupiterSwapTx(params: {
     body: JSON.stringify({
       quoteResponse: params.quoteResponse,
       userPublicKey: params.userPublicKey,
-      wrapAndUnwrapSol: true,
+      // Spend the feeOwner WSOL ATA from claim_dlmm_fees — do not wrap keeper native SOL.
+      wrapAndUnwrapSol: false,
       dynamicComputeUnitLimit: true,
     }),
   });
