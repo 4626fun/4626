@@ -8,6 +8,7 @@ import { loadKeeperEnv } from './utils/loadKeeperEnv.js'
 
 import { executeSolanaFeeSettlement } from './actions/keepr-solana-settle-fees.action.js'
 import { executeSolanaDlmmFeeClaim } from './actions/keepr-solana-claim-dlmm-fees.action.js'
+import { executeSolanaDlmmFeeForward } from './actions/keepr-solana-forward-dlmm-fees.action.js'
 import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.action.js'
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
@@ -30,6 +31,7 @@ type ReconcileBody = {
 export type SolanaOrchestratorAction =
   | 'settle_fees'
   | 'claim_dlmm_fees'
+  | 'forward_dlmm_fees'
   | 'price_monitor'
   | 'graduation'
   | 'sync_mapping'
@@ -120,6 +122,7 @@ export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchest
   switch (action) {
     case 'settle_fees':
     case 'claim_dlmm_fees':
+    case 'forward_dlmm_fees':
     case 'price_monitor':
     case 'graduation':
     case 'sync_mapping':
@@ -144,14 +147,16 @@ function actionEnabled(action: SolanaOrchestratorAction): boolean {
   const globalExecute = parseOrchestratorEnvFlag(process.env.SOLANA_ORCHESTRATOR_EXECUTE) === true
   const specificKey = `SOLANA_ORCHESTRATOR_${action.toUpperCase()}_ENABLED`
   const specific = parseOrchestratorEnvFlag(process.env[specificKey])
-  // B2 workers and DLMM jackpot fee claims are never inherited from the broad
-  // execute switch. Each must be opted in independently after its gate passes.
+  // B2 workers, DLMM jackpot fee claims, and Solana→Base fee forwards are never
+  // inherited from the broad execute switch. Each must be opted in independently
+  // after its gate passes.
   if (
     action === 'lottery_ingest' ||
     action === 'lottery_submit' ||
     action === 'lottery_confirm' ||
     action === 'lottery_winner_settle' ||
-    action === 'claim_dlmm_fees'
+    action === 'claim_dlmm_fees' ||
+    action === 'forward_dlmm_fees'
   ) {
     return specific === true
   }
@@ -169,6 +174,8 @@ async function runSolanaOrchestratorActionBody(params: {
       return executeSolanaFeeSettlement()
     case 'claim_dlmm_fees':
       return executeSolanaDlmmFeeClaim()
+    case 'forward_dlmm_fees':
+      return executeSolanaDlmmFeeForward()
     case 'price_monitor':
       return executeSolanaPriceMonitor()
     case 'graduation':

@@ -53,6 +53,7 @@ contract MockToken is IERC20 {
 
     contract MockVault is MockToken {
         IERC20 public immutable creatorAsset;
+        uint256 public pps = 1e18;
 
         constructor(address _creatorAsset) MockToken("Mock Vault Share", "mVS") {
             creatorAsset = IERC20(_creatorAsset);
@@ -64,8 +65,12 @@ contract MockToken is IERC20 {
             emit Transfer(msg.sender, address(0), shares);
         }
 
-        function pricePerShare() external pure returns (uint256) {
-            return 1e18;
+        function setPricePerShare(uint256 _pps) external {
+            pps = _pps;
+        }
+
+        function pricePerShare() external view returns (uint256) {
+            return pps;
         }
 
         function totalAssets() external view returns (uint256) {
@@ -155,38 +160,37 @@ contract MockToken is IERC20 {
         }
     }
 
-    contract MockSwapRouter is ISwapRouter {
-        bool public shouldRevert;
+    /// @dev Allowlisted router that pulls WETH and pays ShareOFT to the caller (gauge).
+    contract MockBuybackRouter {
+        MockToken public immutable wethToken;
+        MockToken public immutable shareToken;
         uint256 public amountOut;
-        uint256 public lastAmountOutMinimum;
         uint256 public lastAmountIn;
-        uint160 public lastSqrtPriceLimitX96;
+        bool public shouldRevert;
 
-        function setShouldRevert(bool _shouldRevert) external {
-            shouldRevert = _shouldRevert;
+        constructor(address weth_, address share_) {
+            wethToken = MockToken(weth_);
+            shareToken = MockToken(share_);
         }
 
         function setAmountOut(uint256 _amountOut) external {
             amountOut = _amountOut;
         }
 
-        function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 out) {
+        function setShouldRevert(bool v) external {
+            shouldRevert = v;
+        }
+
+        function buyback(uint256 wethIn) external {
             if (shouldRevert) revert("router reverted");
-
-            lastAmountOutMinimum = params.amountOutMinimum;
-            lastAmountIn = params.amountIn;
-            lastSqrtPriceLimitX96 = params.sqrtPriceLimitX96;
-            if (amountOut < params.amountOutMinimum) revert("insufficient output");
-
-            IERC20(params.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
-            IERC20(params.tokenOut).transfer(params.recipient, amountOut);
-            return amountOut;
+            lastAmountIn = wethIn;
+            wethToken.transferFrom(msg.sender, address(this), wethIn);
+            shareToken.transfer(msg.sender, amountOut);
         }
     }
 
     contract CreatorGaugeControllerTest is Test {
         address internal constant WETH_ADDR = 0x4200000000000000000000000000000000000006;
-        address internal constant SWAP_ROUTER_ADDR = 0x2626664c2603336E57B271c5C0b26F421741e481;
 
         CreatorGaugeController internal gauge;
         MockToken internal weth;
@@ -194,10 +198,11 @@ contract MockToken is IERC20 {
         MockToken internal shareOFT;
         MockVault internal vault;
         MockCreatorOracle internal oracle;
-        MockSwapRouter internal router;
+        MockBuybackRouter internal buybackRouter;
         MockGaugeWrapper internal wrapper;
 
         address internal alice = makeAddr("alice");
+        address internal keeper = makeAddr("keeper");
         address internal creatorTreasury = makeAddr("creatorTreasury");
         address internal protocolTreasury = makeAddr("protocolTreasury");
 
@@ -208,33 +213,62 @@ contract MockToken is IERC20 {
             vm.etch(WETH_ADDR, address(wethImpl).code);
             weth = MockToken(WETH_ADDR);
 
-            MockSwapRouter routerImpl = new MockSwapRouter();
-            vm.etch(SWAP_ROUTER_ADDR, address(routerImpl).code);
-            router = MockSwapRouter(SWAP_ROUTER_ADDR);
-
             creatorCoin = new MockToken("Creator Coin", "CREATOR");
             shareOFT = new MockToken("Share OFT", "SHARE");
             vault = new MockVault(address(creatorCoin));
             oracle = new MockCreatorOracle();
             wrapper = new MockGaugeWrapper(address(vault), address(shareOFT));
+            buybackRouter = new MockBuybackRouter(WETH_ADDR, address(shareOFT));
 
             gauge = new CreatorGaugeController(address(shareOFT), creatorTreasury, protocolTreasury, address(this));
             gauge.setVault(address(vault));
             gauge.setCreatorCoin(address(creatorCoin));
             gauge.setWrapper(address(wrapper));
+            gauge.setAllowedSwapRouter(address(buybackRouter), true);
+            gauge.setWethFeeKeeper(keeper);
+            gauge.setWethProcessingConfig(100 ether, false);
         }
 
-        function test_processWETHFees_reverts_whenOracleUnset() public {
+        function _routeCall(uint256 wethAmount) internal pure returns (bytes memory) {
+            return abi.encodeCall(MockBuybackRouter.buyback, (wethAmount));
+        }
+
+        function _oracleMinOut(uint256 wethAmount, uint256 assetPerEth) internal view returns (uint256) {
+            uint256 expectedAsset = (wethAmount * assetPerEth) / 1e18;
+            uint256 expectedShareOft = (expectedAsset * 1e18) / vault.pricePerShare();
+            return (expectedShareOft * (10000 - gauge.swapSlippageBps())) / 10000;
+        }
+
+        function test_previewSwap_convertsAssetTwapThroughPricePerShare() public {
+            uint256 wethAmount = 5 ether;
+            uint256 assetPerEth = 2e18;
+            vault.setPricePerShare(2e18);
+            gauge.setOracle(address(oracle));
+            oracle.setCreatorPerEth(assetPerEth);
+
+            (uint256 expectedOut, uint256 minOut, bool active) = gauge.previewSwap(wethAmount);
+            assertTrue(active);
+            // asset expected = 10e18; at PPS=2e18 → ShareOFT expected = 5e18
+            assertEq(expectedOut, 5 ether);
+            assertEq(minOut, _oracleMinOut(wethAmount, assetPerEth));
+        }
+
+        function test_processWETHFees_legacyRevertsRoutedRequired() public {
+            vm.expectRevert(CreatorGaugeController.RoutedSwapRequired.selector);
+            gauge.processWETHFees();
+        }
+
+        function test_processWETHFeesWithRoute_reverts_whenOracleUnset() public {
             uint256 amount = 5 ether;
             _depositPendingWeth(amount);
 
             vm.expectRevert(CreatorGaugeController.MinOutputUnavailable.selector);
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(amount, address(buybackRouter), _routeCall(amount), 0);
 
             assertEq(gauge.pendingWETHFees(), amount);
         }
 
-        function test_processWETHFees_reverts_whenOracleCallFails() public {
+        function test_processWETHFeesWithRoute_reverts_whenOracleCallFails() public {
             uint256 amount = 5 ether;
             _depositPendingWeth(amount);
 
@@ -242,12 +276,12 @@ contract MockToken is IERC20 {
             oracle.setShouldRevert(true);
 
             vm.expectRevert(CreatorGaugeController.MinOutputUnavailable.selector);
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(amount, address(buybackRouter), _routeCall(amount), 0);
 
             assertEq(gauge.pendingWETHFees(), amount);
         }
 
-        function test_processWETHFees_reverts_whenOracleReturnsZero() public {
+        function test_processWETHFeesWithRoute_reverts_whenOracleReturnsZero() public {
             uint256 amount = 5 ether;
             _depositPendingWeth(amount);
 
@@ -255,14 +289,15 @@ contract MockToken is IERC20 {
             oracle.setCreatorPerEth(0);
 
             vm.expectRevert(CreatorGaugeController.MinOutputUnavailable.selector);
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(amount, address(buybackRouter), _routeCall(amount), 0);
 
             assertEq(gauge.pendingWETHFees(), amount);
         }
 
-        function test_receiveWETHFees_skipsAutoProcess_whenOracleUnavailable() public {
-            uint256 amount = 20 ether; // >= distributionThreshold / 10
+        function test_receiveWETHFees_neverAutoProcesses() public {
+            uint256 amount = 20 ether;
             vm.warp(gauge.distributionInterval() + 1);
+            gauge.setWethProcessingConfig(amount, true); // auto flag ignored
 
             weth.mint(alice, amount);
             vm.startPrank(alice);
@@ -272,118 +307,106 @@ contract MockToken is IERC20 {
 
             assertEq(gauge.pendingWETHFees(), amount);
             assertEq(weth.balanceOf(address(gauge)), amount);
+            assertEq(gauge.autoProcessWethFees(), false);
         }
 
-        function test_processWETHFees_usesNonZeroMinOut_andProcesses() public {
+        function test_processWETHFeesWithRoute_creditsPendingFees() public {
             uint256 wethAmount = 5 ether;
-            uint256 creatorPerEth = 2e18;
-            uint256 creatorOut = 10 ether;
+            uint256 sharePerEth = 2e18;
+            uint256 shareOut = 10 ether;
 
             _depositPendingWeth(wethAmount);
 
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
+            oracle.setCreatorPerEth(sharePerEth);
 
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
+            shareOFT.mint(address(buybackRouter), shareOut);
+            buybackRouter.setAmountOut(shareOut);
 
-            uint256 expectedOut = (wethAmount * creatorPerEth) / 1e18;
-            uint256 expectedMinOut = (expectedOut * (10000 - gauge.swapSlippageBps())) / 10000;
-
-            gauge.processWETHFees();
-
+            uint256 expectedMinOut = _oracleMinOut(wethAmount, sharePerEth);
             assertGt(expectedMinOut, 0);
-            assertEq(router.lastAmountOutMinimum(), expectedMinOut);
+
+            gauge.processWETHFeesWithRoute(
+                wethAmount, address(buybackRouter), _routeCall(wethAmount), expectedMinOut
+            );
+
             assertEq(gauge.pendingWETHFees(), 0);
-            assertGt(gauge.jackpotReserve(), 0);
+            assertEq(gauge.pendingFees(), shareOut);
+            assertEq(buybackRouter.lastAmountIn(), wethAmount);
         }
 
-        function test_processWETHFees_permissionless_reverts_whenCapZero() public {
+        function test_processWETHFeesWithRoute_strangerReverts() public {
             uint256 wethAmount = 5 ether;
-            uint256 creatorPerEth = 2e18;
-            uint256 creatorOut = 10 ether;
+            uint256 sharePerEth = 2e18;
+            uint256 shareOut = 10 ether;
 
             _depositPendingWeth(wethAmount);
 
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
-
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
+            oracle.setCreatorPerEth(sharePerEth);
+            shareOFT.mint(address(buybackRouter), shareOut);
+            buybackRouter.setAmountOut(shareOut);
 
             vm.startPrank(alice);
             vm.expectRevert(CreatorGaugeController.NotAuthorized.selector);
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(wethAmount, address(buybackRouter), _routeCall(wethAmount), 0);
             vm.stopPrank();
 
-            // State should be unchanged on revert
             assertEq(gauge.pendingWETHFees(), wethAmount);
-            assertEq(weth.balanceOf(address(gauge)), wethAmount);
         }
 
-        function test_processWETHFees_permissionless_processesUpToCap_whenEnabled() public {
+        function test_processWETHFeesWithRoute_keeperRespectsCap() public {
             uint256 totalWeth = 20 ether;
             uint256 cap = 5 ether;
-            uint256 creatorPerEth = 2e18;
+            uint256 sharePerEth = 2e18;
 
             _depositPendingWeth(totalWeth);
-
-            // Enable permissionless processing cap (new config).
             gauge.setWethProcessingConfig(cap, false);
 
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
+            oracle.setCreatorPerEth(sharePerEth);
 
-            // Configure router output for the capped amount only.
-            uint256 creatorOut = cap * creatorPerEth / 1e18;
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
+            uint256 shareOut = cap * sharePerEth / 1e18;
+            shareOFT.mint(address(buybackRouter), shareOut);
+            buybackRouter.setAmountOut(shareOut);
 
-            vm.prank(alice);
-            gauge.processWETHFees();
+            vm.prank(keeper);
+            gauge.processWETHFeesWithRoute(totalWeth, address(buybackRouter), _routeCall(cap), 0);
 
-            assertEq(router.lastAmountIn(), cap);
+            assertEq(buybackRouter.lastAmountIn(), cap);
             assertEq(gauge.pendingWETHFees(), totalWeth - cap);
+            assertEq(gauge.pendingFees(), shareOut);
         }
 
-        function test_processWETHFees_reverts_whenOracleStale() public {
+        function test_processWETHFeesWithRoute_reverts_whenOracleStale() public {
             uint256 wethAmount = 5 ether;
-            uint256 creatorPerEth = 2e18;
-            uint256 creatorOut = 10 ether;
+            uint256 sharePerEth = 2e18;
+            uint256 shareOut = 10 ether;
 
             _depositPendingWeth(wethAmount);
 
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
+            oracle.setCreatorPerEth(sharePerEth);
             oracle.setPriceFresh(false);
 
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
+            shareOFT.mint(address(buybackRouter), shareOut);
+            buybackRouter.setAmountOut(shareOut);
 
             vm.expectRevert(CreatorGaugeController.MinOutputUnavailable.selector);
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(wethAmount, address(buybackRouter), _routeCall(wethAmount), 0);
 
             assertEq(gauge.pendingWETHFees(), wethAmount);
         }
 
-        function test_processWETHFees_usesZeroSqrtPriceLimit_amountOutMinimumOnly() public {
+        function test_processWETHFeesWithRoute_reverts_routerNotAllowed() public {
             uint256 wethAmount = 5 ether;
-            uint256 creatorPerEth = 2e18;
-            uint256 creatorOut = 10 ether;
-
             _depositPendingWeth(wethAmount);
-
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
+            oracle.setCreatorPerEth(2e18);
 
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
-
-            gauge.processWETHFees();
-
-            // ODA-424-M3: average-derived sqrtPriceLimit removed; rely on minOut.
-            assertEq(router.lastSqrtPriceLimitX96(), 0);
-            assertGt(router.lastAmountOutMinimum(), 0);
+            address rogue = makeAddr("rogueRouter");
+            vm.expectRevert(CreatorGaugeController.RouterNotAllowed.selector);
+            gauge.processWETHFeesWithRoute(wethAmount, rogue, _routeCall(wethAmount), 0);
         }
 
         function test_setFallbackMinOutputBps_nonzeroReverts() public {
@@ -419,21 +442,20 @@ contract MockToken is IERC20 {
 
         /// ODA-424-L4 / 432-F3: WETH lane must not advance the ShareOFT distribution clock.
         function test_wethProcess_doesNotBlockOftDistribute() public {
-            // lastDistribution=0 still enforces `timestamp >= distributionInterval`.
             vm.warp(block.timestamp + gauge.distributionInterval());
 
             uint256 wethAmount = 5 ether;
-            uint256 creatorPerEth = 2e18;
-            uint256 creatorOut = 10 ether;
+            uint256 sharePerEth = 2e18;
+            uint256 shareOut = 10 ether;
 
             _depositPendingWeth(wethAmount);
             gauge.setOracle(address(oracle));
-            oracle.setCreatorPerEth(creatorPerEth);
-            creatorCoin.mint(SWAP_ROUTER_ADDR, creatorOut);
-            router.setAmountOut(creatorOut);
+            oracle.setCreatorPerEth(sharePerEth);
+            shareOFT.mint(address(buybackRouter), shareOut);
+            buybackRouter.setAmountOut(shareOut);
 
             uint256 beforeOftClock = gauge.lastDistribution();
-            gauge.processWETHFees();
+            gauge.processWETHFeesWithRoute(wethAmount, address(buybackRouter), _routeCall(wethAmount), 0);
 
             assertEq(gauge.lastWethDistribution(), block.timestamp);
             assertEq(gauge.lastDistribution(), beforeOftClock);
@@ -443,7 +465,7 @@ contract MockToken is IERC20 {
             shareOFT.approve(address(gauge), oftAmount);
             gauge.deposit(oftAmount);
 
-            // Same block as WETH process — previously TooSoon via shared lastDistribution.
+            // Same block as WETH process — WETH lane must not have set lastDistribution.
             gauge.distribute();
             assertEq(gauge.pendingFees(), 0);
             assertEq(gauge.lastDistribution(), block.timestamp);
