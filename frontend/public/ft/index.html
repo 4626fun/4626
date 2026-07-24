@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="es-ES">
 <head>
   <link rel="icon" href="/favicon.ico?v=21" sizes="any" />
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, follow">
   <meta name="theme-color" content="#020204">
-  <title>Friend.tech v1 withdraw | 4626.fun</title>
-  <meta name="description" content="One-click sell of Friend.tech v1 shares on Base. Connect the holding wallet and withdraw ETH from the bonding curve.">
+  <title>Retirar Friend.tech v1 | 4626.fun</title>
+  <meta name="description" content="Vende las shares de Friend.tech v1 en Base de un tirón. Conecta la cartera que las tiene y saca el ETH de la curva.">
   <link rel="canonical" href="https://4626.fun/ft">
   <link rel="stylesheet" href="/trust-page.css">
   <style>
@@ -120,68 +120,68 @@
   </style>
 </head>
 <body data-trust-page="ft">
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
   <header class="site-header">
     <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
-    <nav class="nav" aria-label="Primary">
-      <a href="/">Home</a>
-      <a href="/ft" aria-current="page">FT withdraw</a>
+    <nav class="nav" aria-label="Principal">
+      <a href="/">Inicio</a>
+      <a href="/ft" aria-current="page">Retirar FT</a>
     </nav>
   </header>
 
   <main id="main" class="wrap">
     <section class="page-hero">
-      <p class="eyebrow">Utility</p>
-      <h1>Friend.tech v1 withdraw</h1>
-      <p class="lede">Sell Friend.tech v1 shares back into the bonding curve and receive ETH. There is no contract-wide withdraw — each subject is sold via <code>sellShares</code> from the holding wallet.</p>
+      <p class="eyebrow">Utilidad</p>
+      <h1>Retirar Friend.tech v1</h1>
+      <p class="lede">Vende las shares de Friend.tech v1 otra vez a la curva y cobra el ETH. No hay un «retirar todo» en el contrato: cada sujeto se vende con <code>sellShares</code> desde la cartera que las tiene.</p>
     </section>
 
     <p class="fineprint">
-      Contract: <a id="ft" href="#" target="_blank" rel="noopener">—</a>.
-      Candidate subjects are baked from historical buys/sells for the listed wallet, then balances are read live on Base.
-      Last remaining share of a subject cannot be sold (protocol rule).
+      Contrato: <a id="ft" href="#" target="_blank" rel="noopener">—</a>.
+      Los sujetos candidatos salen de compras y ventas históricas de la cartera indicada; luego se leen los saldos en vivo en Base.
+      La última share de un sujeto no se puede vender (regla del protocolo).
     </p>
 
-    <div class="ft-meta" aria-label="Session">
-      <div><span class="label">Network</span> <span id="chain">—</span></div>
-      <div><span class="label">Wallet</span> <code id="wallet">—</code></div>
-      <div><span class="label">Gas balance</span> <span id="gas">—</span></div>
-      <div><span class="label">Baked for</span> <code id="bakedFor">—</code></div>
-      <div><span class="label">Candidates</span> <span id="subjectCount">—</span></div>
-      <div><span class="label">Held / sellable</span> <span><span id="countHeld">0</span> / <span id="countSellable">0</span></span></div>
-      <div><span class="label">Est. out</span> <span id="totalEst">0 ETH</span></div>
+    <div class="ft-meta" aria-label="Sesión">
+      <div><span class="label">Red</span> <span id="chain">—</span></div>
+      <div><span class="label">Cartera</span> <code id="wallet">—</code></div>
+      <div><span class="label">Saldo de gas</span> <span id="gas">—</span></div>
+      <div><span class="label">Preparada para</span> <code id="bakedFor">—</code></div>
+      <div><span class="label">Candidatos</span> <span id="subjectCount">—</span></div>
+      <div><span class="label">En cartera / vendibles</span> <span><span id="countHeld">0</span> / <span id="countSellable">0</span></span></div>
+      <div><span class="label">Estimado</span> <span id="totalEst">0 ETH</span></div>
     </div>
 
     <p id="gasHint" hidden></p>
-    <p id="status" data-kind="info">Loading…</p>
+    <p id="status" data-kind="info">Cargando…</p>
 
     <div class="ft-actions">
-      <button type="button" class="primary" id="connectBtn">Connect wallet</button>
-      <button type="button" id="refreshBtn" disabled>Refresh balances</button>
-      <button type="button" class="primary" id="withdrawBtn" disabled>Withdraw all</button>
+      <button type="button" class="primary" id="connectBtn">Conectar cartera</button>
+      <button type="button" id="refreshBtn" disabled>Actualizar saldos</button>
+      <button type="button" class="primary" id="withdrawBtn" disabled>Retirar todo</button>
     </div>
 
     <div class="ft-table-wrap">
       <table class="ft-table">
         <thead>
           <tr>
-            <th>Subject</th>
-            <th>Bal</th>
-            <th>Sell</th>
+            <th>Sujeto</th>
+            <th>Saldo</th>
+            <th>Vender</th>
             <th>Supply</th>
-            <th>Est. ETH</th>
-            <th>Note</th>
+            <th>ETH est.</th>
+            <th>Nota</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
 
-    <pre id="log" aria-label="Withdraw log"></pre>
+    <pre id="log" aria-label="Registro de retirada"></pre>
   </main>
 
   <footer class="site-footer">
-    <p><a href="/">4626.fun</a> · Friend.tech v1 utility · not affiliated with Friend.tech</p>
+    <p><a href="/">4626.fun</a> · Utilidad Friend.tech v1 · no estamos afiliados a Friend.tech</p>
   </footer>
 
   <script src="/ft/app.js" defer></script>
