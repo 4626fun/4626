@@ -11,7 +11,11 @@ rows remain off until the gates below pass for the exact B2 mint.
    provisioner is still mint authority, `setup-creator` verifies that exact mint
    and initializes its PDAs. Then create the regular LayerZero OFT Store for the
    existing mint and transfer mint authority to the OFT Store. No second mint is
-   created by `setup-creator`.
+   created by `setup-creator`. The 6.9% trade fee is **not** on the mint: it is
+   configured on the canonical Meteora DLMM pool (`FEE_BPS=690`,
+   `CollectFeeMode.OnlyY`). Protocol LP positions must set `feeOwner` to the
+   jackpot claim authority; keepers claim via `claim_dlmm_fees` (not
+   `settle_fees`, which only harvests Token-2022 withheld fees).
 2. Meteora admin `token_badge` approval precedes DLMM pool creation.
 3. Finalized hook logs are ingested into `solana_lottery_entry_inbox`; the ring
    buffer is reconciliation-only.
@@ -64,8 +68,12 @@ remains disabled.
       Base↔Solana peers are reciprocal, and Registry4626 maps the same ShareOFT
       and exact B2 mint/OFT Store identity.
 - [ ] Meteora admin `token_badge` is independently verified, then the B2 DLMM
-      pool account is verified at finalized commitment. The persisted
-      readiness record must retain a passing `meteora_token_badge` check.
+      pool account is verified at finalized commitment with base fee 690 bps,
+      max fee ≤ 690 bps, and `CollectFeeMode.OnlyY`. Protocol LP positions for
+      `SOLANA_B2_PROTOCOL_POSITION_OWNER` must have on-chain `feeOwner` equal to
+      `SOLANA_B2_JACKPOT_FEE_OWNER` (alias `SOLANA_DLMM_FEE_OWNER`). The
+      persisted readiness record must retain a passing `meteora_token_badge`
+      check.
 - [ ] With submit off, one approved live B2 buy emits exactly one authenticated
       `LotteryEntryRecorded` buy-path event.
 - [ ] Finalized ingest is enabled alone and that event appears once in the
@@ -127,6 +135,7 @@ SOLANA_ORCHESTRATOR_LOTTERY_INGEST_ENABLED=0
 SOLANA_ORCHESTRATOR_LOTTERY_SUBMIT_ENABLED=0
 SOLANA_ORCHESTRATOR_LOTTERY_CONFIRM_ENABLED=0
 SOLANA_ORCHESTRATOR_LOTTERY_WINNER_SETTLE_ENABLED=0
+SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED=0
 SOLANA_LOTTERY_INGEST_ENABLED=0
 SOLANA_LOTTERY_CONFIRM_ENABLED=0
 SOLANA_LOTTERY_WINNER_WORKER_ENABLED=0

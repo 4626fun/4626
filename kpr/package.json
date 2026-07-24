@@ -24,6 +24,7 @@
     "dry-run:cca-finalization": "DRY_RUN=true tsx runner.ts cca-finalization",
     "dry-run:vault-strategy-reallocator": "DRY_RUN=true tsx runner.ts vault-strategy-reallocator",
     "solana:create-dlmm-pool": "tsx scripts/solana/launch/create-dlmm-pool.ts",
+    "solana:seed-dlmm-liquidity": "tsx scripts/solana/launch/seed-dlmm-liquidity.ts",
     "solana:create-alpha-vault": "tsx scripts/solana/launch/create-alpha-vault.ts",
     "solana:register-meteora-vault": "tsx scripts/solana/launch/register-meteora-vault.ts",
     "solana:set-token-authority": "tsx scripts/solana/authority/set-token-authority.ts",
@@ -41,7 +42,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
     "@meteora-ag/alpha-vault": "^1.1.15",
-    "@meteora-ag/dlmm": "^1.9.3",
+    "@meteora-ag/dlmm": "^1.9.13",
     "@noble/hashes": "^1.8.0",
     "@safe-global/protocol-kit": "^6.1.2",
     "@safe-global/types-kit": "^3.0.0",

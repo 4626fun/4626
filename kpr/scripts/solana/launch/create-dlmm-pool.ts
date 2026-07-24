@@ -1,6 +1,8 @@
 /**
  * Create a Meteora DLMM pool for the creator's share token on Solana.
  *
+ * Canonical B2 trade fee lives on this pool (690 bps), not on Token-2022 transfer fee.
+ *
  * Usage:
  *   pnpm solana:create-dlmm-pool
  *
@@ -13,6 +15,7 @@
  *   ACTIVE_ID               - Initial active bin ID
  *
  * Optional env:
+ *   FEE_BPS                 - Swap fee in BPS (default: 690). Non-690 requires ALLOW_NONCANONICAL_FEE_BPS=1
  *   BASE_FACTOR             - Base factor for the pool (default: 10000)
  *   ACTIVATION_TYPE         - "timestamp" (default) or "slot"
  *   ACTIVATION_POINT        - Unix timestamp (timestamp mode) or slot (slot mode)
@@ -20,18 +23,25 @@
  *   ACTIVATION_SLOT_OFFSET  - Slot offset when ACTIVATION_TYPE=slot (default: 200)
  *   METEORA_HAS_ALPHA_VAULT - "1" when pairing with Alpha Vault launch (default: off)
  *   HAS_ALPHA_VAULT         - Alias for METEORA_HAS_ALPHA_VAULT
+ *   COLLECT_FEE_MODE        - "only_y" (default) or "input_only"
+ *   ALLOW_NONCANONICAL_COLLECT_FEE_MODE - "1" to allow non-OnlyY collect mode
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import { createRequire } from 'node:module';
 import { loadKeeperKeypair, sendConfirmedSolanaTransaction } from '../../../utils/solana.js';
 import { requireEnv } from '../../../config.js';
+import {
+  CANONICAL_DLMM_FEE_BPS,
+  COLLECT_FEE_MODE_ONLY_Y,
+  feePercentageToBps,
+  loadBn,
+  loadDlmmClass,
+  loadDlmmSdk,
+} from '../../../utils/dlmm.js';
 
-const require = createRequire(import.meta.url);
-// Meteora SDK currently exposes CJS entrypoints that depend on Anchor's CJS BN export.
-// Using require() here avoids ESM named-export mismatches on newer Node/Anchor combos.
-const DLMM = require('@meteora-ag/dlmm');
-const { BN } = require('@coral-xyz/anchor');
+const sdk = loadDlmmSdk();
+const Dlmm = loadDlmmClass();
+const BN = loadBn();
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');
@@ -42,7 +52,8 @@ const tokenMintY = new PublicKey(requireEnv('TOKEN_MINT_Y'));
 const binStep = new BN(requireEnv('BIN_STEP'));
 const activeId = new BN(requireEnv('ACTIVE_ID'));
 const baseFactor = new BN(process.env.BASE_FACTOR ?? '10000');
-const feeBps = new BN(process.env.FEE_BPS ?? '100');
+const feeBpsNumber = Number.parseInt(process.env.FEE_BPS ?? String(CANONICAL_DLMM_FEE_BPS), 10);
+const feeBps = new BN(feeBpsNumber);
 const cluster = rpcUrl.includes('devnet') ? 'devnet' : 'mainnet-beta';
 
 function envFlag(name: string): boolean {
@@ -61,6 +72,64 @@ function redactRpcUrl(raw: string): string {
   }
 }
 
+function resolveCollectFeeMode(): number {
+  const raw = String(process.env.COLLECT_FEE_MODE ?? 'only_y').trim().toLowerCase();
+  if (raw === 'only_y' || raw === 'y' || raw === '1') {
+    return sdk.CollectFeeMode?.OnlyY ?? Dlmm.CollectFeeMode?.OnlyY ?? COLLECT_FEE_MODE_ONLY_Y;
+  }
+  if (raw === 'input_only' || raw === 'input' || raw === '0') {
+    return sdk.CollectFeeMode?.InputOnly ?? Dlmm.CollectFeeMode?.InputOnly ?? 0;
+  }
+  throw new Error(`COLLECT_FEE_MODE must be only_y or input_only. Received: ${raw}`);
+}
+
+function assertCanonicalFeeBps(bps: number): void {
+  if (!Number.isFinite(bps) || bps < 0 || bps > 10_000) {
+    throw new Error(`FEE_BPS out of range: ${bps}`);
+  }
+  if (bps !== CANONICAL_DLMM_FEE_BPS && !envFlag('ALLOW_NONCANONICAL_FEE_BPS')) {
+    throw new Error(
+      `FEE_BPS must be ${CANONICAL_DLMM_FEE_BPS} for canonical B2 pools (got ${bps}). Set ALLOW_NONCANONICAL_FEE_BPS=1 to override.`,
+    );
+  }
+}
+
+async function assertPoolFeeConfig(poolAddress: PublicKey, expectedFeeBps: number, expectedCollectMode: number): Promise<void> {
+  const dlmmPool = await Dlmm.create(connection, poolAddress, { cluster });
+  const feeInfo = dlmmPool.getFeeInfo();
+  const baseFeeBps = feePercentageToBps(feeInfo.baseFeeRatePercentage);
+  const maxFeeBps = feePercentageToBps(feeInfo.maxFeeRatePercentage);
+  const collectFeeMode = Number(dlmmPool.lbPair?.parameters?.collectFeeMode ?? NaN);
+  const variableFeeControl = Number(dlmmPool.lbPair?.parameters?.variableFeeControl ?? 0);
+
+  if (baseFeeBps !== expectedFeeBps) {
+    throw new Error(`pool_base_fee_bps_mismatch:expected=${expectedFeeBps},actual=${baseFeeBps}`);
+  }
+  if (maxFeeBps > expectedFeeBps) {
+    throw new Error(`pool_max_fee_bps_exceeds_cap:cap=${expectedFeeBps},actual=${maxFeeBps}`);
+  }
+  if (!Number.isFinite(collectFeeMode)) {
+    throw new Error(`pool_collect_fee_mode_unreadable:expected=${expectedCollectMode}`);
+  }
+  if (collectFeeMode !== expectedCollectMode) {
+    throw new Error(`pool_collect_fee_mode_mismatch:expected=${expectedCollectMode},actual=${collectFeeMode}`);
+  }
+  if (variableFeeControl !== 0 && maxFeeBps > expectedFeeBps) {
+    throw new Error(`pool_dynamic_fee_uncapped:variableFeeControl=${variableFeeControl},maxFeeBps=${maxFeeBps}`);
+  }
+}
+
+function assertCanonicalCollectFeeMode(mode: number): void {
+  if (mode !== COLLECT_FEE_MODE_ONLY_Y && !envFlag('ALLOW_NONCANONICAL_COLLECT_FEE_MODE')) {
+    throw new Error(
+      `COLLECT_FEE_MODE must be OnlyY (${COLLECT_FEE_MODE_ONLY_Y}) for canonical B2 pools (got ${mode}). Set ALLOW_NONCANONICAL_COLLECT_FEE_MODE=1 to override.`,
+    );
+  }
+}
+
+assertCanonicalFeeBps(feeBpsNumber);
+const collectFeeMode = resolveCollectFeeMode();
+assertCanonicalCollectFeeMode(collectFeeMode);
 const hasAlphaVault = envFlag('METEORA_HAS_ALPHA_VAULT') || envFlag('HAS_ALPHA_VAULT');
 
 function resolveActivationDelaySeconds(): number {
@@ -72,8 +141,10 @@ function resolveActivationDelaySeconds(): number {
   return parsed;
 }
 
-const programId = new PublicKey(DLMM.LBCLMM_PROGRAM_IDS[cluster]);
-const [poolAddress] = DLMM.deriveCustomizablePermissionlessLbPair(tokenMintX, tokenMintY, programId);
+const programIds = sdk.LBCLMM_PROGRAM_IDS ?? Dlmm.LBCLMM_PROGRAM_IDS;
+const derivePair = sdk.deriveCustomizablePermissionlessLbPair ?? Dlmm.deriveCustomizablePermissionlessLbPair;
+const programId = new PublicKey(programIds[cluster]);
+const [poolAddress] = derivePair(tokenMintX, tokenMintY, programId);
 
 console.log('=== Create Meteora DLMM Pool ===');
 console.log('RPC:        ', redactRpcUrl(rpcUrl));
@@ -84,24 +155,28 @@ console.log('Bin Step:   ', binStep.toString());
 console.log('Active ID:  ', activeId.toString());
 console.log('Base Factor:', baseFactor.toString());
 console.log('Fee (BPS):  ', feeBps.toString());
+console.log('CollectFee: ', collectFeeMode === COLLECT_FEE_MODE_ONLY_Y ? 'OnlyY' : 'InputOnly');
 console.log('Program:    ', programId.toBase58());
 console.log('Pool (PDA): ', poolAddress.toBase58());
 console.log();
 
 const existingPool = await connection.getAccountInfo(poolAddress);
 if (existingPool) {
-  console.log('DLMM Pool already exists.');
+  console.log('DLMM Pool already exists — verifying fee config.');
+  await assertPoolFeeConfig(poolAddress, feeBpsNumber, collectFeeMode);
   console.log('  Pool:      ', poolAddress.toBase58());
   console.log('  Signature: existing');
+  console.log('  Fee check: passed');
   process.exit(0);
 }
 
+const ActivationType = sdk.ActivationType ?? Dlmm.ActivationType;
 const activationKindRaw = String(process.env.ACTIVATION_TYPE ?? 'timestamp').trim().toLowerCase();
 const activationType =
-  activationKindRaw === 'timestamp' ? DLMM.ActivationType.Timestamp : DLMM.ActivationType.Slot;
+  activationKindRaw === 'timestamp' ? ActivationType.Timestamp : ActivationType.Slot;
 const activationPointExplicit = String(process.env.ACTIVATION_POINT ?? '').trim();
 const activationPoint =
-  activationType === DLMM.ActivationType.Timestamp
+  activationType === ActivationType.Timestamp
     ? activationPointExplicit
       ? new BN(activationPointExplicit)
       : new BN(Math.floor(Date.now() / 1000) + resolveActivationDelaySeconds())
@@ -115,11 +190,15 @@ console.log('AlphaVault:', hasAlphaVault ? 'yes (launch lane)' : 'no (default sh
 console.log(
   'Activation: ',
   activationPoint.toString(),
-  activationType === DLMM.ActivationType.Timestamp ? '(timestamp)' : '(slot)',
+  activationType === ActivationType.Timestamp ? '(timestamp)' : '(slot)',
 );
 console.log();
 
-const createPoolTx = await DLMM.createCustomizablePermissionlessLbPair2(
+const concreteFunctionType =
+  sdk.ConcreteFunctionType?.LimitOrder ?? Dlmm.ConcreteFunctionType?.LimitOrder ?? 0;
+const createPair =
+  sdk.createCustomizablePermissionlessLbPair2 ?? Dlmm.createCustomizablePermissionlessLbPair2;
+const createPoolTx = await createPair(
   connection,
   binStep,
   tokenMintX,
@@ -131,6 +210,8 @@ const createPoolTx = await DLMM.createCustomizablePermissionlessLbPair2(
   payer.publicKey,
   activationPoint,
   false,
+  concreteFunctionType,
+  collectFeeMode,
   { cluster },
 );
 
@@ -141,12 +222,15 @@ const sig = await sendConfirmedSolanaTransaction({
   commitment: 'confirmed',
 });
 
+await assertPoolFeeConfig(poolAddress, feeBpsNumber, collectFeeMode);
+
 console.log('DLMM Pool created!');
 console.log('  Signature:', sig);
 console.log('  Pool:     ', poolAddress.toBase58());
 console.log();
 console.log('Next steps (Meteora UI visibility):');
-console.log('  1. Seed initial DLMM liquidity — empty pools do not swap and rarely appear in browse');
+console.log('  1. Seed initial DLMM liquidity with feeOwner — empty pools do not swap');
+console.log('     pnpm -C kpr solana:seed-dlmm-liquidity');
 console.log('  2. Confirm activation time has passed (default: start now; delay via ACTIVATION_DELAY_SECONDS)');
 console.log('  3. Verify on https://app.meteora.ag/pools by pasting mint or pool address');
 console.log(
