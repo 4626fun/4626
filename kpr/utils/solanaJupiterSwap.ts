@@ -36,7 +36,11 @@ async function jupiterQuote(params: {
   outputMint: string;
   amount: bigint;
   slippageBps: number;
-}): Promise<{ outAmount: string; otherAmountThreshold: string; routePlan: unknown }> {
+}): Promise<{
+  outAmount: string;
+  otherAmountThreshold: string;
+  quoteResponse: unknown;
+}> {
   const base = String(process.env.JUPITER_QUOTE_API_URL ?? 'https://quote-api.jup.ag/v6').replace(/\/$/, '');
   const url = new URL(`${base}/quote`);
   url.searchParams.set('inputMint', params.inputMint);
@@ -52,15 +56,15 @@ async function jupiterQuote(params: {
   const body = (await res.json()) as {
     outAmount?: string;
     otherAmountThreshold?: string;
-    routePlan?: unknown;
   };
   if (!body.outAmount || !body.otherAmountThreshold) {
     throw new Error('jupiter_quote_invalid');
   }
+  // Pass the same quote object to /swap — avoid a second fetch that can diverge.
   return {
     outAmount: body.outAmount,
     otherAmountThreshold: body.otherAmountThreshold,
-    routePlan: body.routePlan,
+    quoteResponse: body,
   };
 }
 
@@ -134,19 +138,8 @@ export async function buyShareWithWsol(params: {
     slippageBps,
   });
 
-  // Re-fetch full quote object for /swap (API expects the quote response).
-  const base = String(process.env.JUPITER_QUOTE_API_URL ?? 'https://quote-api.jup.ag/v6').replace(/\/$/, '');
-  const quoteUrl = new URL(`${base}/quote`);
-  quoteUrl.searchParams.set('inputMint', NATIVE_MINT.toBase58());
-  quoteUrl.searchParams.set('outputMint', params.shareMint.toBase58());
-  quoteUrl.searchParams.set('amount', params.inAmount.toString());
-  quoteUrl.searchParams.set('slippageBps', String(slippageBps));
-  const quoteRes = await fetch(quoteUrl);
-  if (!quoteRes.ok) throw new Error(`jupiter_quote_refetch_failed:status=${quoteRes.status}`);
-  const quoteResponse = await quoteRes.json();
-
   const swapTxB64 = await jupiterSwapTx({
-    quoteResponse,
+    quoteResponse: quote.quoteResponse,
     userPublicKey: params.payer.publicKey.toBase58(),
   });
 

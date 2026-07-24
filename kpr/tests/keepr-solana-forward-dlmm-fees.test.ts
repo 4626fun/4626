@@ -145,7 +145,8 @@ describe('keepr Solana DLMM fee forward', () => {
     })
     getAccountMock
       .mockResolvedValueOnce({ amount: 5000n }) // WSOL before swap
-      .mockResolvedValueOnce({ amount: 4200n }) // share after swap
+      .mockResolvedValueOnce({ amount: 100n }) // share before swap (pre-existing)
+      .mockResolvedValueOnce({ amount: 4300n }) // share after swap
     createMock.mockResolvedValue({
       tokenX: { publicKey: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') },
       lbPair: { tokenXMint: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') },
@@ -221,6 +222,7 @@ describe('keepr Solana DLMM fee forward', () => {
     expect(swapMock).toHaveBeenCalledTimes(1)
     expect(forwardOftMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        // Only swap delta (4300 - 100), not the full ATA balance.
         amountLd: 4200n,
         toBytes32: '0x0000000000000000000000001111111111111111111111111111111111111111',
       }),

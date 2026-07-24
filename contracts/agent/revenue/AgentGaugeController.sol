@@ -21,6 +21,7 @@ interface IAgentOVaultWrapper {
     function wrap(uint256 amount) external returns (uint256);
     function unwrap(uint256 amount) external returns (uint256);
     function vaultShares() external view returns (address);
+    function previewWrap(uint256 amount, address user) external view returns (uint256);
 }
 
 interface ILotteryManager4626 {
@@ -537,19 +538,26 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev `getAssetEthTWAP` returns vault-asset tokens per ETH, not ShareOFT per ETH.
-     *      Convert via `vault.pricePerShare()` so the buyback floor tracks ShareOFT units.
+     * @dev `getAssetEthTWAP` returns vault-asset tokens per ETH (IOracle4626), not ShareOFT.
+     *      Convert asset → vault shares via `pricePerShare`, then vault shares → ShareOFT via
+     *      `wrapper.previewWrap` (NORMALIZATION_FACTOR / wrap fee). Fail closed if unset.
      */
     function _expectedShareOftFromAssetTwap(uint256 wethAmount, uint256 assetPerEth)
         internal
         view
         returns (uint256 expectedShareOft)
     {
-        if (address(vault) == address(0) || assetPerEth == 0 || wethAmount == 0) return 0;
+        if (
+            address(vault) == address(0) || address(wrapper) == address(0) || assetPerEth == 0
+                || wethAmount == 0
+        ) {
+            return 0;
+        }
         uint256 pps = vault.pricePerShare();
         if (pps == 0) return 0;
         uint256 expectedAsset = Math.mulDiv(wethAmount, assetPerEth, 1e18);
-        return Math.mulDiv(expectedAsset, 1e18, pps);
+        uint256 expectedVaultShares = Math.mulDiv(expectedAsset, 1e18, pps);
+        return wrapper.previewWrap(expectedVaultShares, address(this));
     }
 
     /**

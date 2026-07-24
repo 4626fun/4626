@@ -103,6 +103,6 @@ describe('solana share buyback swap mode', () => {
     expect(result.mode).toBe('jupiter')
     expect(sawWrapFalse).toBe(true)
     expect(privateSubmitMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
