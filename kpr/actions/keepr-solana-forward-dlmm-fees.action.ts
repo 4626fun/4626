@@ -247,6 +247,8 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
 
     const dlmmPool = await Dlmm.create(connection, poolAddress, { cluster });
     const shareMint: PublicKey = dlmmPool.tokenX.publicKey ?? dlmmPool.lbPair.tokenXMint;
+    const shareProgram = await resolveTokenProgram(connection, shareMint);
+    const shareBefore = await readAtaAmount(connection, shareMint, feeOwner, shareProgram);
 
     const swap = await buyShareWithWsol({
       connection,
@@ -261,9 +263,9 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
     result.swappedInAmount = swap.inAmount;
     result.swappedOutQuoted = swap.outAmountQuoted;
 
-    const shareProgram = await resolveTokenProgram(connection, shareMint);
-    const shareBalance = await readAtaAmount(connection, shareMint, feeOwner, shareProgram);
-    if (shareBalance <= 0n) {
+    const shareAfter = await readAtaAmount(connection, shareMint, feeOwner, shareProgram);
+    const shareDelta = shareAfter > shareBefore ? shareAfter - shareBefore : 0n;
+    if (shareDelta <= 0n) {
       throw new Error('dlmm_forward_share_balance_zero_after_swap');
     }
 
@@ -271,7 +273,8 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
       swapSignature: swap.signature,
       mode: swap.mode,
       shareMint: shareMint.toBase58(),
-      shareBalance: shareBalance.toString(),
+      shareDelta: shareDelta.toString(),
+      shareBalance: shareAfter.toString(),
     });
 
     if (skipOft) {
@@ -280,9 +283,10 @@ export async function executeSolanaDlmmFeeForward(): Promise<SolanaDlmmFeeForwar
       return result;
     }
 
+    // Forward only the buyback proceeds — do not drain pre-existing ■ on feeOwner.
     const oft = await forwardSolanaShareOftToHub({
       mint: shareMint,
-      amountLd: shareBalance,
+      amountLd: shareDelta,
       toBytes32: oftToBytes32,
     });
     result.oftSignature = oft.signature;

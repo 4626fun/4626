@@ -151,6 +151,10 @@ contract MockToken is IERC20 {
             return out;
         }
 
+        function previewWrap(uint256 amount, address) external pure returns (uint256) {
+            return amount / NORMALIZATION;
+        }
+
         function unwrap(uint256 amount) external returns (uint256) {
             if (revertUnwrap) revert("InsufficientLocked");
             oftToken.transferFrom(msg.sender, address(this), amount);
@@ -235,11 +239,12 @@ contract MockToken is IERC20 {
 
         function _oracleMinOut(uint256 wethAmount, uint256 assetPerEth) internal view returns (uint256) {
             uint256 expectedAsset = (wethAmount * assetPerEth) / 1e18;
-            uint256 expectedShareOft = (expectedAsset * 1e18) / vault.pricePerShare();
+            uint256 expectedVaultShares = (expectedAsset * 1e18) / vault.pricePerShare();
+            uint256 expectedShareOft = expectedVaultShares / wrapper.NORMALIZATION();
             return (expectedShareOft * (10000 - gauge.swapSlippageBps())) / 10000;
         }
 
-        function test_previewSwap_convertsAssetTwapThroughPricePerShare() public {
+        function test_previewSwap_convertsAssetTwapThroughPricePerShareAndWrapper() public {
             uint256 wethAmount = 5 ether;
             uint256 assetPerEth = 2e18;
             vault.setPricePerShare(2e18);
@@ -248,8 +253,8 @@ contract MockToken is IERC20 {
 
             (uint256 expectedOut, uint256 minOut, bool active) = gauge.previewSwap(wethAmount);
             assertTrue(active);
-            // asset expected = 10e18; at PPS=2e18 → ShareOFT expected = 5e18
-            assertEq(expectedOut, 5 ether);
+            // asset = 10e18; PPS=2e18 → vault shares = 5e18; wrap /1000 → ShareOFT = 5e15
+            assertEq(expectedOut, 5e15);
             assertEq(minOut, _oracleMinOut(wethAmount, assetPerEth));
         }
 
