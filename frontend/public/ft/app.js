@@ -21,11 +21,15 @@
   let subjects = []
   /** @type {string|null} */
   let account = null
+  /** Checksum / wallet-cased address for eth_sendTransaction / wallet_sendCalls `from`. */
+  /** @type {string|null} */
+  let accountFrom = null
   /** @type {Array<{subject:string,balance:bigint,sellable:bigint,supply:bigint,estWei:bigint,stuck:boolean}>} */
   let positions = []
   let busy = false
   /** @type {bigint} */
   let lastGasWei = 0n
+  const SEND_CALLS_CHUNK = 10
 
   const $ = (id) => document.getElementById(id)
 
@@ -210,12 +214,13 @@
     }
     await ensureBase(provider)
     const accounts = await provider.request({ method: 'eth_requestAccounts' })
-    account = (accounts[0] || '').toLowerCase()
-    if (!account) {
+    accountFrom = accounts[0] || null
+    account = accountFrom ? accountFrom.toLowerCase() : null
+    if (!account || !accountFrom) {
       setStatus('No account returned.', 'warn')
       return
     }
-    $('wallet').textContent = account
+    $('wallet').textContent = accountFrom
     $('connectBtn').textContent = 'Connected'
     setStatus('Connected. Scanning positions…', 'info')
     await refresh()
@@ -357,6 +362,99 @@
     $('withdrawBtn').disabled = busy || !account || !sellable || !gasOk
   }
 
+  function txFrom() {
+    return accountFrom || account
+  }
+
+  function buildSellCall(p) {
+    return {
+      to: FT,
+      data: callDataSell(p.subject, p.sellable),
+    }
+  }
+
+  async function sendCallsChunk(provider, chunk, chunkLabel) {
+    const from = txFrom()
+    const calls = chunk.map(buildSellCall)
+    // EIP-5792: Invalid params (-32602) often means schema/bundle issues.
+    // Try v2 non-atomic first; then omit empty value; then fail over to sequential.
+    const attempts = [
+      {
+        version: '2.0.0',
+        from,
+        chainId: BASE_CHAIN_HEX,
+        atomicRequired: false,
+        calls: calls.map((c) => ({ ...c, value: '0x0' })),
+      },
+      {
+        version: '2.0.0',
+        from,
+        chainId: BASE_CHAIN_HEX,
+        atomicRequired: false,
+        calls,
+      },
+    ]
+    let lastErr
+    for (const params of attempts) {
+      try {
+        return await provider.request({
+          method: 'wallet_sendCalls',
+          params: [params],
+        })
+      } catch (err) {
+        lastErr = err
+        const msg = ((err && err.message) || String(err)).toLowerCase()
+        const code = err && err.code
+        // Unsupported method → stop trying sendCalls
+        if (code === -32601 || /method .*not (found|supported)|unsupported method/i.test(msg)) {
+          throw err
+        }
+        // Keep trying alternate shapes for invalid params
+        if (code === -32602 || /invalid params|invalid request/i.test(msg)) {
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastErr || new Error('wallet_sendCalls failed (' + chunkLabel + ')')
+  }
+
+  async function sellSequential(provider, rows, lines) {
+    let ok = 0
+    let fail = 0
+    const from = txFrom()
+    for (let i = 0; i < rows.length; i++) {
+      const p = rows[i]
+      setStatus(`Selling ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
+      try {
+        const hash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from,
+              to: FT,
+              data: callDataSell(p.subject, p.sellable),
+              value: '0x0',
+            },
+          ],
+        })
+        ok++
+        lines.push(`ok ${shortAddr(p.subject)} ${hash}`)
+      } catch (err) {
+        fail++
+        const msg = (err && err.message) || String(err)
+        lines.push(`fail ${shortAddr(p.subject)} ${msg}`)
+        // User rejected — stop hammering confirmations
+        if ((err && err.code === 4001) || /user rejected|denied|rejected the request/i.test(msg)) {
+          lines.push('Stopped: user rejected in wallet.')
+          break
+        }
+      }
+      setLog(lines)
+    }
+    return { ok, fail }
+  }
+
   async function withdrawAll() {
     if (!account || busy) return
     const provider = getEthereum()
@@ -383,66 +481,45 @@
     try {
       await ensureBase(provider)
 
-      const calls = sellable.map((p) => ({
-        to: FT,
-        value: '0x0',
-        data: callDataSell(p.subject, p.sellable),
-      }))
-
       let usedBatch = false
+      let batchOk = 0
       try {
-        setStatus(`Trying wallet batch (${calls.length} sells)…`, 'info')
-        const result = await provider.request({
-          method: 'wallet_sendCalls',
-          params: [
-            {
-              version: '2.0.0',
-              from: account,
-              chainId: BASE_CHAIN_HEX,
-              atomicRequired: false,
-              calls,
-            },
-          ],
-        })
-        usedBatch = true
-        lines.push('Batch submitted: ' + (typeof result === 'string' ? result : JSON.stringify(result)))
-        setLog(lines)
-        setStatus('Batch submitted. Waiting for confirmation, then re-scanning…', 'ok')
-      } catch (batchErr) {
-        const msg = (batchErr && batchErr.message) || String(batchErr)
-        lines.push('Batch unavailable (' + msg + '). Falling back to sequential txs.')
-        setLog(lines)
-
-        let ok = 0
-        let fail = 0
-        for (let i = 0; i < sellable.length; i++) {
-          const p = sellable[i]
-          setStatus(`Selling ${i + 1}/${sellable.length}: ${shortAddr(p.subject)}…`, 'info')
-          try {
-            const hash = await provider.request({
-              method: 'eth_sendTransaction',
-              params: [
-                {
-                  from: account,
-                  to: FT,
-                  data: callDataSell(p.subject, p.sellable),
-                  value: '0x0',
-                },
-              ],
-            })
-            ok++
-            lines.push(`ok ${shortAddr(p.subject)} ${hash}`)
-          } catch (err) {
-            fail++
-            lines.push(`fail ${shortAddr(p.subject)} ${(err && err.message) || err}`)
-          }
+        setStatus(
+          `Batching ${sellable.length} sells in chunks of ${SEND_CALLS_CHUNK}…`,
+          'info',
+        )
+        for (let i = 0; i < sellable.length; i += SEND_CALLS_CHUNK) {
+          const chunk = sellable.slice(i, i + SEND_CALLS_CHUNK)
+          const label = `${i / SEND_CALLS_CHUNK + 1}/${Math.ceil(sellable.length / SEND_CALLS_CHUNK)}`
+          setStatus(`Wallet batch ${label} (${chunk.length} sells)…`, 'info')
+          const result = await sendCallsChunk(provider, chunk, label)
+          usedBatch = true
+          batchOk += chunk.length
+          lines.push(
+            `batch ${label} ok: ` +
+              (typeof result === 'string' ? result : JSON.stringify(result)),
+          )
           setLog(lines)
         }
-        setStatus(`Done: ${ok} sold, ${fail} failed. Re-scanning…`, fail ? 'warn' : 'ok')
+        setStatus(`Submitted ${batchOk} sells via wallet batch. Re-scanning…`, 'ok')
+      } catch (batchErr) {
+        const msg = (batchErr && batchErr.message) || String(batchErr)
+        const code = batchErr && batchErr.code
+        lines.push(
+          `Batch unavailable (${code != null ? code + ' ' : ''}${msg}). Falling back to one-tx-per-subject.`,
+        )
+        setLog(lines)
+
+        // If some chunks already landed, only sell the remainder sequentially
+        const remaining = usedBatch ? sellable.slice(batchOk) : sellable
+        const { ok, fail } = await sellSequential(provider, remaining, lines)
+        setStatus(
+          `Done: ${batchOk + ok} submitted, ${fail} failed. Re-scanning…`,
+          fail ? 'warn' : 'ok',
+        )
       }
 
       if (usedBatch) {
-        // brief pause then refresh
         await new Promise((r) => setTimeout(r, 4000))
       }
       await refresh()
@@ -488,8 +565,9 @@
       $('connectBtn').disabled = true
     } else {
       provider.on?.('accountsChanged', (accs) => {
-        account = (accs[0] || '').toLowerCase() || null
-        $('wallet').textContent = account || '—'
+        accountFrom = accs[0] || null
+        account = accountFrom ? accountFrom.toLowerCase() : null
+        $('wallet').textContent = accountFrom || '—'
         positions = []
         renderPositions()
         if (account) refresh().catch(() => {})
