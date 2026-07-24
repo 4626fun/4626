@@ -1,16 +1,17 @@
 /**
  * Swap helper for Solana DLMM fee repatriation (WSOL → ShareOFT mint).
+ * Uses Jito/private submit when configured (same gate as Jupiter path).
  */
 
 import {
   Connection,
   PublicKey,
-  sendAndConfirmTransaction,
   type Keypair,
   type Transaction,
 } from '@solana/web3.js';
 import { NATIVE_MINT } from '@solana/spl-token';
 import { loadBn, loadDlmmClass } from './dlmm.js';
+import { sendSolanaTransactionPrivate } from './solanaPrivateSubmit.js';
 
 const Dlmm = loadDlmmClass();
 const BN = loadBn();
@@ -21,6 +22,11 @@ export type DlmmSwapResult = {
   minOutAmount: string;
   outAmountQuoted: string;
 };
+
+function envFlag(name: string): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
 
 /**
  * Swap `inAmount` of Token Y (WSOL) into Token X (share) on the canonical DLMM pool.
@@ -45,7 +51,6 @@ export async function swapWsolToShareOnDlmm(params: {
   const tokenX: PublicKey = dlmmPool.tokenX.publicKey ?? dlmmPool.lbPair.tokenXMint;
   const tokenY: PublicKey = dlmmPool.tokenY.publicKey ?? dlmmPool.lbPair.tokenYMint;
   if (!tokenY.equals(NATIVE_MINT) && !tokenY.equals(new PublicKey(NATIVE_MINT.toBase58()))) {
-    // Allow non-WSOL quote only when explicitly opted in.
     const allow = ['1', 'true', 'yes', 'on'].includes(
       String(process.env.SOLANA_DLMM_ALLOW_NON_WSOL_QUOTE ?? '').trim().toLowerCase(),
     );
@@ -55,7 +60,6 @@ export async function swapWsolToShareOnDlmm(params: {
   }
 
   const inAmountBn = new BN(params.inAmount.toString());
-  // Buying Token X with Token Y ⇒ swapForY = false
   const swapForY = false;
   const binArrays =
     typeof dlmmPool.getBinArrayForSwap === 'function'
@@ -77,8 +81,15 @@ export async function swapWsolToShareOnDlmm(params: {
     binArraysPubkey: quote.binArraysPubkey ?? [],
   });
 
-  const signature = await sendAndConfirmTransaction(params.connection, swapTx, [params.payer], {
-    commitment: 'confirmed',
+  const latest = await params.connection.getLatestBlockhash('confirmed');
+  swapTx.recentBlockhash = latest.blockhash;
+  swapTx.feePayer = params.payer.publicKey;
+  swapTx.sign(params.payer);
+
+  const signature = await sendSolanaTransactionPrivate({
+    connection: params.connection,
+    signedTransaction: swapTx,
+    requirePrivate: envFlag('SOLANA_FORWARD_REQUIRE_PRIVATE_SUBMIT'),
   });
 
   return {

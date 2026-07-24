@@ -177,7 +177,10 @@ Forward buyback defaults to **Jupiter** best-path (`SOLANA_FORWARD_SWAP_MODE=jup
 
 Base V4 sell-tax WETH is buyback'd to ■ via gauge `processWETHFeesWithRoute`
 (keeper-quoted Universal Router / aggregator calldata; no ShareOFT `buyFeeBps`).
-Use `keepr-weth-fee-buyback` with private relay submission.
+Use `keepr-weth-fee-buyback` with short-TTL quote env
+(`KPR_WETH_BUYBACK_QUOTE_EXPIRES_AT_MS`, optional `QUOTE_ISSUED_AT_MS` / `QUOTE_MAX_AGE_MS`)
+and `KPR_WETH_BUYBACK_PRIVATE_SUBMIT_CONFIRMED=1` after private relay/builder submit
+(default-on `KPR_WETH_BUYBACK_REQUIRE_PRIVATE_SUBMIT=1`).
 
 ## Solana Launch Scripts
 

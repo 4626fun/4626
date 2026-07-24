@@ -4,7 +4,8 @@
 
 import {
   Connection,
-  type VersionedTransaction,
+  Transaction,
+  VersionedTransaction,
 } from '@solana/web3.js';
 
 function envFlag(name: string): boolean {
@@ -12,11 +13,18 @@ function envFlag(name: string): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }
 
-async function sendViaJito(signedTx: VersionedTransaction): Promise<string> {
+function serializeSigned(tx: VersionedTransaction | Transaction): Buffer {
+  if (tx instanceof VersionedTransaction) {
+    return Buffer.from(tx.serialize());
+  }
+  return Buffer.from(tx.serialize());
+}
+
+async function sendViaJito(signedTx: VersionedTransaction | Transaction): Promise<string> {
   const endpoint = String(
     process.env.JITO_BLOCK_ENGINE_URL ?? 'https://mainnet.block-engine.jito.wtf/api/v1/transactions',
   ).trim();
-  const encoded = Buffer.from(signedTx.serialize()).toString('base64');
+  const encoded = serializeSigned(signedTx).toString('base64');
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -41,13 +49,13 @@ async function sendViaJito(signedTx: VersionedTransaction): Promise<string> {
 }
 
 /**
- * Submit a signed versioned transaction.
+ * Submit a signed transaction (legacy or versioned).
  * When JITO_SUBMIT_ENABLED=1, uses Jito block engine; otherwise public RPC.
  * When requirePrivate=true and Jito is not enabled, fail closed.
  */
 export async function sendSolanaTransactionPrivate(params: {
   connection: Connection;
-  signedTransaction: VersionedTransaction;
+  signedTransaction: VersionedTransaction | Transaction;
   requirePrivate?: boolean;
 }): Promise<string> {
   const jitoEnabled = envFlag('JITO_SUBMIT_ENABLED');
@@ -63,7 +71,8 @@ export async function sendSolanaTransactionPrivate(params: {
     return sendViaJito(params.signedTransaction);
   }
 
-  const sig = await params.connection.sendTransaction(params.signedTransaction, {
+  const raw = serializeSigned(params.signedTransaction);
+  const sig = await params.connection.sendRawTransaction(raw, {
     skipPreflight: false,
     maxRetries: 3,
   });

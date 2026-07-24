@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { sendTransactionMock, confirmTransactionMock, getLatestBlockhashMock } = vi.hoisted(() => ({
-  sendTransactionMock: vi.fn(async () => 'rpc-sig'),
+const { sendRawTransactionMock, confirmTransactionMock, getLatestBlockhashMock } = vi.hoisted(() => ({
+  sendRawTransactionMock: vi.fn(async () => 'rpc-sig'),
   confirmTransactionMock: vi.fn(async () => undefined),
   getLatestBlockhashMock: vi.fn(async () => ({
     blockhash: 'bh',
@@ -14,7 +14,7 @@ vi.mock('@solana/web3.js', async () => {
   return {
     ...actual,
     Connection: class {
-      sendTransaction = sendTransactionMock
+      sendRawTransaction = sendRawTransactionMock
       confirmTransaction = confirmTransactionMock
       getLatestBlockhash = getLatestBlockhashMock
     },
@@ -65,6 +65,6 @@ describe('solana private submit', () => {
       requirePrivate: false,
     })
     expect(sig).toBe('rpc-sig')
-    expect(sendTransactionMock).toHaveBeenCalled()
+    expect(sendRawTransactionMock).toHaveBeenCalled()
   })
 })
