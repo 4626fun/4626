@@ -209,7 +209,7 @@
   async function connect() {
     const provider = getEthereum()
     if (!provider) {
-      setStatus('No injected wallet found. Install MetaMask, Rabby, or Coinbase Wallet.', 'warn')
+      setStatus('No hay cartera inyectada. Instala MetaMask, Rabby o Coinbase Wallet.', 'warn')
       return
     }
     await ensureBase(provider)
@@ -217,12 +217,12 @@
     accountFrom = accounts[0] || null
     account = accountFrom ? accountFrom.toLowerCase() : null
     if (!account || !accountFrom) {
-      setStatus('No account returned.', 'warn')
+      setStatus('La cartera no ha devuelto ninguna cuenta.', 'warn')
       return
     }
     $('wallet').textContent = accountFrom
-    $('connectBtn').textContent = 'Connected'
-    setStatus('Connected. Scanning positions…', 'info')
+    $('connectBtn').textContent = 'Conectada'
+    setStatus('Conectada. Escaneando posiciones…', 'info')
     await refresh()
   }
 
@@ -233,11 +233,11 @@
 
   async function refresh() {
     if (!account) {
-      setStatus('Connect a wallet first.', 'warn')
+      setStatus('Conecta una cartera primero.', 'warn')
       return
     }
     if (!subjects.length) {
-      setStatus('No subject list loaded.', 'warn')
+      setStatus('No se ha cargado la lista de sujetos.', 'warn')
       return
     }
 
@@ -251,9 +251,9 @@
       $('gasHint').hidden = gasOk
       $('gasHint').textContent = gasOk
         ? ''
-        : 'Send at least ~0.001 ETH to this wallet on Base for gas before withdrawing.'
+        : 'Manda al menos ~0,001 ETH a esta cartera en Base para el gas antes de retirar.'
 
-      setStatus(`Reading balances for ${subjects.length} subjects…`, 'info')
+      setStatus(`Leyendo saldos de ${subjects.length} sujetos…`, 'info')
 
       const balResults = await multicall(subjects.map((s) => callDataBalance(s, account)))
 
@@ -268,11 +268,11 @@
       if (!held.length) {
         positions = []
         renderPositions()
-        setStatus('No Friend.tech v1 share balances for this wallet (against baked subject list).', 'warn')
+        setStatus('Esta cartera no tiene shares de Friend.tech v1 (según la lista de sujetos preparada).', 'warn')
         return
       }
 
-      setStatus(`Found ${held.length} positions. Pricing…`, 'info')
+      setStatus(`Hay ${held.length} posiciones. Calculando precios…`, 'info')
       const supplyResults = await multicall(held.map((h) => callDataSupply(h.subject)))
 
       const priced = []
@@ -317,8 +317,8 @@
       const stuckN = positions.filter((p) => p.stuck).length
       const total = sellable.reduce((s, p) => s + p.estWei, 0n)
       setStatus(
-        `${sellable.length} sellable · ${stuckN} last-share stuck · est. ${formatEth(total)} ETH after fees` +
-          (gasOk ? '' : ' · fund gas first'),
+        `${sellable.length} vendibles · ${stuckN} bloqueadas (última share) · est. ${formatEth(total)} ETH tras comisiones` +
+          (gasOk ? '' : ' · primero mete gas'),
         gasOk ? 'ok' : 'warn',
       )
     } catch (err) {
@@ -338,7 +338,11 @@
       total += p.estWei
       const tr = document.createElement('tr')
       if (p.stuck) tr.className = 'stuck'
-      const note = p.stuck ? 'unsellable (last share)' : p.sellable < p.balance ? 'partial (leave 1)' : ''
+      const note = p.stuck
+        ? 'no vendible (última share)'
+        : p.sellable < p.balance
+          ? 'parcial (dejar 1)'
+          : ''
       tr.innerHTML =
         `<td><code>${p.subject}</code></td>` +
         `<td>${p.balance.toString()}</td>` +
@@ -416,7 +420,7 @@
         throw err
       }
     }
-    throw lastErr || new Error('wallet_sendCalls failed (' + chunkLabel + ')')
+    throw lastErr || new Error('Ha fallado wallet_sendCalls (' + chunkLabel + ')')
   }
 
   async function sellSequential(provider, rows, lines) {
@@ -425,7 +429,7 @@
     const from = txFrom()
     for (let i = 0; i < rows.length; i++) {
       const p = rows[i]
-      setStatus(`Selling ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
+      setStatus(`Vendiendo ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
       try {
         const hash = await provider.request({
           method: 'eth_sendTransaction',
@@ -443,10 +447,10 @@
       } catch (err) {
         fail++
         const msg = (err && err.message) || String(err)
-        lines.push(`fail ${shortAddr(p.subject)} ${msg}`)
+        lines.push(`fallo ${shortAddr(p.subject)} ${msg}`)
         // User rejected — stop hammering confirmations
         if ((err && err.code === 4001) || /user rejected|denied|rejected the request/i.test(msg)) {
-          lines.push('Stopped: user rejected in wallet.')
+          lines.push('Parado: has rechazado en la cartera.')
           break
         }
       }
@@ -462,13 +466,13 @@
 
     const sellable = positions.filter((p) => p.sellable > 0n)
     if (!sellable.length) {
-      setStatus('Nothing sellable.', 'warn')
+      setStatus('No hay nada vendible.', 'warn')
       return
     }
 
     const gasWei = await getGasWei(account)
     if (gasWei < MIN_GAS_WEI) {
-      setStatus('Need ~0.001 ETH on Base for gas before withdrawing.', 'warn')
+      setStatus('Hace falta ~0,001 ETH en Base para el gas antes de retirar.', 'warn')
       $('gasHint').hidden = false
       return
     }
@@ -485,28 +489,28 @@
       let batchOk = 0
       try {
         setStatus(
-          `Batching ${sellable.length} sells in chunks of ${SEND_CALLS_CHUNK}…`,
+          `Empaquetando ${sellable.length} ventas en lotes de ${SEND_CALLS_CHUNK}…`,
           'info',
         )
         for (let i = 0; i < sellable.length; i += SEND_CALLS_CHUNK) {
           const chunk = sellable.slice(i, i + SEND_CALLS_CHUNK)
           const label = `${i / SEND_CALLS_CHUNK + 1}/${Math.ceil(sellable.length / SEND_CALLS_CHUNK)}`
-          setStatus(`Wallet batch ${label} (${chunk.length} sells)…`, 'info')
+          setStatus(`Lote de cartera ${label} (${chunk.length} ventas)…`, 'info')
           const result = await sendCallsChunk(provider, chunk, label)
           usedBatch = true
           batchOk += chunk.length
           lines.push(
-            `batch ${label} ok: ` +
+            `lote ${label} ok: ` +
               (typeof result === 'string' ? result : JSON.stringify(result)),
           )
           setLog(lines)
         }
-        setStatus(`Submitted ${batchOk} sells via wallet batch. Re-scanning…`, 'ok')
+        setStatus(`Enviadas ${batchOk} ventas en lote. Volviendo a escanear…`, 'ok')
       } catch (batchErr) {
         const msg = (batchErr && batchErr.message) || String(batchErr)
         const code = batchErr && batchErr.code
         lines.push(
-          `Batch unavailable (${code != null ? code + ' ' : ''}${msg}). Falling back to one-tx-per-subject.`,
+          `Lote no disponible (${code != null ? code + ' ' : ''}${msg}). Paso a una tx por sujeto.`,
         )
         setLog(lines)
 
@@ -514,7 +518,7 @@
         const remaining = usedBatch ? sellable.slice(batchOk) : sellable
         const { ok, fail } = await sellSequential(provider, remaining, lines)
         setStatus(
-          `Done: ${batchOk + ok} submitted, ${fail} failed. Re-scanning…`,
+          `Listo: ${batchOk + ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
           fail ? 'warn' : 'ok',
         )
       }
@@ -539,12 +543,15 @@
 
     try {
       const res = await fetch('/ft/subjects.json', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to load subjects.json')
+      if (!res.ok) throw new Error('No se ha podido cargar subjects.json')
       const data = await res.json()
       subjects = (data.subjects || []).map((s) => s.toLowerCase())
       $('bakedFor').textContent = data.bakedFor || '—'
       $('subjectCount').textContent = String(subjects.length)
-      setStatus('Loaded ' + subjects.length + ' candidate subjects. Connect wallet to scan.', 'info')
+      setStatus(
+        'Cargados ' + subjects.length + ' sujetos candidatos. Conecta la cartera para escanear.',
+        'info',
+      )
     } catch (err) {
       setStatus(err.message || String(err), 'err')
     }
@@ -561,7 +568,7 @@
 
     const provider = getEthereum()
     if (!provider) {
-      setStatus('No injected wallet detected.', 'warn')
+      setStatus('No se detecta ninguna cartera inyectada.', 'warn')
       $('connectBtn').disabled = true
     } else {
       provider.on?.('accountsChanged', (accs) => {
