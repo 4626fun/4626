@@ -294,6 +294,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
     "@elizaos/core": "^1.7.2",
+    "@fal-ai/client": "^1.10.1",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

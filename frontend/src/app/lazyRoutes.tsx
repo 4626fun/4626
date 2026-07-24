@@ -283,4 +283,8 @@ export const TacticalTokenMap = lazyNamed(
   () => import('../pages/dev/TacticalTokenMap'),
   'TacticalTokenMap',
 )
+export const ShowcaseDemoInterstitial = lazyNamed(
+  () => import('../pages/dev/ShowcaseDemoInterstitial'),
+  'ShowcaseDemoInterstitial',
+)
 export const AmoeQuickTasks = lazyNamed(() => import('../pages/AmoeQuickTasks'), 'AmoeQuickTasks')

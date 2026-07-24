@@ -34,6 +34,7 @@ import {
   CreatorStrategyFeatures,
   MetaballOsProbe,
   TacticalTokenMap,
+  ShowcaseDemoInterstitial,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -94,6 +95,7 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/status', element: <Status /> },
   { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
   { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
+  { path: '/_showcase-demo', element: <ShowcaseDemoInterstitial /> },
 ]
 
 export const APP_PUBLIC_ROUTES: PathRouteDef[] = [
