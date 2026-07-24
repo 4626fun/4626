@@ -27,7 +27,7 @@ import { buyShareWithWsol } from '../utils/solanaJupiterSwap.js';
 import { forwardSolanaShareOftToHub, hubGaugeToBytes32 } from '../utils/solanaOftForward.js';
 import { resolveHubGaugeController } from '../utils/remoteFeeFlush.js';
 import { isDryRun, readContract, writeContract } from '../utils/onchain.js';
-import { GaugeReceiveBridgedFeesABI } from '../kpr-workflows/contracts/abi/ShareOftFeeFlush.js';
+import { GaugeReceiveBridgedFeesABI } from '../utils/gaugeReceiveBridgedFeesAbi.js';
 
 const WORKFLOW_NAME = 'keepr-solana-forward-dlmm-fees';
 const Dlmm = loadDlmmClass();

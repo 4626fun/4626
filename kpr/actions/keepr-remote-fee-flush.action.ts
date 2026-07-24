@@ -10,7 +10,7 @@ import { getAddress, isAddress, type Address } from 'viem';
 import {
   GaugeReceiveBridgedFeesABI,
   ShareOftFeeFlushABI,
-} from '../kpr-workflows/contracts/abi/ShareOftFeeFlush.js';
+} from '../utils/gaugeReceiveBridgedFeesAbi.js';
 import { alertInfo, alertWarning } from '../utils/alerts.js';
 import { isDryRun, writeContract } from '../utils/onchain.js';
 import {
