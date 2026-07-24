@@ -166,7 +166,11 @@ The TransferFeeConfig harvest workflow is deliberately harvest-only and is the
 wrong path for B2 trade fees (mint transfer fee stays 0). Canonical B2 trade
 fees are the Meteora pool's 690 bps swap fee; claim them with
 `claim_dlmm_fees` after seeding protocol LP with `FEE_OWNER` set
-(`SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED=1`).
+(`SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED=1`). Repatriate claimed WSOL to
+Base via `forward_dlmm_fees` (claim → DLMM WSOL→■ swap → LZ OFT helper →
+`receiveBridgedFees`); opt-in only with
+`SOLANA_ORCHESTRATOR_FORWARD_DLMM_FEES_ENABLED=1` plus `SOLANA_OFT_FORWARD_ENABLED=1`
+and `SOLANA_OFT_FORWARD_HELPER` (in-repo Solana OFT send SDK is not packaged yet).
 
 ## Solana Launch Scripts
 
