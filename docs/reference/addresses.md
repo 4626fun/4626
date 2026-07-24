@@ -5,9 +5,9 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.3** epoch (v1.19.1 greenfield stack; module and bytecode cutover 2026-07-19).
+Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.3 bytecode epoch with the v1.19.4 Creator-core repair** (v1.19.1 greenfield stack).
 
-v1.19.3 is live on the v1.19.1 greenfield stack: current-source v5 vault modules, hardened Phase 2, a fully seeded bytecode store, and active Chainlink VRF on manager `0xB45E68a5…`. v1.19.2 remains a historical bytecode seal. Creator + Agent paid canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
+v1.19.3 deploy bytecode is live on the v1.19.1 greenfield stack, with the v1.19.4 Creator-core repair wired into the active Phase 1 module. The stack has hardened Phase 2, a fully seeded bytecode store, and active Chainlink VRF on manager `0xB45E68a5…`. v1.19.2 remains a historical bytecode seal. Creator + Agent paid canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
@@ -29,12 +29,12 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | VRFConsumer4626                   | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670`                                |
 | UniversalBytecodeStoreV2          | `0xF9622613682a12E46b914c7498716F42E44c4d36`                                |
 | UniversalCreate2DeployerFromStore | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2`                                |
-| CreatorOVaultCoreModule           | `0x5A9F287910050c89cc3447f6Ac54990C2514466a`                                |
+| CreatorOVaultCoreModule           | `0x0513cf245EF2Cf54534416211F7B890405bF76D1`                                |
 | AgentOVaultCoreModule             | `0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE`                                |
 | CreatorOVaultStrategiesModule     | `0x6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849`                                |
 | CreatorOVaultAdminModule          | `0xD5c887cd16DBb3A9095eB9635ECf57b77D1d9B37`                                |
 | DeploymentBatcher                 | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`                                |
-| DeploymentBatcherPhase1Module     | `0xb64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61`                                |
+| DeploymentBatcherPhase1Module     | `0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3`                                |
 | DeploymentBatcherPhase2Module     | `0x1217bA070DBf64303117939301788925030295d1`                                |
 | DeploymentBatcherPhase3Helper     | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`                                |
 | DeploymentBatcherShareMeshHelper  | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`                                |
@@ -43,11 +43,12 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 Notes:
 
-- **v1.19.3** is the current shared/global + per-creator bytecode/CREATE2
+- **v1.19.3** remains the current shared/global + per-creator bytecode/CREATE2
   namespace. Infra addresses match the v1.19.1 greenfield deploy.
-- Live `DeploymentBatcherPhase1Module` is `0xb64bA38a…` with v5 creator,
-  agent, strategies, and admin modules. Safe swap:
-  [`0xda9a2bef…`](https://basescan.org/tx/0xda9a2bef6bb2f8959325fa6da5ccbc9b779d5c159fe3de66fa4e5d6264608a9b).
+- Live `DeploymentBatcherPhase1Module` is the v1.19.4 Creator-core repair
+  `0x8C1C6C10…`, binding Creator core `0x0513cf24…` while retaining the v1.19.3
+  Agent, strategies, admin, store, and Phase 2 dependencies. Safe swap:
+  [`0x0c5f5b3c…`](https://basescan.org/tx/0x0c5f5b3c0bee4e252bce04b7e1729ebc6ce887b6b32fe56b383780b0f0135ece).
 - Live `DeploymentBatcherPhase2Module` is `0x1217bA07…` (current hardened source).
   Safe swap: [`0x95cc671f…`](https://basescan.org/tx/0x95cc671fc6854cc47425c501f63e8e59471e3340913a60a99ad64ab01dd77fbf).
   Shell `deployPhase2Core` selectors unchanged (`0xf9344d88` / `0x6004df9c`).

@@ -53,7 +53,7 @@ export const PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
 export const PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "02D7abC547F8B1e7E2D7a919D8D1005918361750",
 );
-/** v1.19.3 bytecode/module epoch on the v1.19.1 greenfield infrastructure. */
+/** v1.19.3 bytecode epoch with the v1.19.4 creator-core repair on the v1.19.1 greenfield infrastructure. */
 export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "a18169caf37fa0347285B16aAFC2B09eCB43F145",
 );
@@ -66,11 +66,12 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V1191_STORE_POINTER = addr(
   "0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b",
 );
 /**
- * v1.19.3 Phase1Module on the v1.19.1 batcher. Both lane cores and shared
- * modules use the OVaultModuleStorage.v5 fingerprint.
+ * v1.19.4 Phase1Module on the v1.19.1 batcher. It retains the v1.19.3
+ * deploy-bytecode store and shared modules, while binding the repaired Creator
+ * core for new creator-vault launches.
  */
 export const SPLIT_PHASE1_PHASE1_MODULE = addr(
-  "b64bA38aBAe1f64Ff0ca4541bFFF5333d2C0Fd61",
+  "8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3",
 );
 /** Pre-v1.14.0 Phase1Module (v1.13.0 greenfield; grandfathered vaults only). */
 export const PRE_V1140_SPLIT_PHASE1_PHASE1_MODULE = addr(
@@ -111,7 +112,7 @@ export const OVAULT_FACTORY4626 = addr(
   "CAb65a066A4D52DD29ffB418B319819176b89610",
 );
 export const OVAULT_CORE_MODULE = addr(
-  "5A9F287910050c89cc3447f6Ac54990C2514466a",
+  "0513cf245EF2Cf54534416211F7B890405bF76D1",
 );
 export const OVAULT_STRATEGIES_MODULE = addr(
   "6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849",

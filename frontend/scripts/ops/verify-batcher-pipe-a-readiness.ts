@@ -284,9 +284,9 @@ async function main() {
       detail: `live=${phase1ModuleAddress ?? 'n/a'} retired_pre_v1140=${PRE_V1140_SPLIT_PHASE1_PHASE1_MODULE}`,
     },
     {
-      id: 'phase1_module_storage_v3',
+      id: 'phase1_module_storage_v5',
       ok: moduleStorage.ok,
-      detail: moduleStorage.ok ? 'OVaultModuleStorage.v3' : moduleStorage.message,
+      detail: moduleStorage.ok ? 'OVaultModuleStorage.v5' : moduleStorage.message,
     },
     {
       id: 'phase2_module',
