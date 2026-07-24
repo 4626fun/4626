@@ -17,6 +17,7 @@ import {
   useWalletClient,
 } from "wagmi";
 
+import { InfoHint } from "@/components/alfaclub/InfoHint";
 import { SwapCard } from "@/components/swap/SwapCard";
 import { TokenAvatar } from "@/components/swap/TokenAvatar";
 import { toast } from "@/components/ui/Toast";
@@ -39,6 +40,8 @@ import {
 } from "@/lib/swap/alfaclubRoomTokens";
 import {
   creatorCoinRawLogo,
+  NATIVE_TOKEN_ADDRESS,
+  uniswapChainLogo,
   type TokenDisplay,
 } from "@/lib/uniswap/swapUtils";
 import {
@@ -224,6 +227,8 @@ type AlfaClubLiquidityProps = {
   initialKeyLabel?: string | null;
   onOpenTokenSelector?: (side: "input" | "output") => void;
   onSwitchTokens?: () => void;
+  /** Prefer Swap's Privy embedded canonical signer client when provided. */
+  walletClientOverride?: unknown;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   forcePrimaryActionEnabled?: boolean;
@@ -239,6 +244,7 @@ export function AlfaClubLiquidity({
   initialKeyLabel = null,
   onOpenTokenSelector,
   onSwitchTokens,
+  walletClientOverride = null,
   primaryActionLabel: primaryActionLabelOverride,
   onPrimaryAction,
   forcePrimaryActionEnabled,
@@ -248,20 +254,17 @@ export function AlfaClubLiquidity({
   const account = useAccount();
   const accountContext = useAccountContext();
   const publicClient = usePublicClient({ chainId: base.id });
-  const { data: walletClient } = useWalletClient({ chainId: base.id });
+  const { data: connectedWalletClient } = useWalletClient({ chainId: base.id });
+  const walletClient =
+    (walletClientOverride as typeof connectedWalletClient | null) ??
+    connectedWalletClient;
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
 
   const [mode, setMode] = useState<Mode>(() => {
     if (initialMode === "sell") return "sell";
-    // Embedded swap shell only exposes buy/sell; keep ETH funding on the full page.
-    if (embedded) return "buy";
-    return initialMode === "buyWithEth" ? "buyWithEth" : "buy";
+    if (initialMode === "buyWithEth") return "buyWithEth";
+    return "buy";
   });
-
-  useEffect(() => {
-    if (!embedded) return;
-    if (mode === "buyWithEth") setMode("buy");
-  }, [embedded, mode]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -269,7 +272,12 @@ export function AlfaClubLiquidity({
       setMode("sell");
       return;
     }
-    setMode("buy");
+    if (initialMode === "buyWithEth") {
+      setMode("buyWithEth");
+      return;
+    }
+    // Keep an active ETH funding mode; otherwise default to creator-coin buy.
+    setMode((current) => (current === "buyWithEth" ? current : "buy"));
   }, [embedded, initialMode]);
   const [keyAmountInput, setKeyAmountInput] = useState("1");
   const [ethAmountInput, setEthAmountInput] = useState("0.001");
@@ -1139,9 +1147,12 @@ export function AlfaClubLiquidity({
       keyId: keyIdForImage,
       imageUrl: initialImageUrl,
     });
-    // Keep picker labels as the room name; disambiguate colliding coin/key chips here.
+    // Keep picker labels as the room name; disambiguate colliding coin/key chips here
+    // (including case-only collisions like AKITA vs akita so the rate reads clearly).
     const keyChipSymbol =
-      keySymbol === creatorSymbol ? `${keySymbol} key` : keySymbol;
+      keySymbol.toLowerCase() === creatorSymbol.toLowerCase()
+        ? `${keySymbol} key`
+        : keySymbol;
     const keyDisplay: TokenDisplay = {
       symbol: keyChipSymbol,
       name: `AlfaClub · #${keyIdForImage}`,
@@ -1151,6 +1162,12 @@ export function AlfaClubLiquidity({
       symbol: creatorSymbol,
       name: snapshot?.creatorCoinName ?? "AKITA Creator Coin",
       logoUrl: logoUrl ?? null,
+    };
+    const payingWithEth = mode === "buyWithEth";
+    const ethDisplay: TokenDisplay = {
+      symbol: "ETH",
+      name: "Ether",
+      logoUrl: uniswapChainLogo(BASE_WETH_TOKEN, base.id),
     };
     const quotedCoinAmount =
       keyAmount && quote ? formatTokenAmount(quote.amount, decimals) : "";
@@ -1190,25 +1207,90 @@ export function AlfaClubLiquidity({
 
     return (
       <div className="relative min-w-0 space-y-3">
+        {!sellingKeys ? (
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="text-zinc-500">Pay with</span>
+            <div className="inline-flex rounded-lg border border-white/[0.08] bg-black/30 p-0.5">
+              <button
+                type="button"
+                onClick={() => setMode("buy")}
+                className={
+                  payingWithEth
+                    ? "rounded-md px-2.5 py-1 text-zinc-500 transition hover:text-zinc-300"
+                    : "rounded-md bg-brand-primary px-2.5 py-1 font-medium text-white"
+                }
+              >
+                {creatorSymbol}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("buyWithEth")}
+                className={
+                  payingWithEth
+                    ? "rounded-md bg-brand-primary px-2.5 py-1 font-medium text-white"
+                    : "rounded-md px-2.5 py-1 text-zinc-500 transition hover:text-zinc-300"
+                }
+              >
+                ETH
+              </button>
+            </div>
+            {payingWithEth ? (
+              <>
+                <span className="text-zinc-600">ETH → ZORA → {creatorSymbol} → key</span>
+                <label className="ml-auto inline-flex items-center gap-1.5 text-zinc-500">
+                  Keys
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={keyAmountInput}
+                    onChange={(event) =>
+                      setKeyAmountInput(event.target.value.replace(/[^\d]/g, ""))
+                    }
+                    className="h-7 w-14 rounded-md border border-white/[0.08] bg-black/40 px-2 text-right tabular-nums text-zinc-200 outline-none focus:border-brand-primary/40"
+                    aria-label="Key quantity to buy"
+                  />
+                </label>
+              </>
+            ) : null}
+          </div>
+        ) : null}
         <SwapCard
-          tokenInDisplay={sellingKeys ? keyDisplay : creatorDisplay}
+          tokenInDisplay={
+            sellingKeys ? keyDisplay : payingWithEth ? ethDisplay : creatorDisplay
+          }
           tokenOutDisplay={sellingKeys ? creatorDisplay : keyDisplay}
           tokenInIdentityLoading={!snapshot && snapshotQuery.isLoading}
           tokenOutIdentityLoading={!snapshot && snapshotQuery.isLoading}
-          // Key qty is always the edited amount; coin quote is the estimated side.
-          // SwapCard amountEditSide remaps which row is editable (sell vs buy).
-          amountInUnits={keyAmountInput}
+          // Creator-coin buy: edit key qty on Buy. ETH funding: edit ETH on Sell,
+          // keep key qty on Buy via estimatedOut + amountEditSide sell.
+          amountInUnits={payingWithEth ? ethAmountInput : keyAmountInput}
           estimatedOut={
-            quotedCoinAmount === "--" ? "" : quotedCoinAmount
+            payingWithEth
+              ? keyAmountInput
+              : quotedCoinAmount === "--"
+                ? ""
+                : quotedCoinAmount
           }
-          buyQuoteLoading={Boolean(keyAmount) && quoteQuery.isFetching && !quote}
+          buyQuoteLoading={
+            payingWithEth
+              ? false
+              : Boolean(keyAmount) && quoteQuery.isFetching && !quote
+          }
           estimatedOutUsd={null}
-          tokenInSymbol={sellingKeys ? keyChipSymbol : creatorSymbol}
+          tokenInSymbol={
+            sellingKeys ? keyChipSymbol : payingWithEth ? "ETH" : creatorSymbol
+          }
           tokenOutSymbol={sellingKeys ? creatorSymbol : keyChipSymbol}
-          tokenInBalanceLabel={sellingKeys ? keyBalanceLabel : coinBalanceLabel}
+          tokenInBalanceLabel={
+            sellingKeys ? keyBalanceLabel : payingWithEth ? undefined : coinBalanceLabel
+          }
           tokenOutBalanceLabel={sellingKeys ? coinBalanceLabel : keyBalanceLabel}
           tokenInAddress={
-            sellingKeys ? ALFACLUB.friendKey : ROOM_1659_CREATOR_COIN
+            sellingKeys
+              ? ALFACLUB.friendKey
+              : payingWithEth
+                ? NATIVE_TOKEN_ADDRESS
+                : ROOM_1659_CREATOR_COIN
           }
           tokenOutAddress={
             sellingKeys ? ROOM_1659_CREATOR_COIN : ALFACLUB.friendKey
@@ -1218,7 +1300,9 @@ export function AlfaClubLiquidity({
           busy={isSubmitting ? "submit" : switchingChain ? "chain" : null}
           status={lastHash}
           error={hardError}
-          routeSummary="Sudoswap v2"
+          routeSummary={
+            payingWithEth ? "ETH → ZORA → AKITA → Sudoswap" : "Sudoswap v2"
+          }
           gasEstimateLabel={
             executionMode === "canonical" ? "Sponsored" : null
           }
@@ -1233,10 +1317,15 @@ export function AlfaClubLiquidity({
           slippagePct={slippageInput}
           slippageIsAuto={false}
           onOpenTokenSelector={(side) => onOpenTokenSelector?.(side)}
-          onAmountChange={(value) =>
+          onAmountChange={(value) => {
+            if (payingWithEth) {
+              setEthAmountInput(value.replace(/[^0-9.]/g, ""))
+              return
+            }
             setKeyAmountInput(value.replace(/[^\d]/g, ""))
-          }
+          }}
           onQuickPercent={(pct) => {
+            if (payingWithEth) return
             setKeyAmountInput(
               amountUnitsFromBalancePercent(
                 { raw: cappedKeyBalance, decimals: 0 },
@@ -1259,7 +1348,26 @@ export function AlfaClubLiquidity({
           fallbackActive={false}
           swapProviderLabel="Sudoswap"
           quoteAggregatorLabel="Sudoswap"
-          amountEditSide={sellingKeys ? "sell" : "buy"}
+          providerHref="https://sudoswap.xyz"
+          providerHint={
+            <InfoHint
+              label="About Sudoswap"
+              content={
+                <>
+                  <p>
+                    Sudoswap is an NFT AMM that prices ERC-1155 keys against an ERC-20 in a bonding-curve pool.
+                  </p>
+                  <p className="text-zinc-400">
+                    This market settles FriendKey trades on Sudoswap&apos;s Base v2 pair.
+                  </p>
+                </>
+              }
+            />
+          }
+          headerFeeLabel={
+            snapshot ? `${formatUnits(snapshot.fee, 16)}% fee` : null
+          }
+          amountEditSide={sellingKeys || payingWithEth ? "sell" : "buy"}
           primaryActionLabel={
             primaryActionLabelOverride ??
             (!executionAddress
@@ -1270,7 +1378,9 @@ export function AlfaClubLiquidity({
                   ? "Submitting…"
                   : sellingKeys
                     ? `Sell ${keySymbol}`
-                    : `Buy ${keySymbol}`)
+                    : payingWithEth
+                      ? `Buy ${keyAmountInput || "1"} ${keySymbol} with ETH`
+                      : `Buy ${keySymbol}`)
           }
           onPrimaryAction={onPrimaryAction}
           forcePrimaryActionEnabled={forcePrimaryActionEnabled}
@@ -1283,46 +1393,52 @@ export function AlfaClubLiquidity({
         />
 
         <section className="min-w-0 space-y-3 border-t border-white/[0.06] px-0.5 pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.01em] text-zinc-300">
-                <img
-                  src="/brands/sudoswap.png"
-                  alt=""
-                  className="h-3.5 w-3.5 rounded-full object-cover"
-                  loading="lazy"
-                />
-                <span>Sudoswap market</span>
-              </p>
-              <p className="flex max-w-full items-center gap-1.5 truncate text-[11px] text-zinc-600">
-                <img
-                  src="/protocols/alfaclub.svg"
-                  alt=""
-                  className="h-3.5 w-3.5 shrink-0 object-contain"
-                  loading="lazy"
-                />
-                <span className="truncate">Official AlfaClub pool</span>
-              </p>
-            </div>
-            <span className="shrink-0 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium tabular-nums text-zinc-400">
-              {snapshot ? `${formatUnits(snapshot.fee, 16)}% fee` : "—"}
-            </span>
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+            <a
+              href="https://alfaclub.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-w-0 items-center gap-1.5 truncate transition-colors hover:text-zinc-300"
+            >
+              <img
+                src="/protocols/alfaclub.svg"
+                alt=""
+                className="h-3.5 w-3.5 shrink-0 object-contain"
+                loading="lazy"
+              />
+              <span className="truncate">AlfaClub Key</span>
+            </a>
+            <InfoHint
+              label="About AlfaClub"
+              content={
+                <>
+                  <p>
+                    AlfaClub keys are ERC-1155 FriendKeys that gate rooms and settle against the creator coin.
+                  </p>
+                  <p className="text-zinc-400">
+                    Open AlfaClub for rooms, chat, and key safety context.
+                  </p>
+                </>
+              }
+            />
           </div>
 
           {snapshotQuery.isLoading && !snapshot ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3" aria-label="Loading market">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="space-y-1.5">
-                  <div className="h-2.5 w-14 animate-pulse rounded bg-white/[0.05]" />
-                  <div className="h-3.5 w-20 animate-pulse rounded bg-white/[0.07]" />
-                </div>
-              ))}
+            <div className="space-y-2" aria-label="Loading market">
+              <div className="h-3 w-24 animate-pulse rounded bg-white/[0.05]" />
+              <div className="h-8 animate-pulse rounded bg-white/[0.07]" />
+              <div className="h-8 animate-pulse rounded bg-white/[0.07]" />
             </div>
           ) : (
-            <div className="space-y-2.5">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-                <div className="min-w-0">
-                  <dt className="flex items-center gap-1.5 text-zinc-500">
+            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-black/20">
+              <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 border-b border-white/[0.06] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-600">
+                <span>Asset</span>
+                <span className="text-right">Pool</span>
+                <span className="text-right">Virtual</span>
+              </div>
+              <div className="divide-y divide-white/[0.05]">
+                <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-3 py-2.5 text-xs">
+                  <div className="flex min-w-0 items-center gap-1.5 text-zinc-300">
                     <TokenAvatar
                       token={{
                         address: ALFACLUB.friendKey,
@@ -1330,16 +1446,19 @@ export function AlfaClubLiquidity({
                         logoUrl: keyImageUrl ?? undefined,
                       }}
                       symbol={keyChipSymbol}
-                      size={14}
+                      size={16}
                     />
-                    ERC-1155
-                  </dt>
-                  <dd className="mt-1 truncate tabular-nums text-zinc-200">
+                    <span className="truncate">ERC-1155</span>
+                  </div>
+                  <div className="truncate text-right tabular-nums text-zinc-100">
                     {snapshot?.pairKeyBalance.toString() ?? "—"}
-                  </dd>
+                  </div>
+                  <div className="truncate text-right tabular-nums text-zinc-500">
+                    {snapshot?.delta.toString() ?? "—"}
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <dt className="flex items-center gap-1.5 text-zinc-500">
+                <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-3 py-2.5 text-xs">
+                  <div className="flex min-w-0 items-center gap-1.5 text-zinc-300">
                     <TokenAvatar
                       token={{
                         address: ROOM_1659_CREATOR_COIN,
@@ -1347,59 +1466,18 @@ export function AlfaClubLiquidity({
                         logoUrl: logoUrl ?? undefined,
                       }}
                       symbol={creatorSymbol}
-                      size={14}
+                      size={16}
                     />
-                    ERC-20
-                  </dt>
-                  <dd className="mt-1 truncate tabular-nums text-zinc-200">
+                    <span className="truncate">ERC-20</span>
+                  </div>
+                  <div className="truncate text-right tabular-nums text-zinc-100">
                     {formatTokenAmount(snapshot?.pairCreatorCoinBalance, decimals)}
-                  </dd>
-                </div>
-              </dl>
-
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-2.5 py-2.5 text-xs">
-                <div className="col-span-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-600">
-                  Virtual reserves
-                </div>
-                <div className="min-w-0">
-                  <dt className="flex items-center gap-1.5 text-zinc-600">
-                    <span className="opacity-55">
-                      <TokenAvatar
-                        token={{
-                          address: ALFACLUB.friendKey,
-                          symbol: keyChipSymbol,
-                          logoUrl: keyImageUrl ?? undefined,
-                        }}
-                        symbol={keyChipSymbol}
-                        size={14}
-                      />
-                    </span>
-                    ERC-1155
-                  </dt>
-                  <dd className="mt-1 truncate tabular-nums text-zinc-400">
-                    {snapshot?.delta.toString() ?? "—"}
-                  </dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className="flex items-center gap-1.5 text-zinc-600">
-                    <span className="opacity-55">
-                      <TokenAvatar
-                        token={{
-                          address: ROOM_1659_CREATOR_COIN,
-                          symbol: creatorSymbol,
-                          logoUrl: logoUrl ?? undefined,
-                        }}
-                        symbol={creatorSymbol}
-                        size={14}
-                      />
-                    </span>
-                    ERC-20
-                  </dt>
-                  <dd className="mt-1 truncate tabular-nums text-zinc-400">
+                  </div>
+                  <div className="truncate text-right tabular-nums text-zinc-500">
                     {formatTokenAmount(snapshot?.spotPrice, decimals)}
-                  </dd>
+                  </div>
                 </div>
-              </dl>
+              </div>
             </div>
           )}
         </section>

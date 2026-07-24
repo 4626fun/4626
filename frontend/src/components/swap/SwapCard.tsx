@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { ArrowDownUp } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -62,6 +63,12 @@ type SwapCardProps = {
   onPrimaryAction?: () => void
   forcePrimaryActionEnabled?: boolean
   primaryActionHint?: string | null
+  /** Optional link for the Powered-by mark (e.g. Sudoswap). */
+  providerHref?: string
+  /** Optional info affordance next to the Powered-by mark. */
+  providerHint?: ReactNode
+  /** Optional fee chip in the card header (e.g. Sudoswap pool fee). */
+  headerFeeLabel?: string | null
 }
 
 export function SwapCard(props: SwapCardProps) {
@@ -81,22 +88,45 @@ export function SwapCard(props: SwapCardProps) {
   return (
     <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1.5 text-[10px] text-vault-subtext">
-          <span>Powered by</span>
+        <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] text-vault-subtext">
+          <span className="shrink-0">Powered by</span>
           {showUniswapBranding ? (
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
           ) : props.swapProviderLabel === 'Sudoswap' ? (
-            <img
-              src="/brands/sudoswap.png"
-              alt="Sudoswap"
-              className="h-3.5 w-3.5 rounded-full object-cover"
-              loading="lazy"
-            />
+            props.providerHref ? (
+              <a
+                href={props.providerHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 transition-colors hover:text-vault-text"
+              >
+                <img
+                  src="/brands/sudoswap.png"
+                  alt="Sudoswap"
+                  className="h-3.5 w-3.5 rounded-full object-cover"
+                  loading="lazy"
+                />
+                <span className="font-semibold text-vault-text">Sudoswap</span>
+              </a>
+            ) : (
+              <img
+                src="/brands/sudoswap.png"
+                alt="Sudoswap"
+                className="h-3.5 w-3.5 rounded-full object-cover"
+                loading="lazy"
+              />
+            )
           ) : (
             <span className="font-semibold text-vault-text">{props.swapProviderLabel}</span>
           )}
+          {props.providerHint}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {props.headerFeeLabel ? (
+            <span className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium tabular-nums text-zinc-400">
+              {props.headerFeeLabel}
+            </span>
+          ) : null}
           <ChainSelector
             selectedChainId={props.selectedChainId}
             walletChainId={props.walletChainId}

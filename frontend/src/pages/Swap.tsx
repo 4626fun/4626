@@ -15,7 +15,6 @@ import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
-import { LiquidityPanel } from '@/components/swap/LiquidityPanel'
 import { SwapStatusAlerts } from '@/components/swap/SwapStatusAlerts'
 import { useSwapEmbeddedEoa } from '@/lib/swap/useSwapEmbeddedEoa'
 import { useSwapTokenOptions } from '@/lib/swap/useSwapTokenOptions'
@@ -104,6 +103,7 @@ function KeySwapSurface(props: {
   selection: KeySwapSelection
   onSwitch: () => void
   onOpenPicker: (side: 'input' | 'output') => void
+  walletClientOverride?: unknown
 }) {
   const sellingKey = props.selection.side === 'input'
   const key = props.selection.key
@@ -119,6 +119,7 @@ function KeySwapSurface(props: {
       initialKeyLabel={key.label}
       onOpenTokenSelector={props.onOpenPicker}
       onSwitchTokens={props.onSwitch}
+      walletClientOverride={props.walletClientOverride}
       embedded
     />
   )
@@ -185,7 +186,6 @@ export function Swap() {
     slippagePct,
     setSlippagePct,
     activePanel,
-    setActivePanel,
     showAdvanced,
     setShowAdvanced,
     deadlineMinutes,
@@ -1067,34 +1067,15 @@ export function Swap() {
 
   useScreenshotReady(screenshotReady)
   // ─── Render ───────────────────────────────────────────────────────────────
-  const panelSwitcher = (
-    <div className="mb-3 grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5" aria-label="Swap mode">
-      {([['swap', 'Swap'], ['liquidity', 'Liquidity']] as const).map(([panel, label]) => (
-        <button
-          key={panel}
-          type="button"
-          onClick={() => setActivePanel(panel)}
-          className={`min-h-10 rounded-xl px-3 text-sm font-semibold transition ${
-            activePanel === panel
-              ? 'bg-brand-primary text-white shadow-lg shadow-[rgb(var(--brand-primary)/0.28)]'
-              : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-
+  // Liquidity creation UI is intentionally hidden for now — /swap stays trade-only.
   return (
     <>
       <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
       <SwapPageLayout
-        panelWidth={activePanel === 'liquidity' ? 'wide' : 'compact'}
+        panelWidth="compact"
         swapPanel={
           <>
-          {panelSwitcher}
-          {activePanel === 'swap' ? (
+          {
             !connectGate.ready ? (
               <div className="relative">
                 <SwapConnectGate
@@ -1132,6 +1113,7 @@ export function Swap() {
                         selection={keySwapSelection}
                         onSwitch={handleSwitchTokens}
                         onOpenPicker={openTokenSelector}
+                        walletClientOverride={executionWalletClient}
                       />
                     ) : <SwapCard
                       tokenInDisplay={tokenInDisplay}
@@ -1226,20 +1208,7 @@ export function Swap() {
                   </AnimatePresence>
               </div>
             )
-          ) : (
-            <LiquidityPanel
-              tokenInSymbol={tokenInSymbol}
-              tokenOutSymbol={tokenOutSymbol}
-              identityReady={identityReady}
-              activePanel={activePanel}
-              onSetActivePanel={setActivePanel}
-              onOpenSettings={() => setShowAdvanced(true)}
-              canonicalAddress={canonicalAddress}
-              tokenIn={tokenIn}
-              tokenOut={tokenOut}
-              showPanelSwitcher={false}
-            />
-          )}
+          }
           </>
         }
         vaultPanel={null}
@@ -1248,7 +1217,7 @@ export function Swap() {
       />
 
       <SwapStatusAlerts
-        activePanel={activePanel}
+        activePanel="swap"
         needsPrivyCanonicalAuth={needsPrivyCanonicalAuth}
         authBusy={authBusy}
         privyClientStatus={privyClientStatus}

@@ -124,8 +124,22 @@ describe('swapQuoteDetails', () => {
     })
     expect(rate).toBeTruthy()
     expect(rate).not.toMatch(/e[-+]/i)
-    expect(rate).toContain('1 OS =')
-    expect(rate).toContain('ETH')
+    // Tiny out/in rates flip so the quote stays human-scale.
+    expect(rate).toContain('1 ETH =')
+    expect(rate).toContain('OS')
+  })
+
+  it('flips key-market buy quotes to 1 key = X creator coin', () => {
+    const rate = formatSwapExchangeRate({
+      amountIn: '11992858.541181',
+      tokenInSymbol: 'akita',
+      amountOut: '1',
+      tokenOutSymbol: 'AKITA',
+    })
+    expect(rate).toBeTruthy()
+    expect(rate!.startsWith('1 AKITA =')).toBe(true)
+    expect(rate).toContain('akita')
+    expect(rate).not.toMatch(/e[-+]/i)
   })
 
   it('summarizes mixed v3/v4 route protocols', () => {
