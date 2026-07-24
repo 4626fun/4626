@@ -69,8 +69,11 @@ remains disabled.
       and exact B2 mint/OFT Store identity.
 - [ ] Meteora admin `token_badge` is independently verified, then the B2 DLMM
       pool account is verified at finalized commitment with base fee 690 bps,
-      max fee ≤ 690 bps, and `CollectFeeMode.OnlyY`. The persisted readiness
-      record must retain a passing `meteora_token_badge` check.
+      max fee ≤ 690 bps, and `CollectFeeMode.OnlyY`. Protocol LP positions for
+      `SOLANA_B2_PROTOCOL_POSITION_OWNER` must have on-chain `feeOwner` equal to
+      `SOLANA_B2_JACKPOT_FEE_OWNER` (alias `SOLANA_DLMM_FEE_OWNER`). The
+      persisted readiness record must retain a passing `meteora_token_badge`
+      check.
 - [ ] With submit off, one approved live B2 buy emits exactly one authenticated
       `LotteryEntryRecorded` buy-path event.
 - [ ] Finalized ingest is enabled alone and that event appears once in the

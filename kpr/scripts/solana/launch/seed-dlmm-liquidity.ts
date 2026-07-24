@@ -15,11 +15,15 @@
  *   SEED_AMOUNT             - Base token amount in raw units
  *   SEED_PRICE              - UI price for the single bin
  *
+ * Required for mainnet (or when REQUIRE_FEE_OWNER=1):
+ *   FEE_OWNER               - Jackpot / claim fee recipient pubkey
+ *
  * Optional env:
  *   POSITION_OWNER          - Position owner pubkey (default: keeper)
- *   FEE_OWNER               - Fee claim recipient (default: keeper; set to jackpot vault)
+ *   FEE_OWNER               - Fee claim recipient (devnet may default to keeper)
  *   LOCK_RELEASE_POINT      - Lock release timestamp/slot (default: 0 = unlocked)
  *   ROUNDING_UP             - "1" to round price up (default: off)
+ *   ALLOW_DEFAULT_FEE_OWNER - "1" to allow FEE_OWNER defaulting to keeper on mainnet
  */
 
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
@@ -40,12 +44,25 @@ if (!Number.isFinite(seedPrice) || seedPrice <= 0) {
   throw new Error(`SEED_PRICE must be a positive number. Received: ${process.env.SEED_PRICE}`);
 }
 
+function envFlag(name: string): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
 const positionOwner = new PublicKey(process.env.POSITION_OWNER?.trim() || keeper.publicKey.toBase58());
-const feeOwner = new PublicKey(process.env.FEE_OWNER?.trim() || keeper.publicKey.toBase58());
+const feeOwnerRaw = String(process.env.FEE_OWNER ?? '').trim();
+const isMainnet = !rpcUrl.includes('devnet') && !rpcUrl.includes('localhost') && !rpcUrl.includes('127.0.0.1');
+const requireFeeOwner = isMainnet || envFlag('REQUIRE_FEE_OWNER');
+if (!feeOwnerRaw) {
+  if (requireFeeOwner && !envFlag('ALLOW_DEFAULT_FEE_OWNER')) {
+    throw new Error(
+      'FEE_OWNER is required for mainnet / REQUIRE_FEE_OWNER=1 (jackpot claim authority). Set ALLOW_DEFAULT_FEE_OWNER=1 only for intentional keeper-as-feeOwner tests.',
+    );
+  }
+}
+const feeOwner = new PublicKey(feeOwnerRaw || keeper.publicKey.toBase58());
 const lockReleasePoint = new BN(process.env.LOCK_RELEASE_POINT ?? '0');
-const roundingUp = ['1', 'true', 'yes', 'on'].includes(
-  String(process.env.ROUNDING_UP ?? '').trim().toLowerCase(),
-);
+const roundingUp = envFlag('ROUNDING_UP');
 
 function redactRpcUrl(raw: string): string {
   try {

@@ -156,21 +156,42 @@ export async function executeSolanaDlmmFeeClaim(): Promise<DlmmFeeClaimResult> {
         continue;
       }
 
-      const feeOwnerFromPositions = positions
-        .map((position: { positionData?: { feeOwner?: PublicKey }; feeOwner?: () => PublicKey }) => {
-          if (typeof position.feeOwner === 'function') return position.feeOwner();
-          return position.positionData?.feeOwner;
-        })
-        .find((value: PublicKey | undefined): value is PublicKey => Boolean(value));
+      const positionFeeOwners: Array<{ position: PublicKey; feeOwner: PublicKey }> = positions.map(
+        (position: { publicKey: PublicKey; positionData?: { feeOwner?: PublicKey }; feeOwner?: () => PublicKey }) => {
+          const onChain =
+            typeof position.feeOwner === 'function'
+              ? position.feeOwner()
+              : position.positionData?.feeOwner;
+          if (!onChain) {
+            throw new Error(
+              `dlmm_position_fee_owner_missing:pool=${poolAddress.toBase58()},position=${position.publicKey.toBase58()}`,
+            );
+          }
+          return { position: position.publicKey, feeOwner: onChain };
+        },
+      );
 
-      const feeOwner = expectedFeeOwner ?? feeOwnerFromPositions ?? positionOwner;
-      if (expectedFeeOwner && feeOwnerFromPositions && !expectedFeeOwner.equals(feeOwnerFromPositions)) {
-        await alertWarning(WORKFLOW_NAME, 'Position feeOwner differs from SOLANA_DLMM_FEE_OWNER', {
-          expected: expectedFeeOwner.toBase58(),
-          actual: feeOwnerFromPositions.toBase58(),
-          pool: poolAddress.toBase58(),
-        });
+      const uniqueFeeOwners = new Map<string, PublicKey>(
+        positionFeeOwners.map((entry) => [entry.feeOwner.toBase58(), entry.feeOwner]),
+      );
+      if (uniqueFeeOwners.size !== 1) {
+        throw new Error(
+          `dlmm_position_fee_owner_inconsistent:pool=${poolAddress.toBase58()},fee_owners=${[...uniqueFeeOwners.keys()].join(',')}`,
+        );
       }
+      const feeOwnerFromPositions = uniqueFeeOwners.values().next().value;
+      if (!feeOwnerFromPositions) {
+        throw new Error(`dlmm_position_fee_owner_missing:pool=${poolAddress.toBase58()}`);
+      }
+
+      if (expectedFeeOwner && !expectedFeeOwner.equals(feeOwnerFromPositions)) {
+        throw new Error(
+          `dlmm_fee_owner_mismatch:expected=${expectedFeeOwner.toBase58()},actual=${feeOwnerFromPositions.toBase58()},pool=${poolAddress.toBase58()}`,
+        );
+      }
+
+      // Prefer explicit env expectation; otherwise use the verified on-chain feeOwner.
+      const feeOwner: PublicKey = expectedFeeOwner ?? feeOwnerFromPositions;
 
       const feeOwnerAta = getAssociatedTokenAddressSync(
         quoteMint,

@@ -28,28 +28,44 @@ import { hasExactCreatorConfigAmmProgram } from '../../server/_lib/onchain/solan
 export { decodeMeteoraTokenBadge } from '../../server/_lib/onchain/solanaMeteoraTokenBadge.js'
 
 const require = createRequire(import.meta.url)
+
+type DlmmPoolClient = {
+  getFeeInfo: () => {
+    baseFeeRatePercentage: { toNumber?: () => number } | number | string
+    maxFeeRatePercentage: { toNumber?: () => number } | number | string
+  }
+  lbPair?: { parameters?: { collectFeeMode?: number; variableFeeControl?: number } }
+  getPositionsByUserAndLbPair?: (user: PublicKey) => Promise<{
+    userPositions?: Array<{
+      publicKey: PublicKey
+      positionData?: { feeOwner?: PublicKey }
+      feeOwner?: () => PublicKey
+    }>
+  }>
+}
+
+type DlmmClass = {
+  create: (
+    connection: Connection,
+    poolAddress: PublicKey,
+    opt?: { cluster?: string },
+  ) => Promise<DlmmPoolClient>
+}
+
 const dlmmMod = require('@meteora-ag/dlmm') as {
   getTokensMintFromPoolAddress: (
     connection: Connection,
     poolAddress: string,
   ) => Promise<{ tokenXMint: PublicKey; tokenYMint: PublicKey }>
-  default?: {
-    create: (
-      connection: Connection,
-      poolAddress: PublicKey,
-      opt?: { cluster?: string },
-    ) => Promise<{
-      getFeeInfo: () => {
-        baseFeeRatePercentage: { toNumber?: () => number } | number | string
-        maxFeeRatePercentage: { toNumber?: () => number } | number | string
-      }
-      lbPair?: { parameters?: { collectFeeMode?: number; variableFeeControl?: number } }
-    }>
-  }
+  default?: DlmmClass
+  DLMM?: DlmmClass
   CollectFeeMode?: { OnlyY: number; InputOnly: number }
 }
 const { getTokensMintFromPoolAddress } = dlmmMod
-const Dlmm = dlmmMod.default ?? (dlmmMod as unknown as typeof dlmmMod.default)
+const Dlmm: DlmmClass | undefined =
+  dlmmMod.default ?? dlmmMod.DLMM ?? (typeof (dlmmMod as { create?: unknown }).create === 'function'
+    ? (dlmmMod as unknown as DlmmClass)
+    : undefined)
 
 /** Canonical B2 official-market Meteora swap fee (6.9%). */
 const CANONICAL_DLMM_FEE_BPS = 690
@@ -273,6 +289,7 @@ export async function readSolanaB2OnchainPreflight(): Promise<SolanaB2OnchainPre
   if (!poolRaw || !quoteMintRaw) {
     add(checks, 'meteora_pool_mint_alignment', false, !poolRaw ? 'missing_solana_meteora_pool' : 'missing_solana_meteora_pool_quote_mint')
   } else {
+    let mintAlignmentRecorded = false
     try {
       const quoteMint = new PublicKey(quoteMintRaw)
       const poolKey = new PublicKey(poolRaw)
@@ -288,12 +305,14 @@ export async function readSolanaB2OnchainPreflight(): Promise<SolanaB2OnchainPre
       pool = { address: poolKey.toBase58(), tokenXMint: poolMints.tokenXMint.toBase58(), tokenYMint: poolMints.tokenYMint.toBase58() }
       const aligned = new Set([pool.tokenXMint, pool.tokenYMint]).size === 2 && new Set([pool.tokenXMint, pool.tokenYMint]).has(mint.toBase58()) && new Set([pool.tokenXMint, pool.tokenYMint]).has(quoteMint.toBase58())
       add(checks, 'meteora_pool_mint_alignment', aligned, `token_x=${pool.tokenXMint},token_y=${pool.tokenYMint},expected_share=${mint.toBase58()},expected_quote=${quoteMint.toBase58()}`)
+      mintAlignmentRecorded = true
 
       // Canonical trade fee lives on the DLMM pool (not Token-2022 transfer fee).
       if (!Dlmm?.create) {
         add(checks, 'meteora_pool_fee_bps_690', false, 'dlmm_sdk_create_unavailable')
         add(checks, 'meteora_pool_collect_fee_mode_only_y', false, 'dlmm_sdk_create_unavailable')
         add(checks, 'meteora_pool_max_fee_capped', false, 'dlmm_sdk_create_unavailable')
+        add(checks, 'meteora_protocol_position_fee_owner', false, 'dlmm_sdk_create_unavailable')
       } else {
         const cluster = rpc.includes('devnet') ? 'devnet' : 'mainnet-beta'
         const dlmmPool = await Dlmm.create(connection, poolKey, { cluster })
@@ -316,15 +335,82 @@ export async function readSolanaB2OnchainPreflight(): Promise<SolanaB2OnchainPre
         add(
           checks,
           'meteora_pool_collect_fee_mode_only_y',
-          collectFeeMode === COLLECT_FEE_MODE_ONLY_Y,
-          `collect_fee_mode=${collectFeeMode},expected=${COLLECT_FEE_MODE_ONLY_Y}`,
+          Number.isFinite(collectFeeMode) && collectFeeMode === COLLECT_FEE_MODE_ONLY_Y,
+          Number.isFinite(collectFeeMode)
+            ? `collect_fee_mode=${collectFeeMode},expected=${COLLECT_FEE_MODE_ONLY_Y}`
+            : `collect_fee_mode_unreadable,expected=${COLLECT_FEE_MODE_ONLY_Y}`,
         )
+
+        const expectedFeeOwnerRaw =
+          env('SOLANA_B2_JACKPOT_FEE_OWNER') || env('SOLANA_DLMM_FEE_OWNER')
+        const positionOwnerRaw =
+          env('SOLANA_B2_PROTOCOL_POSITION_OWNER') || env('SOLANA_DLMM_POSITION_OWNER')
+        if (!expectedFeeOwnerRaw) {
+          add(
+            checks,
+            'meteora_protocol_position_fee_owner',
+            false,
+            'missing_solana_b2_jackpot_fee_owner',
+          )
+        } else if (!positionOwnerRaw) {
+          add(
+            checks,
+            'meteora_protocol_position_fee_owner',
+            false,
+            'missing_solana_b2_protocol_position_owner',
+          )
+        } else if (typeof dlmmPool.getPositionsByUserAndLbPair !== 'function') {
+          add(
+            checks,
+            'meteora_protocol_position_fee_owner',
+            false,
+            'dlmm_get_positions_unavailable',
+          )
+        } else {
+          const expectedFeeOwner = new PublicKey(expectedFeeOwnerRaw)
+          const positionOwner = new PublicKey(positionOwnerRaw)
+          const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(positionOwner)
+          const positions = userPositions ?? []
+          if (positions.length === 0) {
+            add(
+              checks,
+              'meteora_protocol_position_fee_owner',
+              false,
+              `no_protocol_positions:owner=${positionOwner.toBase58()}`,
+            )
+          } else {
+            const mismatches: string[] = []
+            for (const position of positions) {
+              const onChain =
+                typeof position.feeOwner === 'function'
+                  ? position.feeOwner()
+                  : position.positionData?.feeOwner
+              if (!onChain || !onChain.equals(expectedFeeOwner)) {
+                mismatches.push(
+                  `${position.publicKey.toBase58()}->${onChain?.toBase58() ?? 'missing'}`,
+                )
+              }
+            }
+            add(
+              checks,
+              'meteora_protocol_position_fee_owner',
+              mismatches.length === 0,
+              mismatches.length === 0
+                ? `positions=${positions.length},fee_owner=${expectedFeeOwner.toBase58()}`
+                : `expected=${expectedFeeOwner.toBase58()},mismatches=${mismatches.join(';')}`,
+            )
+          }
+        }
       }
     } catch (error) {
-      add(checks, 'meteora_pool_mint_alignment', false, error instanceof Error ? error.message : String(error))
-      add(checks, 'meteora_pool_fee_bps_690', false, error instanceof Error ? error.message : String(error))
-      add(checks, 'meteora_pool_max_fee_capped', false, error instanceof Error ? error.message : String(error))
-      add(checks, 'meteora_pool_collect_fee_mode_only_y', false, error instanceof Error ? error.message : String(error))
+      const detail = error instanceof Error ? error.message : String(error)
+      if (!mintAlignmentRecorded) {
+        add(checks, 'meteora_pool_mint_alignment', false, detail)
+      }
+      add(checks, 'meteora_pool_fee_bps_690', false, detail)
+      add(checks, 'meteora_pool_max_fee_capped', false, detail)
+      add(checks, 'meteora_pool_collect_fee_mode_only_y', false, detail)
+      add(checks, 'meteora_protocol_position_fee_owner', false, detail)
     }
   }
 

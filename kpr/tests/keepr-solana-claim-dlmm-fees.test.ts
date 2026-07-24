@@ -131,4 +131,10 @@ describe('keepr Solana DLMM fee claim', () => {
     )
     expect(claimAllSwapFeeMock).not.toHaveBeenCalled()
   })
+
+  it('fails closed when SOLANA_DLMM_FEE_OWNER disagrees with on-chain feeOwner', async () => {
+    process.env.SOLANA_DLMM_FEE_OWNER = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+    await expect(executeSolanaDlmmFeeClaim()).rejects.toThrow('dlmm_fee_owner_mismatch')
+    expect(claimAllSwapFeeMock).not.toHaveBeenCalled()
+  })
 })

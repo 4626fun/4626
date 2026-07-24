@@ -24,6 +24,7 @@
  *   METEORA_HAS_ALPHA_VAULT - "1" when pairing with Alpha Vault launch (default: off)
  *   HAS_ALPHA_VAULT         - Alias for METEORA_HAS_ALPHA_VAULT
  *   COLLECT_FEE_MODE        - "only_y" (default) or "input_only"
+ *   ALLOW_NONCANONICAL_COLLECT_FEE_MODE - "1" to allow non-OnlyY collect mode
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -107,7 +108,10 @@ async function assertPoolFeeConfig(poolAddress: PublicKey, expectedFeeBps: numbe
   if (maxFeeBps > expectedFeeBps) {
     throw new Error(`pool_max_fee_bps_exceeds_cap:cap=${expectedFeeBps},actual=${maxFeeBps}`);
   }
-  if (Number.isFinite(collectFeeMode) && collectFeeMode !== expectedCollectMode) {
+  if (!Number.isFinite(collectFeeMode)) {
+    throw new Error(`pool_collect_fee_mode_unreadable:expected=${expectedCollectMode}`);
+  }
+  if (collectFeeMode !== expectedCollectMode) {
     throw new Error(`pool_collect_fee_mode_mismatch:expected=${expectedCollectMode},actual=${collectFeeMode}`);
   }
   if (variableFeeControl !== 0 && maxFeeBps > expectedFeeBps) {
@@ -115,8 +119,17 @@ async function assertPoolFeeConfig(poolAddress: PublicKey, expectedFeeBps: numbe
   }
 }
 
+function assertCanonicalCollectFeeMode(mode: number): void {
+  if (mode !== COLLECT_FEE_MODE_ONLY_Y && !envFlag('ALLOW_NONCANONICAL_COLLECT_FEE_MODE')) {
+    throw new Error(
+      `COLLECT_FEE_MODE must be OnlyY (${COLLECT_FEE_MODE_ONLY_Y}) for canonical B2 pools (got ${mode}). Set ALLOW_NONCANONICAL_COLLECT_FEE_MODE=1 to override.`,
+    );
+  }
+}
+
 assertCanonicalFeeBps(feeBpsNumber);
 const collectFeeMode = resolveCollectFeeMode();
+assertCanonicalCollectFeeMode(collectFeeMode);
 const hasAlphaVault = envFlag('METEORA_HAS_ALPHA_VAULT') || envFlag('HAS_ALPHA_VAULT');
 
 function resolveActivationDelaySeconds(): number {

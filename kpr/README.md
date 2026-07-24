@@ -176,8 +176,8 @@ TypeScript launch helpers for DLMM + Alpha Vault:
 # Create DLMM pool (default FEE_BPS=690, CollectFeeMode=OnlyY)
 npm run solana:create-dlmm-pool
 
-# Seed single-bin liquidity with explicit FEE_OWNER (jackpot claim authority)
-npm run solana:seed-dlmm-liquidity
+# Seed single-bin liquidity (mainnet requires FEE_OWNER=jackpot claim authority)
+FEE_OWNER=<jackpot-pubkey> npm run solana:seed-dlmm-liquidity
 
 # Create Pro Rata Alpha Vault (requires ALPHA_VAULT_* env vars)
 npm run solana:create-alpha-vault
