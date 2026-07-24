@@ -58,7 +58,7 @@ describe('solana share buyback swap mode', () => {
     process.env.SOLANA_FORWARD_SWAP_MODE = 'jupiter'
     process.env.JUPITER_QUOTE_API_URL = 'https://jup.invalid/v6'
     let sawWrapFalse = false
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input)
       if (url.includes('/quote')) {
         return {

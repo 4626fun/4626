@@ -68,7 +68,7 @@ export async function executeWethFeeBuyback(): Promise<WethFeeBuybackResult> {
     resolveWethBuybackRoute();
 
     const write = await writeContract({
-      address: route.gauge,
+      address: route.gauge as `0x${string}`,
       abi: ProcessWethFeesWithRouteABI,
       functionName: 'processWETHFeesWithRoute',
       args: [route.wethAmount, route.router, route.calldata, route.minShareOftOut],

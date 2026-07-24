@@ -11,7 +11,21 @@ import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = 'keepr-solana-claim-dlmm-fees';
 
+function claimWorkerEnabled(): boolean {
+  const raw = String(process.env.SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 export async function handler(): Promise<void> {
+  if (!claimWorkerEnabled()) {
+    console.log(JSON.stringify({
+      workflow: WORKFLOW_NAME,
+      timestamp: new Date().toISOString(),
+      skippedReason: 'action_disabled:claim_dlmm_fees',
+    }));
+    return;
+  }
+
   try {
     const result = await executeSolanaDlmmFeeClaim();
 

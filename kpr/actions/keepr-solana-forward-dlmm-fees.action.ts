@@ -18,7 +18,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
-import { getAddress, isAddress, type Address } from 'viem';
+import { getAddress, isAddress } from 'viem';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
 import { loadDlmmClass } from '../utils/dlmm.js';
@@ -31,6 +31,7 @@ import { GaugeReceiveBridgedFeesABI } from '../kpr-workflows/contracts/abi/Share
 
 const WORKFLOW_NAME = 'keepr-solana-forward-dlmm-fees';
 const Dlmm = loadDlmmClass();
+type EvmAddress = `0x${string}`;
 
 const ERC20_BALANCE_ABI = [
   {
@@ -85,9 +86,9 @@ async function resolveTokenProgram(connection: Connection, mint: PublicKey): Pro
   return TOKEN_PROGRAM_ID;
 }
 
-async function readUnaccountedBridgedFees(hubGauge: Address): Promise<bigint> {
+async function readUnaccountedBridgedFees(hubGauge: EvmAddress): Promise<bigint> {
   const [shareOft, accounted] = await Promise.all([
-    readContract<Address>({
+    readContract<EvmAddress>({
       address: hubGauge,
       abi: GaugeReceiveBridgedFeesABI,
       functionName: 'shareOFT',
@@ -99,7 +100,7 @@ async function readUnaccountedBridgedFees(hubGauge: Address): Promise<bigint> {
     }),
   ]);
   const balance = await readContract<bigint>({
-    address: getAddress(shareOft),
+    address: getAddress(shareOft) as EvmAddress,
     abi: ERC20_BALANCE_ABI,
     functionName: 'balanceOf',
     args: [hubGauge],
@@ -118,7 +119,7 @@ async function maybeReceiveBridgedFeesOnHub(params?: {
   if (!hubGaugeRaw || !isAddress(hubGaugeRaw)) {
     return { called: false, error: 'hub_gauge_unset' };
   }
-  const hubGauge = getAddress(hubGaugeRaw) as Address;
+  const hubGauge = getAddress(hubGaugeRaw) as EvmAddress;
   const waitForCredit = params?.waitForCredit !== false;
   const timeoutMs = Number(process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_TIMEOUT_MS ?? '120000');
   const pollMs = Number(process.env.SOLANA_DLMM_FORWARD_BASE_SWEEP_POLL_MS ?? '5000');
