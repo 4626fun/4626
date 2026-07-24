@@ -36,8 +36,8 @@ importers:
         specifier: ^1.1.15
         version: 1.1.15(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@meteora-ag/dlmm':
-        specifier: ^1.9.3
-        version: 1.9.3(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
+        specifier: ^1.9.13
+        version: 1.9.14(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -337,8 +337,8 @@ packages:
   '@meteora-ag/dlmm@1.5.0':
     resolution: {integrity: sha512-d8DwhSrSSuIPfw6+9LLu2aXylKc7tS6FTnQzZcQYlGhrKIlABn97muasizBAcgMp80AR/bKEa6qtFCoQt4pqwA==}
 
-  '@meteora-ag/dlmm@1.9.3':
-    resolution: {integrity: sha512-Dh8kGY0ls3VQmfAUiKUnJMtCA9KS6yDjzBvyB9T08lWKiP/yYEN2ymVdqvY9fgNrTZWyMb5rfA2GBq4CkaMRXA==}
+  '@meteora-ag/dlmm@1.9.14':
+    resolution: {integrity: sha512-3xJGBaYgkHWSZ7sjfaMYTuCUE9/FGibIwhoNKSaP3iXX3kZck4b3qrtFwDl/1+JaflTeiZQY4zO25e+u2V/9ug==}
 
   '@meteora-ag/dynamic-amm-sdk@1.4.1':
     resolution: {integrity: sha512-BBHcgC4MWcQi5KqkbXaoV8aCcS03d8JQiQ+4rIidSJPgDYzLqoylD9xjQOIMXGr8dM46qawPVoFPNXrm8ZciQA==}
@@ -1969,7 +1969,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@meteora-ag/dlmm@1.9.3(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@meteora-ag/dlmm@1.9.14(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@coral-xyz/anchor': 0.31.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@coral-xyz/borsh': 0.31.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))

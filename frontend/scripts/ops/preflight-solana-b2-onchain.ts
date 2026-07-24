@@ -28,11 +28,40 @@ import { hasExactCreatorConfigAmmProgram } from '../../server/_lib/onchain/solan
 export { decodeMeteoraTokenBadge } from '../../server/_lib/onchain/solanaMeteoraTokenBadge.js'
 
 const require = createRequire(import.meta.url)
-const { getTokensMintFromPoolAddress } = require('@meteora-ag/dlmm') as {
+const dlmmMod = require('@meteora-ag/dlmm') as {
   getTokensMintFromPoolAddress: (
     connection: Connection,
     poolAddress: string,
   ) => Promise<{ tokenXMint: PublicKey; tokenYMint: PublicKey }>
+  default?: {
+    create: (
+      connection: Connection,
+      poolAddress: PublicKey,
+      opt?: { cluster?: string },
+    ) => Promise<{
+      getFeeInfo: () => {
+        baseFeeRatePercentage: { toNumber?: () => number } | number | string
+        maxFeeRatePercentage: { toNumber?: () => number } | number | string
+      }
+      lbPair?: { parameters?: { collectFeeMode?: number; variableFeeControl?: number } }
+    }>
+  }
+  CollectFeeMode?: { OnlyY: number; InputOnly: number }
+}
+const { getTokensMintFromPoolAddress } = dlmmMod
+const Dlmm = dlmmMod.default ?? (dlmmMod as unknown as typeof dlmmMod.default)
+
+/** Canonical B2 official-market Meteora swap fee (6.9%). */
+const CANONICAL_DLMM_FEE_BPS = 690
+const COLLECT_FEE_MODE_ONLY_Y = dlmmMod.CollectFeeMode?.OnlyY ?? 1
+
+function feePercentageToBps(percentage: { toNumber?: () => number } | number | string): number {
+  const value =
+    percentage && typeof (percentage as { toNumber?: () => number }).toNumber === 'function'
+      ? (percentage as { toNumber: () => number }).toNumber()
+      : Number(percentage)
+  if (!Number.isFinite(value)) return Number.NaN
+  return Math.round(value * 100)
 }
 
 const ACCOUNT_SIZES = {
@@ -259,8 +288,43 @@ export async function readSolanaB2OnchainPreflight(): Promise<SolanaB2OnchainPre
       pool = { address: poolKey.toBase58(), tokenXMint: poolMints.tokenXMint.toBase58(), tokenYMint: poolMints.tokenYMint.toBase58() }
       const aligned = new Set([pool.tokenXMint, pool.tokenYMint]).size === 2 && new Set([pool.tokenXMint, pool.tokenYMint]).has(mint.toBase58()) && new Set([pool.tokenXMint, pool.tokenYMint]).has(quoteMint.toBase58())
       add(checks, 'meteora_pool_mint_alignment', aligned, `token_x=${pool.tokenXMint},token_y=${pool.tokenYMint},expected_share=${mint.toBase58()},expected_quote=${quoteMint.toBase58()}`)
+
+      // Canonical trade fee lives on the DLMM pool (not Token-2022 transfer fee).
+      if (!Dlmm?.create) {
+        add(checks, 'meteora_pool_fee_bps_690', false, 'dlmm_sdk_create_unavailable')
+        add(checks, 'meteora_pool_collect_fee_mode_only_y', false, 'dlmm_sdk_create_unavailable')
+        add(checks, 'meteora_pool_max_fee_capped', false, 'dlmm_sdk_create_unavailable')
+      } else {
+        const cluster = rpc.includes('devnet') ? 'devnet' : 'mainnet-beta'
+        const dlmmPool = await Dlmm.create(connection, poolKey, { cluster })
+        const feeInfo = dlmmPool.getFeeInfo()
+        const baseFeeBps = feePercentageToBps(feeInfo.baseFeeRatePercentage)
+        const maxFeeBps = feePercentageToBps(feeInfo.maxFeeRatePercentage)
+        const collectFeeMode = Number(dlmmPool.lbPair?.parameters?.collectFeeMode ?? Number.NaN)
+        add(
+          checks,
+          'meteora_pool_fee_bps_690',
+          baseFeeBps === CANONICAL_DLMM_FEE_BPS,
+          `base_fee_bps=${baseFeeBps},expected=${CANONICAL_DLMM_FEE_BPS}`,
+        )
+        add(
+          checks,
+          'meteora_pool_max_fee_capped',
+          Number.isFinite(maxFeeBps) && maxFeeBps <= CANONICAL_DLMM_FEE_BPS,
+          `max_fee_bps=${maxFeeBps},cap=${CANONICAL_DLMM_FEE_BPS}`,
+        )
+        add(
+          checks,
+          'meteora_pool_collect_fee_mode_only_y',
+          collectFeeMode === COLLECT_FEE_MODE_ONLY_Y,
+          `collect_fee_mode=${collectFeeMode},expected=${COLLECT_FEE_MODE_ONLY_Y}`,
+        )
+      }
     } catch (error) {
       add(checks, 'meteora_pool_mint_alignment', false, error instanceof Error ? error.message : String(error))
+      add(checks, 'meteora_pool_fee_bps_690', false, error instanceof Error ? error.message : String(error))
+      add(checks, 'meteora_pool_max_fee_capped', false, error instanceof Error ? error.message : String(error))
+      add(checks, 'meteora_pool_collect_fee_mode_only_y', false, error instanceof Error ? error.message : String(error))
     }
   }
 

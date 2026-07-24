@@ -147,6 +147,7 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 | Workflow | What | Schedule |
 |----------|------|----------|
 | **keepr-solana-settle-fees** | Harvest TransferFeeConfig fees to the keeper Token-2022 ATA (no Base forward) | 5m |
+| **keepr-solana-claim-dlmm-fees** | Claim Meteora DLMM swap fees into `feeOwner` Token Y / WSOL ATA (B2 jackpot path; opt-in) | 15m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
 
@@ -161,17 +162,22 @@ Cross-chain supply monitoring uses LayerZero ShareOFT with per-token Registry462
 The Solana lottery B2 entry and winner relays are retired until a supported
 Solana-to-Base transport exists; the orchestrator does not register those actions.
 
-The fee-harvest workflow is deliberately harvest-only. It leaves harvested
-tokens in the keeper Token-2022 ATA and does not call `receiveFeeFromSolana`
-or perform any Base-side accounting.
+The TransferFeeConfig harvest workflow is deliberately harvest-only and is the
+wrong path for B2 trade fees (mint transfer fee stays 0). Canonical B2 trade
+fees are the Meteora pool's 690 bps swap fee; claim them with
+`claim_dlmm_fees` after seeding protocol LP with `FEE_OWNER` set
+(`SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED=1`).
 
 ## Solana Launch Scripts
 
 TypeScript launch helpers for DLMM + Alpha Vault:
 
 ```bash
-# Create DLMM pool (requires DLMM_* env vars)
+# Create DLMM pool (default FEE_BPS=690, CollectFeeMode=OnlyY)
 npm run solana:create-dlmm-pool
+
+# Seed single-bin liquidity with explicit FEE_OWNER (jackpot claim authority)
+npm run solana:seed-dlmm-liquidity
 
 # Create Pro Rata Alpha Vault (requires ALPHA_VAULT_* env vars)
 npm run solana:create-alpha-vault

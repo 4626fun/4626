@@ -564,12 +564,14 @@ async function main() {
         tokenMintX,
         tokenMintY,
         new BN(0),
-        new BN(100),
+        new BN(690),
         DLMM.ActivationType.Timestamp,
         false,
         payer.keypair.publicKey,
         new BN(Math.floor(Date.now() / 1000)),
         false,
+        DLMM.ConcreteFunctionType?.LimitOrder ?? 0,
+        DLMM.CollectFeeMode?.OnlyY ?? 1,
         { cluster },
       );
       const sig = await sendConfirmedSolanaTransaction({

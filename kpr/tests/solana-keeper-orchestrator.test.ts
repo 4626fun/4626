@@ -26,6 +26,8 @@ describe('solana keeper orchestrator', () => {
 
   it('normalizes supported action labels', () => {
     expect(normalizeSolanaOrchestratorAction('settle_fees')).toBe('settle_fees')
+    expect(normalizeSolanaOrchestratorAction('claim_dlmm_fees')).toBe('claim_dlmm_fees')
+    expect(normalizeSolanaOrchestratorAction('claim-dlmm-fees')).toBe('claim_dlmm_fees')
     expect(normalizeSolanaOrchestratorAction('price_monitor')).toBe('price_monitor')
     expect(normalizeSolanaOrchestratorAction('graduation')).toBe('graduation')
     expect(normalizeSolanaOrchestratorAction('sync-mapping')).toBe('sync_mapping')
@@ -35,6 +37,22 @@ describe('solana keeper orchestrator', () => {
     // Solana rebalance was retired with the v1.15.0 strategy removal.
     expect(normalizeSolanaOrchestratorAction('rebalance')).toBeNull()
     expect(normalizeSolanaOrchestratorAction('unknown')).toBeNull()
+  })
+
+  it('does not inherit DLMM fee claim enablement from the global execute flag', async () => {
+    process.env.SOLANA_ORCHESTRATOR_EXECUTE = '1'
+    delete process.env.SOLANA_ORCHESTRATOR_CLAIM_DLMM_FEES_ENABLED
+    try {
+      await expect(
+        executeSolanaOrchestratorAction({
+          workflow: 'solana-orchestrator',
+          action: 'claim_dlmm_fees',
+          checkpointKey: 'test',
+        }),
+      ).rejects.toThrow('action_disabled:claim_dlmm_fees')
+    } finally {
+      delete process.env.SOLANA_ORCHESTRATOR_EXECUTE
+    }
   })
 
   it('does not inherit B2 worker enablement from the global execute flag', async () => {
