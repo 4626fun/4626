@@ -441,6 +441,7 @@ contract BatcherPhaseHandler is Test {
         uniswapFactory.setPool(address(new MockUniswapV3PoolForPhase3()));
         MockAjnaPoolFactoryForPhase3 ajnaFactory = new MockAjnaPoolFactoryForPhase3(makeAddr("ajnaPool"));
         vault = new MockVaultStrategyManagerForPhase3(address(this));
+        vault.setAsset(makeAddr("creatorToken"));
         MockCharmStrategyForPhase3 charmStrategy = new MockCharmStrategyForPhase3();
         MockAjnaVaultAuthForPhase3 ajnaAuth = new MockAjnaVaultAuthForPhase3();
         MockAjnaAdapterForPhase3 ajnaStrategy = new MockAjnaAdapterForPhase3();
@@ -659,6 +660,8 @@ contract BatcherPhase12Handler is Test {
         registry = new MockRegistry4626(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
+        store.setCode(VAULT_CODE_ID, bytes("mock-vault"));
+        store.setCode(WRAPPER_CODE_ID, bytes("mock-wrapper"));
         store.setCode(OFT_BOOTSTRAP_CODE_ID, bytes("mock-oft-bootstrap"));
         store.setCode(SHARE_OFT_CODE_ID, bytes("mock-share-oft"));
         create2.configureBootstrap(keccak256("4626:OFTBootstrapRegistry:v1"), OFT_BOOTSTRAP_CODE_ID, bootstrapAddress);
@@ -816,6 +819,8 @@ contract BatcherPhase2Handler is Test {
         gauge = new MockOwnableTransferPermit2();
         cca = new MockOwnableTransferPermit2();
         oracle = new MockOwnableTransferPermit2();
+        vault.setPhase2Wiring(address(gauge), address(cca));
+        gauge.setOracle(address(oracle));
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
         Registry4626 registry = new Registry4626(address(this));

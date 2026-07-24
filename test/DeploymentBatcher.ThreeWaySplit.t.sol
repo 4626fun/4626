@@ -41,6 +41,7 @@ contract MockCreatorTokenDepositBounds {
 contract MockOwnableVaultForPhase3Bounds {
     address public owner;
     address public managementAddress;
+    address public asset;
 
     constructor(address owner_) {
         owner = owner_;
@@ -54,6 +55,10 @@ contract MockOwnableVaultForPhase3Bounds {
     function setManagement(address account) external {
         managementAddress = account;
     }
+
+    function setAsset(address asset_) external {
+        asset = asset_;
+    }
 }
 
 contract DeploymentBatcherThreeWaySplitTest is Test {
@@ -63,10 +68,9 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     address internal protocolTreasury;
     address internal protocolAutomation;
     // Must match `forge inspect DeploymentBatcher storage-layout`.
-    // 2026-07-08 P1: approvedCodeIds@2; bools+vaultRolePolicyManager pack@3;
-    // vaultRolePolicyId@4; vaultAdminModule@5; pendingAuctions@6; hasActive@7; phase1@8.
-    uint256 private constant PHASE1_SPLIT_STATES_SLOT = 8;
-    uint256 private constant PENDING_AUCTIONS_SLOT = 6;
+    // 2026-07-24: `pendingAuctions` is slot 7 and `phase1SplitStates` is slot 9.
+    uint256 private constant PHASE1_SPLIT_STATES_SLOT = 9;
+    uint256 private constant PENDING_AUCTIONS_SLOT = 7;
 
     function setUp() public {
         vm.chainId(8453);
@@ -257,8 +261,10 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     }
 
     function test_deployPhase3Strategies_revertsWhenTotalWeightExceeds10000() public {
+        address creatorToken = makeAddr("creatorToken");
+        vault.setAsset(creatorToken);
         DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
-            creatorToken: makeAddr("creatorToken"),
+            creatorToken: creatorToken,
             owner: address(this),
             vault: address(vault),
             version: "v1",

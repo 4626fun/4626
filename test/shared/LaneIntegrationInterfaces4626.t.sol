@@ -473,9 +473,9 @@ contract LaneIntegrationInterfaces4626Test is Test {
         _assertSelector(CreatorOVaultWrapper.unwrap.selector, IOVaultWrapper4626.unwrap.selector);
         _assertSelector(AgentOVaultWrapper.unwrap.selector, IOVaultWrapper4626.unwrap.selector);
 
-        assertTrue(
-            CreatorOVaultWrapper.propagateCooldownOnTransfer.selector
-                != AgentOVaultWrapper.propagateCooldownOnTransfer.selector
+        _assertSelector(
+            CreatorOVaultWrapper.propagateCooldownOnTransfer.selector,
+            AgentOVaultWrapper.propagateCooldownOnTransfer.selector
         );
     }
 
