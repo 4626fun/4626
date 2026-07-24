@@ -25,6 +25,23 @@ This monorepo is the public face of the 4626 product. Package directories:
 
 Source migration into this repository is staged. Production hosting (Vercel, Railway, Supabase) remains on the existing private working tree until cutover.
 
+## Virtuals ACP (public adapter slice)
+
+Payment-gated Virtuals ACP jobs for counter-trade signals, research, and backtests live under:
+
+- [`frontend/server/agents/eliza/plugins/virtuals/`](frontend/server/agents/eliza/plugins/virtuals/) — payment gate, tool quotas, observe-only defaults, readiness, colocated tests
+- [`frontend/scripts/agent/virtuals-acp-doctor.ts`](frontend/scripts/agent/virtuals-acp-doctor.ts) — redacted readiness doctor
+
+**Offering focus:** paid counter-trade signals on Virtuals ACP (inverse bias), observe-only until funded. Live AlfaClub/Hermit execution is a separate ops lane and is not required to review this slice.
+
+From a full frontend workspace (after dependencies are installed):
+
+```bash
+pnpm -C frontend exec vitest run server/agents/eliza/plugins/virtuals
+```
+
+Env var **names** only for the doctor (never commit values): `VIRTUALS_ACP_ENABLED`, `VIRTUALS_ACP_WALLET_ADDRESS`, `VIRTUALS_ACP_WALLET_ID`, `VIRTUALS_ACP_SIGNER_PRIVATE_KEY`, `VIRTUALS_API_KEY`. Default posture is observe-only (`VIRTUALS_ACP_AUTO_LLM=0`).
+
 ## Sponsors
 
 Solana sponsor market for this open repo ([Tribe.run](https://www.tribe.run)) — not the Base protocol token (`$4626`) and not vault shares.
