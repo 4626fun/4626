@@ -520,7 +520,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         //    Legacy event-only consumer hook (optional, kept for compat with
         //    deployments that wired the router as a passive broadcaster).
         if (address(consumer) != address(0)) {
-            consumer.recordAmoeEntry(buyer, creatorCoin, epoch, entryId);
+            // A legacy observer must not roll back the required manager settlement.
+            try consumer.recordAmoeEntry(buyer, creatorCoin, epoch, entryId) {} catch {}
         }
 
         emit AmoeEntrySettled(entryId, pointsBurnNullifier, pointsBurnedAsUSD, managerEntryId);

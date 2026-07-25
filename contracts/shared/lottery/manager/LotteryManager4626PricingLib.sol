@@ -41,6 +41,29 @@ library LotteryManager4626PricingLib {
     uint256 internal constant MAX_PRICING_AMOUNT = type(uint128).max;
 
     /**
+     * @notice Cap jackpot shares so `p * prize` tracks a fee-proxy EV bound (ODA-496-2).
+     * @dev `maxPrizeUSD1e6 = amountUSD * fairEvFeeBps * 1e6 / (BASIS_POINTS * winChancePPM)`.
+     *      Converted to 18-decimal shares via `priceUSD1e18`. Returns `type(uint256).max`
+     *      when the cap cannot be evaluated (caller should skip the cap).
+     */
+    function fairMaxJackpotShares(
+        uint256 amountUSD1e6,
+        uint256 winChancePPM,
+        uint256 fairEvFeeBps,
+        uint256 priceUSD1e18
+    ) external pure returns (uint256 maxShares) {
+        // Fail closed: missing context must not disable the EV bound (ODA-496-2 / #801).
+        if (amountUSD1e6 == 0 || winChancePPM == 0 || fairEvFeeBps == 0 || priceUSD1e18 == 0) {
+            return 0;
+        }
+        // prizeUSD1e6 = amount * feeBps * 1e6 / (BPS * p)
+        uint256 maxPrizeUSD1e6 =
+            FullMath.mulDiv(amountUSD1e6, fairEvFeeBps * 1_000_000, BASIS_POINTS * winChancePPM);
+        // shares (1e18) = prizeUSD1e18 * 1e18 / priceUSD1e18, prizeUSD1e18 = prizeUSD1e6 * 1e12
+        return FullMath.mulDiv(maxPrizeUSD1e6, 1e30, priceUSD1e18);
+    }
+
+    /**
      * @notice Value `amount` of `tokenIn` in USD (1e6) using the lane oracle.
      * @param registry Registry for oracle/shareOFT lookup
      * @param token Lane token
@@ -48,14 +71,15 @@ library LotteryManager4626PricingLib {
      * @param amount Token amount (native decimals)
      * @param oracleMaxStaleness Max age of oracle timestamp (0 = disabled)
      * @param oracleMaxDeviationBps Max deviation vs last accepted price (0 = disabled)
-     * @param oracleDeviationWindow Apply deviation only while lastTs is this fresh (0 = off)
+     * @param oracleDeviationWindow Base window for deviation band growth (0 = off)
      * @param lastPrice Last accepted price 1e18 (0 if none)
      * @param lastTs Last accepted price timestamp
      * @param usdMultiplierBps Lottery USD multiplier (0 = none)
-     * @dev Deviation is windowed and fail-closed *inside* the window. Outside the
-     *      window (or with no reference), skip deviation so a quiet lane can
-     *      re-bootstrap from a fresh oracle quote (`oracleMaxStaleness` still applies).
-     *      First entry (`lastPrice == 0`) bootstraps the same way.
+     * @dev ODA-496-6: deviation always applies when a reference exists. The allowed
+     *      band widens by one `oracleMaxDeviationBps` step per full
+     *      `oracleDeviationWindow` elapsed (capped at 100%), so quiet lanes can
+     *      recover without a hard re-bootstrap that disables the circuit breaker.
+     *      First entry (`lastPrice == 0`) still bootstraps with no deviation check.
      */
     function calculateTokenUSD(
         address registry,
@@ -103,17 +127,19 @@ library LotteryManager4626PricingLib {
         if (timestamp > block.timestamp) return (0, 0, 0);
         if (oracleMaxStaleness > 0 && block.timestamp - timestamp > oracleMaxStaleness) return (0, 0, 0);
 
-        // ODA-460-3 / 461-3 (+ Codex/Bugbot liveness fix): enforce deviation only while
-        // the last accepted reference is still inside `oracleDeviationWindow`. After the
-        // window elapses, skip deviation so the next successful entry can re-seed
-        // `lastAcceptedPrice*` (avoids permanent lane disable after quiet periods).
+        // ODA-496-6: always enforce deviation against the last reference; widen the
+        // band as the reference ages instead of disabling the check past the window.
         if (oracleMaxDeviationBps > 0 && oracleDeviationWindow > 0 && lastPrice > 0 && lastTs > 0) {
-            if (block.timestamp >= lastTs && block.timestamp - lastTs <= oracleDeviationWindow) {
+            if (block.timestamp >= lastTs) {
+                uint256 elapsed = block.timestamp - lastTs;
+                uint256 windowsElapsed = elapsed / oracleDeviationWindow;
+                uint256 allowedBps = oracleMaxDeviationBps * (windowsElapsed + 1);
+                if (allowedBps > BASIS_POINTS) allowedBps = BASIS_POINTS;
                 // forge-lint: disable-next-line(unsafe-typecast)
                 uint256 currentPrice = uint256(priceUSD);
                 uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
                 uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
-                if (deviationBps > oracleMaxDeviationBps) return (0, 0, 0);
+                if (deviationBps > allowedBps) return (0, 0, 0);
             }
         }
 
