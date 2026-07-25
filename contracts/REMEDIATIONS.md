@@ -14,6 +14,19 @@ hardenings) for a v1.20.0 greenfield candidate review.
 
 Historical July 22 pin (`423e0e3`) and July 23 remediated pin (`413f060`) remain immutable.
 
+## Closed at private `0e9474d` (synced into this pin)
+
+- **ODA-495-M02** (`Registry4626.setAuthorizedFactory`): the factory codehash pin is now
+  enforced only when granting (`_authorized == true`). Previously it ran on revoke too, so a
+  factory whose live bytecode had diverged from its pin could not be de-authorized — the pin
+  blocked its own revocation. Granting remains exactly as gated as before.
+- **ODA-480-[3]-parity** (`AgentOVaultCoreModule.deposit`): *not present in this pin* — the
+  agent lane is out of scope for the greenfield candidate. Recorded for traceability: the
+  agent lane's measured-transfer `deposit()` override never wrote `lastDepositBlock`, leaving
+  the withdraw cooldown entirely unarmed on that path. It now mirrors
+  `CreatorOVaultCoreModule.deposit()`: stamp on self-deposit and first-time receivers, never
+  refresh an existing holder targeted by a third-party `deposit(assets, victim)`.
+
 ## Closed at private `500bab3e8` (synced into this pin)
 
 ODA job 461 Low/Info lottery hardenings (partial; see private

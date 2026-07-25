@@ -241,7 +241,10 @@ contract Registry4626 is IRegistry4626, Ownable {
      */
     function setAuthorizedFactory(address _factory, bool _authorized) external onlyOwner {
         if (_factory == address(0)) revert ZeroAddress();
-        _requireFactoryCodehash(_factory);
+        // ODA-495-M02: pin-check only when granting. A factory whose live bytecode has
+        // diverged from its pin is exactly the one that must stay revocable, so enforcing
+        // the check on de-authorization would block its own removal.
+        if (_authorized) _requireFactoryCodehash(_factory);
         authorizedFactories[_factory] = _authorized;
         emit FactoryAuthorized(_factory, _authorized);
     }
