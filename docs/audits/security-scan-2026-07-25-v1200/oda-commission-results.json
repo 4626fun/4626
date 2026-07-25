@@ -1,0 +1,85 @@
+{
+  "commissionedAt": "2026-07-25T05:49:59Z",
+  "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "amountUsdcEach": 1,
+  "spendUsdc": 5.0,
+  "privateRepo": "wenakita/4626",
+  "privateBranch": "audit/oda-v1200-greenfield-candidate",
+  "privateSha": "a16096d1e6d5a849dd35a2295eefaaf9ae3507a2",
+  "publicRepo": "4626fun/4626",
+  "publicBranch": "audit/oda-v1200-greenfield-candidate",
+  "publicSha": "ef1ca595340b02680c3b17f0011b27bece24b914",
+  "publicPinUrl": "https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts",
+  "context": "v1.20.0 no-legacy greenfield candidate delta. Prior full ODA 2026-07-22@423e0e3; P0 remediations in #757 / 413f060.",
+  "jobs": [
+    {
+      "id": "batcher",
+      "title": "DeploymentBatcher",
+      "ok": true,
+      "jobId": 494,
+      "jobUrl": "https://onedollaraudit.com/audit/494",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/494",
+      "priorJobs": [
+        464
+      ],
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you."
+    },
+    {
+      "id": "registry",
+      "title": "Registry4626",
+      "ok": true,
+      "jobId": 495,
+      "jobUrl": "https://onedollaraudit.com/audit/495",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/495",
+      "priorJobs": [
+        465
+      ],
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you."
+    },
+    {
+      "id": "lottery",
+      "title": "Lottery stack",
+      "ok": true,
+      "jobId": 496,
+      "jobUrl": "https://onedollaraudit.com/audit/496",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/496",
+      "priorJobs": [
+        461
+      ],
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you."
+    },
+    {
+      "id": "vault",
+      "title": "CreatorOVault + CoreModule",
+      "ok": true,
+      "jobId": 497,
+      "jobUrl": "https://onedollaraudit.com/audit/497",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/497",
+      "priorJobs": [
+        462,
+        480
+      ],
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you."
+    },
+    {
+      "id": "shareoft",
+      "title": "CreatorShareOFT + Wrapper",
+      "ok": true,
+      "jobId": 498,
+      "jobUrl": "https://onedollaraudit.com/audit/498",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/498",
+      "priorJobs": [
+        463,
+        481
+      ],
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you."
+    }
+  ],
+  "note": "Do not re-pay to re-check \u2014 poll statusUrl. No greenfield broadcast in this step.",
+  "remediationNote": "ODA-494-H01/ODA-495-H01 closed at private a16096d1e; public pin synced to ef1ca595340b02680c3b17f0011b27bece24b914. No new ODA jobs."
+}

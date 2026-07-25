@@ -179,12 +179,10 @@ interface IRegistry4626 {
 
     /**
      * @notice Set the canonical smart wallet for a creator
-     * @dev This is the creator's ERC-4337 smart wallet (e.g., Coinbase Smart Wallet).
-     *      It serves as the unified on-chain identity:
-     *      - ERC-8004 agent wallet (on-chain agent registration)
-     *      - ERC-4337 account (UserOp sender, gas sponsorship)
-     *      - Vault owner and asset holder
-     *      - Lottery prize recipient
+     * @dev Unified on-chain identity (ERC-4337 / ERC-8004 / vault owner / lottery recipient).
+     *      Auth: registry owner may set/override; otherwise only the token creator may set,
+     *      and only as a self-bind (`msg.sender == creator == _wallet`). Replacing a different
+     *      non-zero binding requires live rebind enabled and owner (one-shot latch).
      * @param _token Lane token address
      * @param _wallet Canonical smart wallet address
      */

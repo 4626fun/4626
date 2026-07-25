@@ -301,7 +301,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.deployPhase3Strategies(params, codeIds);
     }
 
-    function test_phase1SaltOverrideEntrypoints_acceptOverrideInput() public {
+    function test_phase1SaltOverride_rejectsFreeFormSquat() public {
         DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
             creatorToken: makeAddr("creatorToken"),
             owner: address(this),
@@ -322,30 +322,68 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             oftBootstrap: bytes32(uint256(7))
         });
 
-        bytes32 saltOverride = keccak256("custom-share-oft-salt");
-        bytes4 disabledSelector = bytes4(keccak256("SaltOverrideDisabled()"));
+        // ODA-494-H01: free-form CREATE2 salt must not squat another derived address.
+        bytes32 squatSalt = keccak256("custom-share-oft-salt");
+        vm.expectRevert(DeploymentBatcherPhase1Module.InvalidShareOftSaltOverride.selector);
+        batcher.deployPhase1CoreWithSalt(params, codeIds, squatSalt);
 
-        try batcher.deployPhase1CoreWithSalt(params, codeIds, saltOverride) {
-            // no-op
-        } catch (bytes memory err) {
+        vm.expectRevert(DeploymentBatcherPhase1Module.InvalidShareOftSaltOverride.selector);
+        batcher.finalizePhase1WithSalt(params, codeIds, squatSalt);
+    }
+
+    function test_phase1SaltOverride_matchingDerivedSaltDoesNotHitInvalidOverride() public {
+        DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
+            creatorToken: makeAddr("creatorToken"),
+            owner: address(this),
+            vaultName: "Creator OVault",
+            vaultSymbol: "ovCR8R",
+            shareName: "Creator Share",
+            shareSymbol: "sCR8R",
+            version: "v1",
+            vaultKind: DeploymentBatcher.VaultKind.Creator
+        });
+        DeploymentBatcher.CodeIds memory codeIds = DeploymentBatcher.CodeIds({
+            vault: bytes32(uint256(1)),
+            wrapper: bytes32(uint256(2)),
+            shareOFT: bytes32(uint256(3)),
+            gauge: bytes32(uint256(4)),
+            cca: bytes32(uint256(5)),
+            oracle: bytes32(uint256(6)),
+            oftBootstrap: bytes32(uint256(7))
+        });
+
+        DeploymentBatcherUtilsHelper utils = new DeploymentBatcherUtilsHelper();
+        string memory shareSymbolLower = utils.toLower(params.shareSymbol);
+        bytes32 derived =
+            utils.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version);
+
+        // Matching confirmation (or zero) must not revert InvalidShareOftSaltOverride;
+        // later deploy steps may still fail without real bytecode in this fixture.
+        try batcher.deployPhase1CoreWithSalt(params, codeIds, derived) {}
+        catch (bytes memory err) {
             if (err.length >= 4) {
                 bytes4 sel;
                 assembly {
                     sel := mload(add(err, 32))
                 }
-                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for deployPhase1CoreWithSalt");
+                assertTrue(
+                    sel != DeploymentBatcherPhase1Module.InvalidShareOftSaltOverride.selector,
+                    "matching derived salt rejected as invalid override"
+                );
             }
         }
 
-        try batcher.finalizePhase1WithSalt(params, codeIds, saltOverride) {
-            // no-op
-        } catch (bytes memory err) {
+        try batcher.deployPhase1CoreWithSalt(params, codeIds, bytes32(0)) {}
+        catch (bytes memory err) {
             if (err.length >= 4) {
                 bytes4 sel;
                 assembly {
                     sel := mload(add(err, 32))
                 }
-                assertTrue(sel != disabledSelector, "salt override unexpectedly disabled for finalizePhase1WithSalt");
+                assertTrue(
+                    sel != DeploymentBatcherPhase1Module.InvalidShareOftSaltOverride.selector,
+                    "zero override rejected as invalid override"
+                );
             }
         }
     }
