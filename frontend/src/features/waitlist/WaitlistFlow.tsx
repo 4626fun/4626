@@ -26,7 +26,11 @@ import { cn } from '@/lib/shared/utils'
 import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { readWaitlistAlfaClubReturnPath } from '@/lib/auth/waitlistEntry'
+import {
+  isWaitlistStartAuthSearchParam,
+  readWaitlistAlfaClubReturnPath,
+  WAITLIST_START_AUTH_QUERY_KEY,
+} from '@/lib/auth/waitlistEntry'
 import { getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
@@ -648,11 +652,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   // Intentional entry from the marketing "Join waitlist" CTA (`/waitlist?join=1`).
   // Used only to auto-focus the inline email field. The email/OTP entry renders
   // inside the card, so there is no modal to auto-open (preserves UX-002: a
-  // passive arrival just shows the card).
+  // passive arrival just shows the card). Legacy `?start=1` is treated as the
+  // same intentional CTA for already-shared marketing links.
   const joinIntent = useMemo(() => {
     if (typeof window === 'undefined') return false
     try {
-      return new URLSearchParams(window.location.search).get('join') === '1'
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('join') === '1') return true
+      return isWaitlistStartAuthSearchParam(params.get(WAITLIST_START_AUTH_QUERY_KEY))
     } catch {
       return false
     }
@@ -883,6 +890,23 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     if (!joinIntent || !privyReadyLatched || joinedSessionAddress || step !== 'email') return
     emailInputRef.current?.focus()
   }, [joinIntent, privyReadyLatched, joinedSessionAddress, step])
+
+  // Drop the one-shot CTA query after latching intent so the address bar stays `/waitlist`.
+  useEffect(() => {
+    if (!joinIntent || typeof window === 'undefined') return
+    try {
+      const url = new URL(window.location.href)
+      const hadJoin = url.searchParams.get('join') === '1'
+      const hadStart = isWaitlistStartAuthSearchParam(url.searchParams.get(WAITLIST_START_AUTH_QUERY_KEY))
+      if (!hadJoin && !hadStart) return
+      url.searchParams.delete('join')
+      url.searchParams.delete(WAITLIST_START_AUTH_QUERY_KEY)
+      const next = `${url.pathname}${url.search}${url.hash}`
+      navigate(next, { replace: true })
+    } catch {
+      // ignore
+    }
+  }, [joinIntent, navigate])
 
   // Focus the code field as soon as we advance to the OTP step.
   useEffect(() => {
