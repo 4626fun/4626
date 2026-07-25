@@ -31,6 +31,8 @@
   let lastGasWei = 0n
   /** MetaMask atomic batches — keep ≤20 so ~96 sells ≈ 5 confirms. */
   const ATOMIC_CHUNK = 20
+  const ATOMIC_STATUS_TIMEOUT_MS = 90_000
+  const ATOMIC_STATUS_POLL_MS = 1_000
 
   const $ = (id) => document.getElementById(id)
 
@@ -377,6 +379,56 @@
     return code === 4001 || /user rejected|denied|rejected the request/i.test(msg)
   }
 
+  function isDefinitiveBatchUnsupported(err) {
+    const msg = ((err && err.message) || String(err)).toLowerCase()
+    const code = Number(err && err.code)
+    return (
+      code === -32601 ||
+      code === -32602 ||
+      code === 4200 ||
+      /method not found|unsupported method|wallet_sendcalls.+not supported|invalid params/i.test(msg)
+    )
+  }
+
+  function callBundleId(result) {
+    if (typeof result === 'string' && result) return result
+    if (result && typeof result === 'object') {
+      if (typeof result.id === 'string' && result.id) return result.id
+      if (typeof result.callBundleId === 'string' && result.callBundleId) {
+        return result.callBundleId
+      }
+    }
+    throw new Error('wallet_sendCalls no devolvió un id de lote.')
+  }
+
+  async function waitForAtomicCompletion(provider, callsId) {
+    const deadline = Date.now() + ATOMIC_STATUS_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      const result = await provider.request({
+        method: 'wallet_getCallsStatus',
+        params: [callsId],
+      })
+      const numericStatus = Number(result && result.status)
+      if (Number.isFinite(numericStatus)) {
+        if (numericStatus >= 200 && numericStatus < 300) return result
+        if (numericStatus >= 300) {
+          throw new Error(`wallet_sendCalls falló con estado ${numericStatus}.`)
+        }
+      }
+      const textStatus = String((result && result.status) || '').toUpperCase()
+      if (textStatus === 'CONFIRMED' || textStatus === 'COMPLETED' || textStatus === 'SUCCESS') {
+        return result
+      }
+      if (textStatus === 'FAILED' || textStatus === 'ERROR') {
+        throw new Error(`wallet_sendCalls falló con estado ${textStatus}.`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, ATOMIC_STATUS_POLL_MS))
+    }
+    throw new Error(
+      'El lote sigue pendiente en la cartera. No se volverá a enviar para evitar ventas duplicadas.',
+    )
+  }
+
   /**
    * MetaMask on Base supports atomic EIP-5792 batches via EIP-7702.
    * Check wallet_getCapabilities before calling wallet_sendCalls.
@@ -400,14 +452,14 @@
     }
   }
 
-  async function sendAtomicChunk(provider, chunk, from, label) {
+  async function sendAtomicChunk(provider, chunk, from) {
     const calls = chunk.map((p) => ({
       to: FT,
       value: '0x0',
       data: callDataSell(p.subject, p.sellable),
     }))
     // MetaMask docs: only atomic batches are supported on Base.
-    return provider.request({
+    const result = await provider.request({
       method: 'wallet_sendCalls',
       params: [
         {
@@ -419,6 +471,7 @@
         },
       ],
     })
+    return callBundleId(result)
   }
 
   /**
@@ -453,10 +506,9 @@
     throw lastErr || new Error('eth_sendTransaction ha fallado')
   }
 
-  async function sellSequential(provider, rows, lines) {
+  async function sellSequential(provider, rows, lines, from) {
     let ok = 0
     let fail = 0
-    const from = txFrom()
     for (let i = 0; i < rows.length; i++) {
       const p = rows[i]
       setStatus(`Vendiendo ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
@@ -478,8 +530,7 @@
     return { ok, fail }
   }
 
-  async function sellAtomicBatches(provider, rows, lines) {
-    const from = txFrom()
+  async function sellAtomicBatches(provider, rows, lines, from) {
     const totalChunks = Math.ceil(rows.length / ATOMIC_CHUNK)
     let submitted = 0
     for (let i = 0; i < rows.length; i += ATOMIC_CHUNK) {
@@ -490,29 +541,32 @@
         `MetaMask lote atómico ${label}: ${chunk.length} ventas (confirma una vez)…`,
         'info',
       )
+      let callsId
       try {
-        const result = await sendAtomicChunk(provider, chunk, from, label)
-        submitted += chunk.length
-        lines.push(
-          `lote ${label} ok (${chunk.length}): ` +
-            (typeof result === 'string' ? result : JSON.stringify(result)),
-        )
-        setLog(lines)
+        callsId = await sendAtomicChunk(provider, chunk, from)
       } catch (err) {
         if (isUserReject(err)) {
           lines.push('Parado: has rechazado el lote en MetaMask.')
           setLog(lines)
           return { submitted, aborted: true, err }
         }
-        // Fall through to sequential for the remainder
-        lines.push(
-          `Lote ${label} falló (${(err && err.code) || ''} ${(err && err.message) || err}). Paso a una tx por sujeto.`,
-        )
+        if (!isDefinitiveBatchUnsupported(err)) {
+          lines.push(
+            `Lote ${label}: respuesta ambigua de la cartera; no se reenvía para evitar ventas duplicadas.`,
+          )
+          setLog(lines)
+          throw err
+        }
+        lines.push(`Lote ${label} no admitido. Paso a una tx por sujeto.`)
         setLog(lines)
         const remaining = rows.slice(i)
-        const { ok, fail } = await sellSequential(provider, remaining, lines)
+        const { ok, fail } = await sellSequential(provider, remaining, lines, from)
         return { submitted: submitted + ok, fail, aborted: false, err }
       }
+      await waitForAtomicCompletion(provider, callsId)
+      submitted += chunk.length
+      lines.push(`lote ${label} confirmado (${chunk.length}): ${callsId}`)
+      setLog(lines)
     }
     return { submitted, fail: 0, aborted: false }
   }
@@ -521,6 +575,8 @@
     if (!account || busy) return
     const provider = getEthereum()
     if (!provider) return
+    const from = txFrom()
+    if (!from) return
 
     const sellable = positions.filter((p) => p.sellable > 0n)
     if (!sellable.length) {
@@ -528,7 +584,7 @@
       return
     }
 
-    const gasWei = await getGasWei(account)
+    const gasWei = await getGasWei(from)
     if (gasWei < MIN_GAS_WEI) {
       setStatus('Hace falta ~0,001 ETH en Base para el gas antes de retirar.', 'warn')
       $('gasHint').hidden = false
@@ -542,7 +598,6 @@
 
     try {
       await ensureBase(provider)
-      const from = txFrom()
       const canBatch = await walletSupportsAtomicBatch(provider, from)
       const clicks = Math.ceil(sellable.length / ATOMIC_CHUNK)
 
@@ -555,7 +610,7 @@
           `Modo: wallet_sendCalls atómico (MetaMask/EIP-7702), lotes de ${ATOMIC_CHUNK} → ~${clicks} clicks.`,
         )
         setLog(lines)
-        const result = await sellAtomicBatches(provider, sellable, lines)
+        const result = await sellAtomicBatches(provider, sellable, lines, from)
         if (result.aborted) {
           setStatus(
             `Parado tras ${result.submitted} enviadas. Volviendo a escanear…`,
@@ -578,7 +633,7 @@
           'Modo: una tx por sujeto (wallet_getCapabilities no reporta atomic en Base). Usa MetaMask en Base para 1–5 clicks.',
         )
         setLog(lines)
-        const { ok, fail } = await sellSequential(provider, sellable, lines)
+        const { ok, fail } = await sellSequential(provider, sellable, lines, from)
         setStatus(
           `Listo: ${ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
           fail ? 'warn' : 'ok',

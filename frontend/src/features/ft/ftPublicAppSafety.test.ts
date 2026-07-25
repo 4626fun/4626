@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 type Provider = {
   request: (args: {
     method: string
-    params: Array<Record<string, string>>
-  }) => Promise<string>
+    params?: unknown[]
+  }) => Promise<unknown>
 }
 
 type SellRow = {
@@ -20,7 +20,14 @@ type FtTestHooks = {
     provider: Provider,
     rows: SellRow[],
     lines: string[],
+    from: string,
   ) => Promise<{ ok: number; fail: number }>
+  sellAtomicBatches: (
+    provider: Provider,
+    rows: SellRow[],
+    lines: string[],
+    from: string,
+  ) => Promise<{ submitted: number; fail?: number; aborted: boolean }>
   setAccountFrom: (from: string) => void
 }
 
@@ -31,7 +38,7 @@ function loadFtTestHooks(): FtTestHooks {
   )
   const instrumented = source.replace(
     /\n\}\)\(\)\s*$/,
-    '\n  window.__ftTestHooks = { sendOneSell, sellSequential, setAccountFrom: (value) => { accountFrom = value } }\n})()\n',
+    '\n  window.__ftTestHooks = { sendOneSell, sellSequential, sellAtomicBatches, setAccountFrom: (value) => { accountFrom = value } }\n})()\n',
   )
   const elements = new Map<
     string,
@@ -100,7 +107,7 @@ describe('Friend.tech public withdrawal safety', () => {
     })
     expect(request).toHaveBeenCalledTimes(3)
     for (const [{ params }] of request.mock.calls) {
-      expect(params[0].from).toBe(ACCOUNT_A)
+      expect((params as Array<Record<string, string>>)[0]?.from).toBe(ACCOUNT_A)
     }
   })
 
@@ -109,15 +116,94 @@ describe('Friend.tech public withdrawal safety', () => {
     setAccountFrom(ACCOUNT_A)
     const sent: Array<Record<string, string>> = []
     const request = vi.fn(async ({ params }) => {
-      sent.push(params[0])
+      sent.push(params[0] as Record<string, string>)
       if (sent.length === 1) setAccountFrom(ACCOUNT_B)
       return `0x${sent.length}`
     })
 
-    await expect(sellSequential({ request }, ROWS, [])).resolves.toEqual({
+    await expect(sellSequential({ request }, ROWS, [], ACCOUNT_A)).resolves.toEqual({
       ok: 2,
       fail: 0,
     })
     expect(sent.map((tx) => tx.from)).toEqual([ACCOUNT_A, ACCOUNT_A])
+  })
+
+  it('does not replay an ambiguously accepted atomic batch', async () => {
+    const { sellAtomicBatches } = loadFtTestHooks()
+    const error = { code: -32603, message: 'Internal JSON-RPC error after submission' }
+    const request = vi.fn(async ({ method }) => {
+      if (method === 'wallet_sendCalls') throw error
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    await expect(
+      sellAtomicBatches({ request }, ROWS, [], ACCOUNT_A),
+    ).rejects.toBe(error)
+    expect(request.mock.calls.map(([args]) => args.method)).toEqual(['wallet_sendCalls'])
+  })
+
+  it('falls back only after a definitive unsupported error and keeps the sender', async () => {
+    const { sellAtomicBatches, setAccountFrom } = loadFtTestHooks()
+    const sent: Array<Record<string, string>> = []
+    const request = vi.fn(async ({ method, params }) => {
+      if (method === 'wallet_sendCalls') {
+        setAccountFrom(ACCOUNT_B)
+        throw { code: -32601, message: 'Method not found' }
+      }
+      if (method === 'eth_sendTransaction') {
+        const tx = (params as Array<Record<string, string>>)[0]
+        if (!tx) throw new Error('Missing transaction payload')
+        sent.push(tx)
+        return `0x${sent.length}`
+      }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    await expect(
+      sellAtomicBatches({ request }, ROWS, [], ACCOUNT_A),
+    ).resolves.toMatchObject({
+      submitted: 2,
+      fail: 0,
+      aborted: false,
+    })
+    expect(sent.map((tx) => tx.from)).toEqual([ACCOUNT_A, ACCOUNT_A])
+  })
+
+  it('waits for atomic confirmation before counting the batch', async () => {
+    const { sellAtomicBatches } = loadFtTestHooks()
+    const request = vi.fn(async ({ method }) => {
+      if (method === 'wallet_sendCalls') return { id: 'bundle-1' }
+      if (method === 'wallet_getCallsStatus') return { status: 200 }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    await expect(
+      sellAtomicBatches({ request }, ROWS, [], ACCOUNT_A),
+    ).resolves.toEqual({
+      submitted: 2,
+      fail: 0,
+      aborted: false,
+    })
+    expect(request.mock.calls.map(([args]) => args.method)).toEqual([
+      'wallet_sendCalls',
+      'wallet_getCallsStatus',
+    ])
+  })
+
+  it('does not replay a terminally failed atomic batch', async () => {
+    const { sellAtomicBatches } = loadFtTestHooks()
+    const request = vi.fn(async ({ method }) => {
+      if (method === 'wallet_sendCalls') return { callBundleId: 'bundle-1' }
+      if (method === 'wallet_getCallsStatus') return { status: 500 }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    await expect(
+      sellAtomicBatches({ request }, ROWS, [], ACCOUNT_A),
+    ).rejects.toThrow('wallet_sendCalls falló con estado 500')
+    expect(request.mock.calls.map(([args]) => args.method)).toEqual([
+      'wallet_sendCalls',
+      'wallet_getCallsStatus',
+    ])
   })
 })
