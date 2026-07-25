@@ -780,10 +780,9 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         if (price <= 0) return (false, 0);
         int256 cap = maxAcceptablePrice;
         if (cap <= 0) return (false, 0);
-        if (localRef > 0) {
+        if (localRef > 0 && localRef <= cap / 10) {
             // Relative outlier guard when a fresh local anchor exists.
-            int256 relCap = localRef * 10;
-            if (relCap > 0 && relCap < cap) cap = relCap;
+            cap = localRef * 10;
         }
         capped = price > cap ? cap : price;
         return (true, capped);

@@ -14,8 +14,14 @@ import {
 import {IAmoePlonkVerifier} from "@4626/shared/lottery/zk/IAmoePlonkVerifier.sol";
 
 contract Oda461MockOracle {
+    int256 internal immutable price;
+
+    constructor(int256 price_) {
+        price = price_;
+    }
+
     function getAssetPrice() external view returns (int256, uint256) {
-        return (1e18, block.timestamp);
+        return (price, block.timestamp);
     }
 }
 
@@ -86,6 +92,12 @@ contract Oda461MockConsumer is ILotteryAmoeConsumer {
     function recordAmoeEntry(address, address, uint64, uint256) external {}
 }
 
+contract Oda461RevertingConsumer is ILotteryAmoeConsumer {
+    function recordAmoeEntry(address, address, uint64, uint256) external pure {
+        revert("legacy consumer unavailable");
+    }
+}
+
 contract ODA461LowInfoRemediationsTest is Test {
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
@@ -147,6 +159,19 @@ contract ODA461LowInfoRemediationsTest is Test {
         assertEq(vrfConsumer.twapPeriod(), 1800);
     }
 
+    /// @notice ODA-461-7: a pathological local reading must be capped without overflowing.
+    function test_L7_extremeLocalPrice_isCappedBeforeRelativeBound() public {
+        Oda461MockOracle oracle = new Oda461MockOracle(type(int256).max);
+        vm.prank(owner);
+        vrfConsumer.setPriceOracle(address(oracle));
+
+        vrfConsumer.updateLocalPrice();
+        (int256 aggregatedPrice, uint256 numChains) = vrfConsumer.getAggregatedAssetPrice();
+
+        assertEq(aggregatedPrice, vrfConsumer.maxAcceptablePrice());
+        assertEq(numChains, 1);
+    }
+
     /// @notice ODA-461-12: ownership is two-step.
     function test_L12_amoeOwner_twoStep() public {
         vm.prank(owner);
@@ -187,6 +212,42 @@ contract ODA461LowInfoRemediationsTest is Test {
         vm.prank(owner);
         router.executeConsumerUpdate();
         assertEq(address(router.consumer()), address(second));
+    }
+
+    /// @notice The optional legacy consumer must not roll back required manager settlement.
+    function test_Amoe_revertingOptionalConsumer_doesNotBlockSettlement() public {
+        bytes32 allowRoot = bytes32(uint256(0x1111));
+        bytes32 ledgerRoot = bytes32(uint256(0x2222));
+        bytes32 nullifier = keccak256("consumer-failure-nullifier");
+        uint64 epoch = 8;
+
+        vm.startPrank(owner);
+        router.setPointsLedgerPublisher(address(0xCC));
+        router.setConsumer(address(new Oda461RevertingConsumer()));
+        vm.stopPrank();
+
+        vm.prank(address(0xBB));
+        router.setAllowlistRoot(epoch, allowRoot);
+        vm.prank(address(0xCC));
+        router.setPointsLedgerRoot(epoch, ledgerRoot);
+        vm.warp(block.timestamp + router.ROOT_PUBLICATION_TIMELOCK());
+
+        uint256[24] memory proof;
+        uint256[9] memory inp;
+        inp[0] = uint256(keccak256("wallet"));
+        inp[1] = uint256(uint160(coin));
+        inp[2] = uint256(keccak256("nonce"));
+        inp[3] = uint256(epoch);
+        inp[4] = uint256(allowRoot);
+        inp[5] = 1_000_000;
+        inp[6] = uint256(ledgerRoot);
+        inp[7] = uint256(nullifier);
+        inp[8] = uint256(uint160(buyer));
+
+        uint256 entryId = router.submitAmoeEntryZK(buyer, coin, epoch, proof, inp);
+
+        assertEq(entryId, 1);
+        assertTrue(router.usedPointsBurnNullifier(nullifier));
     }
 
     /// @notice ODA-461-14: renounceOwnership is disabled on hub + spoke VRF OApps.
