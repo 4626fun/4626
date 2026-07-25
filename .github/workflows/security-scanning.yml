@@ -280,7 +280,7 @@ jobs:
         with:
           version: v1.7.0
           cache: true
-          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0-${{ github.run_id }}
+          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0
           cache-restore-keys: |
             foundry-rpc-${{ runner.os }}-v1.7.0-
             foundry-rpc-${{ runner.os }}-
@@ -342,7 +342,7 @@ jobs:
         with:
           version: v1.7.0
           cache: true
-          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0-${{ github.run_id }}
+          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0
           cache-restore-keys: |
             foundry-rpc-${{ runner.os }}-v1.7.0-
             foundry-rpc-${{ runner.os }}-
