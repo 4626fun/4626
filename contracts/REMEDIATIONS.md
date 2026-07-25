@@ -13,3 +13,14 @@ hardenings) for a v1.20.0 greenfield candidate review.
   requires `liveRebindEnabled` + owner. Reverse-map uniqueness retained.
 
 Historical July 22 pin (`423e0e3`) and July 23 remediated pin (`413f060`) remain immutable.
+
+## Closed at private `500bab3e8` (synced into this pin)
+
+ODA job 461 Low/Info lottery hardenings (partial; see private
+`docs/audits/security-scan-2026-07-22/461-low-info-remediations.md`):
+
+- **L6** reject `setOracleMaxStaleness(0)`
+- **L7/L8/L10** VRFConsumer aggregation bound, TWAP min/freshness, `_payNative` overpay refund
+- **L12/L13/L14** AMOE two-step owner, price-oracle/consumer timelocks, renounce disabled
+- **L16** multi-vault `payJackpot` gas stipend
+- **I23/I35** full-width buyer bind; AMOE applies `usdMultiplierBps`
