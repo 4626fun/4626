@@ -43,4 +43,17 @@ describe('deploymentBatcherInfra', () => {
     expect(capabilities.supportsPhase1WithSalt).toBe(false)
     expect(capabilities.saltOverridesDisabledByBatcher).toBe(true)
   })
+
+  it('reads restrictive salt semantics from the delegatecall Phase-1 module', () => {
+    const capabilities = parseCreatorVaultBatcherCapabilities({
+      batcherAddress: '0xa99058f424FB3ACC639F59355C65C40149030651',
+      batcherBytecode: `0x${[
+        CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2),
+        CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt.slice(2),
+      ].join('')}`,
+      phase1ModuleBytecode: toFunctionSelector('InvalidShareOftSaltOverride()'),
+    })
+    expect(capabilities.supportsPhase1WithSalt).toBe(false)
+    expect(capabilities.saltOverridesDisabledByBatcher).toBe(true)
+  })
 })

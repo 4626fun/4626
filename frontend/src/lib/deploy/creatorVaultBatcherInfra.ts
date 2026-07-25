@@ -3,12 +3,13 @@ import { getAddress, type Address, type Hex } from 'viem'
 import { CURRENT_DEPLOYMENT_BATCHER_SELECTORS } from './deploymentBatcherSelectors.js'
 import { isShareOftSaltOverrideDisabledBatcher } from '@/config/contracts.defaults'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
-import { resolveAlignedPhase1DeployDeps } from '@/lib/deploy/phase1ModuleDeploy'
+import { readPhase1ModuleAddress, resolveAlignedPhase1DeployDeps } from '@/lib/deploy/phase1ModuleDeploy'
 
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt.slice(2)
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2)
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt.slice(2)
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
+const BATCHER_INVALID_SHARE_OFT_SALT_OVERRIDE_ERROR_SELECTOR = 'aa12062d'
 
 const BATCHER_VIEW_ABI = [
   {
@@ -89,12 +90,16 @@ function readMulticallAddress(viewResults: unknown[] | null | undefined, index: 
 export function parseCreatorVaultBatcherCapabilities(params: {
   batcherAddress: string
   batcherBytecode: Hex | null | undefined
+  phase1ModuleBytecode?: Hex | null
 }): CreatorVaultBatcherCapabilities {
   const batcherBytecodeLower = (params.batcherBytecode ?? '0x').toLowerCase()
+  const phase1ModuleBytecodeLower = (params.phase1ModuleBytecode ?? '0x').toLowerCase()
   const batcherAddressLower = String(params.batcherAddress ?? '').toLowerCase()
   const saltOverridesDisabledByBatcher =
     isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
-    batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
+    batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR) ||
+    phase1ModuleBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR) ||
+    phase1ModuleBytecodeLower.includes(BATCHER_INVALID_SHARE_OFT_SALT_OVERRIDE_ERROR_SELECTOR)
   const supportsLegacyPhase1WithSaltSelector =
     Boolean(params.batcherBytecode && params.batcherBytecode !== '0x') &&
     !saltOverridesDisabledByBatcher &&
@@ -123,7 +128,7 @@ export async function readCreatorVaultBatcherInfra(params: {
     chainlinkEthUsd: Address | null
   }
 }): Promise<{ ok: true; infra: CreatorVaultBatcherInfra } | { ok: false; message: string }> {
-  const [alignedDeps, batcherBytecode] = await Promise.all([
+  const [alignedDeps, batcherBytecode, phase1ModuleAddress] = await Promise.all([
     resolveAlignedPhase1DeployDeps({
       publicClient:
         params.publicClient as unknown as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
@@ -134,7 +139,15 @@ export async function readCreatorVaultBatcherInfra(params: {
       },
     }),
     params.publicClient.getBytecode({ address: params.batcherAddress }).catch(() => null),
+    readPhase1ModuleAddress({
+      publicClient:
+        params.publicClient as unknown as Parameters<typeof readPhase1ModuleAddress>[0]['publicClient'],
+      batcherAddress: params.batcherAddress,
+    }),
   ])
+  const phase1ModuleBytecode = phase1ModuleAddress
+    ? await params.publicClient.getBytecode({ address: phase1ModuleAddress }).catch(() => null)
+    : null
 
   if (!alignedDeps.ok) {
     return { ok: false, message: alignedDeps.message }
@@ -184,6 +197,7 @@ export async function readCreatorVaultBatcherInfra(params: {
       capabilities: parseCreatorVaultBatcherCapabilities({
         batcherAddress: params.batcherAddress,
         batcherBytecode: bytecode,
+        phase1ModuleBytecode: phase1ModuleBytecode as Hex | null,
       }),
     },
   }

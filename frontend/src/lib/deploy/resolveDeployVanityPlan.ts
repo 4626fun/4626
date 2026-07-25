@@ -447,21 +447,27 @@ export async function resolveDeployVanityPlan(
             usingDefaultVaultVanityTarget && usingDefaultShareVanityTarget
               ? 'missed_defaults'
               : 'missed_custom'
-          throw new Error(
-            `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-              `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${params.shareOftVanityMaxTries.toLocaleString()} tries).`,
-          )
+          if (vanityVersionSearchOutcome === 'missed_custom') {
+            throw new Error(
+              `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
+                `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${params.shareOftVanityMaxTries.toLocaleString()} tries).`,
+            )
+          }
         } else if (versionSearchShareSuffix) {
           vanityVersionSearchOutcome = usingDefaultShareVanityTarget ? 'missed_defaults' : 'missed_custom'
-          throw new Error(
-            `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${params.shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
-          )
+          if (vanityVersionSearchOutcome === 'missed_custom') {
+            throw new Error(
+              `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${params.shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
+            )
+          }
         } else if (versionSearchVaultPrefix) {
           vanityVersionSearchOutcome = usingDefaultVaultVanityTarget ? 'missed_defaults' : 'missed_custom'
-          throw new Error(
-            `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${params.vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-              'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-          )
+          if (vanityVersionSearchOutcome === 'missed_custom') {
+            throw new Error(
+              `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${params.vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
+                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+            )
+          }
         }
       }
       if (foundVersion) {
@@ -505,7 +511,9 @@ export async function resolveDeployVanityPlan(
     saltOverrideDisabled: shareOftVanityUnsupportedByBatcher,
     versionSearchOutcome: vanityVersionSearchOutcome,
   })
-  if (shareOftVanityUnsupportedByBatcher && params.shareVanityIsCustom) {
+  const shareVanityMatchedByVersion =
+    vanityVersionSearchOutcome === 'combined_match' || vanityVersionSearchOutcome === 'share_only_match'
+  if (shareOftVanityUnsupportedByBatcher && params.shareVanityIsCustom && !shareVanityMatchedByVersion) {
     throw new Error(
       `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
         `Custom share token vanity suffix "${params.shareOftVanitySuffix}" is blocked for this deploy.`,
@@ -685,9 +693,10 @@ export async function resolveDeployVanityPlan(
     }
   }
 
+  const allowBestEffortDefaultVanityMiss = vanityVersionSearchOutcome === 'missed_defaults'
   const requestedVaultPrefix = normalizeHexSuffix(params.vaultVanityPrefix)
   if (requestedVaultPrefix && !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`)) {
-    if (versionSearchVaultPrefix) {
+    if (versionSearchVaultPrefix && !allowBestEffortDefaultVanityMiss) {
       const deterministicVersion = await findDeploymentVersionForVanityTargets({
         create2Deployer,
         creatorToken: params.creatorToken,
@@ -729,7 +738,11 @@ export async function resolveDeployVanityPlan(
       }
     }
   }
-  if (requestedVaultPrefix && !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`)) {
+  if (
+    requestedVaultPrefix &&
+    !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`) &&
+    !allowBestEffortDefaultVanityMiss
+  ) {
     throw new Error(
       `Resolved vault address ${vaultAddress} does not satisfy required vanity prefix 0x${requestedVaultPrefix}. ` +
         'Retry with a higher search budget or run the offline vanity grinder.',
@@ -755,7 +768,7 @@ export async function resolveDeployVanityPlan(
           shareOftInitCode,
           shareSuffix: requestedShareSuffix,
         })
-    if (!shareSuffixSatisfied) {
+    if (!shareSuffixSatisfied && !allowBestEffortDefaultVanityMiss) {
       throw new Error(
         `Resolved ShareOFT vanity does not satisfy required suffix ${requestedShareSuffix}. ` +
           'Retry with a higher search budget or run the offline vanity grinder.',
