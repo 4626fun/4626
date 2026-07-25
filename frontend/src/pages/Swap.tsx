@@ -673,14 +673,6 @@ export function Swap() {
     privyClientStatus,
     sessionHydrated,
   ])
-  const identityReady = Boolean(
-    canonicalAddress &&
-      executionWalletClient &&
-      publicClient &&
-      (accountContext.signerType === 'SMART_WALLET' ||
-        accountContext.eoaIsOwnerOfCsw === true ||
-        canonicalSignerGate.ready),
-  )
 
   const balanceReadsEnabled = Boolean(hasSession && sessionHydrated && balanceOwnerAddress)
 
