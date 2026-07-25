@@ -126,13 +126,24 @@ contract AlfaClubSudoswapOfficialBaseForkTest is Test {
 
         assertTrue(factory.isValidPair(address(pair)), "factory-authenticated pair");
         assertEq(pair.owner(), MARKET_ADMIN_SAFE, "Safe owns pair");
-        assertEq(pair.delta(), VIRTUAL_KEY_RESERVE, "virtual key reserve");
-        assertEq(pair.spotPrice(), VIRTUAL_AKITA_RESERVE, "virtual AKITA reserve");
         assertEq(pair.fee(), PAIR_FEE, "6.9 percent pair fee");
-        assertEq(friendKey.balanceOf(address(pair), ROOM_TOKEN_ID), INITIAL_KEYS, "three keys seeded");
         if (usingProductionPair) {
+            // Live canary pair: virtual reserves and NFT inventory drift with every
+            // trade, so pin only invariants that survive market activity (fee,
+            // non-zero curve params, non-empty inventory). Launch-time VIRTUAL_* /
+            // INITIAL_* constants apply to the create-pair rehearsal path below.
+            assertGt(pair.delta(), 0, "production virtual key reserve");
+            assertGt(pair.spotPrice(), 0, "production virtual AKITA reserve");
+            assertGe(
+                friendKey.balanceOf(address(pair), ROOM_TOKEN_ID),
+                1,
+                "production pair has at least one key"
+            );
             assertGe(akita.balanceOf(address(pair)), INITIAL_AKITA, "production pair AKITA inventory");
         } else {
+            assertEq(pair.delta(), VIRTUAL_KEY_RESERVE, "virtual key reserve");
+            assertEq(pair.spotPrice(), VIRTUAL_AKITA_RESERVE, "virtual AKITA reserve");
+            assertEq(friendKey.balanceOf(address(pair), ROOM_TOKEN_ID), INITIAL_KEYS, "three keys seeded");
             assertEq(akita.balanceOf(address(pair)), INITIAL_AKITA, "fifty million AKITA seeded");
         }
         if (!usingProductionPair) {

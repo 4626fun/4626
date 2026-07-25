@@ -174,18 +174,15 @@ contract M08CooldownPropagationTest is Test {
         vm.prank(alice);
         shareOFT.transfer(bob, 1);
 
-        assertEq(
-            wrapper.lastWrapperDepositBlock(bob),
-            block.number,
-            "established holder inherits hot cooldown"
-        );
+        uint256 bobStamp = wrapper.lastWrapperDepositBlock(bob);
+        assertEq(bobStamp, block.number, "established holder inherits hot cooldown");
 
         vm.prank(bob);
         vm.expectRevert(
             abi.encodeWithSelector(
                 CreatorOVaultWrapper.WrapperWithdrawTooSoon.selector,
-                block.number,
-                block.number + 1
+                bobStamp,
+                bobStamp + 1
             )
         );
         wrapper.unwrap(1);
@@ -227,8 +224,8 @@ contract M08CooldownPropagationTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 CreatorOVaultWrapper.WrapperWithdrawTooSoon.selector,
-                block.number,
-                block.number + 1
+                aliceBlock,
+                aliceBlock + 1
             )
         );
         wrapper.unwrap(1);

@@ -1,6 +1,6 @@
 {
-  "moduleStorageVersionTag": "OVaultModuleStorage.v4",
-  "creatorOVaultLayoutHash": "9ff6793eac529cf22d4eb6686153154624472ff718cfaf3f44c327ad132fcd68",
+  "moduleStorageVersionTag": "OVaultModuleStorage.v5",
+  "creatorOVaultLayoutHash": "0cbf8092c9de7f670d43b2736d7dc4711348fa8e05192f0e0196bc0b0996dc9e",
   "contracts": [
     "contracts/creator/vault/CreatorOVault.sol:CreatorOVault",
     "contracts/creator/vault/modules/CreatorOVaultCoreModule.sol:CreatorOVaultCoreModule",

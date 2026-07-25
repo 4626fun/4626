@@ -2056,12 +2056,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @notice Delegate arbitrary admin-module calldata (ODA-426-F3 queue/execute/cancel).
     /// @dev Keeps named queue/execute/cancel off the main runtime to stay under EIP-170.
     ///      Admin module enforces `onlyOwner` / `onlyDelegateCall`.
+    ///      Returns the module's raw returndata verbatim so view getters
+    ///      (e.g. `getBoostSourceTimelockState()`) stay readable through this path.
     function adminModuleCall(bytes calldata data) external onlyOwner {
         (bool ok, bytes memory ret) = _adminModule.delegatecall(data);
-        if (!ok) {
-            assembly {
-                revert(add(ret, 0x20), mload(ret))
-            }
+        assembly {
+            let len := mload(ret)
+            switch ok
+            case 0 { revert(add(ret, 0x20), len) }
+            default { return(add(ret, 0x20), len) }
         }
     }
 
