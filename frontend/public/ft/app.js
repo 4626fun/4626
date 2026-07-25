@@ -374,14 +374,12 @@
    * Invalid params (-32602) for EIP-5792 batches. Plain eth_sendTransaction
    * is what works for EOAs on Base.
    */
-  async function sendOneSell(provider, p) {
-    const from = txFrom()
+  async function sendOneSell(provider, p, from) {
     const data = callDataSell(p.subject, p.sellable)
     const shapes = [
       { from, to: FT, data },
       { from, to: FT, data, value: '0x0' },
       { from, to: FT.toLowerCase(), data },
-      { to: FT, data },
     ]
     let lastErr
     for (const tx of shapes) {
@@ -401,8 +399,7 @@
         if (code === -32602 || /invalid params|invalid request|invalid argument/i.test(msg)) {
           continue
         }
-        // Other errors: still try remaining shapes once
-        continue
+        throw err
       }
     }
     throw lastErr || new Error('eth_sendTransaction ha fallado')
@@ -411,11 +408,12 @@
   async function sellSequential(provider, rows, lines) {
     let ok = 0
     let fail = 0
+    const from = txFrom()
     for (let i = 0; i < rows.length; i++) {
       const p = rows[i]
       setStatus(`Vendiendo ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
       try {
-        const hash = await sendOneSell(provider, p)
+        const hash = await sendOneSell(provider, p, from)
         ok++
         lines.push(`ok ${shortAddr(p.subject)} ${hash}`)
       } catch (err) {
