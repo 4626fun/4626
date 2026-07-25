@@ -115,6 +115,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// growing registry (M-06 / 4626-315). Remainder active coins roll to
     /// the next jackpot via the payout cursor.
     uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+    /// @notice Gas stipend per multi-vault `payJackpot` call (ODA-461-16).
+    /// @dev Keeps a hostile/gas-heavy in-mesh gauge from OOGing the whole fan-out.
+    uint256 public constant JACKPOT_PAYOUT_CALL_GAS = 300_000;
 
     /// @notice Hard cap on the number of registry slots scanned in a single
     /// jackpot payout, regardless of active/inactive status. Because
@@ -787,6 +790,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             return 0;
         }
 
+        // ODA-461-35: apply the same usdMultiplierBps used on the paid pricing path
+        // so equal-dollar AMOE and paid entries share win-chance USD input scaling.
+        uint256 amoeUsdInput = pointsBurnedAsUSD;
+        uint256 multBps = lotteryConfig.usdMultiplierBps;
+        if (multBps > 0) {
+            uint256 mult = multBps > 100_000 ? 100_000 : multBps;
+            amoeUsdInput = (amoeUsdInput * mult) / BASIS_POINTS;
+        }
+
         // AUDIT-2026-07-08-H03: coverage is ShareOFT holdings (not the lane coin).
         // Prefer ShareOFT block-start eligible balance when the OFT exposes it
         // so same-tx flash-borrowed shares do not inflate AMOE odds.
@@ -802,11 +814,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
         uint256 boostedWinChance;
         (entryId, boostedWinChance) = _boostAndDispatchVRF(
-            buyer, token, shareOFT == address(0) ? token : shareOFT, shareBalanceUSD, pointsBurnedAsUSD, 0
+            buyer, token, shareOFT == address(0) ? token : shareOFT, shareBalanceUSD, amoeUsdInput, 0
         );
 
         if (entryId > 0) {
-            emit LotteryEntryCreated(token, buyer, pointsBurnedAsUSD, boostedWinChance, entryId);
+            emit LotteryEntryCreated(token, buyer, amoeUsdInput, boostedWinChance, entryId);
         }
         return entryId;
     }
@@ -2165,6 +2177,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000;
     uint256 public constant BASIS_POINTS = 10_000;
     uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+    uint256 public constant JACKPOT_PAYOUT_CALL_GAS = 300_000;
     uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
 
@@ -2712,7 +2725,8 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
             if (rewardShares > 0) {
                 // slither-disable-next-line calls-loop
                 // slither-disable-next-line reentrancy-no-eth
-                try gaugeController.payJackpot(winner, rewardShares) {
+                // ODA-461-16: cap gas per payJackpot so one gauge cannot OOG the fan-out.
+                try gaugeController.payJackpot{gas: JACKPOT_PAYOUT_CALL_GAS}(winner, rewardShares) {
                     totalRewardsPaid += rewardShares;
                     tokenStats[token].rewardsPaid += rewardShares;
                     // M-12: accumulate ShareOFT units paid (not vault count) for callbacks/return.
@@ -3145,6 +3159,8 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     }
 
     function setOracleMaxStaleness(uint256 _maxStaleness) external onlyDelegateCall onlyOwner {
+        // ODA-461-6: zero disables staleness checks in PricingLib — reject misconfig.
+        if (_maxStaleness == 0) revert InvalidAmount();
         oracleMaxStaleness = _maxStaleness;
         emit OracleMaxStalenessUpdated(_maxStaleness);
     }

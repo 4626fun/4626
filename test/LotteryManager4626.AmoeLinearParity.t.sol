@@ -495,6 +495,23 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         assertEq(effectivePPM, 40, "no shares -> base PPM only");
     }
 
+    /// @notice ODA-461-35: AMOE win-chance USD input applies usdMultiplierBps like paid path.
+    function test_ProcessAmoeEntry_AppliesUsdMultiplierBps() public {
+        boostManager.setBoostBPS(10_000);
+        gauge.setGaugeBoostPPM(0);
+
+        // 1.5x multiplier on win-chance USD input.
+        vm.prank(owner);
+        manager.setLotteryConfig(1_000_000, 6900, true, 40, 150_000, 15_000);
+
+        uint256 swapUSD = 10 * 1_000_000; // $10 → base 40 PPM; *1.5 → $15 → 60 PPM
+        vm.prank(relayer);
+        uint256 entryId = manager.processAmoeEntry(buyer, creatorCoin, swapUSD);
+        assertGt(entryId, 0);
+        (, , , uint256 effectivePPM, , , ) = manager.vrfRequests(entryId);
+        assertEq(effectivePPM, 60, "AMOE must apply usdMultiplierBps to win-chance USD");
+    }
+
     /// @notice ODA-461-5: eligible-view revert must not fall back to live balanceOf.
     function test_ProcessAmoeEntry_EligibleRevert_NoLiveBalanceFallback() public {
         boostManager.setBoostBPS(20_000);

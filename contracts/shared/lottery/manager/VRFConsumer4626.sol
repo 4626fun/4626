@@ -151,11 +151,16 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     int256 public localAssetPriceUSD;
     uint256 public localPriceTimestamp;
 
-    /// @notice TWAP period (default 5 minutes)
-    uint32 public twapPeriod = 300;
+    /// @notice TWAP period (ODA-461-8: default/minimum 30 minutes)
+    uint32 public constant MIN_TWAP_PERIOD = 1800;
+    uint32 public twapPeriod = MIN_TWAP_PERIOD;
 
     /// @notice Staleness threshold (2 hours)
     uint256 public constant PRICE_STALENESS = 7200;
+
+    /// @notice Absolute cap for any price included in aggregation (ODA-461-7).
+    /// @dev Matches spoke integrator scale ($100B at 1e18).
+    int256 public maxAcceptablePrice = 100_000_000_000 * 1e18;
 
     // ================================
     // EVENTS
@@ -266,6 +271,13 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
     event VRFCoordinatorChangeQueued(address indexed newCoordinator, uint256 effectiveAt);
     event VRFCoordinatorChangeExecuted(address indexed newCoordinator);
+    event PriceOracleChangeQueued(address indexed newOracle, uint256 effectiveAt);
+    event PriceOracleChangeExecuted(address indexed newOracle);
+
+    // ODA-461-13: timelock price-oracle rewires (same delay as VRF coordinator).
+    address public pendingPriceOracle;
+    uint256 public priceOracleTimelockExpiry;
+    bool public priceOracleChangePending;
 
     function queueVRFCoordinatorChange(address _vrfCoordinator) external onlyOwner {
         if (_vrfCoordinator == address(0)) revert ZeroAddress();
@@ -311,9 +323,30 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         emit VRFConfigUpdated(_subscriptionId, _keyHash, _callbackGasLimit, _requestConfirmations);
     }
 
+    /// @dev Bootstrap-only while unset; thereafter use queue/execute timelock (ODA-461-13).
     function setPriceOracle(address _oracle) external onlyOwner {
+        require(address(priceOracle) == address(0), "Use timelock flow");
         priceOracle = IOracle4626(_oracle);
         emit PriceOracleSet(_oracle);
+    }
+
+    function queuePriceOracleChange(address _oracle) external onlyOwner {
+        pendingPriceOracle = _oracle;
+        priceOracleTimelockExpiry = block.timestamp + VRF_COORDINATOR_TIMELOCK;
+        priceOracleChangePending = true;
+        emit PriceOracleChangeQueued(_oracle, priceOracleTimelockExpiry);
+    }
+
+    function executePriceOracleChange() external onlyOwner {
+        require(priceOracleChangePending, "No pending change");
+        require(block.timestamp >= priceOracleTimelockExpiry, "Timelock not expired");
+        address next = pendingPriceOracle;
+        priceOracle = IOracle4626(next);
+        pendingPriceOracle = address(0);
+        priceOracleTimelockExpiry = 0;
+        priceOracleChangePending = false;
+        emit PriceOracleChangeExecuted(next);
+        emit PriceOracleSet(next);
     }
 
     function setRemotePriceReportingEnabled(bool enabled) external onlyOwner {
@@ -550,18 +583,21 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         if (!pendingResponses[srcEid][sequence]) revert NotPendingResponse();
 
         (MessagingFee memory fee,) = _quoteResponseFee(request);
-        // FIX: VRFC-02/VRFC-04 — accept >= nativeFee and refund excess to avoid permanently locked responses
+        // FIX: VRFC-02/VRFC-04 — accept >= nativeFee; ODA-461-10 routes excess via LZ refund to msg.sender.
         if (msg.value < fee.nativeFee) revert RelayFeeMismatch(msg.value, fee.nativeFee);
 
         _sendResponseToChain(request, fee);
-
-        // Refund excess ETH
-        uint256 excess = msg.value - fee.nativeFee;
-        if (excess > 0) {
-            (bool ok,) = payable(msg.sender).call{value: excess}("");
-            require(ok, "Refund failed");
-        }
         emit PendingResponseRelayed(sequence, requestId, msg.sender, fee.nativeFee);
+    }
+
+    /// @dev ODA-461-10: accept `msg.value >= fee` so the ~5% fee buffer is refundable to the relayer.
+    function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
+        if (msg.value == 0) {
+            if (address(this).balance < _nativeFee) revert NotEnoughNative(msg.value);
+            return _nativeFee;
+        }
+        if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
+        return msg.value;
     }
 
     function _quoteResponseFee(VRFRequest storage request)
@@ -595,7 +631,8 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
         _request.responseSent = true;
 
-        _lzSend(_request.sourceChainEid, payload, options, _fee, payable(owner()));
+        // ODA-461-10: refund excess native fee to the paying relayer (not owner).
+        _lzSend(_request.sourceChainEid, payload, options, _fee, payable(msg.sender));
 
         pendingResponses[_request.sourceChainEid][_request.sequence] = false;
         emit ResponseSentToChain(_request.sequence, _request.randomWord, _request.sourceChainEid, _fee.nativeFee);
@@ -680,7 +717,9 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
                     // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
                     localAssetPriceUSD = int256(Math.mulDiv(uint256(ethUsd), 1e18, assetPerEth));
-                    localPriceTimestamp = block.timestamp;
+                    // ODA-461-8: TWAP observes a window ending now; stamp the window start so
+                    // freshness is not overstated as a spot quote at block.timestamp.
+                    localPriceTimestamp = block.timestamp > twapPeriod ? block.timestamp - twapPeriod : 0;
                     emit LocalPriceUpdated(localAssetPriceUSD, localPriceTimestamp);
                 } catch {}
             } catch {}
@@ -690,14 +729,19 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     function getAggregatedAssetPrice() public view returns (int256 avgPrice, uint256 numChains) {
         int256 totalPrice;
         uint256 validChains;
+        int256 localRef = localAssetPriceUSD;
 
         // Include local price
         if (
             localAssetPriceUSD > 0 && localPriceTimestamp > 0 && localPriceTimestamp <= block.timestamp
                 && block.timestamp - localPriceTimestamp < PRICE_STALENESS
         ) {
-            totalPrice += localAssetPriceUSD;
-            validChains++;
+            // ODA-461-7: bound before summing so a pathological reading cannot overflow int256.
+            (bool ok, int256 capped) = _boundReportedPrice(localAssetPriceUSD, localRef);
+            if (ok) {
+                totalPrice += capped;
+                validChains++;
+            }
         }
 
         // Include remote prices
@@ -712,8 +756,12 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
                 priceData.assetPriceUSD > 0 && priceData.lastUpdated > 0
                     && block.timestamp - priceData.lastUpdated < PRICE_STALENESS
             ) {
-                totalPrice += priceData.assetPriceUSD;
-                validChains++;
+                // ODA-461-7: skip non-positive / cap outliers before checked add.
+                (bool ok, int256 capped) = _boundReportedPrice(priceData.assetPriceUSD, localRef);
+                if (ok) {
+                    totalPrice += capped;
+                    validChains++;
+                }
             }
         }
 
@@ -721,6 +769,24 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
         avgPrice = totalPrice / int256(validChains);
         numChains = validChains;
+    }
+
+    /// @dev ODA-461-7: skip non-positive; cap each price to absolute max and 10× local ref.
+    function _boundReportedPrice(int256 price, int256 localRef)
+        internal
+        view
+        returns (bool ok, int256 capped)
+    {
+        if (price <= 0) return (false, 0);
+        int256 cap = maxAcceptablePrice;
+        if (cap <= 0) return (false, 0);
+        if (localRef > 0) {
+            // Relative outlier guard when a fresh local anchor exists.
+            int256 relCap = localRef * 10;
+            if (relCap > 0 && relCap < cap) cap = relCap;
+        }
+        capped = price > cap ? cap : price;
+        return (true, capped);
     }
 
     // ================================
@@ -794,8 +860,15 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     }
 
     function setTwapPeriod(uint32 _period) external onlyOwner {
-        require(_period > 0, "Invalid");
+        // ODA-461-8: enforce minimum TWAP window (default/min 1800s).
+        require(_period >= MIN_TWAP_PERIOD, "TWAP period too short");
         twapPeriod = _period;
+    }
+
+    function setMaxAcceptablePrice(int256 _maxPrice) external onlyOwner {
+        // ODA-461-7: operator-tunable absolute aggregation cap.
+        require(_maxPrice > 0, "Price must be positive");
+        maxAcceptablePrice = _maxPrice;
     }
 
     // FIX: VRFC-05 — add removal path for priceReportingChains to prevent unbounded growth
@@ -936,6 +1009,11 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     // ================================
     // EMERGENCY
     // ================================
+
+    /// @notice ODA-461-14: renouncing would brick owner-only recovery paths.
+    function renounceOwnership() public pure override {
+        revert Unauthorized();
+    }
 
     function withdraw() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
