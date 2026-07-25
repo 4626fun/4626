@@ -76,8 +76,9 @@ contract LotteryManager4626HardeningTest is Test {
             vm.getDeployedCode("contracts/shared/lottery/manager/LotteryManager4626.sol:LotteryManager4626AdminModule");
         assertLe(mainRt.length, 24_576, "main over EIP-170");
         assertLe(adminRt.length, 24_576, "admin over EIP-170");
-        // Prefer comfortable headroom on main after extraction (~800B measured).
-        assertGe(24_576 - mainRt.length, 200, "main headroom under 200B - size budget review required");
+        // Soft budget after ODA-496 remediations (gate + EV context + 1h grace). Hard EIP-170
+        // remains enforced by SizeLimit. Prefer ≥150B so the next feature still has room.
+        assertGe(24_576 - mainRt.length, 150, "main headroom under 150B - size budget review required");
     }
 
     function test_pricingLib_failClosed_onBadInputs() public {
@@ -106,6 +107,18 @@ contract LotteryManager4626HardeningTest is Test {
         assertEq(usd, 0, "non-positive price");
     }
 
+    function test_pricingLib_fairMaxJackpotShares_boundsWashEv() public pure {
+        // $100 entry, 400 PPM win chance, 30 bps fee proxy, $1/share → max prize $750.
+        uint256 maxShares =
+            LotteryManager4626PricingLib.fairMaxJackpotShares(100e6, 400, 30, 1e18);
+        assertEq(maxShares, 750e18);
+        assertEq(
+            LotteryManager4626PricingLib.fairMaxJackpotShares(100e6, 400, 30, 0),
+            0,
+            "missing payout price must fail closed"
+        );
+    }
+
     function test_pricingLib_happyPath_andDeviation() public {
         MockOracleHardening oracle = new MockOracleHardening();
         MockRegistryHardening reg = new MockRegistryHardening(address(oracle), address(0xBEEF));
@@ -124,15 +137,22 @@ contract LotteryManager4626HardeningTest is Test {
         );
         assertEq(usd, 0, "deviation should fail closed inside window");
 
-        // After the deviation window elapses, re-bootstrap from the live oracle quote
-        // (still subject to oracleMaxStaleness) so quiet lanes are not permanently disabled.
-        vm.warp(block.timestamp + 1 hours + 1);
+        // ODA-496-6: after enough windows the allowed band widens to cover a 50% move
+        // (base 10% × 5 windows = 50%) without disabling the circuit breaker outright.
+        vm.warp(block.timestamp + 4 hours + 1);
         oracle.set(15e17, block.timestamp);
         (usd, price,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp - 1 hours - 1, 0
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp - 4 hours - 1, 0
         );
-        assertEq(price, 15e17, "stale reference must re-bootstrap outside window");
-        assertGt(usd, 0, "stale reference must re-bootstrap outside window");
+        assertEq(price, 15e17, "aged reference must widen band enough to accept");
+        assertGt(usd, 0, "aged reference must widen band enough to accept");
+
+        // Still inside a too-narrow aged band: reject.
+        oracle.set(3e18, block.timestamp);
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp - 4 hours - 1, 0
+        );
+        assertEq(usd, 0, "extreme jump must still fail under widened band");
     }
 
     function test_pricingLib_respectsTokenDecimals() public {

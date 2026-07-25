@@ -570,9 +570,11 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         emit ResponsePending(request.sequence, requestId, request.sourceChainEid, "Awaiting relayer funding");
     }
 
+    /// @notice Relay a fulfilled cross-chain VRF response (ODA-496-3: permissionless).
+    /// @dev Anyone may pay the LZ fee. Removing the relayer-only gate prevents selective
+    ///      censorship of winning results once `randomWord` is public on the hub.
+    ///      `authorizedRelayers` remains for ops discovery / monitoring, not access control.
     function relayPendingResponse(uint32 srcEid, uint64 sequence) external payable nonReentrant {
-        if (msg.sender != owner() && !authorizedRelayers[msg.sender]) revert UnauthorizedRelayer();
-
         uint256 requestId = sequenceToRequestId[srcEid][sequence];
         if (requestId == 0) revert InvalidRequest();
 

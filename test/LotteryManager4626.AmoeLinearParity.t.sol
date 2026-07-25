@@ -539,19 +539,29 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         manager.setAuthorizedAmoeRelayer(address(0xBABE));
     }
 
-    function test_SetAuthorizedAmoeRelayer_UpdatesAndAllowsZero() public {
-        // After first set (setUp), rewires go through queue + timelock.
+    function test_SetAuthorizedAmoeRelayer_InstantDisableCannotReopenBootstrap() public {
+        // After first set (setUp), non-zero rewires go through queue + timelock.
         vm.startPrank(owner);
+        vm.expectRevert(LotteryManager4626.AmoeRelayerAlreadySet.selector);
+        manager.setAuthorizedAmoeRelayer(address(0xCAFE));
+
         manager.queueAmoeRelayerChange(address(0xBABE));
         vm.warp(block.timestamp + manager.AMOE_RELAYER_TIMELOCK());
         manager.executeAmoeRelayerChange();
         assertEq(manager.authorizedAmoeRelayer(), address(0xBABE));
 
-        // Zero disables AMOE.
-        manager.queueAmoeRelayerChange(address(0));
+        // ODA-496: instant disable to zero (emergency), matching swap-contract deauth.
+        manager.setAuthorizedAmoeRelayer(address(0));
+        assertEq(manager.authorizedAmoeRelayer(), address(0));
+
+        // Disabled is not uninitialized: direct re-enable must not bypass the timelock.
+        vm.expectRevert(LotteryManager4626.AmoeRelayerAlreadySet.selector);
+        manager.setAuthorizedAmoeRelayer(address(0xCAFE));
+
+        manager.queueAmoeRelayerChange(address(0xCAFE));
         vm.warp(block.timestamp + manager.AMOE_RELAYER_TIMELOCK());
         manager.executeAmoeRelayerChange();
-        assertEq(manager.authorizedAmoeRelayer(), address(0));
+        assertEq(manager.authorizedAmoeRelayer(), address(0xCAFE));
         vm.stopPrank();
     }
 

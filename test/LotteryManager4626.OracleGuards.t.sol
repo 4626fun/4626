@@ -167,13 +167,13 @@ contract LotteryManager4626OracleGuardsTest is Test {
         assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 1e18);
         assertEq(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), firstTimestamp);
 
-        // Outside the deviation window: re-bootstrap so quiet lanes can recover.
-        // Live oracle staleness still applies; in-window deviation remains fail-closed.
-        vm.warp(block.timestamp + 1 hours + 1);
+        // ODA-496-6: widen the band over multiple windows (10% × 5 = 50%) instead of
+        // disabling deviation after a single window elapses.
+        vm.warp(block.timestamp + 4 hours + 1);
         oracle.setPrice(15e17);
         vm.prank(authorizedSwap);
         uint256 recoveredId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
-        assertGt(recoveredId, 0, "stale reference must re-bootstrap outside window");
+        assertGt(recoveredId, 0, "aged reference must widen band enough to accept");
         assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 15e17);
         assertEq(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), block.timestamp);
     }

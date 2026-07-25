@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 
 import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 contract MockCreatorOraclePauseGuards {
@@ -356,7 +357,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
 
         assertEq(gauge.payCount(), 0, "unpause should not auto-settle deferred VRF FIFO");
 
-        vm.prank(owner);
+        vm.prank(buyer);
         lotteryManager.applyDeferredVrf(requestId);
 
         assertEq(gauge.payCount(), 1, "apply should settle deferred request");
@@ -455,7 +456,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
         vm.prank(owner);
         lotteryManager.unpause();
 
-        vm.prank(owner);
+        vm.prank(buyer);
         uint256 processed = lotteryManager.processDeferredVrfBatch(16);
         assertEq(processed, 2, "batch settles entire small queue");
         assertEq(gauge.payCount(), 2, "both wins settled");
@@ -519,7 +520,16 @@ contract LotteryManager4626PauseGuardsTest is Test {
 
         assertEq(lotteryManager.deferredVrfQueueLength(), 2);
 
-        // Settle head while still paused — must not rotate to tail.
+        // Permissionless callers cannot bypass the emergency payout pause.
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, buyer));
+        lotteryManager.applyDeferredVrf(requestId1);
+
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, buyer));
+        lotteryManager.processDeferredVrfBatch(8);
+
+        // Owner may still settle the head while paused without rotating to tail.
         vm.prank(owner);
         lotteryManager.applyDeferredVrf(requestId1);
         assertEq(gauge.payCount(), 1, "head settles while paused");
@@ -538,7 +548,8 @@ contract LotteryManager4626PauseGuardsTest is Test {
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
-        vm.warp(block.timestamp + 31 minutes);
+        // ODA-496-4: default grace period is 1 hour (aligned with spoke requestTimeout).
+        vm.warp(block.timestamp + 1 hours + 1);
 
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = 0;

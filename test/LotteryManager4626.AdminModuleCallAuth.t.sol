@@ -108,6 +108,20 @@ contract LotteryManager4626AdminModuleCallAuthTest is Test {
         manager.adminModuleCall(data);
     }
 
+    /// @notice ODA-496-1: owner adminModuleCall cannot payout without the transient win gate.
+    function test_owner_adminModuleCall_payoutLocalJackpot_forbidden() public {
+        bytes memory data = abi.encodeWithSelector(
+            LotteryManager4626AdminModule.payoutLocalJackpot.selector,
+            address(0xC01),
+            attacker,
+            uint16(10_000)
+        );
+
+        // Delegatecall reaches the module, but the transient gate rejects it.
+        vm.expectRevert(LotteryManager4626AdminModule.Unauthorized.selector);
+        manager.adminModuleCall(data);
+    }
+
     function test_owner_adminModuleCall_queueStillWorks() public {
         address integratorA = address(0xA11CE);
         address integratorB = address(0xB0B);

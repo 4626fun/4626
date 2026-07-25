@@ -132,7 +132,7 @@ contract VRFConsumer4626RelayFundingTest is Test {
         assertFalse(responseSent);
     }
 
-    function test_relayPendingResponseRequiresAuthorizedRelayerAndExactFee() external {
+    function test_relayPendingResponseIsPermissionlessAndRequiresFee() external {
         uint64 sequence = 7;
         _submitRemoteRequest(sequence);
         _fulfillRequest(1, 777);
@@ -141,19 +141,15 @@ contract VRFConsumer4626RelayFundingTest is Test {
         assertTrue(relayable);
         assertGt(expectedFee, 0);
 
-        vm.expectRevert(VRFConsumer4626.UnauthorizedRelayer.selector);
-        vm.prank(attacker);
-        consumer.relayPendingResponse{value: expectedFee}(REMOTE_EID, sequence);
-
-        consumer.setRelayerAuthorization(relayer, true);
-
+        // ODA-496-3: any caller may relay once the result is public; fee still required.
         vm.expectRevert(
             abi.encodeWithSelector(VRFConsumer4626.RelayFeeMismatch.selector, expectedFee - 1, expectedFee)
         );
-        vm.prank(relayer);
+        vm.prank(attacker);
         consumer.relayPendingResponse{value: expectedFee - 1}(REMOTE_EID, sequence);
 
-        vm.prank(relayer);
+        vm.deal(attacker, expectedFee);
+        vm.prank(attacker);
         consumer.relayPendingResponse{value: expectedFee}(REMOTE_EID, sequence);
 
         assertEq(consumer.lzSendCount(), 1);
