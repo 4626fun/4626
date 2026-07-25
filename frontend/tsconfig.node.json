@@ -61,6 +61,7 @@
     "scripts/ops/create-room1659-sudoswap-pair-csw.ts",
     "scripts/ops/solanaMintArgument.ts",
     "scripts/ops/verify-inverse-akita-trade-journal.ts",
+    "scripts/ops/check-native-aa-readiness.ts",
     "src/config/contracts.defaults.ts",
     "src/config/contracts.ts",
     "src/config/remoteShareOftChains.ts",
@@ -107,7 +108,8 @@
     "src/pages/deploy/deployVaultHelpers.ts",
     "src/pages/deploy/deployVaultSignals.ts",
     "src/pages/deploy/deployVaultVanityPersistence.ts",
-    "src/features/deploy-vault/deploySteps.ts"
+    "src/features/deploy-vault/deploySteps.ts",
+    "src/features/status/nativeAaReadiness.ts"
   ],
   "exclude": [
     "src/**/*.test.ts",

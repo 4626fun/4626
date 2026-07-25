@@ -45,6 +45,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | Deploy-session autopilot / continue | `deploy-vault-operator.md` |
 | VRF, lottery randomness, integrator | `lottery-vrf-ops.md` |
 | AA25, paymaster, txRouter, canonical4337 | `swap-execution.md` |
+| EIP-8130, native AA, Base Cobalt, EntryPoint migration | [docs/_internal/eip-8130-native-aa-readiness.md](../_internal/eip-8130-native-aa-readiness.md) |
 | `/h pos`, counter-trade, room 1659, Hermit | `alfaclub-ops-core.md` |
 | Railway Hermit health, daily brief bot | `alfaclub-ops-ops.md` |
 | PROTOCOL vs CANONICAL, XMTP inbox | `wallet-identity.md` |
@@ -81,6 +82,7 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 - **Open threads / next prompts:** [OPEN_THREADS.md](./OPEN_THREADS.md)
 - Prompt cheat sheet: [prompt-templates.md](./prompt-templates.md) and `.cursor/commands/` (swap-bug, deploy-cutover, wallet-csw, waitlist-auth-debug, alfaclub-ops, fast-bugfix, contracts-test). SEO commands in `.cursor/commands/optional/`.
 - Account model authority: [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md)
+- Native AA (EIP-8130 / Base Cobalt) readiness + migration plan: [docs/_internal/eip-8130-native-aa-readiness.md](../_internal/eip-8130-native-aa-readiness.md)
 - Wallet policy code: `frontend/src/wallet/canonicalWalletPolicy.ts`
 - Sync Tier 1 into rule: `node scripts/sync-agent-context-rule.mjs`
 
@@ -99,6 +101,7 @@ Content migrated from monolithic `docs/agent-learned-facts.md` (July 2026). That
 | Deploy guards / CSW env drift | `pnpm -C frontend validate:deploy-guards` |
 | Quick agent gate (no full test) | `pnpm -C frontend validate:agent-quick` |
 | Context line budgets | `pnpm -C frontend guard:agent-context` |
+| Native AA (EIP-8130) rollout tripwire | `pnpm -C frontend ops:check-native-aa` |
 
 Scoped single file: `pnpm -C frontend exec vitest run <path>`. Full suite: `pnpm -C frontend test` (~3.5 min).
 

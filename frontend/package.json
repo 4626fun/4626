@@ -149,6 +149,7 @@
     "ops:archive-failed-keeper-jobs": "tsx scripts/ops/archive-failed-keeper-jobs.ts",
     "ops:verify-post-phase1-mesh": "tsx scripts/ops/verify-post-phase1-mesh-readiness.ts",
     "ops:verify-robinhood-mesh": "tsx scripts/ops/verify-robinhood-share-mesh-readiness.ts",
+    "ops:check-native-aa": "tsx scripts/ops/check-native-aa-readiness.ts",
     "ops:update-vultr-mapping": "tsx scripts/ops/update-vultr-orchestrator-mapping.ts",
     "ops:complete-akita-deploy": "tsx scripts/ops/complete-akita-deploy-ops.ts",
     "ops:post-hook-upgrade-preflight": "tsx scripts/ops/post-hook-upgrade-preflight.ts",
