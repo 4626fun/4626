@@ -8,6 +8,7 @@ import {AgentOVault} from "@4626/agent/vault/AgentOVault.sol";
 import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreModule.sol";
 import {AgentOVaultWrapper} from "@4626/agent/vault/AgentOVaultWrapper.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
 import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
@@ -25,12 +26,28 @@ contract ODA480MockAgentShare is ERC20 {
 }
 
 contract ODA480TrustedActivator {
-    function depositAndTransfer(MockAgentTokenV4 coin, AgentOVault vault, uint256 amount, address recipient)
-        external
-    {
+    function depositAndTransfer(MockAgentTokenV4 coin, AgentOVault vault, uint256 amount, address recipient) external {
         coin.approve(address(vault), amount);
         uint256 shares = vault.deposit(amount, address(this));
         vault.transfer(recipient, shares);
+    }
+}
+
+contract ODA480ActivationRegistry {
+    mapping(address => address) internal vaults;
+    mapping(address => address) internal wrappers;
+
+    function setRouting(address token, address vault, address wrapper) external {
+        vaults[token] = vault;
+        wrappers[token] = wrapper;
+    }
+
+    function getVaultForToken(address token) external view returns (address) {
+        return vaults[token];
+    }
+
+    function getWrapperForToken(address token) external view returns (address) {
+        return wrappers[token];
     }
 }
 
@@ -181,6 +198,31 @@ contract ODA480AgentCooldownParityTest is Test {
 
         assertEq(vault.lastDepositBlock(address(activator)), 0, "trusted adapter must not arm pooled cooldown");
         assertGt(vault.balanceOf(recipient), 0, "activation transfer must complete");
+    }
+
+    /// The production activation adapter must measure its receipt before depositing
+    /// fee-on-transfer AgentTokens; otherwise the second pull exceeds its balance.
+    function test_agentLane_activationBatcher_handlesTransferTax() external {
+        (MockAgentTokenV4 coin, AgentOVault vault) = _deploy();
+        AgentOVaultWrapper wrapper = new AgentOVaultWrapper(address(coin), address(vault), address(this));
+        ODA480MockAgentShare share = new ODA480MockAgentShare();
+        ODA480ActivationRegistry registry = new ODA480ActivationRegistry();
+        VaultActivationBatcher batcher = new VaultActivationBatcher(makeAddr("permit2"), address(registry));
+        uint256 amount = _bootstrapNominal(vault) * 2;
+
+        wrapper.setShareOFT(address(share));
+        registry.setRouting(address(coin), address(vault), address(wrapper));
+        vault.setWhitelist(address(batcher), true);
+        coin.mint(attacker, amount);
+
+        vm.prank(attacker);
+        coin.approve(address(batcher), amount);
+        vm.prank(attacker);
+        batcher.batchActivate(address(coin), address(vault), address(wrapper), makeAddr("cca"), amount, 0, 0);
+
+        assertGt(share.balanceOf(attacker), 0, "activation must return wrapped shares");
+        assertEq(coin.balanceOf(address(batcher)), 0, "activation batcher must not retain agent tokens");
+        assertEq(vault.balanceOf(address(batcher)), 0, "activation batcher must not retain vault shares");
     }
 
     /// A wrapper holds pooled vault shares for every ShareOFT holder. Another user's

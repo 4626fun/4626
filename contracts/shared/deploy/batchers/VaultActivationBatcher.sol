@@ -120,6 +120,18 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (expectedWrapper != wrapper) revert WrapperRegistryMismatch(expectedWrapper, wrapper);
     }
 
+    function _pullTokenMeasured(address token, address from, uint256 amount) internal returns (uint256 received) {
+        uint256 balanceBefore = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(from, address(this), amount);
+        received = _receivedSince(token, balanceBefore);
+    }
+
+    function _receivedSince(address token, uint256 balanceBefore) internal view returns (uint256 received) {
+        uint256 balanceAfter = IERC20(token).balanceOf(address(this));
+        if (balanceAfter <= balanceBefore) revert ZeroAmount();
+        received = balanceAfter - balanceBefore;
+    }
+
     function _executeActivateAndLaunch(
         address identity,
         address creatorToken,
@@ -215,7 +227,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         }
 
         // ============ STEP 1: Pull creator tokens ============
-        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), depositAmount);
+        uint256 receivedAmount = _pullTokenMeasured(creatorToken, msg.sender, depositAmount);
 
         // Default behavior: no creator reserve; leftover goes back to msg.sender
         uint256 auctionAmount;
@@ -227,7 +239,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             0,
             address(0),
@@ -259,7 +271,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             revert ZeroAddress();
         }
 
-        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), depositAmount);
+        uint256 receivedAmount = _pullTokenMeasured(creatorToken, msg.sender, depositAmount);
 
         uint256 auctionAmount;
         uint256 reserveAmount;
@@ -270,7 +282,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             creatorReservePercent,
             creatorReserveRecipient,
@@ -320,9 +332,11 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();
 
         // ============ STEP 1: Pull creator tokens from identity via Permit2 ============
+        uint256 balanceBefore = IERC20(creatorToken).balanceOf(address(this));
         ISignatureTransfer.SignatureTransferDetails memory details =
             ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: depositAmount});
         ISignatureTransfer(permit2).permitTransferFrom(permit, details, identity, signature);
+        uint256 receivedAmount = _receivedSince(creatorToken, balanceBefore);
 
         // Default behavior: no creator reserve; leftover goes back to identity
         uint256 auctionAmount;
@@ -334,7 +348,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             0,
             address(0),
@@ -383,9 +397,11 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();
 
+        uint256 balanceBefore = IERC20(creatorToken).balanceOf(address(this));
         ISignatureTransfer.SignatureTransferDetails memory details =
             ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: depositAmount});
         ISignatureTransfer(permit2).permitTransferFrom(permit, details, identity, signature);
+        uint256 receivedAmount = _receivedSince(creatorToken, balanceBefore);
 
         uint256 auctionAmount;
         uint256 reserveAmount;
@@ -396,7 +412,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             creatorReservePercent,
             creatorReserveRecipient,
@@ -446,9 +462,11 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();
 
         // ============ STEP 1: Pull creator tokens from operator via Permit2 ============
+        uint256 balanceBefore = IERC20(creatorToken).balanceOf(address(this));
         ISignatureTransfer.SignatureTransferDetails memory details =
             ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: depositAmount});
         ISignatureTransfer(permit2).permitTransferFrom(permit, details, msg.sender, signature);
+        uint256 receivedAmount = _receivedSince(creatorToken, balanceBefore);
 
         // Default behavior: no creator reserve; leftover goes back to identity
         uint256 auctionAmount;
@@ -460,7 +478,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             0,
             address(0),
@@ -509,9 +527,11 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();
 
+        uint256 balanceBefore = IERC20(creatorToken).balanceOf(address(this));
         ISignatureTransfer.SignatureTransferDetails memory details =
             ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: depositAmount});
         ISignatureTransfer(permit2).permitTransferFrom(permit, details, msg.sender, signature);
+        uint256 receivedAmount = _receivedSince(creatorToken, balanceBefore);
 
         uint256 auctionAmount;
         uint256 reserveAmount;
@@ -522,7 +542,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             vault,
             wrapper,
             ccaLaunchArm,
-            depositAmount,
+            receivedAmount,
             auctionPercent,
             creatorReservePercent,
             creatorReserveRecipient,
