@@ -381,13 +381,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         }
 
         _pullCreatorCoinExact(msg.sender, assets);
-        // ODA-480-[3] + Codex flash-loan fix: refresh cooldown for self-deposits, and
-        // for first-time receivers (zero prior shares) so `deposit(assets, attackerWallet)`
-        // cannot mint immediately-redeemable shares. Do not refresh an existing holder's
-        // clock via third-party `deposit(assets, victim)`.
+        // ODA-480-[3] + Codex flash-loan fix: refresh cooldown for untrusted
+        // self-deposits and first-time third-party receivers. Whitelisted *contract*
+        // adapters enforce their own per-user cooldown; stamping their pooled balance
+        // would let one user freeze every other user's exit.
         uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
-        if (receiver == msg.sender || receiverSharesBefore == 0) {
+        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore)) {
             lastDepositBlock[receiver] = block.number;
         }
 
@@ -438,7 +438,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         // ODA-480-[3] + Codex flash-loan fix: mirror deposit policy.
         uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
-        if (receiver == msg.sender || receiverSharesBefore == 0) {
+        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore)) {
             lastDepositBlock[receiver] = block.number;
         }
 
@@ -450,6 +450,21 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         _increaseReportBaselineForPrincipalInflow(assets);
 
         emit Deposit(msg.sender, receiver, assets, shares);
+    }
+
+    /// @dev Trusted protocol adapters (wrapper / activation batcher) are contracts
+    ///      that deploy wiring places on `whitelist`. Skip pooled cooldown only for
+    ///      those contract self-deposits — admission-gated EOAs share the same
+    ///      mapping when `whitelistEnabled` is on and must still arm the delay.
+    function _shouldStampInflowCooldown(address receiver, uint256 receiverSharesBefore)
+        internal
+        view
+        returns (bool)
+    {
+        if (receiver == msg.sender) {
+            return !(whitelist[msg.sender] && msg.sender.code.length > 0);
+        }
+        return receiverSharesBefore == 0;
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {

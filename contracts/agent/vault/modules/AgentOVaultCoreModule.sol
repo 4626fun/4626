@@ -93,11 +93,10 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
         }
 
         // ODA-480-[3] lane parity: the measured-transfer override must apply the same
-        // withdraw-cooldown policy as the base module — refresh for self-deposits and
-        // first-time receivers, never for an existing holder targeted by a third party.
+        // withdraw-cooldown policy as the base module, including trusted-adapter handling.
         uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
-        if (receiver == msg.sender || receiverSharesBefore == 0) {
+        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore)) {
             lastDepositBlock[receiver] = block.number;
         }
 
