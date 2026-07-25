@@ -120,10 +120,6 @@ vi.mock('@/components/cca/CcaAuctionPanel', () => ({
   CcaAuctionPanel: () => React.createElement('div', null, 'Auction panel content'),
 }))
 
-vi.mock('@/components/lottery/AmoeEntryCard', () => ({
-  AmoeEntryCard: () => React.createElement('div', null, 'AMOE FREE ENTRY'),
-}))
-
 vi.mock('@/hooks/useTokenMetadata', () => ({
   useTokenMetadata: (address?: string) => ({
     imageUrl:
@@ -197,7 +193,7 @@ describe('Vault', () => {
 
     expect(html).not.toContain('Connected: Not connected')
     expect(html).not.toContain('Acting as: Unavailable')
-    expect(html).not.toContain('AMOE FREE ENTRY')
+    expect(html).not.toContain('Enter free')
     expect(html).toContain('View wrapper')
     expect(html).toContain('Status checks')
     expect(html).toContain('Auction panel')

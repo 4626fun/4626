@@ -5,6 +5,7 @@ import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import { formatJackpotUsdDisplay } from '@/lib/lottery/formatJackpotUsd'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { Spinner } from '@/components/ui/Spinner'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -178,16 +179,6 @@ function toErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-function formatUsdDisplay(value: string | null): string | null {
-  if (!value) return null
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric) || numeric <= 0) return null
-  return numeric.toLocaleString(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: numeric >= 100 ? 0 : 2,
-  })
-}
 
 function parseJsonSafe<T>(value: unknown): ApiEnvelope<T> | null {
   if (!value || typeof value !== 'object') return null
@@ -240,8 +231,13 @@ export function AmoeEntryCard(props: {
   walletAddress: Address | null
   creatorCoin: Address | null
   walletClientOverride?: AmoeSigningWalletClient | null
+  /** Denser chrome for account tray (Points). */
+  variant?: 'page' | 'tray'
+  /** When set (e.g. Points tray header query), prefer this jackpot USD string. */
+  jackpotUsdOverride?: string | null
 }) {
-  const { walletAddress, creatorCoin, walletClientOverride } = props
+  const { walletAddress, creatorCoin, walletClientOverride, variant = 'page', jackpotUsdOverride } = props
+  const isTray = variant === 'tray'
   const { data: connectedWalletClient } = useWalletClient()
   const walletClient = walletClientOverride ?? connectedWalletClient
   const publicClient = usePublicClient({ chainId: base.id })
@@ -267,6 +263,7 @@ export function AmoeEntryCard(props: {
   // $1 = 0.0004% pre-boost) so a one-click entry stays cheap. The slider
   // and numeric input are kept in sync via this single source of truth.
   const [pointsBurned, setPointsBurned] = useState<number>(AMOE_MIN_POINTS)
+  const [showAmountAdjust, setShowAmountAdjust] = useState(false)
 
   const refreshCredits = useCallback(async () => {
     if (!walletAddress && !protocolEntryMode) return
@@ -281,7 +278,7 @@ export function AmoeEntryCard(props: {
       })
       const json = parseJsonSafe<CreditSnapshot>(await res.json().catch(() => null))
       if (!res.ok || !json?.success || !json.data) {
-        throw new Error(json?.error || 'Failed to load AMOE points')
+        throw new Error(json?.error || 'Failed to load points')
       }
       setCredits(Number(json.data.credits ?? 0))
       setCreditsPerEntry(Number(json.data.creditsPerEntry ?? 100))
@@ -293,14 +290,16 @@ export function AmoeEntryCard(props: {
       const statsUrl = `/api/v1/lottery/creator${statsParams.size > 0 ? `?${statsParams.toString()}` : ''}`
       const statsRes = await apiFetch(statsUrl, { method: 'GET', withCredentials: true })
       const statsJson = parseJsonSafe<TokenLotteryStatsResponse>(await statsRes.json().catch(() => null))
-      setJackpotUsd(statsRes.ok && statsJson?.success ? (statsJson.data?.jackpotUsd ?? null) : null)
+      if (jackpotUsdOverride === undefined) {
+        setJackpotUsd(statsRes.ok && statsJson?.success ? (statsJson.data?.jackpotUsd ?? null) : null)
+      }
     } catch (error: unknown) {
-      setErrorMessage(toErrorMessage(error, 'Unable to load AMOE points'))
+      setErrorMessage(toErrorMessage(error, 'Unable to load points'))
       setJackpotUsd(null)
     } finally {
       setLoadingCredits(false)
     }
-  }, [creatorCoin, protocolEntryMode, walletAddress])
+  }, [creatorCoin, jackpotUsdOverride, protocolEntryMode, walletAddress])
 
   useEffect(() => {
     if (!walletAddress && !protocolEntryMode) {
@@ -314,6 +313,12 @@ export function AmoeEntryCard(props: {
   useEffect(() => {
     void refreshCredits()
   }, [refreshCredits])
+
+  useEffect(() => {
+    if (jackpotUsdOverride !== undefined) {
+      setJackpotUsd(jackpotUsdOverride)
+    }
+  }, [jackpotUsdOverride])
 
   const handleTwitterCheckin = useCallback(async () => {
     if (!walletAddress && !protocolEntryMode) {
@@ -390,15 +395,17 @@ export function AmoeEntryCard(props: {
     try {
       const pending = readPendingAmoeEntry()
       if (pending && walletAddress && pending.wallet.toLowerCase() !== walletAddress.toLowerCase()) {
-        throw new Error('Switch to the wallet that created the pending AMOE entry to finish it')
+        throw new Error('Switch to the wallet that started this free entry to finish it')
       }
       if (pending && creatorCoin && pending.creatorCoin.toLowerCase() !== creatorCoin.toLowerCase()) {
-        throw new Error('Finish the pending AMOE entry before starting one for another creator')
+        throw new Error('Finish your pending free entry before starting one for another creator')
       }
       if (pending && !isPendingAmoeEntryReady(pending)) {
         const readyAt = new Date((pending.eligibleSubmitAfterUnixSec + 15 * 60) * 1000)
         setPendingEntry(pending)
-        setStatusMessage(`Points burned safely. Return after ${readyAt.toLocaleString()} to sign and finalize the entry.`)
+        setStatusMessage(
+          `Entry started. Come back after ${readyAt.toLocaleString()} to finish.`,
+        )
         return
       }
 
@@ -462,7 +469,7 @@ export function AmoeEntryCard(props: {
         })
         const burnJson = parseJsonSafe<BurnCreditsResponse>(await burnRes.json().catch(() => null))
         if (!burnRes.ok || !burnJson?.success || !burnJson.data) {
-          throw new Error(burnJson?.error || 'Burn credits failed')
+          throw new Error(burnJson?.error || 'Failed to start free entry')
         }
         const burned = burnJson.data
         const nextPending: PendingAmoeEntry = {
@@ -482,7 +489,9 @@ export function AmoeEntryCard(props: {
         setCreditsPerEntry(Number(burned.creditsPerEntry ?? 100))
         setEntriesAvailable(Number(burned.entriesAvailable ?? 0))
         const readyAt = new Date((nextPending.eligibleSubmitAfterUnixSec + 15 * 60) * 1000)
-        setStatusMessage(`Points burned safely. Return after ${readyAt.toLocaleString()} to sign and finalize the entry.`)
+        setStatusMessage(
+          `Entry started. Come back after ${readyAt.toLocaleString()} to finish.`,
+        )
         return
       }
 
@@ -507,7 +516,7 @@ export function AmoeEntryCard(props: {
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
         // Preserve pending burn intent on `amoe_burn_not_found` — projection
         // can lag briefly; clearing localStorage would drop retry state.
-        throw new Error(submitJson?.error || 'Failed to submit AMOE ZK entry')
+        throw new Error(submitJson?.error || 'Failed to finish free entry')
       }
 
       const tx = submitJson.data
@@ -515,7 +524,7 @@ export function AmoeEntryCard(props: {
       setPendingEntry(null)
       const hash = tx.txHash
       setTxHash(hash)
-      setStatusMessage('AMOE ZK entry relayed by protocol. Waiting for confirmation…')
+      setStatusMessage('Free entry submitted. Waiting for confirmation…')
 
       // Receipt confirmation is best-effort — if no public client is
       // configured we still surface the txHash so the user can follow up.
@@ -550,7 +559,7 @@ export function AmoeEntryCard(props: {
     [pointsBurned, sliderMax],
   )
   const livePreviewPct = formatWinChancePct(livePreviewPPM)
-  const jackpotUsdDisplay = useMemo(() => formatUsdDisplay(jackpotUsd), [jackpotUsd])
+  const jackpotUsdDisplay = useMemo(() => formatJackpotUsdDisplay(jackpotUsd), [jackpotUsd])
 
   // Keep selection in range when the live balance shrinks (e.g. after a
   // successful entry refresh).
@@ -568,29 +577,52 @@ export function AmoeEntryCard(props: {
   const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
   return (
-    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgb(var(--brand-primary)/0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
-      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-blue-300/35 to-transparent" />
-      <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
-      <div className="relative space-y-3.5">
+    <div
+      className={
+        isTray
+          ? 'relative overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03] p-3'
+          : 'relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgb(var(--brand-primary)/0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6'
+      }
+    >
+      {!isTray ? (
+        <>
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-blue-300/35 to-transparent" />
+          <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
+        </>
+      ) : null}
+      <div className={`relative ${isTray ? 'space-y-2.5' : 'space-y-3.5'}`}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="label">Alternative Method of Entry</p>
-            <h3 className="text-lg font-medium text-zinc-100 mt-1">
-              Free entry
-            </h3>
+            <p className="label">{isTray ? 'Lottery' : 'Free jackpot entry'}</p>
+            <h3 className={`font-medium text-zinc-100 mt-1 ${isTray ? 'text-sm' : 'text-lg'}`}>Enter free</h3>
+            {isTray && jackpotUsdDisplay ? (
+              <p className="mt-1 text-xs text-zinc-400">
+                For <span className="font-semibold text-brand-accent tabular-nums">{jackpotUsdDisplay}</span>
+              </p>
+            ) : null}
           </div>
-          <Gift className="w-5 h-5 text-brand-primary" />
+          {!isTray ? <Gift className="w-5 h-5 text-brand-primary" /> : null}
         </div>
 
-        <p className="text-sm leading-5 text-zinc-500">
-          AMOE (Alternative Method of Entry) lets users earn points through eligible 4626 actions for a free entry to win the jackpot.
-        </p>
-        <div className="rounded-2xl bg-black/18 p-3 shadow-inner shadow-black/25">
-          <p className="text-[11px] font-semibold uppercase leading-5 tracking-wide text-zinc-200">
+        {!isTray ? (
+          <p className="text-sm leading-5 text-zinc-500">
+            Use your points for a free jackpot entry — no purchase required.
+          </p>
+        ) : null}
+        <div className={`rounded-2xl bg-black/18 shadow-inner shadow-black/25 ${isTray ? 'p-2.5' : 'p-3'}`}>
+          <p
+            className={`font-semibold uppercase leading-5 tracking-wide text-zinc-200 ${
+              isTray ? 'text-[10px]' : 'text-[11px]'
+            }`}
+          >
             No purchase necessary. A purchase will not improve your chances of winning.
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
-            <span>Free and paid entries share the same winner-selection flow.</span>
+          <div
+            className={`mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-zinc-500 ${
+              isTray ? 'text-[10px]' : 'text-[11px]'
+            }`}
+          >
+            {!isTray ? <span>Free and paid entries use the same winner selection.</span> : null}
             <a
               href={officialRulesUrl}
               target="_blank"
@@ -602,42 +634,45 @@ export function AmoeEntryCard(props: {
           </div>
         </div>
 
-        <div className="space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)]">
+        <div
+          className={`space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)] ${
+            isTray ? 'p-2.5' : 'p-3'
+          }`}
+        >
           <div className="flex items-start justify-between gap-3 text-xs">
             <div>
-              <div className="text-zinc-500">Your AMOE-eligible points</div>
+              <div className="text-zinc-500">Your points</div>
               <div className="mt-0.5 text-lg font-semibold text-zinc-100">
                 {credits.toLocaleString()}
               </div>
-              <div className="mt-1 text-[11px] text-zinc-500">
-                Waitlist total can be higher than AMOE-eligible points.
-              </div>
             </div>
-            {jackpotUsdDisplay ? (
+            {!isTray && jackpotUsdDisplay ? (
               <div className="text-right">
                 <div className="text-zinc-500">Current jackpot</div>
                 <div className="mt-0.5 text-sm font-medium text-zinc-100">{jackpotUsdDisplay}</div>
               </div>
             ) : null}
           </div>
-          {!hasEnoughForFloor ? (
+          {!hasEnoughForFloor && !hasPendingEntry ? (
             <div className="space-y-2 text-xs">
               <div>
-                <div className="font-medium text-zinc-100">Not enough points to enter</div>
+                <div className="font-medium text-zinc-100">Not enough points yet</div>
                 <div className="mt-1 text-zinc-500">
-                  You need {missingCredits.toLocaleString()} more points to unlock a free entry.
+                  You need {missingCredits.toLocaleString()} more points (minimum{' '}
+                  {AMOE_MIN_POINTS.toLocaleString()}).
                 </div>
               </div>
-              <div className="text-zinc-500">Minimum entry: {AMOE_MIN_POINTS.toLocaleString()} points</div>
             </div>
           ) : (
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span>{hasPendingEntry ? 'Finish your free entry.' : 'Ready to enter.'}</span>
+              <span>
+                Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
+              </span>
+            </div>
+          )}
+          {(hasEnoughForFloor || hasPendingEntry) && showAmountAdjust && !hasPendingEntry ? (
             <>
-              <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Ready to enter.</span>
-                <span>
-                  Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
-                </span>
-              </div>
               <label htmlFor="amoe-points-slider" className="text-xs font-medium text-zinc-300">
                 Entry amount
               </label>
@@ -665,116 +700,130 @@ export function AmoeEntryCard(props: {
                   className="h-8 w-28 rounded-lg border border-white/10 bg-black/18 px-2 text-right text-xs text-zinc-100 disabled:opacity-50"
                   aria-label="Entry amount in points"
                 />
-                <span>{AMOE_MAX_POINTS.toLocaleString()} max</span>
+                <span>{sliderMax.toLocaleString()} max</span>
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          {hasEnoughForFloor || hasPendingEntry ? (
+        {hasEnoughForFloor || hasPendingEntry ? (
+          <div className="space-y-2">
             <button
               type="button"
               onClick={() => void handleEnterForFree()}
-              disabled={!canEnter}
-              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canEnter || (hasPendingEntry && !isPendingAmoeEntryReady(pendingEntry!))}
+              className="h-11 w-full rounded-xl bg-brand-primary px-3 text-sm font-semibold text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {entryBusy ? (
-                <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Submitting…</span>
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <Spinner size="sm" /> Submitting…
+                </span>
+              ) : hasPendingEntry ? (
+                isPendingAmoeEntryReady(pendingEntry!) ? (
+                  'Finish free entry'
+                ) : (
+                  `Come back after ${new Date(pendingEntry!.eligibleSubmitAfterUnixSec * 1000).toLocaleString()}`
+                )
               ) : (
-                hasPendingEntry
-                  ? isPendingAmoeEntryReady(pendingEntry!)
-                    ? `Finalize pending entry (${pendingEntry!.pointsBurned.toLocaleString()} pts)`
-                    : `Pending entry (${pendingEntry!.pointsBurned.toLocaleString()} pts)`
-                  : `Submit free jackpot entry (${selectedPoints.toLocaleString()} pts)`
+                'Enter free'
               )}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => openXPost()}
-            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {checkinBusy ? (
-              <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
-            ) : (
-              <span className="inline-flex items-center justify-center gap-1.5">
-                <XIcon className="h-3.5 w-3.5" />{' '}
-                {hasEnoughForFloor ? 'Open X composer' : 'Open X'}
-              </span>
-            )}
-          </button>
-          <input
-            type="url"
-            value={tweetProofUrl}
-            onChange={(event) => setTweetProofUrl(event.target.value)}
-            placeholder="Paste posted tweet URL"
-            disabled={checkinBusy || entryBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50`}
-            aria-label="Tweet URL proof"
-          />
-          <button
-            type="button"
-            onClick={() => void handleTwitterCheckin()}
-            disabled={
-              (!walletAddress && !protocolEntryMode) ||
-              checkinBusy ||
-              entryBusy ||
-              tweetProofUrl.trim().length === 0
-            }
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {checkinBusy
-              ? 'Verifying tweet…'
-              : `Verify posted tweet for ${formatDailyCreditLabel(AMOE_DAILY_TWITTER_CREDIT)}`}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleXmtpCheckin()}
-            disabled={(!walletAddress && !protocolEntryMode) || entryBusy || checkinBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            <span className="inline-flex items-center justify-center gap-1.5">
-              <MessageCircle className="h-3.5 w-3.5" />
-              {hasEnoughForFloor
-                ? `Message Akita on XMTP for ${formatDailyCreditLabel(AMOE_DAILY_XMTP_CREDIT)}`
-                : 'Earn via XMTP task'}
-            </span>
-          </button>
-          {hasEnoughForFloor ? (
+            {!hasPendingEntry ? (
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAmountAdjust((v) => !v)}
+                  className="text-[11px] font-medium text-zinc-400 hover:text-zinc-200"
+                >
+                  {showAmountAdjust ? 'Hide amount' : `Adjust amount (${selectedPoints.toLocaleString()} pts)`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void refreshCredits()}
+                  disabled={
+                    (!walletAddress && !protocolEntryMode) ||
+                    loadingCredits ||
+                    checkinBusy ||
+                    entryBusy
+                  }
+                  className="text-[11px] font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+                >
+                  {loadingCredits ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void refreshCredits()}
+              onClick={() => openXPost()}
+              disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
+              className="col-span-2 h-9 rounded-xl bg-brand-primary px-3 text-xs font-medium text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checkinBusy ? (
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <Spinner size="sm" /> Claiming…
+                </span>
+              ) : (
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <XIcon className="h-3.5 w-3.5" /> Open X to earn points
+                </span>
+              )}
+            </button>
+            <input
+              type="url"
+              value={tweetProofUrl}
+              onChange={(event) => setTweetProofUrl(event.target.value)}
+              placeholder="Paste posted tweet URL"
+              disabled={checkinBusy || entryBusy}
+              className="col-span-2 h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Tweet URL proof"
+            />
+            <button
+              type="button"
+              onClick={() => void handleTwitterCheckin()}
               disabled={
                 (!walletAddress && !protocolEntryMode) ||
-                loadingCredits ||
                 checkinBusy ||
-                entryBusy
+                entryBusy ||
+                tweetProofUrl.trim().length === 0
               }
-              className="h-9 rounded-xl bg-white/[0.03] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="col-span-2 h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loadingCredits ? 'Refreshing…' : 'Refresh'}
+              {checkinBusy
+                ? 'Verifying tweet…'
+                : `Verify tweet for ${formatDailyCreditLabel(AMOE_DAILY_TWITTER_CREDIT)}`}
             </button>
-          ) : null}
-        </div>
-        <div className="text-[11px] text-zinc-500">
-          X reward requires tweet verification, and XMTP reward is granted only after a real DM send.
-        </div>
+            <button
+              type="button"
+              onClick={() => void handleXmtpCheckin()}
+              disabled={(!walletAddress && !protocolEntryMode) || entryBusy || checkinBusy}
+              className="col-span-2 h-9 rounded-xl bg-brand-primary px-3 text-xs font-medium text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <MessageCircle className="h-3.5 w-3.5" /> Earn via chat
+              </span>
+            </button>
+            <div className="col-span-2 text-[11px] text-zinc-500">
+              X reward needs tweet verification. Chat reward unlocks after a real DM send.
+            </div>
+          </div>
+        )}
 
-      {statusMessage ? <div className="text-xs text-emerald-300">{statusMessage}</div> : null}
-      {errorMessage ? <div className="text-xs text-rose-300">{errorMessage}</div> : null}
+        {statusMessage ? <div className="text-xs text-emerald-300">{statusMessage}</div> : null}
+        {errorMessage ? <div className="text-xs text-rose-300">{errorMessage}</div> : null}
 
-      {txHash ? (
-        <a
-          href={`https://basescan.org/tx/${txHash}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-brand-accent hover:text-brand-primary"
-        >
-          View transaction <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      ) : null}
+        {txHash ? (
+          <a
+            href={`https://basescan.org/tx/${txHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-brand-accent hover:text-brand-primary"
+          >
+            View transaction <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        ) : null}
       </div>
     </div>
   )

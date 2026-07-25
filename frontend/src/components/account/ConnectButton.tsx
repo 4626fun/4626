@@ -575,6 +575,7 @@ export function ConnectButton({
           leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
           hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
           signupId={trayAccountPointsQuery.data?.signupId ?? 0}
+          walletAddress={accountProfile?.canonicalCswAddress ?? address ?? null}
         />
       }
       footer={{

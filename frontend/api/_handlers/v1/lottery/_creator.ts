@@ -165,6 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const winners = BigInt((stats as any)?.[1] ?? 0n).toString()
     const rewardsPaid = BigInt((stats as any)?.[2] ?? 0n).toString()
     const jackpotBalanceShares = BigInt((stats as any)?.[3] ?? 0n).toString()
+    // jackpotBalanceShares is gauge getJackpotReserve() — ShareOFT funded at lotteryShareBps (69%).
+    // USD = convertToAssets(reserve) × creator oracle getAssetPrice().
     let jackpotUsd: string | null = null
 
     if (BigInt(jackpotBalanceShares) > 0n && isAddressLike(String(contracts.registry ?? ''))) {

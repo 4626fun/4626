@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { isAddress, type Address } from 'viem'
 
+import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { LeaderboardIdentityCell } from '@/features/waitlist/LeaderboardIdentityCell'
 import {
   formatLeaderboardDisplayName,
@@ -11,6 +13,10 @@ import {
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import {
+  fetchProtocolJackpotUsd,
+  formatJackpotUsdDisplay,
+} from '@/lib/lottery/formatJackpotUsd'
 import type { PointsActivityRow } from '@/lib/waitlist/pointsActivity'
 
 export type TrayPointsOverview = {
@@ -103,6 +109,8 @@ export function RelayTrayPointsModule(props: {
   leaderboardEligible: boolean
   hasAccountProfile: boolean
   signupId: number
+  /** Canonical CSW (preferred) or connected wallet for free jackpot entry. */
+  walletAddress?: string | null
 }) {
   const [pointsTab, setPointsTab] = useState<PointsTrayTab>('overview')
   const totalRank = props.position?.rank.total ?? null
@@ -111,17 +119,47 @@ export function RelayTrayPointsModule(props: {
   const breakdownRows = props.position ? buildTrayPointsOverviewRows(props.position.points) : []
   const canonicalTotal = props.position?.points.total ?? props.pointsTotal
   const activityRows = props.activity.filter((row) => row.waitlistPoints > 0)
+  const amoeWallet: Address | null =
+    typeof props.walletAddress === 'string' && isAddress(props.walletAddress)
+      ? (props.walletAddress as Address)
+      : null
+
+  const jackpotQuery = useQuery({
+    queryKey: ['lottery', 'protocol-jackpot-usd'],
+    queryFn: () => fetchProtocolJackpotUsd(apiFetch),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  })
+  const jackpotUsdDisplay = formatJackpotUsdDisplay(jackpotQuery.data ?? null)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-2 pb-3">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
-      {props.pointsLoading ? (
-        <div className="mt-2 text-[11px] text-zinc-500">Loading points…</div>
-      ) : (
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
+          {props.pointsLoading ? (
+            <div className="mt-2 text-[11px] text-zinc-500">Loading points…</div>
+          ) : (
+            <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
+              {canonicalTotal.toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Jackpot</div>
+          {jackpotQuery.isLoading ? (
+            <div className="mt-2 text-[11px] text-zinc-500">Loading…</div>
+          ) : jackpotUsdDisplay ? (
+            <div className="mt-2 text-[22px] font-semibold leading-none tracking-tight text-brand-accent tabular-nums">
+              {jackpotUsdDisplay}
+            </div>
+          ) : (
+            <div className="mt-2 text-[11px] text-zinc-500">—</div>
+          )}
+        </div>
+      </div>
+      {props.pointsLoading ? null : (
         <>
-          <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-            {canonicalTotal.toLocaleString()}
-          </div>
 
           <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
             {POINTS_TRAY_TABS.map(({ id, label }) => (
@@ -142,6 +180,15 @@ export function RelayTrayPointsModule(props: {
 
           {pointsTab === 'overview' ? (
             <div className="mt-3 space-y-3">
+              <div>
+                <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Free jackpot entry</div>
+                <AmoeEntryCard
+                  walletAddress={amoeWallet}
+                  creatorCoin={null}
+                  variant="tray"
+                  jackpotUsdOverride={jackpotQuery.isFetched ? (jackpotQuery.data ?? null) : undefined}
+                />
+              </div>
               {props.position ? (
                 <div>
                   <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Category breakdown</div>
