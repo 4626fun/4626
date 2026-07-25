@@ -69,6 +69,13 @@ compilation_restrictions = [
     # Lottery manager is EIP-170 constrained; low-run optimization preserves
     # the full admin/VRF ABI while leaving audited runtime headroom.
     { paths = "contracts/shared/lottery/manager/LotteryManager4626.sol", optimizer_runs = 10 },
+    # Registry4626 is EIP-170 constrained: at optimizer_runs = 200 its runtime is
+    # 24,634 B (58 B over). Scripts that also import LotteryManager4626 (including
+    # DeployInfrastructure, the greenfield registry deployer) already compiled it at
+    # runs = 10 (24,368 B), so the deploy path shipped a different artifact than
+    # `forge build` emitted. Pinning runs = 10 here makes the default artifact
+    # byte-identical to the deployed one and keeps CREATE2 deployers deployable.
+    { paths = "contracts/shared/core/Registry4626.sol", optimizer_runs = 10 },
     { paths = "contracts/other/alfaclub/universal-router/AlfaClubSudoswapAdapter.sol", version = "=0.8.26", optimizer_runs = 1 },
     { paths = "contracts/other/alfaclub/universal-router/AlfaClubUniversalRouter.sol", version = "=0.8.26", optimizer_runs = 1 }
 ]
