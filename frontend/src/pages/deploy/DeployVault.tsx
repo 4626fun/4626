@@ -300,14 +300,6 @@ const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
-function hasSaltOverrideDisabledError(error: unknown): boolean {
-  const text = String((error as { message?: unknown; shortMessage?: unknown } | null)?.shortMessage
-    ?? (error as { message?: unknown } | null)?.message
-    ?? error
-    ?? '')
-    .toLowerCase()
-  return text.includes(`0x${BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR}`) || text.includes('saltoverridedisabled')
-}
 const NO_EOA_STRICT_BLOCKER =
   'No-EOA deploy requires Privy owner signer readiness on your canonical CSW. Complete one-time Base Account owner approval (or use Base App prolink), then retry.'
 type DeployMode = 'default' | 'no_eoa_strict'
@@ -4638,41 +4630,25 @@ function DeployVaultBatcher({
             shareOftSaltOverride = ZERO_BYTES32 as Hex
           }
           if (saltEnabled && shareOftSaltOverride !== ZERO_BYTES32) {
-            try {
-              const phase1SaltProbeParams = {
-                creatorToken,
-                owner,
-                vaultName,
-                vaultSymbol,
-                shareName,
-                shareSymbol,
-                version: deployVersion,
-                vaultKind: onchainVaultKind,
-              } as const
-              await publicClient.call({
-                account: owner,
-                to: batcherAddress,
-                data: encodeFunctionData({
-                  abi: DEPLOYMENT_BATCHER_ABI,
-                  functionName: 'deployPhase1CoreWithSalt',
-                  args: [phase1SaltProbeParams, codeIds, shareOftSaltOverride],
-                }),
-              })
-            } catch (probeError: unknown) {
-              if (hasSaltOverrideDisabledError(probeError)) {
-                shareOftSaltOverride = ZERO_BYTES32 as Hex
-                if (supportsSplitPhase1NoSalt) {
-                  saltEnabled = false
-                  logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; falling back to no-salt phase1 calls', {
-                    batcher: batcherAddress,
-                  })
-                } else {
-                  logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; using split with-salt entrypoints and zero override', {
-                    batcher: batcherAddress,
-                  })
-                }
-              }
-            }
+            const phase1SaltProbeParams = {
+              creatorToken,
+              owner,
+              vaultName,
+              vaultSymbol,
+              shareName,
+              shareSymbol,
+              version: deployVersion,
+              vaultKind: onchainVaultKind,
+            } as const
+            await publicClient.call({
+              account: owner,
+              to: batcherAddress,
+              data: encodeFunctionData({
+                abi: DEPLOYMENT_BATCHER_ABI,
+                functionName: 'deployPhase1CoreWithSalt',
+                args: [phase1SaltProbeParams, codeIds, shareOftSaltOverride],
+              }),
+            })
           }
           if (expectedShareOftSaltOverride && (!saltEnabled || splitPhase1SaltOverrideDisabled)) {
             if (shareVanityIsCustom) {

@@ -693,10 +693,12 @@ export async function resolveDeployVanityPlan(
     }
   }
 
-  const allowBestEffortDefaultVanityMiss = vanityVersionSearchOutcome === 'missed_defaults'
   const requestedVaultPrefix = normalizeHexSuffix(params.vaultVanityPrefix)
+  const allowBestEffortDefaultVaultVanityMiss =
+    vanityVersionSearchOutcome === 'missed_defaults' &&
+    requestedVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
   if (requestedVaultPrefix && !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`)) {
-    if (versionSearchVaultPrefix && !allowBestEffortDefaultVanityMiss) {
+    if (versionSearchVaultPrefix && !allowBestEffortDefaultVaultVanityMiss) {
       const deterministicVersion = await findDeploymentVersionForVanityTargets({
         create2Deployer,
         creatorToken: params.creatorToken,
@@ -741,7 +743,7 @@ export async function resolveDeployVanityPlan(
   if (
     requestedVaultPrefix &&
     !vaultAddress.toLowerCase().startsWith(`0x${requestedVaultPrefix}`) &&
-    !allowBestEffortDefaultVanityMiss
+    !allowBestEffortDefaultVaultVanityMiss
   ) {
     throw new Error(
       `Resolved vault address ${vaultAddress} does not satisfy required vanity prefix 0x${requestedVaultPrefix}. ` +
@@ -750,6 +752,10 @@ export async function resolveDeployVanityPlan(
   }
 
   const requestedShareSuffix = normalizeHexSuffix(params.shareOftVanitySuffix)
+  const allowBestEffortDefaultShareVanityMiss =
+    vanityVersionSearchOutcome === 'missed_defaults' &&
+    !params.shareVanityIsCustom &&
+    requestedShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
   if (requestedShareSuffix) {
     const shareSuffixSatisfied = shareOftSaltOverrideUsed
       ? predictCreate2AddressFromInitCode({
@@ -768,7 +774,7 @@ export async function resolveDeployVanityPlan(
           shareOftInitCode,
           shareSuffix: requestedShareSuffix,
         })
-    if (!shareSuffixSatisfied && !allowBestEffortDefaultVanityMiss) {
+    if (!shareSuffixSatisfied && !allowBestEffortDefaultShareVanityMiss) {
       throw new Error(
         `Resolved ShareOFT vanity does not satisfy required suffix ${requestedShareSuffix}. ` +
           'Retry with a higher search budget or run the offline vanity grinder.',

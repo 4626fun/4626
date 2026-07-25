@@ -3,7 +3,11 @@ import { getAddress, type Address, type Hex } from 'viem'
 import { CURRENT_DEPLOYMENT_BATCHER_SELECTORS } from './deploymentBatcherSelectors.js'
 import { isShareOftSaltOverrideDisabledBatcher } from '@/config/contracts.defaults'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
-import { readPhase1ModuleAddress, resolveAlignedPhase1DeployDeps } from '@/lib/deploy/phase1ModuleDeploy'
+import {
+  classifyPhase1ModuleReadState,
+  readPhase1ModuleState,
+  resolveAlignedPhase1DeployDeps,
+} from '@/lib/deploy/phase1ModuleDeploy'
 
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt.slice(2)
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2)
@@ -91,11 +95,16 @@ export function parseCreatorVaultBatcherCapabilities(params: {
   batcherAddress: string
   batcherBytecode: Hex | null | undefined
   phase1ModuleBytecode?: Hex | null
+  phase1ModuleConfigured?: boolean
 }): CreatorVaultBatcherCapabilities {
   const batcherBytecodeLower = (params.batcherBytecode ?? '0x').toLowerCase()
   const phase1ModuleBytecodeLower = (params.phase1ModuleBytecode ?? '0x').toLowerCase()
   const batcherAddressLower = String(params.batcherAddress ?? '').toLowerCase()
+  const configuredPhase1ModuleBytecodeUnavailable =
+    params.phase1ModuleConfigured === true &&
+    (!params.phase1ModuleBytecode || params.phase1ModuleBytecode === '0x')
   const saltOverridesDisabledByBatcher =
+    configuredPhase1ModuleBytecodeUnavailable ||
     isShareOftSaltOverrideDisabledBatcher(batcherAddressLower) ||
     batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR) ||
     phase1ModuleBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR) ||
@@ -128,7 +137,7 @@ export async function readCreatorVaultBatcherInfra(params: {
     chainlinkEthUsd: Address | null
   }
 }): Promise<{ ok: true; infra: CreatorVaultBatcherInfra } | { ok: false; message: string }> {
-  const [alignedDeps, batcherBytecode, phase1ModuleAddress] = await Promise.all([
+  const [alignedDeps, batcherBytecode, phase1ModuleReadState] = await Promise.all([
     resolveAlignedPhase1DeployDeps({
       publicClient:
         params.publicClient as unknown as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
@@ -139,12 +148,24 @@ export async function readCreatorVaultBatcherInfra(params: {
       },
     }),
     params.publicClient.getBytecode({ address: params.batcherAddress }).catch(() => null),
-    readPhase1ModuleAddress({
+    readPhase1ModuleState({
       publicClient:
-        params.publicClient as unknown as Parameters<typeof readPhase1ModuleAddress>[0]['publicClient'],
+        params.publicClient as unknown as Parameters<typeof readPhase1ModuleState>[0]['publicClient'],
       batcherAddress: params.batcherAddress,
     }),
   ])
+  const phase1ModuleState = classifyPhase1ModuleReadState({
+    readState: phase1ModuleReadState,
+    batcherBytecode,
+  })
+  if (phase1ModuleState.status === 'read_failed') {
+    return {
+      ok: false,
+      message: `Configured batcher at ${params.batcherAddress} advertises phase1Module(), but the module address read failed.`,
+    }
+  }
+  const phase1ModuleAddress =
+    phase1ModuleState.status === 'configured' ? phase1ModuleState.address : null
   const phase1ModuleBytecode = phase1ModuleAddress
     ? await params.publicClient.getBytecode({ address: phase1ModuleAddress }).catch(() => null)
     : null
@@ -198,6 +219,7 @@ export async function readCreatorVaultBatcherInfra(params: {
         batcherAddress: params.batcherAddress,
         batcherBytecode: bytecode,
         phase1ModuleBytecode: phase1ModuleBytecode as Hex | null,
+        phase1ModuleConfigured: phase1ModuleAddress !== null,
       }),
     },
   }

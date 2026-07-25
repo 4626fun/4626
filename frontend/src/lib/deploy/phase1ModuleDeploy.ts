@@ -1,4 +1,4 @@
-import { getAddress, isAddress, type Address } from 'viem'
+import { getAddress, isAddress, toFunctionSelector, type Address, type Hex } from 'viem'
 
 export const PHASE1_MODULE_ON_BATCHER_ABI = [
   {
@@ -9,6 +9,14 @@ export const PHASE1_MODULE_ON_BATCHER_ABI = [
     outputs: [{ type: 'address' }],
   },
 ] as const
+
+export const PHASE1_MODULE_ON_BATCHER_SELECTOR = toFunctionSelector('phase1Module()')
+
+export type Phase1ModuleReadState =
+  | { status: 'configured'; address: Address }
+  | { status: 'not_configured' }
+  | { status: 'unsupported' }
+  | { status: 'read_failed' }
 
 export const PHASE1_MODULE_DEPS_ABI = [
   {
@@ -57,22 +65,47 @@ type ReadClient = {
   }) => Promise<unknown>
 }
 
-export async function readPhase1ModuleAddress(params: {
+export async function readPhase1ModuleState(params: {
   publicClient: ReadClient
   batcherAddress: Address
-}): Promise<Address | null> {
+}): Promise<Phase1ModuleReadState> {
   try {
     const phase1Module = await params.publicClient.readContract({
       address: params.batcherAddress,
       abi: PHASE1_MODULE_ON_BATCHER_ABI,
       functionName: 'phase1Module',
     })
-    if (!isAddress(String(phase1Module))) return null
+    if (!isAddress(String(phase1Module))) return { status: 'read_failed' }
     const resolved = getAddress(phase1Module as Address)
-    return resolved === '0x0000000000000000000000000000000000000000' ? null : resolved
+    return resolved === '0x0000000000000000000000000000000000000000'
+      ? { status: 'not_configured' }
+      : { status: 'configured', address: resolved }
   } catch {
-    return null
+    return { status: 'read_failed' }
   }
+}
+
+export function classifyPhase1ModuleReadState(params: {
+  readState: Phase1ModuleReadState
+  batcherBytecode: Hex | null | undefined
+}): Phase1ModuleReadState {
+  if (params.readState.status !== 'read_failed') return params.readState
+  if (
+    params.batcherBytecode &&
+    params.batcherBytecode !== '0x' &&
+    !params.batcherBytecode.toLowerCase().includes(PHASE1_MODULE_ON_BATCHER_SELECTOR.slice(2))
+  ) {
+    return { status: 'unsupported' }
+  }
+  return params.readState
+}
+
+export async function readPhase1ModuleAddress(params: {
+  publicClient: ReadClient
+  batcherAddress: Address
+}): Promise<Address | null> {
+  const state = await readPhase1ModuleState(params)
+  return state.status === 'configured' ? state.address : null
 }
 
 async function readPhase1ModuleField(params: {
