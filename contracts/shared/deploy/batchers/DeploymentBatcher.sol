@@ -738,6 +738,8 @@ contract DeploymentBatcherPhase1Module {
     error Phase1ShareOFTMissing();
     error Phase1ShareOFTAlreadyBound(address shareOFT, address existingVault, address expectedVault);
     error Phase1Missing();
+    /// @notice Nonzero ShareOFT salt override must equal the derived CREATE2 salt (blocks squats).
+    error InvalidShareOftSaltOverride();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -934,9 +936,17 @@ contract DeploymentBatcherPhase1Module {
     ) internal returns (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash, bytes32 baseSalt) {
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
         baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
-        shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? utilsHelper.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version)
-            : shareOftSaltOverride;
+        // ODA-494-H01: nonzero override is a confirmation of the derived salt only — never a
+        // free-form CREATE2 salt (would let callers squat another owner's ShareOFT address).
+        bytes32 derivedShareOftSalt =
+            utilsHelper.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version);
+        if (shareOftSaltOverride == bytes32(0)) {
+            shareOftSalt = derivedShareOftSalt;
+        } else if (shareOftSaltOverride != derivedShareOftSalt) {
+            revert InvalidShareOftSaltOverride();
+        } else {
+            shareOftSalt = derivedShareOftSalt;
+        }
         paramsHash = utilsHelper.phase1ParamsHash(
             params.creatorToken,
             params.owner,
@@ -2139,6 +2149,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     // PHASE 1
     // ================================
 
+    /**
+     * @notice Deploy Phase-1 core with optional ShareOFT salt confirmation.
+     * @param shareOftSaltOverride Zero uses the derived CREATE2 salt. Nonzero must equal
+     *        `deriveShareOftSalt(creatorToken, owner, toLower(shareSymbol), version)` —
+     *        free-form salts are rejected (`InvalidShareOftSaltOverride`).
+     */
     function deployPhase1CoreWithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
@@ -2147,6 +2163,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
     }
 
+    /**
+     * @notice Finalize Phase-1 with optional ShareOFT salt confirmation.
+     * @param shareOftSaltOverride Zero uses the derived CREATE2 salt. Nonzero must equal
+     *        `deriveShareOftSalt(creatorToken, owner, toLower(shareSymbol), version)` —
+     *        free-form salts are rejected (`InvalidShareOftSaltOverride`).
+     */
     function finalizePhase1WithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,

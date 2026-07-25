@@ -400,15 +400,26 @@ contract Registry4626 is IRegistry4626, Ownable {
      *      - ERC-8004 agent identity (on-chain agent registration)
      *      - Vault owner and primary asset holder
      *      - Lottery prize recipient
-     *      Only the registry owner or the creator themselves can set this.
+     *      Auth (ODA-495-H01 / ODA-465-3):
+     *      - Registry owner may set or override any wallet.
+     *      - Otherwise only the token `creator` may set, and only as a self-bind
+     *        (`msg.sender == creator && msg.sender == _wallet`). Creators cannot bind
+     *        an arbitrary third-party wallet; strangers cannot claim a token by being `_wallet`.
+     *      - Replacing a different non-zero binding requires `liveRebindEnabled` and owner
+     *        (same one-shot latch as other token bindings).
      */
     function setCanonicalWallet(address _token, address _wallet) external override {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_wallet == address(0)) revert ZeroAddress();
 
-        // ODA-465-3: owner may override; otherwise caller must be the wallet being set
-        // (creator alone cannot bind an arbitrary third-party wallet).
-        if (msg.sender != owner() && msg.sender != _wallet) revert NotAuthorized();
+        address creator = tokenInfos[_token].creator;
+        if (msg.sender != owner()) {
+            // Creator self-bind only — not "any wallet claims itself for any token".
+            if (msg.sender != creator || msg.sender != _wallet) revert NotAuthorized();
+        }
+
+        address oldWallet = tokenInfos[_token].canonicalWallet;
+        _requireBindingWritable(_token, oldWallet, _wallet);
 
         // Enforce a 1:1 canonical wallet reverse mapping.
         // Without this check, a creator could "claim" another creator's wallet and hijack attribution.
@@ -418,7 +429,6 @@ contract Registry4626 is IRegistry4626, Ownable {
         }
 
         // Clear old reverse mapping if exists
-        address oldWallet = tokenInfos[_token].canonicalWallet;
         if (oldWallet != address(0) && oldWallet != _wallet) {
             // Defensive: only delete if the reverse mapping still points to this token.
             // (If state is already inconsistent from older deployments, don't clobber another token.)
