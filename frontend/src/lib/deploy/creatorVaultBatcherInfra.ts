@@ -7,6 +7,7 @@ import {
   classifyPhase1ModuleReadState,
   readPhase1ModuleState,
   resolveAlignedPhase1DeployDeps,
+  resolveWiredCreatorOvaultModules,
 } from '@/lib/deploy/phase1ModuleDeploy'
 
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1WithSalt.slice(2)
@@ -137,16 +138,7 @@ export async function readCreatorVaultBatcherInfra(params: {
     chainlinkEthUsd: Address | null
   }
 }): Promise<{ ok: true; infra: CreatorVaultBatcherInfra } | { ok: false; message: string }> {
-  const [alignedDeps, batcherBytecode, phase1ModuleReadState] = await Promise.all([
-    resolveAlignedPhase1DeployDeps({
-      publicClient:
-        params.publicClient as unknown as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
-      batcherAddress: params.batcherAddress,
-      fallbacks: {
-        create2Deployer: params.fallbacks.create2Deployer,
-        bytecodeStore: params.fallbacks.bytecodeStore,
-      },
-    }),
+  const [batcherBytecode, phase1ModuleReadState] = await Promise.all([
     params.publicClient.getBytecode({ address: params.batcherAddress }).catch(() => null),
     readPhase1ModuleState({
       publicClient:
@@ -166,12 +158,38 @@ export async function readCreatorVaultBatcherInfra(params: {
   }
   const phase1ModuleAddress =
     phase1ModuleState.status === 'configured' ? phase1ModuleState.address : null
-  const phase1ModuleBytecode = phase1ModuleAddress
-    ? await params.publicClient.getBytecode({ address: phase1ModuleAddress }).catch(() => null)
-    : null
+  const [alignedDeps, phase1ModuleBytecode, wiredModules] = await Promise.all([
+    resolveAlignedPhase1DeployDeps({
+      publicClient:
+        params.publicClient as unknown as Parameters<typeof resolveAlignedPhase1DeployDeps>[0]['publicClient'],
+      batcherAddress: params.batcherAddress,
+      fallbacks: {
+        create2Deployer: params.fallbacks.create2Deployer,
+        bytecodeStore: params.fallbacks.bytecodeStore,
+      },
+      phase1ModuleState,
+    }),
+    phase1ModuleAddress
+      ? params.publicClient.getBytecode({ address: phase1ModuleAddress }).catch(() => null)
+      : Promise.resolve(null),
+    phase1ModuleAddress
+      ? resolveWiredCreatorOvaultModules({
+          publicClient:
+            params.publicClient as unknown as Parameters<typeof resolveWiredCreatorOvaultModules>[0]['publicClient'],
+          batcherAddress: params.batcherAddress,
+          phase1ModuleState,
+        })
+      : Promise.resolve(null),
+  ])
 
   if (!alignedDeps.ok) {
     return { ok: false, message: alignedDeps.message }
+  }
+  if (phase1ModuleAddress && !wiredModules) {
+    return {
+      ok: false,
+      message: `Configured Phase-1 module at ${phase1ModuleAddress} does not expose the expected vault module wiring.`,
+    }
   }
 
   const viewResults = await params.publicClient
@@ -200,7 +218,9 @@ export async function readCreatorVaultBatcherInfra(params: {
   const modulePreflight = await assertCreatorOvaultModuleStorageCompatible({
     publicClient:
       params.publicClient as unknown as Parameters<typeof assertCreatorOvaultModuleStorageCompatible>[0]['publicClient'],
-    batcherAddress: params.batcherAddress,
+    ...(wiredModules
+      ? { moduleAddress: wiredModules.core }
+      : { batcherAddress: params.batcherAddress }),
   })
   if (!modulePreflight.ok) {
     return { ok: false, message: modulePreflight.message }

@@ -124,28 +124,38 @@ describe('deploymentBatcherInfra', () => {
     expect(result.infra.capabilities.supportsPhase1WithSalt).toBe(false)
   })
 
-  it('fails closed when runtime advertises phase1Module but its getter read fails', async () => {
+  it('fails closed when repeated phase1Module reads could disagree', async () => {
     const batcher = getAddress('0x1111111111111111111111111111111111111111')
-    const deployer = getAddress('0x3333333333333333333333333333333333333333')
-    const store = getAddress('0x4444444444444444444444444444444444444444')
-    const core = getAddress('0x5555555555555555555555555555555555555555')
-    const strategies = getAddress('0x6666666666666666666666666666666666666666')
-    const admin = getAddress('0x7777777777777777777777777777777777777777')
+    const phase1 = getAddress('0x2222222222222222222222222222222222222222')
+    const shellDeployer = getAddress('0x3333333333333333333333333333333333333333')
+    const shellStore = getAddress('0x4444444444444444444444444444444444444444')
+    const moduleDeployer = getAddress('0x5555555555555555555555555555555555555555')
+    const moduleStore = getAddress('0x6666666666666666666666666666666666666666')
+    const core = getAddress('0x7777777777777777777777777777777777777777')
+    const strategies = getAddress('0x8888888888888888888888888888888888888888')
+    const admin = getAddress('0x9999999999999999999999999999999999999999')
     const shellBytecode = `0x${[
       toFunctionSelector('phase1Module()').slice(2),
       CURRENT_DEPLOYMENT_BATCHER_SELECTORS.deployPhase1CoreWithSalt.slice(2),
       CURRENT_DEPLOYMENT_BATCHER_SELECTORS.finalizePhase1WithSalt.slice(2),
     ].join('')}` as Hex
+    let phase1ModuleReads = 0
     const readContract = vi.fn(async (args: { address: Address; functionName: string }) => {
       if (args.functionName === 'phase1Module') {
-        throw new Error('transient RPC failure')
+        phase1ModuleReads += 1
+        if (phase1ModuleReads === 1 || phase1ModuleReads === 3) {
+          throw new Error('transient RPC failure')
+        }
+        return phase1
       }
-      if (args.address === batcher && args.functionName === 'create2Deployer') return deployer
-      if (args.address === batcher && args.functionName === 'bytecodeStore') return store
-      if (args.address === batcher && args.functionName === 'vaultCoreModule') return core
-      if (args.address === batcher && args.functionName === 'vaultStrategiesModule') return strategies
-      if (args.address === batcher && args.functionName === 'vaultAdminModule') return admin
-      if (args.address === deployer && args.functionName === 'store') return store
+      if (args.address === batcher && args.functionName === 'create2Deployer') return shellDeployer
+      if (args.address === batcher && args.functionName === 'bytecodeStore') return shellStore
+      if (args.address === phase1 && args.functionName === 'create2Deployer') return moduleDeployer
+      if (args.address === phase1 && args.functionName === 'bytecodeStore') return moduleStore
+      if (args.address === phase1 && args.functionName === 'vaultCoreModule') return core
+      if (args.address === phase1 && args.functionName === 'vaultStrategiesModule') return strategies
+      if (args.address === phase1 && args.functionName === 'vaultAdminModule') return admin
+      if (args.address === shellDeployer && args.functionName === 'store') return shellStore
       if (args.address === core && args.functionName === 'moduleStorageVersion') {
         return CREATOR_OVAULT_MODULE_STORAGE_V5
       }
@@ -156,6 +166,9 @@ describe('deploymentBatcherInfra', () => {
       getBytecode: vi.fn(async ({ address }: { address: Address }) => {
         if (address === batcher) {
           return shellBytecode
+        }
+        if (address === phase1) {
+          return '0x6000' as Hex
         }
         throw new Error(`unexpected bytecode read ${address}`)
       }),
@@ -182,5 +195,6 @@ describe('deploymentBatcherInfra', () => {
     if (!result.ok) {
       expect(result.message).toMatch(/phase1Module/i)
     }
+    expect(phase1ModuleReads).toBe(1)
   })
 })

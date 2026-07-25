@@ -104,6 +104,8 @@ describe('phase1ModuleDeploy', () => {
     const resolved = await resolveCreate2DeployerForBatcher({
       publicClient,
       batcherAddress: BATCHER,
+      fallback: LEGACY_CREATE2,
+      phase1ModuleState: { status: 'configured', address: PHASE1 },
     })
     expect(resolved).toBeNull()
   })

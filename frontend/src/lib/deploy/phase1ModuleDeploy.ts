@@ -151,8 +151,14 @@ export async function resolvePhase1ModuleDeployField(params: {
   publicClient: ReadClient
   batcherAddress: Address
   functionName: 'create2Deployer' | 'bytecodeStore' | 'vaultCoreModule' | 'vaultStrategiesModule' | 'vaultAdminModule'
+  phase1ModuleState?: Phase1ModuleReadState
 }): Promise<Address | null> {
-  const phase1ModuleAddress = await readPhase1ModuleAddress(params)
+  if (params.phase1ModuleState?.status === 'read_failed') return null
+  const phase1ModuleAddress = params.phase1ModuleState
+    ? params.phase1ModuleState.status === 'configured'
+      ? params.phase1ModuleState.address
+      : null
+    : await readPhase1ModuleAddress(params)
   if (phase1ModuleAddress) {
     const fromPhase1 = await readPhase1ModuleField({
       publicClient: params.publicClient,
@@ -207,18 +213,21 @@ export async function resolveAlignedPhase1DeployDeps(params: {
   publicClient: ReadClient
   batcherAddress: Address
   fallbacks?: { create2Deployer?: Address | null; bytecodeStore?: Address | null }
+  phase1ModuleState?: Phase1ModuleReadState
 }): Promise<Phase1DeployDeps> {
   const bytecodeStore =
     (await resolveBytecodeStoreForBatcher({
       publicClient: params.publicClient,
       batcherAddress: params.batcherAddress,
       fallback: params.fallbacks?.bytecodeStore ?? null,
+      phase1ModuleState: params.phase1ModuleState,
     })) ?? null
   const create2Deployer =
     (await resolveCreate2DeployerForBatcher({
       publicClient: params.publicClient,
       batcherAddress: params.batcherAddress,
       fallback: params.fallbacks?.create2Deployer ?? null,
+      phase1ModuleState: params.phase1ModuleState,
     })) ?? null
 
   if (!bytecodeStore || !create2Deployer) {
@@ -279,13 +288,21 @@ export async function resolveCreate2DeployerForBatcher(params: {
   publicClient: ReadClient
   batcherAddress: Address
   fallback?: Address | null
+  phase1ModuleState?: Phase1ModuleReadState
 }): Promise<Address | null> {
   const resolved = await resolvePhase1ModuleDeployField({
     publicClient: params.publicClient,
     batcherAddress: params.batcherAddress,
     functionName: 'create2Deployer',
+    phase1ModuleState: params.phase1ModuleState,
   })
   if (resolved) return resolved
+  if (
+    params.phase1ModuleState?.status === 'configured' ||
+    params.phase1ModuleState?.status === 'read_failed'
+  ) {
+    return null
+  }
   if (params.fallback && isAddress(params.fallback)) return getAddress(params.fallback)
   return null
 }
@@ -294,13 +311,21 @@ export async function resolveBytecodeStoreForBatcher(params: {
   publicClient: ReadClient
   batcherAddress: Address
   fallback?: Address | null
+  phase1ModuleState?: Phase1ModuleReadState
 }): Promise<Address | null> {
   const resolved = await resolvePhase1ModuleDeployField({
     publicClient: params.publicClient,
     batcherAddress: params.batcherAddress,
     functionName: 'bytecodeStore',
+    phase1ModuleState: params.phase1ModuleState,
   })
   if (resolved) return resolved
+  if (
+    params.phase1ModuleState?.status === 'configured' ||
+    params.phase1ModuleState?.status === 'read_failed'
+  ) {
+    return null
+  }
   if (params.fallback && isAddress(params.fallback)) return getAddress(params.fallback)
   return null
 }
@@ -308,6 +333,7 @@ export async function resolveBytecodeStoreForBatcher(params: {
 export async function resolveWiredCreatorOvaultModules(params: {
   publicClient: ReadClient
   batcherAddress: Address
+  phase1ModuleState?: Phase1ModuleReadState
 }): Promise<{ core: Address; strategies: Address; admin: Address } | null> {
   const [core, strategies, admin] = await Promise.all([
     resolvePhase1ModuleDeployField({ ...params, functionName: 'vaultCoreModule' }),
