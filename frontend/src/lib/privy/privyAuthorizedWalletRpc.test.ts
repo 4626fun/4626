@@ -57,6 +57,15 @@ describe('resolvePrivyUnifiedWalletId', () => {
       }),
     ).toBe(WALLET_ID)
   })
+
+  it('rejects a wallet id when the requested signer address disagrees', () => {
+    expect(
+      resolvePrivyUnifiedWalletId({
+        wallet: { id: WALLET_ID, address: ADDRESS },
+        address: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('isPrivyUnifiedStackWallet', () => {
@@ -115,6 +124,10 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
           method: 'secp256k1_sign',
           params: { hash: DIGEST },
         },
+        headers: expect.objectContaining({
+          'privy-app-id': 'cltestappid000000000000000',
+          'privy-request-expiry': expect.stringMatching(/^\d+$/),
+        }),
       }),
     )
 
@@ -125,6 +138,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
           'privy-authorization-signature': 'auth-sig-base64',
+          'privy-request-expiry': expect.stringMatching(/^\d+$/),
         }),
       }),
     )
@@ -301,10 +315,15 @@ describe('privyAuthorizedWalletPersonalSign', () => {
     })
 
     expect(out).toBe(SIG)
-    // Signature stays canonicalized against the auth.privy.io URL form.
-    expect(generateAuthorizationSignature).toHaveBeenCalledTimes(1)
-    expect(generateAuthorizationSignature).toHaveBeenCalledWith(
+    // Re-sign for the proxy URL — Privy requires the signed url to match the request target.
+    expect(generateAuthorizationSignature).toHaveBeenCalledTimes(2)
+    expect(generateAuthorizationSignature).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc` }),
+    )
+    expect(generateAuthorizationSignature).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc` }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,

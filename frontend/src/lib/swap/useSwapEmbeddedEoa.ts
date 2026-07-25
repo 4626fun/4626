@@ -267,11 +267,14 @@ export function useSwapEmbeddedEoa(params: {
   ])
 
   const privyEmbeddedEoaAddressInfo = useMemo(() => {
+    // Prefer the selected Privy embedded wallet address. Do not fall back to the
+    // 4626 session authAddress (often an external admin EOA) — that mismatches
+    // the wallet id used for authorized secp256k1_sign and produces AA24-style
+    // UserOp signature failures on the canonical CSW.
     const candidates: Array<{ address: Address | null; source: string }> = [
       { address: normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address), source: 'wallets' },
       { address: privyEmbeddedEoaAddressFromUser, source: 'privy-user' },
       { address: ensuredEmbeddedEoaAddress, source: 'privy-embedded-hook' },
-      { address: normalizeAddressOrNull(authAddress), source: 'session-auth-address' },
     ]
     for (const { address, source } of candidates) {
       if (address && (!canonicalAddress || address.toLowerCase() !== canonicalAddress.toLowerCase())) {
@@ -280,7 +283,6 @@ export function useSwapEmbeddedEoa(params: {
     }
     return { address: null, source: null as any }
   }, [
-    authAddress,
     canonicalAddress,
     ensuredEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,
@@ -390,7 +392,16 @@ export function useSwapEmbeddedEoa(params: {
     })
   }, [privyEmbeddedEoaAddress, privyEmbeddedEoaWallet, privyUser])
 
-  const usePrivyAuthorizedSecp256k1 = Boolean(privyUnifiedWalletId)
+  const usePrivyAuthorizedSecp256k1 = useMemo(() => {
+    if (!privyUnifiedWalletId || !privyEmbeddedEoaAddress) return false
+    const walletAddress = normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address)
+    // If the live wallet object has an address, it must match the signer we will
+    // advertise as UserOp ownerAddress.
+    if (walletAddress && walletAddress.toLowerCase() !== privyEmbeddedEoaAddress.toLowerCase()) {
+      return false
+    }
+    return true
+  }, [privyEmbeddedEoaAddress, privyEmbeddedEoaWallet, privyUnifiedWalletId])
 
   const signPrivyAuthorizedSecp256k1Digest = useCallback(
     async (digest: Hex) => {

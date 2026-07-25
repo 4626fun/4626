@@ -8,6 +8,10 @@ import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarke
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
 
+/** Matches `@privy-io/js-sdk-core` wallet-api DEFAULT_EXPIRY_TIME_MS (30 minutes). */
+const PRIVY_REQUEST_EXPIRY_MS = 1_800_000
+const PRIVY_REQUEST_EXPIRY_HEADER = 'privy-request-expiry' as const
+
 export type PrivyAuthorizationSignatureGenerator = (input: {
   version: 1
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -16,6 +20,7 @@ export type PrivyAuthorizationSignatureGenerator = (input: {
   headers: {
     'privy-app-id': string
     'privy-idempotency-key'?: string
+    'privy-request-expiry'?: string
   }
 }) => Promise<{ signature: string }>
 
@@ -122,44 +127,52 @@ async function postAuthorizedWalletRpc(params: {
   }
 
   const rpcAuthorizationUrl = resolvePrivyWalletRpcAuthorizationUrl(params.walletId)
+  // Privy verifies this header as part of the authorization-signature payload.
+  // Omitting it yields 401 after a valid bearer ("Successfully verified access token")
+  // with zero_correct_authorization_signatures — see js-sdk-core wallet-api/rpc.js.
+  const requestExpiry = String(Date.now() + PRIVY_REQUEST_EXPIRY_MS)
 
-  const { signature: authorizationSignature } = await params.generateAuthorizationSignature({
-    version: 1,
-    method: 'POST',
-    url: rpcAuthorizationUrl,
-    body: params.body,
-    headers: { 'privy-app-id': appId },
-  })
+  const signAndBuildHeaders = async (requestUrl: string): Promise<Record<string, string>> => {
+    const { signature: authorizationSignature } = await params.generateAuthorizationSignature({
+      version: 1,
+      method: 'POST',
+      url: requestUrl,
+      body: params.body,
+      headers: {
+        'privy-app-id': appId,
+        [PRIVY_REQUEST_EXPIRY_HEADER]: requestExpiry,
+      },
+    })
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    'privy-app-id': appId,
-    Authorization: `Bearer ${accessToken}`,
-    'privy-authorization-signature': authorizationSignature,
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'privy-app-id': appId,
+      Authorization: `Bearer ${accessToken}`,
+      'privy-authorization-signature': authorizationSignature,
+      [PRIVY_REQUEST_EXPIRY_HEADER]: requestExpiry,
+    }
+    // Apps configured with an app client issue access tokens bound to that
+    // client context. Privy verifies the bearer against the client id, so
+    // omitting this header makes valid tokens fail as "Missing auth token."
+    const clientId = resolveEffectivePrivyClientId()
+    if (clientId) {
+      headers['privy-client-id'] = clientId
+    }
+    return headers
   }
-  // Apps configured with an app client issue access tokens bound to that
-  // client context. Privy verifies the bearer against the client id, so
-  // omitting this header makes valid tokens fail as "Missing auth token."
-  const clientId = resolveEffectivePrivyClientId()
-  if (clientId) {
-    headers['privy-client-id'] = clientId
-  }
 
-  const requestInit: RequestInit = {
+  let response = await fetch(rpcAuthorizationUrl, {
     method: 'POST',
     credentials: 'include',
-    headers,
+    headers: await signAndBuildHeaders(rpcAuthorizationUrl),
     body: JSON.stringify(params.body),
-  }
+  })
 
-  let response = await fetch(rpcAuthorizationUrl, requestInit)
-
-  // Bearer verification can fail at auth.privy.io when the session was issued
-  // through the first-party proxy (server-cookie mode). The proxy host holds
-  // the HttpOnly session cookies, so retry there. The authorization signature
-  // stays canonicalized against the auth.privy.io URL form, which is what
-  // upstream verification expects even for proxied requests.
+  // Bearer/cookie verification can fail at auth.privy.io when the session was
+  // issued through the first-party proxy (server-cookie mode). Retry on the
+  // proxy host with a freshly signed payload bound to that request URL —
+  // Privy requires the signed `url` to match the HTTP request target.
   if (response.status === 401) {
     const proxyBase = resolvePrivyProxyBaseUrl()
     if (proxyBase && !rpcAuthorizationUrl.startsWith(proxyBase)) {
@@ -167,7 +180,12 @@ async function postAuthorizedWalletRpc(params: {
       console.warn(
         `[privy-authorized-rpc] ${params.context} got 401 at canonical origin, retrying via first-party proxy`,
       )
-      response = await fetch(proxyUrl, requestInit)
+      response = await fetch(proxyUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: await signAndBuildHeaders(proxyUrl),
+        body: JSON.stringify(params.body),
+      })
     }
   }
 
@@ -348,7 +366,17 @@ export function resolvePrivyUnifiedWalletId(params: {
   const walletRecord =
     params.wallet && typeof params.wallet === 'object' ? (params.wallet as Record<string, unknown>) : null
   const walletId = typeof walletRecord?.id === 'string' ? walletRecord.id.trim() : ''
-  if (walletId) return walletId
+  const walletAddress = String(walletRecord?.address ?? '')
+    .trim()
+    .toLowerCase()
+  const requestedAddress = String(params.address ?? '')
+    .trim()
+    .toLowerCase()
+  // Never bind an authorized-RPC wallet id to a different signer address — that
+  // builds UserOps for owner A while secp256k1_sign uses wallet B's key.
+  if (walletId && (!requestedAddress || !walletAddress || walletAddress === requestedAddress)) {
+    return walletId
+  }
 
   const targetAddress = String(params.address ?? walletRecord?.address ?? '')
     .trim()
