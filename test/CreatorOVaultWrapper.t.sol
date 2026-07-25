@@ -199,7 +199,8 @@ contract CreatorOVaultWrapperTest is Test {
         assertEq(wrapper.userDustShares(bob), 0);
     }
 
-    function test_withdrawFor_consumesBeneficiaryDust() public {
+    /// ODA-498-3: operators must not siphon beneficiary dust via withdrawFor.
+    function test_withdrawFor_doesNotSiphonBeneficiaryDust() public {
         wrapper.setBeneficiaryOperator(composer, true);
 
         creatorCoin.mint(composer, 1_001);
@@ -216,9 +217,10 @@ contract CreatorOVaultWrapperTest is Test {
 
         vm.prank(composer);
         uint256 creatorOut = wrapper.withdrawFor(1, 0, alice);
-        assertEq(creatorOut, 1_001);
-        assertEq(wrapper.userDustShares(alice), 0);
+        assertEq(creatorOut, 1_000);
+        assertEq(wrapper.userDustShares(alice), 1);
         assertEq(shareOFT.balanceOf(composer), 0);
+        assertTrue(wrapper.isBalanced());
     }
 
     function test_verify_and_isBalanced_includeDust() public {

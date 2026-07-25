@@ -631,6 +631,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error ImpairmentChallengeWindowClosed(uint64 unlockTime);
     error ImpairmentRootRequired(uint256 epochId);
     error ImpairmentRootAlreadyFinalized(uint256 epochId);
+    /// @dev ODA-497-2: propose would place finalize unlock at/after stale-clear deadline.
+    error ImpairmentRootWouldExceedStaleDeadline(uint64 unlock, uint64 staleAt);
+    /// @dev ODA-497-2: permissionless stale clear refused while a root is outstanding.
+    error ImpairmentRootBlocksStaleClear(uint256 epochId);
     error ImpairmentRootChallengedErr(uint256 epochId);
     error ChallengeWindowNotConfigured();
     error ClaimAlreadyMinted(uint256 epochId, address account);
@@ -1268,9 +1272,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     ///         deposits/withdrawals indefinitely. Deliberately intentionally NOT gated by
     ///         `onlyImpairmentAuthorized` — restricting who can call this would defeat its
     ///         purpose as a backstop against that very authority being unavailable.
-    ///         Applies uniformly regardless of whether a root has already been proposed;
-    ///         governance should size `maxImpairmentTripDuration` comfortably longer than
-    ///         its expected propose + `impairmentChallengeWindow` + finalize turnaround.
+    ///         ODA-497-2: refused while `snapshotRoot != 0` (use challenge / clear-root paths);
+    ///         `proposeImpairmentRoot` also requires challenge unlock < stale deadline.
     function clearStaleImpairmentTrip(uint256 epochId) external nonReentrant {
         _delegateAndReturn(_coreModule);
     }

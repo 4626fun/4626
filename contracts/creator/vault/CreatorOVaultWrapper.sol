@@ -190,8 +190,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         isWhitelisted[_owner] = true;
         isBeneficiaryOperator[_owner] = true;
 
-        // Infinite approval for vault deposits
-        IERC20(_creatorCoin).approve(_vault, type(uint256).max);
+        // Infinite approval for vault deposits (ODA-498 lead: SafeERC20 for non-standard ERC20).
+        IERC20(_creatorCoin).forceApprove(_vault, type(uint256).max);
     }
 
     // ================================
@@ -461,6 +461,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
+        // ODA-498-4: parity with withdraw* — large unwraps must use the async queue.
+        _requireSynchronousRedemption(amountOut);
 
         // Transfer vault shares to user
         IERC20(address(vault)).safeTransfer(msg.sender, amountOut);
@@ -544,7 +546,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     {
         // DENORMALIZE: Multiply by 1000 and include user's accumulated dust.
         // 1 ■AKITA → 1000 ▢AKITA (+ user dust remainder)
-        uint256 userDust = userDustShares[accountingUser];
+        // ODA-498-3: only reclaim dust when the ShareOFT burner is the accounting
+        // principal — otherwise a beneficiary operator could siphon dust via withdrawFor.
+        uint256 userDust = (accountingUser == burnFrom) ? userDustShares[accountingUser] : 0;
         uint256 vaultSharesBeforeFee = shareOFTIn * NORMALIZATION_FACTOR + userDust;
 
         uint256 fee = 0;
@@ -771,7 +775,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      * @notice Refresh vault approval if needed
      */
     function refreshApproval() external onlyOwner {
-        creatorCoin.approve(address(vault), type(uint256).max);
+        creatorCoin.forceApprove(address(vault), type(uint256).max);
     }
 
     function _requiredLockedBacking() internal view returns (uint256) {
@@ -820,8 +824,11 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 fromBlock = lastWrapperDepositBlock[from];
         if (fromBlock == 0) return;
 
+        // ODA-498-1: only stamp recipients with no independent deposit history.
+        // Overwriting an existing `to` stamp let any recent depositor grief
+        // another address via dust ShareOFT transfers every block.
         uint256 toBlock = lastWrapperDepositBlock[to];
-        if (fromBlock > toBlock) {
+        if (toBlock == 0) {
             lastWrapperDepositBlock[to] = fromBlock;
             emit CooldownPropagated(from, to, fromBlock);
         }

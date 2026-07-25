@@ -46,3 +46,5 @@ Persist IDs in [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-com
 ## Public pin sync
 
 Remediation contracts for **ODA-494-H01** / **ODA-495-H01** synced to public `ef1ca595340b02680c3b17f0011b27bece24b914` (from private `a16096d1e`). No new ODA jobs commissioned.
+
+- [ODA 496–498 remediation](./oda-496-498-remediation.md)

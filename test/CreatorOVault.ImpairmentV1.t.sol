@@ -416,13 +416,9 @@ contract CreatorOVaultImpairmentV1Test is Test {
         assertEq(newEpochId, epochId + 1);
     }
 
-    /// The timeout clear is a hard bound on Suspect-mode duration regardless of internal
-    /// sub-state — even if a root has already been proposed and is sitting in (or past)
-    /// its own challenge window, a stranger can still force-clear once the *overall* trip
-    /// has outlived `maxImpairmentTripDuration`. Governance controls both durations and is
-    /// expected to size `maxImpairmentTripDuration` comfortably longer than its expected
-    /// propose+challenge+finalize turnaround.
-    function test_clearStaleImpairmentTrip_worksEvenWithProposedRoot() public {
+    /// ODA-497-2: once a root is proposed, the permissionless stale valve must not wipe
+    /// a near-finalized claim surface — use challenge / clear-root / authorized clear.
+    function test_clearStaleImpairmentTrip_revertsWhenRootProposed() public {
         uint256 epochId = vault.tripImpairment(address(strat), 1);
         uint256 aliceShares = vault.balanceOf(alice);
         bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
@@ -433,11 +429,34 @@ contract CreatorOVaultImpairmentV1Test is Test {
 
         address stranger = _pickEmptyCodeAddress("impairment-stranger-2");
         vm.prank(stranger);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.ImpairmentRootBlocksStaleClear.selector, epochId)
+        );
         vault.clearStaleImpairmentTrip(epochId);
+    }
 
-        assertEq(uint8(vault.vaultMode()), 0);
-        assertEq(vault.impairmentRootUnlockTime(epochId), 0);
-        assertFalse(vault.impairmentRootChallenged(epochId));
+    /// ODA-497-2: propose must keep challenge unlock strictly before the stale-clear deadline.
+    function test_proposeImpairmentRoot_revertsWhenUnlockWouldMeetOrPassStaleDeadline() public {
+        vault.setMaxImpairmentTripDuration(3 days);
+        vault.setImpairmentChallengeWindow(1 hours);
+
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint64 trippedAt = uint64(block.timestamp);
+        // Leave only 30 minutes before stale-clear while challenge window is 1 hour.
+        vm.warp(trippedAt + 3 days - 30 minutes);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
+
+        uint64 unlock = uint64(block.timestamp + 1 hours);
+        uint64 staleAt = trippedAt + uint64(3 days);
+        assertGt(unlock, staleAt, "precondition: challenge unlock must meet/pass stale deadline");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVault.ImpairmentRootWouldExceedStaleDeadline.selector, unlock, staleAt
+            )
+        );
+        vault.proposeImpairmentRoot(epochId, leaf, aliceShares, address(creatorCoin));
     }
 
     /// The permissionless timeout path must not interfere with the ordinary authorized

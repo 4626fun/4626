@@ -158,6 +158,10 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error ImpairmentChallengeWindowClosed(uint64 unlockTime);
     error ImpairmentRootRequired(uint256 epochId);
     error ImpairmentRootAlreadyFinalized(uint256 epochId);
+    /// @notice ODA-497-2: proposed root's challenge unlock must finalize before the stale-clear deadline.
+    error ImpairmentRootWouldExceedStaleDeadline(uint64 unlock, uint64 staleAt);
+    /// @notice ODA-497-2: once a root exists, permissionless stale-clear must not wipe it.
+    error ImpairmentRootBlocksStaleClear(uint256 epochId);
     error ImpairmentRootChallengedErr(uint256 epochId);
     error ChallengeWindowNotConfigured();
     error ClaimAlreadyMinted(uint256 epochId, address account);
@@ -490,11 +494,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             revert LargeWithdrawalMustBeQueued(assets, largeWithdrawalThreshold);
         }
 
+        uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
         _ensureCoin(assets);
         _pushCreatorCoinExact(receiver, assets);
 
-        _decreaseReportBaselineForPrincipalOutflow(assets);
+        // ODA-497-4: decrement report baseline by cost basis, not market value.
+        _decreaseReportBaselineForShareBurn(shares, supplyBefore);
 
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -528,11 +534,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             _spendAllowance(owner_, msg.sender, shares);
         }
 
+        uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
         _ensureCoin(assets);
         _pushCreatorCoinExact(receiver, assets);
 
-        _decreaseReportBaselineForPrincipalOutflow(assets);
+        // ODA-497-4: decrement report baseline by cost basis, not market value.
+        _decreaseReportBaselineForShareBurn(shares, supplyBefore);
 
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -550,6 +558,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
     function queueWithdrawal(uint256 shares, address receiver) external onlyDelegateCall {
         _enforceOperatorPermIfGranted(OP_WITHDRAW);
+        // ODA-497-5: large-holder queue must honor the same emergency pause as redeem/withdraw.
+        if (paused) revert Paused();
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -587,6 +597,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
     function claimQueuedWithdrawal() external onlyDelegateCall returns (uint256 assets) {
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
+        // ODA-497-5: pause must block claim as well as queue / sync redeem.
+        if (paused) revert Paused();
         _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
 
@@ -597,6 +609,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 shares = queued.shares;
         address receiver = queued.receiver;
+        uint256 supplyBefore = _totalSupply;
         delete queuedWithdrawals[msg.sender];
 
         // Use uncapped conversion for queued settlement; capped previewRedeem is for sync withdrawals.
@@ -607,7 +620,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         _ensureCoin(assets);
         _pushCreatorCoinExact(receiver, assets);
-        _decreaseReportBaselineForPrincipalOutflow(assets);
+        // ODA-497-4: decrement report baseline by cost basis, not market value.
+        _decreaseReportBaselineForShareBurn(shares, supplyBefore);
 
         emit WithdrawalClaimed(msg.sender, assets);
     }
@@ -809,6 +823,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     // =================================
 
     function report() external onlyDelegateCall returns (uint256 profit, uint256 loss) {
+        // ODA-497-3: do not book performance fees while tripped/impaired.
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         _processProfitUnlock();
         _processValuationHealth();
         _requireStrategyValuationsReady(true);
@@ -984,9 +1000,18 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         totalAssetsAtLastReport += assetsIn;
     }
 
+    /// @dev Asset-denominated baseline decrease (recovery / non-share outflows).
     function _decreaseReportBaselineForPrincipalOutflow(uint256 assetsOut) internal {
         uint256 baseline = totalAssetsAtLastReport;
         totalAssetsAtLastReport = assetsOut >= baseline ? 0 : baseline - assetsOut;
+    }
+
+    /// @notice ODA-497-4: share burns reduce the report baseline by cost basis, not market value.
+    function _decreaseReportBaselineForShareBurn(uint256 sharesBurned, uint256 supplyBeforeBurn) internal {
+        if (sharesBurned == 0 || supplyBeforeBurn == 0) return;
+        uint256 baseline = totalAssetsAtLastReport;
+        uint256 basisOut = (baseline * sharesBurned) / supplyBeforeBurn;
+        totalAssetsAtLastReport = basisOut >= baseline ? 0 : baseline - basisOut;
     }
 
     // =================================
@@ -1096,6 +1121,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         if (epochId == 0 || epochId != activeImpairmentEpoch) revert InvalidImpairmentEpoch(epochId);
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+        // ODA-497-2: once a root exists, use challenge/clear-root paths — do not wipe
+        // a near-finalized claim surface via the permissionless stale valve.
+        if (epoch.snapshotRoot != bytes32(0)) revert ImpairmentRootBlocksStaleClear(epochId);
 
         uint256 staleAt = uint256(epoch.trippedAt) + uint256(maxImpairmentTripDuration);
         if (block.timestamp < staleAt) revert ImpairmentTripNotStale(epochId, staleAt);
@@ -1190,6 +1218,10 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         // Griefing of finalize still needs a bond/cap follow-up — do not extend
         // the stale deadline by refreshing trippedAt here.
         uint64 unlock = uint64(block.timestamp) + impairmentChallengeWindow;
+        // ODA-497-2: challenge unlock must strictly precede the stale-clear deadline
+        // so a legitimate near-finalized root cannot race the permissionless wipe.
+        uint64 staleAt = epoch.trippedAt + maxImpairmentTripDuration;
+        if (unlock >= staleAt) revert ImpairmentRootWouldExceedStaleDeadline(unlock, staleAt);
         impairmentRootUnlockTime[epochId] = unlock;
         emit ImpairmentRootProposed(epochId, snapshotRoot, unlock);
     }

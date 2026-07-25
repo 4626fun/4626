@@ -736,6 +736,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         require(_sendParam.dstEid == hubEid, "Invalid dstEid");
         require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
         require(_sendParam.amountLD == amount, "Amount mismatch");
+        // ODA-498-2: permissionless callers must not inject lzCompose payloads.
+        require(_sendParam.composeMsg.length == 0, "No compose allowed");
 
         // Execute OFT send with the contract as the debited sender.
         // Calling `this.send` makes msg.sender == address(this) in OFTCore._send,

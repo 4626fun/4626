@@ -205,9 +205,12 @@ contract ODA480_481_P0Test is Test {
         assertFalse(vault.impairmentRootChallenged(epochId));
         assertEq(vault.impairmentChallengeBondHeld(epochId), 0);
 
-        // Re-challenge + wait for stale trip timeout; clearStale must succeed.
+        // Re-challenge then clear root again (second bond refund must also not brick).
+        // ODA-497-2: clearStale refuses while a root is outstanding — clear the root first.
         vault.proposeImpairmentRoot(epochId, leaf, vault.balanceOf(address(this)), address(coin));
         griefer.challenge{value: bond}(vault, epochId, bond);
+        vault.clearImpairmentRootAfterChallenge(epochId);
+        assertEq(vault.impairmentChallengeBondHeld(epochId), 0);
 
         vm.warp(block.timestamp + 3 days + 1);
         vault.clearStaleImpairmentTrip(epochId);
