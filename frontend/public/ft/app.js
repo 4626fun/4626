@@ -29,7 +29,6 @@
   let busy = false
   /** @type {bigint} */
   let lastGasWei = 0n
-  const SEND_CALLS_CHUNK = 10
 
   const $ = (id) => document.getElementById(id)
 
@@ -370,85 +369,59 @@
     return accountFrom || account
   }
 
-  function buildSellCall(p) {
-    return {
-      to: FT,
-      data: callDataSell(p.subject, p.sellable),
-    }
-  }
-
-  async function sendCallsChunk(provider, chunk, chunkLabel) {
+  /**
+   * One sellShares tx. Avoid wallet_sendCalls — many wallets return
+   * Invalid params (-32602) for EIP-5792 batches. Plain eth_sendTransaction
+   * is what works for EOAs on Base.
+   */
+  async function sendOneSell(provider, p) {
     const from = txFrom()
-    const calls = chunk.map(buildSellCall)
-    // EIP-5792: Invalid params (-32602) often means schema/bundle issues.
-    // Try v2 non-atomic first; then omit empty value; then fail over to sequential.
-    const attempts = [
-      {
-        version: '2.0.0',
-        from,
-        chainId: BASE_CHAIN_HEX,
-        atomicRequired: false,
-        calls: calls.map((c) => ({ ...c, value: '0x0' })),
-      },
-      {
-        version: '2.0.0',
-        from,
-        chainId: BASE_CHAIN_HEX,
-        atomicRequired: false,
-        calls,
-      },
+    const data = callDataSell(p.subject, p.sellable)
+    const shapes = [
+      { from, to: FT, data },
+      { from, to: FT, data, value: '0x0' },
+      { from, to: FT.toLowerCase(), data },
+      { to: FT, data },
     ]
     let lastErr
-    for (const params of attempts) {
+    for (const tx of shapes) {
       try {
         return await provider.request({
-          method: 'wallet_sendCalls',
-          params: [params],
+          method: 'eth_sendTransaction',
+          params: [tx],
         })
       } catch (err) {
         lastErr = err
         const msg = ((err && err.message) || String(err)).toLowerCase()
         const code = err && err.code
-        // Unsupported method → stop trying sendCalls
-        if (code === -32601 || /method .*not (found|supported)|unsupported method/i.test(msg)) {
+        if (code === 4001 || /user rejected|denied|rejected the request/i.test(msg)) {
           throw err
         }
-        // Keep trying alternate shapes for invalid params
-        if (code === -32602 || /invalid params|invalid request/i.test(msg)) {
+        // Try next shape on invalid params / similar
+        if (code === -32602 || /invalid params|invalid request|invalid argument/i.test(msg)) {
           continue
         }
-        throw err
+        // Other errors: still try remaining shapes once
+        continue
       }
     }
-    throw lastErr || new Error('Ha fallado wallet_sendCalls (' + chunkLabel + ')')
+    throw lastErr || new Error('eth_sendTransaction ha fallado')
   }
 
   async function sellSequential(provider, rows, lines) {
     let ok = 0
     let fail = 0
-    const from = txFrom()
     for (let i = 0; i < rows.length; i++) {
       const p = rows[i]
       setStatus(`Vendiendo ${i + 1}/${rows.length}: ${shortAddr(p.subject)}…`, 'info')
       try {
-        const hash = await provider.request({
-          method: 'eth_sendTransaction',
-          params: [
-            {
-              from,
-              to: FT,
-              data: callDataSell(p.subject, p.sellable),
-              value: '0x0',
-            },
-          ],
-        })
+        const hash = await sendOneSell(provider, p)
         ok++
         lines.push(`ok ${shortAddr(p.subject)} ${hash}`)
       } catch (err) {
         fail++
         const msg = (err && err.message) || String(err)
         lines.push(`fallo ${shortAddr(p.subject)} ${msg}`)
-        // User rejected — stop hammering confirmations
         if ((err && err.code === 4001) || /user rejected|denied|rejected the request/i.test(msg)) {
           lines.push('Parado: has rechazado en la cartera.')
           break
@@ -485,47 +458,18 @@
     try {
       await ensureBase(provider)
 
-      let usedBatch = false
-      let batchOk = 0
-      try {
-        setStatus(
-          `Empaquetando ${sellable.length} ventas en lotes de ${SEND_CALLS_CHUNK}…`,
-          'info',
-        )
-        for (let i = 0; i < sellable.length; i += SEND_CALLS_CHUNK) {
-          const chunk = sellable.slice(i, i + SEND_CALLS_CHUNK)
-          const label = `${i / SEND_CALLS_CHUNK + 1}/${Math.ceil(sellable.length / SEND_CALLS_CHUNK)}`
-          setStatus(`Lote de cartera ${label} (${chunk.length} ventas)…`, 'info')
-          const result = await sendCallsChunk(provider, chunk, label)
-          usedBatch = true
-          batchOk += chunk.length
-          lines.push(
-            `lote ${label} ok: ` +
-              (typeof result === 'string' ? result : JSON.stringify(result)),
-          )
-          setLog(lines)
-        }
-        setStatus(`Enviadas ${batchOk} ventas en lote. Volviendo a escanear…`, 'ok')
-      } catch (batchErr) {
-        const msg = (batchErr && batchErr.message) || String(batchErr)
-        const code = batchErr && batchErr.code
-        lines.push(
-          `Lote no disponible (${code != null ? code + ' ' : ''}${msg}). Paso a una tx por sujeto.`,
-        )
-        setLog(lines)
+      setStatus(
+        `Vendiendo ${sellable.length} sujetos (una transacción cada uno). Confirma en la cartera…`,
+        'info',
+      )
+      lines.push(`Modo: una tx por sujeto (${sellable.length} en total).`)
+      setLog(lines)
 
-        // If some chunks already landed, only sell the remainder sequentially
-        const remaining = usedBatch ? sellable.slice(batchOk) : sellable
-        const { ok, fail } = await sellSequential(provider, remaining, lines)
-        setStatus(
-          `Listo: ${batchOk + ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
-          fail ? 'warn' : 'ok',
-        )
-      }
-
-      if (usedBatch) {
-        await new Promise((r) => setTimeout(r, 4000))
-      }
+      const { ok, fail } = await sellSequential(provider, sellable, lines)
+      setStatus(
+        `Listo: ${ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
+        fail ? 'warn' : 'ok',
+      )
       await refresh()
     } catch (err) {
       console.error(err)
