@@ -7,8 +7,8 @@ Targeted One Dollar Audit re-pass before a **no-legacy** v1.20.0 full greenfield
 
 | Pin | Value |
 |-----|--------|
-| Private | `wenakita/4626` @ `audit/oda-v1200-greenfield-candidate` (`a16096d1e`) |
-| Public | [`4626fun/4626` @ `audit/oda-v1200-greenfield-candidate`](https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts) (`ef1ca5953`) |
+| Private | `wenakita/4626` @ `audit/oda-v1200-greenfield-candidate` (`b2df117ccd0`) |
+| Public | [`4626fun/4626` @ `audit/oda-v1200-greenfield-candidate`](https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts) (`d3e73cdcf`) |
 | Prior full pass | 2026-07-22 @ `423e0e3` / remediated `413f060` |
 | Release packet | `docs/_internal/deployment-releases-legacy/v1.20.0-greenfield.md` |
 
@@ -45,6 +45,12 @@ Persist IDs in [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-com
 
 ## Public pin sync
 
-Remediation contracts for **ODA-494-H01** / **ODA-495-H01** synced to public `ef1ca595340b02680c3b17f0011b27bece24b914` (from private `a16096d1e`). No new ODA jobs commissioned.
+Remediation contracts for **ODA-494-H01** / **ODA-495-H01** synced to public `d3e73cdcf21d95207f58c2eb41166cbfbe80d8fc` (from private `b2df117ccd0`). No new ODA jobs commissioned.
 
 - [ODA 496–498 remediation](./oda-496-498-remediation.md)
+
+## Public pin sync (2026-07-25 — ODA-496–498 + wrapper cooldown)
+
+- Private source: `b2df117ccd07ee1a63ca74d7b6abd9cd9d48e1e7` (`fix/wrapper-cooldown-hot-balance`; includes `main` #805)
+- Public: [`4626fun/4626` @ `audit/oda-v1200-greenfield-candidate`](https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts) (`d3e73cdcf21d95207f58c2eb41166cbfbe80d8fc`)
+- No new ODA jobs commissioned for this sync.

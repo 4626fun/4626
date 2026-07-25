@@ -101,6 +101,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
     // FIX: M-01 — per-user flash loan protection (wrapper-level cooldown)
     mapping(address => uint256) public lastWrapperDepositBlock;
+    /// @notice ShareOFT balance still subject to the wrapper cooldown.
+    /// @dev Tracks hot units separately so unsolicited dust cannot freeze older, cooled balances.
+    mapping(address => uint256) public cooldownShareOFTBalance;
     uint256 public wrapperWithdrawDelayBlocks = 1;
 
     /// @notice Fees (basis points) - 0 by default for simplicity
@@ -296,8 +299,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         // 4. Check slippage
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 — track newly minted ShareOFT as hot for wrapper-level flash loan protection
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(msg.sender, amount, shareOFTOut);
     }
@@ -313,8 +316,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 vaultShareAmount = vault.deposit(amount, address(this));
         shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 — track newly minted ShareOFT as hot for wrapper-level flash loan protection
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(msg.sender, amount, shareOFTOut);
     }
@@ -339,8 +342,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         shareOFTOut = _wrapInternal(vaultShareAmount, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 — track newly minted ShareOFT as hot for wrapper-level flash loan protection
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(beneficiary, amount, shareOFTOut);
     }
@@ -364,7 +367,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        _requireWrapperCooldown(msg.sender, amount);
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
         uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
@@ -386,7 +389,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        _requireWrapperCooldown(msg.sender, amount);
 
         uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
         _requireSynchronousRedemption(vaultShareAmount);
@@ -410,7 +413,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        _requireWrapperCooldown(msg.sender, amount);
 
         uint256 vaultShareAmount = _unwrapInternal(amount, beneficiary, msg.sender);
         _requireSynchronousRedemption(vaultShareAmount);
@@ -443,7 +446,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
         // FIX: M-08 — advanced wrap mints ShareOFT and must participate in
         // the same wrapper-level cooldown as deposit paths.
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        _recordWrapperCooldown(msg.sender, amountOut);
     }
 
     /**
@@ -457,7 +460,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-08 — advanced unwrap releases vault shares directly and must
         // enforce the same cooldown as withdraw paths.
-        _requireWrapperCooldown(msg.sender);
+        _requireWrapperCooldown(msg.sender, amount);
 
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
@@ -638,11 +641,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @dev Preview unwrap with denormalization: share token (■AKITA) → vaultShares
      */
-    function _previewUnwrap(uint256 shareOFTAmount, address user)
-        internal
-        view
-        returns (uint256 vaultShareAmount)
-    {
+    function _previewUnwrap(uint256 shareOFTAmount, address user) internal view returns (uint256 vaultShareAmount) {
         // DENORMALIZE: ×1000 (+ user dust)
         uint256 vaultSharesBeforeFee = shareOFTAmount * NORMALIZATION_FACTOR + userDustShares[user];
 
@@ -789,11 +788,28 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
     }
 
-    // FIX: M-01 — enforce per-user cooldown at the wrapper level
-    function _requireWrapperCooldown(address user) internal view {
+    // FIX: M-01 — record newly minted ShareOFT as hot at the wrapper level.
+    function _recordWrapperCooldown(address user, uint256 amount) internal {
+        uint256 priorBlock = lastWrapperDepositBlock[user];
+        uint256 priorHotBalance = cooldownShareOFTBalance[user];
+        if (block.number >= priorBlock + wrapperWithdrawDelayBlocks) {
+            priorHotBalance = 0;
+        }
+
+        lastWrapperDepositBlock[user] = block.number;
+        cooldownShareOFTBalance[user] = priorHotBalance + amount;
+    }
+
+    // FIX: M-01 — permit cooled units to exit while retaining the delay on hot units.
+    function _requireWrapperCooldown(address user, uint256 amount) internal view {
         if (isWhitelisted[user] || isBeneficiaryOperator[user]) return;
         uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
-        if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
+        if (block.number >= requiredBlock) return;
+
+        uint256 balance = shareOFT.balanceOf(user);
+        uint256 hotBalance = cooldownShareOFTBalance[user];
+        uint256 cooledBalance = balance > hotBalance ? balance - hotBalance : 0;
+        if (amount > cooledBalance) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
     }
 
     /**
@@ -805,9 +821,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      *      same block.
      *
      *      Only the registered `shareOFT` may call this function. The hook is a
-     *      monotonically-increasing max-propagator: it never decreases an existing
-     *      cooldown on the recipient, so stacking deposits from multiple sources
-     *      behaves correctly.
+     *      Hot units move with the transfer while cooled units remain withdrawable.
+     *      This prevents both pre-seeded-address laundering and dust-transfer griefing.
      *
      *      Mint (from == 0) and burn (to == 0) are skipped: deposit paths in this
      *      contract already record `lastWrapperDepositBlock[msg.sender] = block.number`
@@ -822,22 +837,27 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) return;
 
         uint256 fromBlock = lastWrapperDepositBlock[from];
-        if (fromBlock == 0) return;
+        if (fromBlock == 0 || block.number >= fromBlock + wrapperWithdrawDelayBlocks) return;
 
-        // ODA-498-1: only stamp recipients with no independent deposit history.
-        // Overwriting an existing `to` stamp let any recent depositor grief
-        // another address via dust ShareOFT transfers every block.
+        uint256 fromHotBalance = cooldownShareOFTBalance[from];
+        if (fromHotBalance == 0) return;
+        uint256 hotTransferred = amount < fromHotBalance ? amount : fromHotBalance;
+        cooldownShareOFTBalance[from] = fromHotBalance - hotTransferred;
+
         uint256 toBlock = lastWrapperDepositBlock[to];
-        if (toBlock == 0) {
-            lastWrapperDepositBlock[to] = fromBlock;
-            emit CooldownPropagated(from, to, fromBlock);
+        uint256 toHotBalance = cooldownShareOFTBalance[to];
+        if (block.number >= toBlock + wrapperWithdrawDelayBlocks) {
+            toHotBalance = 0;
         }
+        uint256 propagatedBlock = fromBlock > toBlock ? fromBlock : toBlock;
+        lastWrapperDepositBlock[to] = propagatedBlock;
+        cooldownShareOFTBalance[to] = toHotBalance + hotTransferred;
+        emit CooldownPropagated(from, to, propagatedBlock);
     }
 
     function _requireSynchronousRedemption(uint256 vaultShareAmount) internal view {
-        (bool success, bytes memory data) = address(vault).staticcall(
-            abi.encodeWithSelector(IQueueAwareVault.largeWithdrawalThreshold.selector)
-        );
+        (bool success, bytes memory data) =
+            address(vault).staticcall(abi.encodeWithSelector(IQueueAwareVault.largeWithdrawalThreshold.selector));
         if (!success || data.length < 32) {
             return;
         }

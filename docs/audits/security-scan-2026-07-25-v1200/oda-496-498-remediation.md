@@ -19,7 +19,7 @@
 | ODA-497-3 | Medium | **Fixed this branch:** `report()` requires `VaultMode.Normal`. |
 | ODA-497-4 | Medium | **Fixed this branch:** share burns decrement report baseline by cost basis (`_decreaseReportBaselineForShareBurn`). |
 | ODA-497-5 | Medium | **Fixed this branch:** `queueWithdrawal` / `claimQueuedWithdrawal` honor `paused`. |
-| ODA-498-1 | High | **Fixed this branch:** cooldown propagates only when recipient has `lastWrapperDepositBlock == 0` (no overwrite of existing history). |
+| ODA-498-1 | High | **Fixed this branch:** cooldown follows hot ShareOFT units, so pre-seeded recipients cannot launder them while unsolicited dust cannot freeze older cooled balances. |
 | ODA-498-2 | Medium | **Fixed this branch:** `flushFees` requires `composeMsg.length == 0`. |
 | ODA-498-3 | High | **Fixed this branch:** dust folded into unwrap only when `accountingUser == burnFrom` (blocks operator siphon; dust may remain until a self-unwrap path — accepted residual). |
 | ODA-498-4 | Medium | **Fixed this branch:** `unwrap` calls `_requireSynchronousRedemption`. |

@@ -158,8 +158,6 @@ jobs:
             protocol-assets:
               - 'frontend/public/protocols/**'
               - 'frontend/scripts/verify-protocol-assets.mjs'
-              - 'frontend/package.json'
-              - 'frontend/pnpm-lock.yaml'
             zk:
               - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
               - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'

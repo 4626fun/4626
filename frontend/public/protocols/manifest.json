@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastReviewedAt": "2026-03-01",
+  "lastReviewedAt": "2026-07-25",
   "assets": [
     {
       "protocol": "ajna",
@@ -11,12 +11,36 @@
       "brandGuideUrl": "https://www.ajna.finance/"
     },
     {
+      "protocol": "alfaclub",
+      "variant": "primary-mark-svg",
+      "file": "alfaclub.svg",
+      "sha256": "a46f1dd199369386374a5e21eaf40ac70b662ec8d56477d2f35283ec34535847",
+      "officialSourceUrl": "https://alfaclub.io/",
+      "brandGuideUrl": "https://alfaclub.io/"
+    },
+    {
       "protocol": "base",
       "variant": "primary-mark-png",
       "file": "base.png",
       "sha256": "a4aa4e138a72be7f887d4135605d8fb9296e2ffc983f2de235af85003ed15a7f",
       "officialSourceUrl": "https://base.org/brand",
       "brandGuideUrl": "https://base.org/brand"
+    },
+    {
+      "protocol": "cabals",
+      "variant": "primary-mark-svg",
+      "file": "cabals.svg",
+      "sha256": "9a6a31cf06e3d20b1e7eeb826e3ec26a0ba197909a3cac0a8c3b03bdbde71f8e",
+      "officialSourceUrl": "https://cabals.xyz/",
+      "brandGuideUrl": "https://cabals.xyz/"
+    },
+    {
+      "protocol": "chainlink",
+      "variant": "hexagon-mark-blue-svg",
+      "file": "chainlink.svg",
+      "sha256": "b850708185356bd45126a929a1cf01a2445466bf124574d6da468de144cc4e77",
+      "officialSourceUrl": "https://chain.link/brand-assets",
+      "brandGuideUrl": "https://chain.link/brand-assets"
     },
     {
       "protocol": "charm",
@@ -27,12 +51,20 @@
       "brandGuideUrl": "https://www.charm.fi/"
     },
     {
-      "protocol": "chainlink",
-      "variant": "hexagon-mark-blue-svg",
-      "file": "chainlink.svg",
-      "sha256": "b850708185356bd45126a929a1cf01a2445466bf124574d6da468de144cc4e77",
-      "officialSourceUrl": "https://chain.link/brand-assets",
-      "brandGuideUrl": "https://chain.link/brand-assets"
+      "protocol": "layerzero",
+      "variant": "official-mark-svg",
+      "file": "layerzero-official.svg",
+      "sha256": "062adb132b8c20eb16b667096fcb535b4f80b72c73d2342d01181d78b3745168",
+      "officialSourceUrl": "https://layerzero.network/",
+      "brandGuideUrl": "https://layerzero.network/"
+    },
+    {
+      "protocol": "layerzero",
+      "variant": "primary-mark-svg",
+      "file": "layerzero.svg",
+      "sha256": "671d731949ce8d95a5868091b3aa5f4002b80ca037054950362c662cbfb267a9",
+      "officialSourceUrl": "https://layerzero.network/",
+      "brandGuideUrl": "https://layerzero.network/"
     },
     {
       "protocol": "safe",
@@ -65,6 +97,14 @@
       "sha256": "fc4964ba320c0b10574dba90564e7bbe501f6449908f150e79dc4809377da5ce",
       "officialSourceUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets",
       "brandGuideUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets"
+    },
+    {
+      "protocol": "virtuals",
+      "variant": "primary-mark-svg",
+      "file": "virtuals.svg",
+      "sha256": "a300595a9213e39d67552be59e2b9b7f1f70100cc95b9e417541a94321e6dc24",
+      "officialSourceUrl": "https://www.virtuals.io/",
+      "brandGuideUrl": "https://www.virtuals.io/"
     }
   ]
 }

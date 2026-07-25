@@ -23,7 +23,7 @@ overrides:
   picomatch@2: 2.3.2
   picomatch@4: 4.0.4
   brace-expansion: 5.0.8
-  tar: 7.5.19
+  tar: 7.5.21
   path-to-regexp: 6.3.0
   follow-redirects: 1.16.0
   fast-uri: 3.1.4
@@ -2191,8 +2191,8 @@ packages:
     resolution: {integrity: sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==}
     engines: {node: '>=10'}
 
-  tar@7.5.19:
-    resolution: {integrity: sha512-4LeEWl96twnS2Q7Bz4MGqgazLqO+hJN63GZxXoIqh1T3VweYD997gbU1ItNsQafqqXTXd5WFyFdReLtwvRBNiw==}
+  tar@7.5.21:
+    resolution: {integrity: sha512-XdhtCvlMywwxpCW8YEq3lOXBJpUPTR2OHHcwLPO3HwsJqOHa2Ok/oJ7ruGzp+JrKoRPVCzJwAdEjqLW/vNRPHA==}
     engines: {node: '>=18'}
 
   term-size@2.2.1:
@@ -3129,7 +3129,7 @@ snapshots:
       node-fetch: 2.7.0
       nopt: 8.1.0
       semver: 7.7.3
-      tar: 7.5.19
+      tar: 7.5.21
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -4812,7 +4812,7 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  tar@7.5.19:
+  tar@7.5.21:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0
