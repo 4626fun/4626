@@ -29,6 +29,8 @@
   let busy = false
   /** @type {bigint} */
   let lastGasWei = 0n
+  /** MetaMask atomic batches — keep ≤20 so ~96 sells ≈ 5 confirms. */
+  const ATOMIC_CHUNK = 20
 
   const $ = (id) => document.getElementById(id)
 
@@ -369,10 +371,59 @@
     return accountFrom || account
   }
 
+  function isUserReject(err) {
+    const msg = ((err && err.message) || String(err)).toLowerCase()
+    const code = err && err.code
+    return code === 4001 || /user rejected|denied|rejected the request/i.test(msg)
+  }
+
   /**
-   * One sellShares tx. Avoid wallet_sendCalls — many wallets return
-   * Invalid params (-32602) for EIP-5792 batches. Plain eth_sendTransaction
-   * is what works for EOAs on Base.
+   * MetaMask on Base supports atomic EIP-5792 batches via EIP-7702.
+   * Check wallet_getCapabilities before calling wallet_sendCalls.
+   */
+  async function walletSupportsAtomicBatch(provider, from) {
+    try {
+      const caps = await provider.request({
+        method: 'wallet_getCapabilities',
+        params: [from, [BASE_CHAIN_HEX]],
+      })
+      const chainCaps =
+        (caps && (caps[BASE_CHAIN_HEX] || caps['0x2105'] || caps[String(BASE_CHAIN_ID)])) ||
+        null
+      const atomic = chainCaps && chainCaps.atomic
+      if (!atomic) return false
+      // EIP-5792: status supported | ready | unsupported
+      const status = typeof atomic === 'object' ? atomic.status : atomic
+      return status === 'supported' || status === 'ready' || status === true
+    } catch (_) {
+      return false
+    }
+  }
+
+  async function sendAtomicChunk(provider, chunk, from, label) {
+    const calls = chunk.map((p) => ({
+      to: FT,
+      value: '0x0',
+      data: callDataSell(p.subject, p.sellable),
+    }))
+    // MetaMask docs: only atomic batches are supported on Base.
+    return provider.request({
+      method: 'wallet_sendCalls',
+      params: [
+        {
+          version: '2.0.0',
+          from,
+          chainId: BASE_CHAIN_HEX,
+          atomicRequired: true,
+          calls,
+        },
+      ],
+    })
+  }
+
+  /**
+   * One sellShares tx fallback. Plain eth_sendTransaction for wallets
+   * without EIP-5792 atomic support.
    */
   async function sendOneSell(provider, p, from) {
     const data = callDataSell(p.subject, p.sellable)
@@ -390,12 +441,9 @@
         })
       } catch (err) {
         lastErr = err
+        if (isUserReject(err)) throw err
         const msg = ((err && err.message) || String(err)).toLowerCase()
         const code = err && err.code
-        if (code === 4001 || /user rejected|denied|rejected the request/i.test(msg)) {
-          throw err
-        }
-        // Try next shape on invalid params / similar
         if (code === -32602 || /invalid params|invalid request|invalid argument/i.test(msg)) {
           continue
         }
@@ -420,7 +468,7 @@
         fail++
         const msg = (err && err.message) || String(err)
         lines.push(`fallo ${shortAddr(p.subject)} ${msg}`)
-        if ((err && err.code === 4001) || /user rejected|denied|rejected the request/i.test(msg)) {
+        if (isUserReject(err)) {
           lines.push('Parado: has rechazado en la cartera.')
           break
         }
@@ -428,6 +476,45 @@
       setLog(lines)
     }
     return { ok, fail }
+  }
+
+  async function sellAtomicBatches(provider, rows, lines) {
+    const from = txFrom()
+    const totalChunks = Math.ceil(rows.length / ATOMIC_CHUNK)
+    let submitted = 0
+    for (let i = 0; i < rows.length; i += ATOMIC_CHUNK) {
+      const chunk = rows.slice(i, i + ATOMIC_CHUNK)
+      const n = i / ATOMIC_CHUNK + 1
+      const label = `${n}/${totalChunks}`
+      setStatus(
+        `MetaMask lote atómico ${label}: ${chunk.length} ventas (confirma una vez)…`,
+        'info',
+      )
+      try {
+        const result = await sendAtomicChunk(provider, chunk, from, label)
+        submitted += chunk.length
+        lines.push(
+          `lote ${label} ok (${chunk.length}): ` +
+            (typeof result === 'string' ? result : JSON.stringify(result)),
+        )
+        setLog(lines)
+      } catch (err) {
+        if (isUserReject(err)) {
+          lines.push('Parado: has rechazado el lote en MetaMask.')
+          setLog(lines)
+          return { submitted, aborted: true, err }
+        }
+        // Fall through to sequential for the remainder
+        lines.push(
+          `Lote ${label} falló (${(err && err.code) || ''} ${(err && err.message) || err}). Paso a una tx por sujeto.`,
+        )
+        setLog(lines)
+        const remaining = rows.slice(i)
+        const { ok, fail } = await sellSequential(provider, remaining, lines)
+        return { submitted: submitted + ok, fail, aborted: false, err }
+      }
+    }
+    return { submitted, fail: 0, aborted: false }
   }
 
   async function withdrawAll() {
@@ -455,19 +542,50 @@
 
     try {
       await ensureBase(provider)
+      const from = txFrom()
+      const canBatch = await walletSupportsAtomicBatch(provider, from)
+      const clicks = Math.ceil(sellable.length / ATOMIC_CHUNK)
 
-      setStatus(
-        `Vendiendo ${sellable.length} sujetos (una transacción cada uno). Confirma en la cartera…`,
-        'info',
-      )
-      lines.push(`Modo: una tx por sujeto (${sellable.length} en total).`)
-      setLog(lines)
+      if (canBatch) {
+        setStatus(
+          `MetaMask admite lotes atómicos: ~${clicks} confirmación(es) para ${sellable.length} ventas…`,
+          'info',
+        )
+        lines.push(
+          `Modo: wallet_sendCalls atómico (MetaMask/EIP-7702), lotes de ${ATOMIC_CHUNK} → ~${clicks} clicks.`,
+        )
+        setLog(lines)
+        const result = await sellAtomicBatches(provider, sellable, lines)
+        if (result.aborted) {
+          setStatus(
+            `Parado tras ${result.submitted} enviadas. Volviendo a escanear…`,
+            'warn',
+          )
+        } else {
+          setStatus(
+            `Listo: ${result.submitted} enviadas` +
+              (result.fail ? `, ${result.fail} fallidas` : '') +
+              '. Volviendo a escanear…',
+            result.fail ? 'warn' : 'ok',
+          )
+        }
+      } else {
+        setStatus(
+          `Esta cartera no admite lotes atómicos. Vendiendo ${sellable.length} sujetos uno a uno…`,
+          'info',
+        )
+        lines.push(
+          'Modo: una tx por sujeto (wallet_getCapabilities no reporta atomic en Base). Usa MetaMask en Base para 1–5 clicks.',
+        )
+        setLog(lines)
+        const { ok, fail } = await sellSequential(provider, sellable, lines)
+        setStatus(
+          `Listo: ${ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
+          fail ? 'warn' : 'ok',
+        )
+      }
 
-      const { ok, fail } = await sellSequential(provider, sellable, lines)
-      setStatus(
-        `Listo: ${ok} enviadas, ${fail} fallidas. Volviendo a escanear…`,
-        fail ? 'warn' : 'ok',
-      )
+      await new Promise((r) => setTimeout(r, 2500))
       await refresh()
     } catch (err) {
       console.error(err)
