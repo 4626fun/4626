@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 import sharp from 'sharp'
+import type { SharpInstance, SharpOverlayOptions } from '../../../server/_lib/image/sharpTypes.js'
 import { renderPremiumTokenIcon } from './_premiumTokenIconRenderer.js'
 import { ensureFontconfig } from '../../../server/_lib/infra/ensureFontconfig.js'
 
@@ -1624,7 +1625,7 @@ async function postProcessAiOverrideIcon(rawBytes: Uint8Array, size: number): Pr
     .toBuffer()
   const glowUri = await renderGlowLayerDataUri(size, layout)
   const glowBytes = Buffer.from(glowUri.split(',')[1] ?? '', 'base64')
-  const overlays: sharp.OverlayOptions[] = []
+  const overlays: SharpOverlayOptions[] = []
   if (breakoutOverlay && breakoutOverlay.length > 0) {
     overlays.push({ input: await applyLayerOpacity(breakoutOverlay, 0.95), blend: 'over' })
   }
@@ -2461,7 +2462,7 @@ async function renderDeterministicTokenIcon(params: {
     layout,
   })
 
-  const overlays: sharp.OverlayOptions[] = []
+  const overlays: SharpOverlayOptions[] = []
   if (artLayer && artLayer.length > 0) {
     overlays.push({
       input: Buffer.from(artLayer),

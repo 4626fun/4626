@@ -95,7 +95,9 @@ describe('amoeAllowlistPublisher', () => {
       String(c[0]?.join?.(' ') ?? c[0]).includes('SET publish_tx_hash'),
     )
     expect(stampCall).toBeTruthy()
-    expect(stampCall?.[1]).toBe(AMOE_ON_CHAIN_RECONCILED_TX)
+    // sql tagged-template args: strings at [0], first value at [1] when present
+    const stampValues = stampCall?.slice(1) ?? []
+    expect(stampValues).toContain(AMOE_ON_CHAIN_RECONCILED_TX)
   })
 
   it('throws amoe_allowlist_root_mismatch when on-chain root differs', async () => {

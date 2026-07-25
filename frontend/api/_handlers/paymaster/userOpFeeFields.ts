@@ -17,7 +17,9 @@ function isMissingOrZeroFee(value: unknown): boolean {
   }
 }
 
-export function ensurePaymasterUserOpFeeFields<T extends Record<string, unknown>>(userOp: T): T {
+export function ensurePaymasterUserOpFeeFields<T extends Record<string, unknown>>(
+  userOp: T,
+): T & { maxFeePerGas: string; maxPriorityFeePerGas: string } {
   const next: Record<string, unknown> = { ...userOp }
   if (isMissingOrZeroFee(next.maxFeePerGas)) {
     next.maxFeePerGas = STUB_FEE_HEX
@@ -25,5 +27,5 @@ export function ensurePaymasterUserOpFeeFields<T extends Record<string, unknown>
   if (isMissingOrZeroFee(next.maxPriorityFeePerGas)) {
     next.maxPriorityFeePerGas = STUB_FEE_HEX
   }
-  return next as T
+  return next as T & { maxFeePerGas: string; maxPriorityFeePerGas: string }
 }

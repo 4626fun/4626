@@ -290,7 +290,8 @@
     "wagmi": "^2.19.5",
     "wawoff2": "^2.0.1",
     "x402": "0.7.3",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "undici": "6.27.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

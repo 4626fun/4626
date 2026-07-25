@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import type { SharpInstance, SharpOverlayOptions } from '../../../../../server/_lib/image/sharpTypes.js'
 
 import {
   buildPremiumSubjectStack,
@@ -34,9 +35,9 @@ import {
 
 export type { PremiumTokenIconParams }
 
-type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
+type BlendMode = NonNullable<SharpOverlayOptions['blend']>
 
-function compositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptions {
+function compositeStep(input: Buffer, blend: BlendMode): SharpOverlayOptions {
   return { input, blend }
 }
 
@@ -129,7 +130,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
       })
   let heroLayer = await applyV2SubjectLut(heroBase)
 
-  const overlays: sharp.OverlayOptions[] = [
+  const overlays: SharpOverlayOptions[] = [
     compositeStep(outerGlow, 'screen'),
     compositeStep(frameBloom, 'screen'),
   ]

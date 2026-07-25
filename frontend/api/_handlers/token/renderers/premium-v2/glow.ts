@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import type { SharpInstance } from '../../../../../server/_lib/image/sharpTypes.js'
 
 import type { PremiumLayout } from '../premium-classic/renderPremiumTokenIcon.js'
 
@@ -20,7 +21,7 @@ async function applyOpacity(layer: Buffer, opacity: number): Promise<Buffer> {
     .toBuffer()
 }
 
-function createTransparentCanvas(size: number): sharp.Sharp {
+function createTransparentCanvas(size: number): SharpInstance {
   return sharp({
     create: {
       width: size,

@@ -201,7 +201,12 @@ export interface PublishEpochArgs {
 
 /** Outcome of a single epoch's pipeline run. */
 export type PublishEpochOutcome =
-  | { kind: 'finished'; epoch: bigint; rootHex: `0x${string}`; txHash: `0x${string}` }
+  | {
+      kind: 'finished'
+      epoch: bigint
+      rootHex: `0x${string}`
+      txHash: `0x${string}` | typeof AMOE_ON_CHAIN_RECONCILED_TX
+    }
   | { kind: 'finished_no_op'; epoch: bigint; reason: 'empty_epoch' }
   | { kind: 'in_flight'; epoch: bigint; phase: PublisherPhase }
   | { kind: 'lost_claim'; epoch: bigint }
@@ -376,7 +381,7 @@ async function findSnapshot(
 async function markSnapshotBroadcast(
   db: AmoePublisherDb,
   epoch: bigint,
-  txHash: `0x${string}`,
+  txHash: `0x${string}` | typeof AMOE_ON_CHAIN_RECONCILED_TX,
 ): Promise<void> {
   await db.sql`
     UPDATE amoe_points_burn_ledger_snapshots
@@ -681,7 +686,7 @@ export async function publishEpoch(
     if (!liveSnapshot) {
       throw new Error('amoe_publisher_invalid_state_post_build')
     }
-    let txHash: `0x${string}`
+    let txHash: `0x${string}` | typeof AMOE_ON_CHAIN_RECONCILED_TX
     if (liveSnapshot.publishTxHash === null) {
       await setPhase(db, runId, 'broadcasting')
       // Reconcile: if the on-chain root already matches, stamp DB and skip
@@ -703,7 +708,7 @@ export async function publishEpoch(
       )
       const expectedRoot = normalizeRootHex(snapshotRoot)
       if (onChainRoot === expectedRoot) {
-        txHash = AMOE_ON_CHAIN_RECONCILED_TX as `0x${string}`
+        txHash = AMOE_ON_CHAIN_RECONCILED_TX
         await markSnapshotBroadcast(db, epoch, txHash)
         await markSnapshotConfirmed(db, epoch, 0n)
         await markTerminal(db, runId, 'finished', { snapshotEpoch: epoch })
@@ -722,7 +727,11 @@ export async function publishEpoch(
       txHash = broadcastResult.txHash
       await markSnapshotBroadcast(db, epoch, txHash)
     } else {
-      txHash = liveSnapshot.publishTxHash as `0x${string}`
+      const existing = liveSnapshot.publishTxHash
+      txHash =
+        existing === AMOE_ON_CHAIN_RECONCILED_TX
+          ? AMOE_ON_CHAIN_RECONCILED_TX
+          : (existing as `0x${string}`)
     }
 
     // Reconciled sentinel has no receipt to wait for.

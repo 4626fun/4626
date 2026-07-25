@@ -3,10 +3,11 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
+import type { SharpInstance, SharpOverlayOptions, ImageBuffer } from '../../../../../server/_lib/image/sharpTypes.js'
 import { generateSegmentationMask, type SegmentationModel } from '../../_segmentation.js'
 import { ensureFontconfig } from '../../../../../server/_lib/infra/ensureFontconfig.js'
 
-type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
+type BlendMode = NonNullable<SharpOverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'
 type SourceClass = 'brightBadge' | 'portraitPhoto' | 'illustration' | 'pixelArt' | 'generic'
 type RenderPreset = 'standard' | 'hero' | 'pixel'
@@ -313,7 +314,7 @@ async function hardenImageAlpha(image: Buffer, alphaFloor: number): Promise<Buff
     .toBuffer()
 }
 
-async function scrubTopDarkFringe(image: Buffer): Promise<Buffer> {
+async function scrubTopDarkFringe(image: ImageBuffer): Promise<ImageBuffer> {
   const { data, info } = await sharp(image)
     .ensureAlpha()
     .raw()
@@ -373,11 +374,11 @@ async function scrubTopDarkFringe(image: Buffer): Promise<Buffer> {
 }
 
 async function shiftLayerCanvas(params: {
-  layer: Buffer
+  layer: ImageBuffer
   size: number
   offsetX: number
   offsetY: number
-}): Promise<Buffer> {
+}): Promise<ImageBuffer> {
   const offsetX = Math.round(params.offsetX)
   const offsetY = Math.round(params.offsetY)
   if (offsetX === 0 && offsetY === 0) return params.layer
@@ -600,7 +601,7 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function createTransparentCanvas(size: number): sharp.Sharp {
+function createTransparentCanvas(size: number): SharpInstance {
   return sharp({
     create: {
       width: size,
@@ -2218,9 +2219,9 @@ async function renderHeroContactShadow(params: {
 }
 
 async function createPortraitSubjectMask(params: {
-  clippedArtwork: Buffer
+  clippedArtwork: ImageBuffer
   layout: PremiumLayout
-}): Promise<Buffer | null> {
+}): Promise<ImageBuffer | null> {
   const { clippedArtwork, layout } = params
   const { data, info } = await sharp(clippedArtwork)
     .ensureAlpha()
@@ -2378,10 +2379,10 @@ async function createPortraitSubjectMask(params: {
 }
 
 async function applyPortraitSubjectEnhancement(params: {
-  artwork: Buffer
-  subjectMask: Buffer
+  artwork: ImageBuffer
+  subjectMask: ImageBuffer
   layout: PremiumLayout
-}): Promise<Buffer> {
+}): Promise<ImageBuffer> {
   const { artwork, subjectMask, layout } = params
   const subjectLift = await sharp(artwork)
     .modulate({
@@ -2556,7 +2557,7 @@ export async function renderArtworkLayer(params: {
           .toBuffer()
 
   const isPortraitHero = params.sourceClass === 'portraitPhoto'
-  let integratedArtwork = toned
+  let integratedArtwork: ImageBuffer = toned
   if (isPortraitHero) {
     const portraitMask = await createPortraitSubjectMask({
       clippedArtwork: clipped,
@@ -3930,7 +3931,7 @@ export async function renderBreakoutLayer(params: {
   if (breakoutEdgeBlur >= 0.3) {
     maskedSharp = maskedSharp.blur(breakoutEdgeBlur)
   }
-  let masked = await maskedSharp
+  let masked: ImageBuffer = await maskedSharp
     .png()
     .toBuffer()
   const shouldNudgePreparedBreakout =
@@ -4103,7 +4104,7 @@ export async function renderBreakoutLayer(params: {
     })
     const fallbackDetailMaskDebug = fallbackDetailMask ?? await createTransparentCanvas(size).png().toBuffer()
     await writeBreakoutDebugAsset('3a-breakout-mask-fallback-detail.png', fallbackDetailMaskDebug)
-    const bandOnlyComposites: sharp.OverlayOptions[] = [
+    const bandOnlyComposites: SharpOverlayOptions[] = [
       { input: fallbackBandMask, blend: 'dest-in' },
       { input: aboveFrameMask, blend: 'dest-in' },
     ]
@@ -4326,7 +4327,7 @@ export async function renderCreatorSignature(params: {
   return sharp(Buffer.from(svg)).png().toBuffer()
 }
 
-function buildCompositeStep(input: Buffer, blend: BlendMode): sharp.OverlayOptions {
+function buildCompositeStep(input: Buffer, blend: BlendMode): SharpOverlayOptions {
   return { input, blend }
 }
 
@@ -4747,7 +4748,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
   const frameBloom = await renderFrameBloom({ size, layout })
   const premiumFrame = await renderPremiumFrame({ size, layout })
 
-  const overlays: sharp.OverlayOptions[] = [
+  const overlays: SharpOverlayOptions[] = [
     buildCompositeStep(outerGlow, 'screen'),
     buildCompositeStep(frameBloom, 'screen'),
   ]

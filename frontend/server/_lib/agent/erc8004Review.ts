@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { Agent } from 'undici'
+import type { LookupOptions } from 'node:dns'
 
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base, mainnet } from 'viem/chains'
@@ -274,13 +275,16 @@ async function fetchPublicResource(startUrl: URL, accept: string): Promise<{
       connect: {
         // Pin the socket to the address that passed the SSRF check. TLS still
         // validates against currentUrl.hostname; DNS is not consulted again.
-        lookup: (_hostname, options, callback) => {
-          const all =
-            typeof options === 'object' &&
-            options !== null &&
-            'all' in options &&
-            Boolean((options as { all?: boolean }).all)
-          if (all) {
+        lookup: (
+          _hostname: string,
+          options: LookupOptions,
+          callback: (
+            err: NodeJS.ErrnoException | null,
+            address: string | Array<{ address: string; family: number }>,
+            family?: number,
+          ) => void,
+        ) => {
+          if (options.all) {
             callback(null, [{ address: pinned.address, family: pinned.family }])
             return
           }

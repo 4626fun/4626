@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import type { SharpOverlayOptions } from './sharpTypes.js'
 import { classifyArtwork, type ArtworkLayout } from './imageClassifier.js'
 import { getFixedContentBox, getContentBoxInnerRadius, type FixedContentBox } from './imageContentBox.js'
 
@@ -542,7 +543,7 @@ export async function composeLockedFrameImage(
     }
   }
 
-  const composites: sharp.OverlayOptions[] = [
+  const composites: SharpOverlayOptions[] = [
     { input: glowLayer },
     { input: interiorLayer },
     { input: frameOverlayLayer },

@@ -2,7 +2,7 @@
 // Prevents opaque UserOp estimate failures (`NotPublisher` → userop_submission_failed)
 // when router roles drift from PROTOCOL_CSW.
 
-import { getAddress, isAddressEqual, type Address, type Hex, type PublicClient } from 'viem'
+import { getAddress, isAddressEqual, type Address, type Hex } from 'viem'
 
 export const AMOE_PUBLISHER_ROLE_MISMATCH = 'amoe_publisher_role_mismatch' as const
 export const AMOE_ALLOWLIST_ROOT_MISMATCH = 'amoe_allowlist_root_mismatch' as const
@@ -16,6 +16,19 @@ export const AMOE_ZERO_ROOT = ('0x' + '00'.repeat(32)) as `0x${string}`
  * the snapshot and we skip broadcasting. Column is TEXT (not bytes32).
  */
 export const AMOE_ON_CHAIN_RECONCILED_TX = 'reconciled:on-chain' as const
+
+/**
+ * Structural reader — avoids TS2719 when callers construct clients via a
+ * different `viem` resolution path (static import vs dynamic `import('viem')`).
+ */
+export type AmoeChainReader = {
+  readContract: (parameters: {
+    address: Hex
+    abi: readonly unknown[] | unknown[]
+    functionName: string
+    args?: readonly unknown[]
+  }) => Promise<unknown>
+}
 
 const ALLOWLIST_PUBLISHER_ABI = [
   {
@@ -74,7 +87,7 @@ export function assertPublisherRoleMatchesSender(args: {
 }
 
 export async function requireAllowlistPublisherMatchesSender(args: {
-  publicClient: PublicClient
+  publicClient: AmoeChainReader
   lotteryAmoeRouter: Hex
   expectedSender: Address | string
 }): Promise<void> {
@@ -85,13 +98,13 @@ export async function requireAllowlistPublisherMatchesSender(args: {
   })
   assertPublisherRoleMatchesSender({
     role: 'allowlistPublisher',
-    onChainPublisher,
+    onChainPublisher: onChainPublisher as Address | string,
     expectedSender: args.expectedSender,
   })
 }
 
 export async function requirePointsLedgerPublisherMatchesSender(args: {
-  publicClient: PublicClient
+  publicClient: AmoeChainReader
   lotteryAmoeRouter: Hex
   expectedSender: Address | string
 }): Promise<void> {
@@ -102,13 +115,13 @@ export async function requirePointsLedgerPublisherMatchesSender(args: {
   })
   assertPublisherRoleMatchesSender({
     role: 'pointsLedgerPublisher',
-    onChainPublisher,
+    onChainPublisher: onChainPublisher as Address | string,
     expectedSender: args.expectedSender,
   })
 }
 
 export async function readAllowlistRootOf(args: {
-  publicClient: PublicClient
+  publicClient: AmoeChainReader
   lotteryAmoeRouter: Hex
   epoch: bigint
 }): Promise<`0x${string}`> {
@@ -122,7 +135,7 @@ export async function readAllowlistRootOf(args: {
 }
 
 export async function readPointsLedgerRootOf(args: {
-  publicClient: PublicClient
+  publicClient: AmoeChainReader
   lotteryAmoeRouter: Hex
   epoch: bigint
 }): Promise<`0x${string}`> {
