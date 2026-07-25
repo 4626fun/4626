@@ -1,12 +1,10 @@
 name: Deploy AlfaClub Proxy Worker
 
+# Manual CD only — auto-push was chronically red (missing Cloudflare secrets)
+# and burned Actions minutes on every proxy-path merge. Deploy from the
+# Actions UI after secrets are set (or use wrangler locally).
+
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - alfaclub/infra/cloudflare-proxy/**
-      - .github/workflows/cloudflare-alfaclub-proxy-deploy.yml
   workflow_dispatch:
 
 permissions:

@@ -2,8 +2,12 @@ name: Security scanning
 
 on:
   pull_request:
+    # ready_for_review: draft skips must re-run when a PR is marked ready
+    # without a new push (default activity set omits this event).
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
-    # Gitleaks only on PRs; heavy jobs are schedule/manual.
+    # Gitleaks on every non-draft PR (including docs) — secrets land in markdown too.
+    # Heavy jobs remain schedule/manual.
   workflow_dispatch:
   # Heavy jobs (full-history gitleaks, pnpm audit, Semgrep, full Slither)
   # monthly + manual. Was weekly — keep allowlist telemetry cheap.
@@ -32,9 +36,12 @@ jobs:
       github.event_name != 'schedule' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     steps:
+      # blob:none keeps commit history for base..head without downloading every
+      # blob up front (full clone was the expensive part on this monorepo).
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - name: Install gitleaks
         env:
@@ -263,17 +270,27 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          submodules: recursive
+          fetch-depth: 1
+          submodules: false
+
+      - name: Init forge submodules (selective)
+        run: bash scripts/ci-init-forge-submodules.sh
 
       - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
           version: v1.7.0
+          cache: true
+          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0-${{ github.run_id }}
+          cache-restore-keys: |
+            foundry-rpc-${{ runner.os }}-v1.7.0-
+            foundry-rpc-${{ runner.os }}-
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '20'
+          cache: 'pnpm'
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -315,17 +332,27 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          submodules: recursive
+          fetch-depth: 1
+          submodules: false
+
+      - name: Init forge submodules (selective)
+        run: bash scripts/ci-init-forge-submodules.sh
 
       - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
           version: v1.7.0
+          cache: true
+          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0-${{ github.run_id }}
+          cache-restore-keys: |
+            foundry-rpc-${{ runner.os }}-v1.7.0-
+            foundry-rpc-${{ runner.os }}-
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '20'
+          cache: 'pnpm'
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:

@@ -99,8 +99,9 @@ function readDepositBounds() {
 
 function readLiveBatcherAddress() {
   const source = readFileSync(DEFAULTS_TS, 'utf8');
+  // contracts.defaults.ts formats addr() across lines with double quotes + trailing comma.
   const match = source.match(
-    /export const SPLIT_PHASE1_DEPLOYMENT_BATCHER\s*=\s*addr\('([0-9a-fA-F]{40})'\)/,
+    /export const SPLIT_PHASE1_DEPLOYMENT_BATCHER\s*=\s*addr\(\s*['"]([0-9a-fA-F]{40})['"]\s*,?\s*\)/s,
   );
   if (!match) {
     throw new Error('Could not parse SPLIT_PHASE1_DEPLOYMENT_BATCHER from contracts.defaults.ts');

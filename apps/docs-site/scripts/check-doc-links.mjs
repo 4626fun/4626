@@ -15,7 +15,12 @@ function listTrackedMarkdownDocs() {
     .filter((file) => file.endsWith(".md"))
     .filter((file) => existsSync(path.join(repoRoot, file)))
     .filter((file) => !file.startsWith("docs/_generated/"))
-    .filter((file) => !file.startsWith("docs/_archive/"));
+    .filter((file) => !file.startsWith("docs/_archive/"))
+    // Public docs only — internal/agent/audit trees are not published and
+    // routinely contain intentional relative paths that are not link targets.
+    .filter((file) => !file.startsWith("docs/_internal/"))
+    .filter((file) => !file.startsWith("docs/agent-context/"))
+    .filter((file) => !file.startsWith("docs/audits/"));
 }
 
 function normalizeTarget(rawHref) {

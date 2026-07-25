@@ -18,10 +18,13 @@
 
 | Command | Purpose |
 | -------- | -------- |
-| `pnpm -C frontend lint:a11y` | Alias of main `lint` — jsx-a11y rules at **error** in `eslint.config.js` |
+| `pnpm -C frontend lint` / `lint:a11y` | jsx-a11y rules at **error** in `eslint.config.js` (`lint:a11y` is an alias) |
 | `pnpm -C frontend smoke:a11y -- --serve` | Playwright + axe on `/faq`, `/faq/how-it-works`, `/waitlist`, `/swap` (fails on **serious/critical** only). With `--serve`, restarts Vite per host shell (`marketing` vs `app`). |
 
-CI runs both in [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml). Set repository variable **`A11Y_CI_BLOCKING=true`** so the job fails PRs on regressions (default is non-blocking when the variable is unset).
+| Surface | Where it runs |
+| -------- | ------------- |
+| jsx-a11y (ESLint) | **Tests** workflow → Frontend ESLint (`pnpm lint`) on frontend-path PRs — always blocking |
+| Playwright + axe smoke | Local / pre-release only (`pnpm -C frontend smoke:a11y`) — not a GitHub Actions workflow |
 
 **Note:** `eslint-plugin-jsx-a11y` needs `minimatch@3` under the plugin (see `pnpm.overrides` `eslint-plugin-jsx-a11y>minimatch`) because the repo pins `minimatch@10` elsewhere.
 
@@ -34,7 +37,7 @@ A11Y_BASE_URL=https://app.4626.fun pnpm -C frontend smoke:a11y -- --paths /swap
 
 Use preview/staging when validating a PR; production is useful for periodic audits only.
 
-### Local serve (matches CI)
+### Local serve
 
 ```bash
 pnpm -C frontend smoke:a11y -- --serve
@@ -54,9 +57,7 @@ Prioritize manual keyboard + screen reader passes on:
 
 ## jsx-a11y in main lint
 
-jsx-a11y **recommended** rules run at **error** severity in `eslint.config.js`. `pnpm -C frontend lint:a11y` is an alias of `pnpm lint`.
-
-To fail CI on accessibility regressions, set repository variable **`A11Y_CI_BLOCKING=true`** in GitHub (Settings → Secrets and variables → Actions → Variables).
+jsx-a11y **recommended** rules run at **error** severity in `eslint.config.js`. `pnpm -C frontend lint:a11y` is an alias of `pnpm lint` and is already covered by the Tests workflow Frontend ESLint step.
 
 ## References
 

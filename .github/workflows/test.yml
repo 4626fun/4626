@@ -1,18 +1,29 @@
 name: Tests
 
-# Cost posture (2026-07): PR + manual only. Merges to main no longer re-run the
-# full suite (branch protection should require these checks on PRs). Path-filtered
-# jobs, cancel-in-progress, no Foundry submodules on frontend jobs. Full vitest
-# is workflow_dispatch only (PRs keep lint/typecheck/guards + forge when needed).
+# Cost posture (2026-07):
+# - PR + manual only (no push-to-main re-runs).
+# - Draft / Dependabot: skip entirely.
+# - Path filters do NOT include this workflow file (CI-only PRs must not force
+#   forge + frontend + kpr). Validate with workflow_dispatch.
+# - Forge: selective submodules, solc/RPC caches, PR excludes live fork suites
+#   (full suite including forks on workflow_dispatch).
+# - Frontend vitest: workflow_dispatch only.
 
 on:
   pull_request:
+    # ready_for_review: draft skips must re-run when a PR is marked ready
+    # without a new push (default activity set omits this event).
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'apps/docs-site/**'
       - '**/*.mdx'
+      - '.cursor/**'
+      - 'skills/**'
+      - 'acp-cli/**'
+      - 'dgclaw-skill/**'
   workflow_dispatch:
 
 concurrency:
@@ -27,20 +38,22 @@ env:
   FOUNDRY_PROFILE: ci
   MARKETING_ORIGIN: https://4626.fun
   APP_ORIGIN: https://app.4626.fun
+  # Public Base RPC for PR integration forks (AlfaClub BaseFork, etc.).
+  BASE_RPC_URL: https://base-rpc.publicnode.com
 
 jobs:
-  # Single detect job (was changes + plan — two runners for one boolean matrix).
   plan:
     name: Detect paths
-    # Dependabot: Dependency Review covers high+ vulns; full forge/vitest
-    # on every lockfile bump is the largest avoidable Actions cost.
-    if: github.actor != 'dependabot[bot]'
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       contracts: ${{ steps.out.outputs.contracts }}
       frontend: ${{ steps.out.outputs.frontend }}
       kpr: ${{ steps.out.outputs.kpr }}
+      alfaclub_fe: ${{ steps.out.outputs.alfaclub_fe }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -55,7 +68,6 @@ jobs:
             echo "force_all=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # paths-filter uses the PR base via GitHub API when fetch-depth is shallow.
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         if: steps.force.outputs.force_all != 'true'
@@ -65,22 +77,49 @@ jobs:
               - 'contracts/**'
               - 'test/**'
               - 'script/**'
+              - 'alfaclub/contracts/**'
               - 'foundry.toml'
               - 'remappings.txt'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.gitmodules'
               - 'lib/**'
               - 'amoe/tools/ci/**'
               - 'scripts/check-lane-contract-parity.mjs'
               - 'scripts/check-ovault-*.mjs'
               - 'scripts/check-forbidden-tracked-files.sh'
               - 'scripts/check-eip170-size-gate.mjs'
-              - '.github/workflows/test.yml'
+              - 'scripts/ci-init-forge-submodules.sh'
             frontend:
-              - 'frontend/**'
-              - '.github/workflows/test.yml'
+              # Explicit trees (not frontend/**) so frontend/docs stays Docs Drift-only.
+              - 'frontend/src/**'
+              - 'frontend/api/**'
+              - 'frontend/server/**'
+              - 'frontend/scripts/**'
+              - 'frontend/packages/**'
+              - 'frontend/public/**'
+              - 'frontend/db/**'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/tsconfig*.json'
+              - 'frontend/vite.config.*'
+              - 'frontend/eslint.config.*'
+              - 'frontend/vercel.json'
+              - 'frontend/index.html'
             kpr:
               - 'kpr/**'
               - 'scripts/check-vault-strategy-reallocator-wiring.mjs'
-              - '.github/workflows/test.yml'
+            alfaclub_fe:
+              - 'frontend/src/lib/alfaclub/**'
+              - 'frontend/src/components/alfaclub/**'
+              - 'frontend/src/hooks/useAlfaClub*'
+              - 'frontend/src/pages/AlfaClub*'
+              - 'frontend/server/_lib/alfaclub/**'
+              - 'frontend/server/_lib/paymaster/alfaclubLpPolicy*'
+              - 'frontend/api/_handlers/paymaster/**'
+              - 'frontend/api/_handlers/v1/alfaclub/**'
+              - 'frontend/api/__tests__/alfaclub*'
+              - 'frontend/api/__tests__/paymasterUniversalRouterOpcodes*'
 
       - name: Resolve outputs
         id: out
@@ -89,25 +128,28 @@ jobs:
             echo "contracts=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "kpr=true" >> "$GITHUB_OUTPUT"
+            echo "alfaclub_fe=true" >> "$GITHUB_OUTPUT"
           else
             echo "contracts=${{ steps.filter.outputs.contracts }}" >> "$GITHUB_OUTPUT"
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
             echo "kpr=${{ steps.filter.outputs.kpr }}" >> "$GITHUB_OUTPUT"
+            echo "alfaclub_fe=${{ steps.filter.outputs.alfaclub_fe }}" >> "$GITHUB_OUTPUT"
           fi
 
   forge:
     name: Forge (contracts)
     needs: plan
-    if: |
-      needs.plan.outputs.contracts == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    if: needs.plan.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          submodules: recursive
           fetch-depth: 1
+          submodules: false
+
+      - name: Init forge submodules (selective)
+        run: bash scripts/ci-init-forge-submodules.sh
 
       - name: Guard forbidden tracked secrets/key files
         run: bash scripts/check-forbidden-tracked-files.sh
@@ -124,16 +166,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Forge solc artifacts
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v6
+        with:
+          path: |
+            cache
+            out
+            ~/.svm
+          key: forge-solc-${{ runner.os }}-${{ hashFiles('foundry.toml', 'remappings.txt', 'pnpm-lock.yaml', '.gitmodules') }}-${{ hashFiles('contracts/**/*.sol', 'test/**/*.sol', 'script/**/*.sol', 'amoe/**/*.sol') }}
+          restore-keys: |
+            forge-solc-${{ runner.os }}-${{ hashFiles('foundry.toml', 'remappings.txt', 'pnpm-lock.yaml', '.gitmodules') }}-
+            forge-solc-${{ runner.os }}-
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
           version: v1.7.0
+          cache: true
+          cache-key: foundry-rpc-${{ runner.os }}-v1.7.0-${{ github.run_id }}
+          cache-restore-keys: |
+            foundry-rpc-${{ runner.os }}-v1.7.0-
+            foundry-rpc-${{ runner.os }}-
 
       - name: EIP-170 size gate (allowlist-aware)
-        # Blocking for new oversize; known OFT/oracle/Charm factory debt is
-        # allowlisted with maxRuntimeBytes ceilings. See
-        # docs/operations/contract-size-gate.md and
-        # scripts/check-eip170-size-gate.mjs.
         run: node scripts/check-eip170-size-gate.mjs
         id: build
 
@@ -156,27 +211,30 @@ jobs:
       - name: CreatorOVault size warn/fail gate
         run: amoe/tools/ci/check_ovault_size_warn.sh
 
-      - name: Run Forge tests (exclude known Rebalance economic baseline fails)
-        # AGENTS.md: CreatorOVaultStrategies.Rebalance.* has pre-existing
-        # deterministic failures on main — do not pay minutes re-failing them on every PR.
+      - name: "Run Forge tests (PR; skip deployment-batcher fork dir)"
+        # Rebalance suite is known-red on main. `test/fork/**` is the heavy
+        # deployment-batcher live-fork dir — keep that on workflow_dispatch.
+        # Forge v1.7 allows only one --no-match-path; combine with brace glob.
+        # Do NOT blanket-exclude `*Fork*`: AlfaClub BaseFork stays on PRs.
+        if: github.event_name == 'pull_request'
         run: |
-          forge test -vv \
-            --no-match-path 'test/vault/strategies/CreatorOVaultStrategies.Rebalance.*'
-        id: test
+          forge test --no-match-path '{test/fork/**,test/vault/strategies/CreatorOVaultStrategies.Rebalance.*}'
+        id: test_pr
+
+      - name: "Run Forge tests (full; exclude Rebalance)"
+        if: github.event_name != 'pull_request'
+        run: forge test --no-match-path 'test/vault/strategies/CreatorOVaultStrategies.Rebalance.*'
+        id: test_full
 
   api-tests:
-    name: Frontend guards + typecheck (+ vitest on main)
+    name: Frontend / KPR checks
     needs: plan
-    # Skip entire job for draft PRs (still pay path-detect only).
-    if: |
-      (needs.plan.outputs.frontend == 'true' || needs.plan.outputs.kpr == 'true') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    if: needs.plan.outputs.frontend == 'true' || needs.plan.outputs.kpr == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          # No Foundry submodules — largest checkout cost on monorepo
           fetch-depth: 1
 
       - name: Guard forbidden tracked secrets/key files
@@ -191,6 +249,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
           cache-dependency-path: |
+            pnpm-lock.yaml
             frontend/pnpm-lock.yaml
             kpr/pnpm-lock.yaml
 
@@ -219,6 +278,7 @@ jobs:
         run: pnpm --dir frontend guard:output-contract
 
       - name: Frontend ESLint
+        # Includes jsx-a11y (lint:a11y is an alias — see frontend/docs/accessibility.md).
         if: needs.plan.outputs.frontend == 'true'
         run: pnpm --dir frontend lint
 
@@ -250,16 +310,47 @@ jobs:
         if: needs.plan.outputs.frontend == 'true'
         run: pnpm --dir frontend typecheck
 
+      # Focused AlfaClub paymaster/room-access vitest on PRs (full vitest stays manual).
+      - name: AlfaClub frontend policy tests
+        if: needs.plan.outputs.alfaclub_fe == 'true'
+        run: >-
+          pnpm -C frontend exec vitest run
+          src/lib/alfaclub/sudoswapRouter.test.ts
+          src/pages/AlfaClubLiquidity.readiness.test.ts
+          src/hooks/useAlfaClubLiquidityPools.test.ts
+          src/pages/AlfaClubLiquidityPools.writeGate.test.tsx
+          src/components/alfaclub/CreatorCoinLinkPanel.test.tsx
+          server/_lib/paymaster/alfaclubLpPolicy.test.ts
+          server/_lib/alfaclub/roomAccessPolicy.test.ts
+          server/_lib/alfaclub/room1659SudoswapPairPlan.test.ts
+          server/_lib/alfaclub/roomPolicySync.test.ts
+          api/__tests__/alfaclubRoomAccessEndpoints.test.ts
+          api/__tests__/paymasterUniversalRouterOpcodes.test.ts
+
       - name: Install kpr dependencies
-        if: needs.plan.outputs.kpr == 'true' || needs.plan.outputs.frontend == 'true'
+        if: needs.plan.outputs.kpr == 'true'
         run: pnpm --dir kpr install --frozen-lockfile
 
-      - name: KPR TypeScript (no-regression launch gate)
-        if: needs.plan.outputs.kpr == 'true' || needs.plan.outputs.frontend == 'true'
+      - name: KPR TypeScript
+        if: needs.plan.outputs.kpr == 'true'
         run: pnpm --dir kpr typecheck
 
-      # Full vitest suite is expensive (~minutes). PR = lint/typecheck/guards only;
-      # workflow_dispatch runs the full suite on demand.
+      # Folded former strategy-reallocator job — one runner when kpr/ changes.
+      - name: Install root dependencies (reallocator wiring)
+        if: needs.plan.outputs.kpr == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Guard vault strategy reallocator wiring
+        if: needs.plan.outputs.kpr == 'true'
+        run: node scripts/check-vault-strategy-reallocator-wiring.mjs
+
+      - name: KPR planner + pass-loop tests
+        if: needs.plan.outputs.kpr == 'true'
+        run: |
+          pnpm -C kpr test vault-strategy-reallocator
+          pnpm -C kpr test vault-strategy-reallocator-pass-loop
+          pnpm -C kpr test strategyAllocation.fuzz
+
       - name: Run frontend tests (manual only)
         if: needs.plan.outputs.frontend == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm --dir frontend test -- --reporter=dot
@@ -281,45 +372,3 @@ jobs:
           AGENT_REGISTRATION_URL: ${{ env.APP_ORIGIN }}/.well-known/agent-registration.json
           AGENT_REGISTRATION_EXPECTED_ID: '2205'
           AGENT_REGISTRATION_EXPECTED_REGISTRY: eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432
-
-  strategy-reallocator-guards:
-    name: Strategy reallocator (KPR only)
-    needs: plan
-    # Only when kpr/ changes — not every contracts PR. No Foundry (Rebalance suite is known-red).
-    if: |
-      needs.plan.outputs.kpr == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 1
-          submodules: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            kpr/pnpm-lock.yaml
-
-      - name: Install root dependencies (for wiring script if needed)
-        run: pnpm install --frozen-lockfile
-
-      - name: Install KPR dependencies
-        run: pnpm -C kpr install --frozen-lockfile
-
-      - name: Guard vault strategy reallocator wiring
-        run: node scripts/check-vault-strategy-reallocator-wiring.mjs
-
-      - name: KPR planner + pass-loop tests
-        run: |
-          pnpm -C kpr test vault-strategy-reallocator
-          pnpm -C kpr test vault-strategy-reallocator-pass-loop
-          pnpm -C kpr test strategyAllocation.fuzz

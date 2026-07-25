@@ -24,7 +24,9 @@ Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/core/creat
 
 On finalize, wrapped `■` splits **30/30/30/10**: auction · vesting (365d) · Solana bridge · LP reserve. [Share allocation](/reference/glossary#share-allocation-at-finalize).
 
-### Finalize does **not**
+## What finalize does **not** do
+
+Phase 2 `finalizePhase2` wraps the deposit and enforces the **30/30/30/10** split. It does **not**:
 
 - Fund Charm / Ajna — that is **Phase 3** (`deployPhase3Strategies` + `deployToStrategies` at **45% / 45% / 10% idle**)
 - Graduate the auction or call `migrate()` — that runs **after** the auction completes

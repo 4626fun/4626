@@ -3,10 +3,13 @@ name: Guards
 # Consolidated path-filtered guardrails (was: builder-codes, eliza-runtime,
 # env-example-address-check, protocol-assets, zk-pipeline-guards).
 # A cheap `changes` job selects which heavy jobs run so unrelated PRs do
-# not pay forge/pnpm minutes.
+# not pay forge/pnpm minutes. ZK forge suites live in Tests → Forge.
 
 on:
   pull_request:
+    # ready_for_review: draft skips must re-run when a PR is marked ready
+    # without a new push (default activity set omits this event).
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
     paths:
       # builder-codes
@@ -53,7 +56,6 @@ on:
       - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
       - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
       - 'amoe/tools/ci/check_lottery_amoe_failures.py'
-      - '.github/workflows/guards.yml'
       # agent-context budget
       - 'AGENTS.md'
       - 'docs/agent-context/**'
@@ -62,6 +64,8 @@ on:
       - 'scripts/guard-tier1-line-budget.mjs'
       - 'scripts/guard-agent-context-sync.mjs'
       - 'scripts/sync-agent-context-rule.mjs'
+      # Intentionally omit this workflow file from paths — CI-only edits must not
+      # force zk/forge/pnpm jobs. Validate Guards via workflow_dispatch.
   # No push-to-main re-run — PR path filters already gated the change.
   workflow_dispatch:
     inputs:
@@ -82,22 +86,41 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: guards-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     name: Detect changed paths
-    if: github.actor != 'dependabot[bot]' && github.event_name != 'workflow_dispatch'
+    # workflow_dispatch forces all lanes so Guards can be exercised manually
+    # even when this workflow file is omitted from pull_request paths.
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     outputs:
-      builder-codes: ${{ steps.filter.outputs.builder-codes }}
-      eliza: ${{ steps.filter.outputs.eliza }}
-      env-example: ${{ steps.filter.outputs.env-example }}
-      protocol-assets: ${{ steps.filter.outputs.protocol-assets }}
-      zk: ${{ steps.filter.outputs.zk }}
-      agent-context: ${{ steps.filter.outputs.agent-context }}
+      builder-codes: ${{ steps.out.outputs.builder-codes }}
+      eliza: ${{ steps.out.outputs.eliza }}
+      env-example: ${{ steps.out.outputs.env-example }}
+      protocol-assets: ${{ steps.out.outputs.protocol-assets }}
+      zk: ${{ steps.out.outputs.zk }}
+      agent-context: ${{ steps.out.outputs.agent-context }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Force-all on manual dispatch
+        id: force
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "force_all=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "force_all=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
+        if: steps.force.outputs.force_all != 'true'
         with:
           filters: |
             builder-codes:
@@ -156,6 +179,25 @@ jobs:
               - 'scripts/guard-agent-context-sync.mjs'
               - 'scripts/sync-agent-context-rule.mjs'
 
+      - name: Resolve outputs
+        id: out
+        run: |
+          if [ "${{ steps.force.outputs.force_all }}" = "true" ]; then
+            echo "builder-codes=true" >> "$GITHUB_OUTPUT"
+            echo "eliza=true" >> "$GITHUB_OUTPUT"
+            echo "env-example=true" >> "$GITHUB_OUTPUT"
+            echo "protocol-assets=true" >> "$GITHUB_OUTPUT"
+            echo "zk=true" >> "$GITHUB_OUTPUT"
+            echo "agent-context=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "builder-codes=${{ steps.filter.outputs.builder-codes }}" >> "$GITHUB_OUTPUT"
+            echo "eliza=${{ steps.filter.outputs.eliza }}" >> "$GITHUB_OUTPUT"
+            echo "env-example=${{ steps.filter.outputs.env-example }}" >> "$GITHUB_OUTPUT"
+            echo "protocol-assets=${{ steps.filter.outputs.protocol-assets }}" >> "$GITHUB_OUTPUT"
+            echo "zk=${{ steps.filter.outputs.zk }}" >> "$GITHUB_OUTPUT"
+            echo "agent-context=${{ steps.filter.outputs.agent-context }}" >> "$GITHUB_OUTPUT"
+          fi
+
   agent-context-budget-guard:
     needs: changes
     if: needs.changes.outputs.agent-context == 'true'
@@ -183,7 +225,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          submodules: recursive
+          fetch-depth: 1
+          submodules: false
       - name: Install pnpm
         uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
       - name: Setup Node.js
@@ -349,44 +392,5 @@ jobs:
             "${{ github.event.inputs.manager_address }}" \
             "${{ github.event.inputs.manager_rpc }}"
 
-  amoe-plonk-tests:
-    needs: changes
-    if: needs.changes.outputs.zk == 'true'
-    name: AmoePlonkVerifier regression tests
-    runs-on: ubuntu-latest
-    env:
-      FOUNDRY_PROFILE: ci
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
-        with:
-          version: v1.7.0
-      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: '20'
-      - name: Install Node deps (Solidity remappings)
-        run: pnpm install --frozen-lockfile
-      - name: Run AmoePlonkVerifier suite
-        run: forge test --match-contract AmoePlonkVerifier -vv
-      - name: Run LotteryAmoeRouter suite
-        run: |
-          set +e
-          forge test --match-contract LotteryAmoe --json > /tmp/result.json
-          forge_rc=$?
-          set -e
-
-          set +e
-          python3 amoe/tools/ci/check_lottery_amoe_failures.py /tmp/result.json
-          guard_rc=$?
-          set -e
-
-          if [ "$guard_rc" -eq 0 ] && [ "$forge_rc" -ne 0 ] && [ ! -s /tmp/result.json ]; then
-              echo "forge returned non-zero exit ($forge_rc) and produced no JSON."
-              echo "This usually means compilation broke. Re-running verbosely:"
-              forge test --match-contract LotteryAmoe -vv || true
-              exit 1
-          fi
-          exit "$guard_rc"
+  # AmoePlonk / LotteryAmoe forge suites run in Tests → Forge when contracts/**
+  # change. Keeping a second forge install here doubled ZK-path PR minutes.

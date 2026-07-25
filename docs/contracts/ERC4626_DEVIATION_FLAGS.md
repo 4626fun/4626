@@ -46,7 +46,7 @@ Zero (`0x0`) is valid and means "vault claims full ERC-4626 conformance".
 
 | Contract                                          | Flags | Bits set                         | Doc                                                                                          |
 |---------------------------------------------------|-------|----------------------------------|----------------------------------------------------------------------------------------------|
-| `AjnaERC4626Vault`                                | `0x3` | 0, 1                             | [M-22 / F-19 acceptance](./../audits/4626/acceptances/F-19-erc4626-deviation-flag.md)        |
+| `AjnaERC4626Vault`                                | `0x3` | 0, 1                             | [M-22 / F-19 acceptance](../_internal/audits/4626/acceptances/F-19-erc4626-deviation-flag.md) |
 
 Future 4626-style vaults that take deviations MUST (1) add themselves to this table, (2) implement `erc4626DeviationFlags()` with `pure` semantics, and (3) ship a test pinning the returned value.
 

@@ -61,6 +61,17 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'docs/_internal/operations/alfaclub/token-rotation.md',
   // SEO assets engineering readme.
   'seo/README.md',
+  // Engineering / agent seed notes — not public docs.4626.fun content.
+  '.hermes/plans/**',
+  'apps/docs-site/REDESIGN-SPEC.md',
+  'contracts/README.md',
+  'contracts/_archive/README.md',
+  'frontend/server/_lib/akita/**',
+  'indexer/shovel/README.md',
+  'programs/lottery-relay-oapp/README.md',
+  'shared/revenue/README.md',
+  'verification/tamago/**',
+  'wave-w6-acceptance-note.md',
   // Repo-level meta doc (single sign-on notes), peer of note.md.
   'sso.md',
   // ZK tooling engineering readme.
