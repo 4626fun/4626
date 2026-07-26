@@ -38,6 +38,8 @@ import {
   CANONICAL_CSW_ADDRESS,
   isAllowedCanonicalCswExecutionSigner,
 } from '@/wallet/canonicalWalletPolicy'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
+import { PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE } from '@/lib/privy/privyWalletSignerMatch'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 import {
   ensureSignatureHex,
@@ -1241,8 +1243,22 @@ function createWalletBackedLocalAccount(params: {
           return await tryEthSign()
         } catch (ethSignError: unknown) {
           if (isUserRejection(ethSignError)) throw ethSignError
+          const ethMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError ?? '')
+          if (isPrivyEmbeddedSignerAuthError(ethMsg)) {
+            throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
+          }
           if (!allowSignMessageFallback || !isEthSignBlocked(ethSignError)) throw ethSignError
-          return await tryPersonalSign()
+          try {
+            return await tryPersonalSign()
+          } catch (personalSignError: unknown) {
+            if (isUserRejection(personalSignError)) throw personalSignError
+            const personalMsg =
+              personalSignError instanceof Error ? personalSignError.message : String(personalSignError ?? '')
+            if (isPrivyEmbeddedSignerAuthError(personalMsg) || isPrivyEmbeddedSignerAuthError(ethMsg)) {
+              throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
+            }
+            throw personalSignError
+          }
         }
       }
       if (userOpSignMode === 'signMessage') return await tryPersonalSign()
@@ -1278,7 +1294,14 @@ function createWalletBackedLocalAccount(params: {
             if (isUserRejection(personalSignError)) {
               throw personalSignError
             }
-            // Both methods failed
+            const ethMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError ?? '')
+            const personalMsg =
+              personalSignError instanceof Error ? personalSignError.message : String(personalSignError ?? '')
+            // Privy iframe/session failures should drive Sign-in-again UX, not Coinbase Wallet copy.
+            if (isPrivyEmbeddedSignerAuthError(ethMsg) || isPrivyEmbeddedSignerAuthError(personalMsg)) {
+              throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
+            }
+            // Both methods failed (capability)
             throw new Error(
               'Could not sign the UserOperation. Your wallet blocked eth_sign and signMessage also failed. ' +
               'Try using Coinbase Wallet or adding your Privy smart wallet as an owner.'

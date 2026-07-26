@@ -86,6 +86,7 @@
     "src/lib/alfaclub/zoraFundingExecuteFixtures.ts",
     "src/lib/api/**/*.ts",
     "src/lib/auth/**/*.ts",
+    "src/lib/privy/privyWalletSignerMatch.ts",
     "src/lib/debank/**/*.ts",
     "src/components/account/trayPortfolioHelpers.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",

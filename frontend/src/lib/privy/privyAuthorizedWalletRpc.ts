@@ -5,6 +5,7 @@ import { getPrivyApiUrl, getPrivyAppId } from '@/lib/flags/flags'
 import { resolveEffectivePrivyClientId } from '@/lib/flags/featureFlags'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
 import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
+import { assertPrivyWalletIdMatchesSignerAddress } from '@/lib/privy/privyWalletSignerMatch'
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
 
@@ -214,6 +215,10 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
   generateAuthorizationSignature: PrivyAuthorizationSignatureGenerator
   getToken?: () => Promise<string | null>
   refreshSession?: () => Promise<unknown>
+  /** Live wallet object address — must match expectedSignerAddress when both set. */
+  walletAddress?: string | null
+  /** UserOp / Permit2 ownerAddress that will use this signature. */
+  expectedSignerAddress?: string | null
 }): Promise<Hex> {
   const walletId = String(params.walletId ?? '').trim()
   if (!walletId) {
@@ -221,6 +226,13 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
   }
   if (!RAW_DIGEST_RE.test(String(params.hash ?? ''))) {
     throw new Error('Privy secp256k1_sign requires a 32-byte digest hash (0x + 64 hex chars).')
+  }
+  if (params.expectedSignerAddress) {
+    assertPrivyWalletIdMatchesSignerAddress({
+      walletId,
+      walletAddress: params.walletAddress,
+      expectedSignerAddress: params.expectedSignerAddress,
+    })
   }
 
   return postAuthorizedWalletRpc({

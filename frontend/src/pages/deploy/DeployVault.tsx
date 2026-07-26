@@ -69,7 +69,6 @@ import {
   http,
   keccak256,
   parseAbiParameters,
-  toHex,
   toBytes,
   type PublicClient,
 } from 'viem'
@@ -150,6 +149,9 @@ import { useZoraCoin, useAccountZoraProfile, useZoraProfile } from '@/lib/zora/h
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
+import { createPrivyEmbeddedUserOpWalletClient } from '@/lib/privy/createPrivyEmbeddedUserOpWalletClient'
+import { isSigningSessionRecoveryRequired } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
+import { isPrivyWalletSignerMismatchError } from '@/lib/privy/privyWalletSignerMatch'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
@@ -868,6 +870,10 @@ function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
 // may leak internal contract storage slot names, addresses, or logic
 // structure. Dev-only raw view is gated on import.meta.env.DEV.
 const DEPLOY_VAULT_ERROR_PATTERNS: ReadonlyArray<{ match: RegExp; userMessage: string }> = [
+  { match: /privy wallet id does not match|do not mix those lanes/i,
+    userMessage: 'Desktop Privy embedded signer and Base App lanes were mixed. Sign in again with email OTP or connect your Base Account, then retry.' },
+  { match: /signing session was refreshed but|embedded signing session expired|sign out and sign in again/i,
+    userMessage: 'Your embedded signing session expired. Sign in again with email OTP to restore it, then retry.' },
   { match: /wallet.*extension|metamask|rabby|ethereum.*request|window\.ethereum/i,
     userMessage: 'A wallet extension (MetaMask, Rabby, etc.) is interfering with the page. Disable other wallet extensions and reload.' },
   { match: /user rejected|user denied|rejected the request/i,
@@ -1745,6 +1751,17 @@ function DeployVaultBatcher({
       )
     }
 
+    if (isPrivyWalletSignerMismatchError(msg) || isSigningSessionRecoveryRequired(msg)) {
+      if (isPrivyWalletSignerMismatchError(msg)) {
+        return (
+          'Desktop Privy embedded signer and Base App / admin EOA lanes were mixed. ' +
+          'Sign in again with email OTP for the embedded signer, or connect your Base Account, then retry.'
+        )
+      }
+      return (
+        'Your embedded signing session expired. Sign in again with email OTP to restore it, then retry deploy.'
+      )
+    }
     if (lower.includes('blocked the raw signature method') && lower.includes('eth_sign')) {
       return (
         "Your current wallet can’t sign the UserOp hash required for smart wallet execution (`eth_sign`). " +
@@ -1975,50 +1992,16 @@ function DeployVaultBatcher({
           const embeddedProvider = await getPrivyEmbeddedEoaProvider()
           if (embeddedProvider?.request) {
             await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
-            const embeddedWalletClientAdapter = {
-              request: async (args: { method: string; params?: any[] }) => {
-                if (args?.method === 'eth_sign') {
-                  const p = Array.isArray(args.params) ? args.params : []
-                  const hashCandidate =
-                    p.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
-                    ''
-                  if (hashCandidate) {
-                    try {
-                      const rawSig = await embeddedProvider.request({
-                        method: 'secp256k1_sign',
-                        params: [hashCandidate],
-                      })
-                      return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
-                    } catch (signErr) {
-                      logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
-                        context: 'addOwner',
-                        error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
-                      })
-                    }
-                  }
-                }
-                return await embeddedProvider.request(args as any)
-              },
-              signMessage: async (args: { account: Address; message: any }) => {
-                const raw =
-                  typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
-                    ? (args.message as any).raw
-                    : args?.message
-                const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
-                const rawSig = await embeddedProvider.request({
-                  method: 'personal_sign',
-                  params: [msgHex, privyEmbeddedEoaAddress],
+            const embeddedWalletClientAdapter = createPrivyEmbeddedUserOpWalletClient({
+              address: privyEmbeddedEoaAddress,
+              getProvider: async () => embeddedProvider,
+              onSecp256k1Fallback: (signErr) => {
+                logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
+                  context: 'addOwner',
+                  error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
                 })
-                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
               },
-              signTypedData: async (typedData: any) => {
-                const rawSig = await embeddedProvider.request({
-                  method: 'eth_signTypedData_v4',
-                  params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
-                })
-                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
-              },
-            }
+            })
             const result = await sendCoinbaseSmartWalletUserOperation({
               publicClient: publicClient as any,
               walletClient: embeddedWalletClientAdapter as any,
@@ -5730,52 +5713,16 @@ function DeployVaultBatcher({
                 throw new Error('Privy embedded EOA provider not available')
               }
               await ensureProviderOnBase({ provider: embeddedProvider, label: 'Privy embedded EOA' })
-              const embeddedWalletClientAdapter = {
-                request: async (args: { method: string; params?: any[] }) => {
-                  // Privy embedded providers may block eth_sign, but often support
-                  // secp256k1_sign for raw 32-byte digests (ideal for UserOp hashes).
-                  if (args?.method === 'eth_sign') {
-                    const p = Array.isArray(args.params) ? args.params : []
-                    const hashCandidate =
-                      p.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
-                      ''
-                    if (hashCandidate) {
-                      try {
-                        const rawSig = await embeddedProvider.request({
-                          method: 'secp256k1_sign',
-                          params: [hashCandidate],
-                        })
-                        return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
-                      } catch (signErr) {
-                        logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
-                          phaseLabel: logPhaseLabel,
-                          error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
-                        })
-                      }
-                    }
-                  }
-                  return await embeddedProvider.request(args as any)
-                },
-                signMessage: async (args: { account: Address; message: any }) => {
-                  const raw =
-                    typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
-                      ? (args.message as any).raw
-                      : args?.message
-                  const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
-                  const rawSig = await embeddedProvider.request({
-                    method: 'personal_sign',
-                    params: [msgHex, privyEmbeddedEoaAddress],
+              const embeddedWalletClientAdapter = createPrivyEmbeddedUserOpWalletClient({
+                address: privyEmbeddedEoaAddress,
+                getProvider: async () => embeddedProvider,
+                onSecp256k1Fallback: (signErr) => {
+                  logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
+                    phaseLabel: logPhaseLabel,
+                    error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
                   })
-                  return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
                 },
-                signTypedData: async (typedData: any) => {
-                  const rawSig = await embeddedProvider.request({
-                    method: 'eth_signTypedData_v4',
-                    params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
-                  })
-                  return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
-                },
-              }
+              })
               const result = await sendCoinbaseSmartWalletUserOperation({
                 publicClient: publicClient as any,
                 walletClient: embeddedWalletClientAdapter as any,
@@ -7868,7 +7815,7 @@ function DeployVaultBatcher({
             ) : error}
           </div>
           {/* Only show auth-switch CTA for auth/session issues (not for signing-method incompatibility). */}
-          {switchAuthCta && /no_session|not authenticated|gas sponsorship requires a session|base account|email|privy|smart wallet/i.test(error) ? (
+          {switchAuthCta && (/no_session|not authenticated|gas sponsorship requires a session|base account|email|privy|smart wallet|sign in again|signing session|do not mix those lanes|embedded signing session/i.test(error) || isSigningSessionRecoveryRequired(error) || isPrivyWalletSignerMismatchError(error)) ? (
             <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
             </Button>
@@ -8198,7 +8145,7 @@ function DeployVaultMain() {
       }
     }
     return {
-      label: privyAuthenticated ? 'Switch account connection' : 'Restore account connection',
+      label: privyAuthenticated ? 'Sign in again to fix signing' : 'Restore account connection',
       onClick: () => void run(),
     }
   }, [getAccessToken, login, logout, privyAuthenticated, privyReady])

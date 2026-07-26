@@ -408,15 +408,26 @@ export function useSwapEmbeddedEoa(params: {
       if (!privyUnifiedWalletId) {
         throw new Error('Privy embedded wallet id is not available for authorized signing.')
       }
+      if (!privyEmbeddedEoaAddress) {
+        throw new Error('Privy embedded EOA address is not available for authorized signing.')
+      }
       const generateAuthSig = generateAuthorizationSignature as PrivyAuthorizationSignatureGenerator
       return privyAuthorizedWalletSecp256k1Sign({
         walletId: privyUnifiedWalletId,
         hash: digest,
         generateAuthorizationSignature: generateAuthSig,
         refreshSession: refreshEmbeddedSignerSession,
+        walletAddress: normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address),
+        expectedSignerAddress: privyEmbeddedEoaAddress,
       })
     },
-    [generateAuthorizationSignature, privyUnifiedWalletId, refreshEmbeddedSignerSession],
+    [
+      generateAuthorizationSignature,
+      privyEmbeddedEoaAddress,
+      privyEmbeddedEoaWallet,
+      privyUnifiedWalletId,
+      refreshEmbeddedSignerSession,
+    ],
   )
 
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {

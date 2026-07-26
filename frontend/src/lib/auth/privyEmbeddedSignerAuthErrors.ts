@@ -1,3 +1,8 @@
+import {
+  isPrivyWalletSignerMismatchError,
+  PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE,
+} from '@/lib/privy/privyWalletSignerMatch'
+
 /**
  * Privy embedded-wallet signer auth failures that a session refresh
  * (access-token re-read + active-wallet/provider re-acquire) can plausibly fix.
@@ -26,7 +31,9 @@ export function isSigningSessionRecoveryRequired(message: string): boolean {
   const m = String(message ?? '').trim()
   if (!m) return false
   if (isPrivyEmbeddedSignerAuthError(m)) return true
+  if (isPrivyWalletSignerMismatchError(m)) return true
   if (/signing session (was refreshed but|could not be refreshed)/i.test(m)) return true
   if (/privy session expired/i.test(m)) return true
+  if (m.includes(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)) return true
   return false
 }

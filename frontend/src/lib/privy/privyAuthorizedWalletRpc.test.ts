@@ -87,6 +87,24 @@ describe('isPrivyUnifiedStackWallet', () => {
   })
 })
 
+
+describe('privyAuthorizedWalletSecp256k1Sign signer guard', () => {
+  it('fails closed on expectedSignerAddress mismatch before fetch', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(
+      privyAuthorizedWalletSecp256k1Sign({
+        walletId: WALLET_ID,
+        hash: DIGEST,
+        walletAddress: ADDRESS,
+        expectedSignerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+        generateAuthorizationSignature: async () => ({ signature: 'sig' }),
+      }),
+    ).rejects.toThrow(/does not match the signing owner address/i)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('privyAuthorizedWalletSecp256k1Sign', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

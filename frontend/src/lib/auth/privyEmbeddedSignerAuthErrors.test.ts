@@ -40,3 +40,20 @@ describe('isSigningSessionRecoveryRequired', () => {
     expect(isSigningSessionRecoveryRequired('Slippage tolerance exceeded')).toBe(false)
   })
 })
+
+  it('matches Privy wallet-id vs owner lane mismatch', () => {
+    expect(
+      isSigningSessionRecoveryRequired(
+        'Privy wallet id does not match the signing owner address. Use your Privy embedded signer on desktop, or connect your Base Account in Base App — do not mix those lanes.',
+      ),
+    ).toBe(true)
+  })
+
+  it('matches UserOp signing-session recovery message', () => {
+    expect(
+      isSigningSessionRecoveryRequired(
+        'Signing session was refreshed but UserOperation signing still failed — sign out and sign in again (email OTP), then retry.',
+      ),
+    ).toBe(true)
+  })
+
