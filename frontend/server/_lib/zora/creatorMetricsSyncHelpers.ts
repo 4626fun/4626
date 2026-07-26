@@ -31,8 +31,8 @@ export function toIntegerOrNull(v: unknown): number | null {
   return Math.trunc(n)
 }
 
-const LEGACY_FEE_RATE = 0.03
-const V4_FEE_RATE = 0.01
+export const LEGACY_FEE_RATE = 0.03
+export const V4_FEE_RATE = 0.01
 const V4_CUTOFF_MS = Date.parse('2025-06-06T00:00:00Z')
 
 export const DEFAULT_HOT_REFRESH_LISTS: readonly ExploreList[] = [

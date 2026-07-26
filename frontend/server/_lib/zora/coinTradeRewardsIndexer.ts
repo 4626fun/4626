@@ -28,6 +28,7 @@ export const V4_LP_OF_TOTAL = 0.2
 /** creator+platform+trade+protocol portion of total fee (excludes doppler + LP). */
 export const V4_EVENT_CORE_MARKET_SHARE = 0.79
 
+/** Legacy CoinTradeRewards candidate cap (V4 path indexes all reward-emitting coins). */
 const DEFAULT_FEE_INDEX_LIMIT = 40
 const DEFAULT_BLOCK_TIME_SECONDS = 2n
 const BASE_CHAIN_ID = 8453
@@ -266,15 +267,15 @@ type RewardLog = {
 
 async function fetchMarketRewardsV4Logs(params: {
   client: PublicClient
-  coinSet: Set<string>
   fromBlock: bigint
   toBlock: bigint
   range: bigint
 }): Promise<RewardLog[]> {
   const event = parseAbiItem(COIN_MARKET_REWARDS_V4_EVENT)
   const logsOut: RewardLog[] = []
-  const { client, coinSet, fromBlock, toBlock, range } = params
+  const { client, fromBlock, toBlock, range } = params
 
+  // Full topic scan: coin is not indexed on CoinMarketRewardsV4 (~1.5k unique coins / 24h).
   for (let start = fromBlock; start <= toBlock; start += range + 1n) {
     const end = start + range > toBlock ? toBlock : start + range
     const logs = await client.getLogs({
@@ -284,11 +285,55 @@ async function fetchMarketRewardsV4Logs(params: {
     })
     for (const log of logs as any[]) {
       const coin = normalizeAddress(log.args?.coin)
-      if (!coin || !coinSet.has(coin)) continue
+      if (!coin) continue
       logsOut.push({ coin, args: log.args ?? {}, source: 'v4' })
     }
   }
   return logsOut
+}
+
+async function loadFeeModelsForCoins(db: Db, coinAddresses: string[]): Promise<Map<string, FeeModel>> {
+  const out = new Map<string, FeeModel>()
+  if (coinAddresses.length === 0) return out
+  const result = await db.sql`
+    SELECT lower(coin_address) AS coin_address, fee_model
+    FROM creator_coins
+    WHERE chain_id = ${BASE_CHAIN_ID}
+      AND lower(coin_address) = ANY(${coinAddresses}::text[]);
+  `
+  for (const row of result.rows ?? []) {
+    const coinAddress = normalizeAddress(row.coin_address)
+    if (!coinAddress) continue
+    out.set(coinAddress, row.fee_model === 'legacy' ? 'legacy' : 'v4')
+  }
+  return out
+}
+
+async function clearStaleIndexedFees(
+  db: Db,
+  params: { indexedCoins: string[]; runStartedAtIso: string },
+): Promise<number> {
+  const { indexedCoins, runStartedAtIso } = params
+  const result = await db.sql`
+    UPDATE creator_coins
+    SET
+      fees_24h_usd = COALESCE(volume_24h_usd, 0) * CASE
+        WHEN fee_model = 'legacy' THEN 0.03
+        ELSE 0.01
+      END,
+      fees_24h_creator_usd = 0,
+      fees_24h_platform_usd = 0,
+      fees_24h_trade_ref_usd = 0,
+      fees_24h_protocol_usd = 0,
+      fees_24h_lp_usd = 0,
+      fees_24h_doppler_usd = 0,
+      fees_24h_indexed_at = NULL
+    WHERE chain_id = ${BASE_CHAIN_ID}
+      AND fees_24h_indexed_at IS NOT NULL
+      AND fees_24h_indexed_at < ${runStartedAtIso}::timestamptz
+      AND NOT (lower(coin_address) = ANY(${indexedCoins}::text[]));
+  `
+  return Number((result as any)?.rowCount ?? 0)
 }
 
 async function fetchLegacyTradeRewardLogs(params: {
@@ -370,23 +415,53 @@ async function upsertFeeBuckets(
   db: Db,
   rows: Array<{ coinAddress: string; buckets: FeeBucketUsd }>,
 ): Promise<number> {
+  if (rows.length === 0) return 0
+  const batchSize = 200
   let updated = 0
-  for (const row of rows) {
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    const slice = rows.slice(offset, offset + batchSize)
+    const coinAddresses = slice.map((row) => row.coinAddress)
+    const creatorUsd = slice.map((row) => row.buckets.creatorUsd)
+    const platformUsd = slice.map((row) => row.buckets.platformUsd)
+    const tradeRefUsd = slice.map((row) => row.buckets.tradeRefUsd)
+    const protocolUsd = slice.map((row) => row.buckets.protocolUsd)
+    const lpUsd = slice.map((row) => row.buckets.lpUsd)
+    const dopplerUsd = slice.map((row) => row.buckets.dopplerUsd)
+    const totalUsd = slice.map((row) => row.buckets.totalUsd)
     await db.sql`
-      UPDATE creator_coins
+      UPDATE creator_coins AS c
       SET
-        fees_24h_creator_usd = ${row.buckets.creatorUsd},
-        fees_24h_platform_usd = ${row.buckets.platformUsd},
-        fees_24h_trade_ref_usd = ${row.buckets.tradeRefUsd},
-        fees_24h_protocol_usd = ${row.buckets.protocolUsd},
-        fees_24h_lp_usd = ${row.buckets.lpUsd},
-        fees_24h_doppler_usd = ${row.buckets.dopplerUsd},
-        fees_24h_usd = ${row.buckets.totalUsd},
+        fees_24h_creator_usd = t.creator_usd,
+        fees_24h_platform_usd = t.platform_usd,
+        fees_24h_trade_ref_usd = t.trade_ref_usd,
+        fees_24h_protocol_usd = t.protocol_usd,
+        fees_24h_lp_usd = t.lp_usd,
+        fees_24h_doppler_usd = t.doppler_usd,
+        fees_24h_usd = t.total_usd,
         fees_24h_indexed_at = NOW()
-      WHERE chain_id = ${BASE_CHAIN_ID}
-        AND lower(coin_address) = ${row.coinAddress};
+      FROM UNNEST(
+        ${coinAddresses}::text[],
+        ${creatorUsd}::float8[],
+        ${platformUsd}::float8[],
+        ${tradeRefUsd}::float8[],
+        ${protocolUsd}::float8[],
+        ${lpUsd}::float8[],
+        ${dopplerUsd}::float8[],
+        ${totalUsd}::float8[]
+      ) AS t(
+        coin_address,
+        creator_usd,
+        platform_usd,
+        trade_ref_usd,
+        protocol_usd,
+        lp_usd,
+        doppler_usd,
+        total_usd
+      )
+      WHERE c.chain_id = ${BASE_CHAIN_ID}
+        AND lower(c.coin_address) = t.coin_address;
     `
-    updated += 1
+    updated += slice.length
   }
   return updated
 }
@@ -400,8 +475,9 @@ export type CoinTradeRewardsIndexResult = {
 }
 
 /**
- * Index on-chain market reward events for top recent-volume coins and write fee bucket USD columns.
- * Prefers CoinMarketRewardsV4 (hook); also scans legacy CoinTradeRewards on coin contracts.
+ * Index on-chain market reward events into fee bucket USD columns.
+ * Primary: full 24h CoinMarketRewardsV4 topic scan (all hooks / coins).
+ * Fallback: legacy CoinTradeRewards for top-volume coins still missing V4 logs.
  */
 export async function indexCreatorCoinTradeRewardsFees(
   db: Db,
@@ -412,18 +488,11 @@ export async function indexCreatorCoinTradeRewardsFees(
     return { candidates: 0, coinsIndexed: 0, logsFetched: 0, skippedNoPrice: 0, zoraUsdPrice: null }
   }
 
-  const limit = Math.max(
+  const runStartedAtIso = new Date().toISOString()
+  const legacyLimit = Math.max(
     1,
     options.limit ?? parsePositiveInt(process.env.CREATOR_METRICS_FEE_INDEX_LIMIT, DEFAULT_FEE_INDEX_LIMIT),
   )
-  const candidates = await loadFeeIndexCandidates(db, limit)
-  if (candidates.length === 0) {
-    return { candidates: 0, coinsIndexed: 0, logsFetched: 0, skippedNoPrice: 0, zoraUsdPrice: null }
-  }
-
-  const feeModelByCoin = new Map(candidates.map((c) => [c.coinAddress, c.feeModel]))
-  const coinAddresses = candidates.map((c) => c.coinAddress)
-  const coinSet = new Set(coinAddresses)
 
   const rpcUrl = getLogsRpcUrl()
   const client = createPublicClient({
@@ -444,16 +513,23 @@ export async function indexCreatorCoinTradeRewardsFees(
 
   const v4Logs = await fetchMarketRewardsV4Logs({
     client,
-    coinSet,
     fromBlock,
     toBlock: latest,
     range,
   })
 
-  // Legacy path for coins that still emit CoinTradeRewards on the coin contract.
-  // Skip coins already covered by V4 logs to avoid double-counting.
-  const coinsWithV4 = new Set(v4Logs.map((l) => l.coin))
-  const legacyAddresses = coinAddresses.filter((a) => !coinsWithV4.has(a))
+  const v4Coins = [...new Set(v4Logs.map((l) => l.coin))]
+  const feeModelByCoin = await loadFeeModelsForCoins(db, v4Coins)
+
+  // Legacy path for top-volume coins that still emit CoinTradeRewards (no V4 coverage).
+  const legacyCandidates = await loadFeeIndexCandidates(db, legacyLimit)
+  const coinsWithV4 = new Set(v4Coins)
+  const legacyAddresses = legacyCandidates
+    .map((c) => c.coinAddress)
+    .filter((a) => !coinsWithV4.has(a))
+  for (const c of legacyCandidates) {
+    if (!feeModelByCoin.has(c.coinAddress)) feeModelByCoin.set(c.coinAddress, c.feeModel)
+  }
   const legacyLogs =
     legacyAddresses.length > 0
       ? await fetchLegacyTradeRewardLogs({
@@ -468,6 +544,8 @@ export async function indexCreatorCoinTradeRewardsFees(
 
   const logs = [...v4Logs, ...legacyLogs]
   const aggregated = aggregateRawRewards(logs)
+  // Only upsert coins we know in creator_coins (fee model lookup).
+  const coinAddresses = [...aggregated.keys()].filter((coin) => feeModelByCoin.has(coin))
 
   const envZoraPrice = Number(String(process.env.CREATOR_METRICS_ZORA_USD_PRICE ?? '').trim())
   let sampleCoin: {
@@ -553,8 +631,12 @@ export async function indexCreatorCoinTradeRewardsFees(
   }
 
   const coinsIndexed = await upsertFeeBuckets(db, upserts)
+  await clearStaleIndexedFees(db, {
+    indexedCoins: upserts.map((row) => row.coinAddress),
+    runStartedAtIso,
+  })
   return {
-    candidates: candidates.length,
+    candidates: coinAddresses.length,
     coinsIndexed,
     logsFetched: logs.length,
     skippedNoPrice,

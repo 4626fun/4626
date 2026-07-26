@@ -1,6 +1,7 @@
 import { getDb } from '../server/_lib/db/postgres.ts'
 import { ensureCreatorMetricsSchema } from '../server/_lib/zora/creatorMetricsSync.ts'
 import { indexCreatorCoinTradeRewardsFees } from '../server/_lib/zora/coinTradeRewardsIndexer.ts'
+import { recomputeAndCacheCreatorMetricsTotals } from '../server/_lib/zora/creatorMetricsSync.ts'
 
 async function main() {
   const limit = Number(process.env.CREATOR_METRICS_FEE_INDEX_LIMIT || 5)
@@ -17,6 +18,7 @@ async function main() {
   console.log('[fee-index-once] starting', { limit, hasSdk: Boolean(sdk) })
   const started = Date.now()
   const result = await indexCreatorCoinTradeRewardsFees(db, { sdk, limit })
+  await recomputeAndCacheCreatorMetricsTotals(db)
   console.log('[fee-index-once] done', { ms: Date.now() - started, ...result })
 }
 

@@ -379,7 +379,13 @@ async function upsertHotFinancialSnapshot(db: Db, snapshot: ReturnType<typeof pa
       chain_id = EXCLUDED.chain_id,
       market_cap_usd = EXCLUDED.market_cap_usd,
       volume_24h_usd = EXCLUDED.volume_24h_usd,
-      fees_24h_usd = EXCLUDED.fees_24h_usd,
+      -- Keep fresh on-chain indexed fees; only fall back to Zora volume×rate estimates otherwise.
+      fees_24h_usd = CASE
+        WHEN creator_coins.fees_24h_indexed_at IS NOT NULL
+          AND creator_coins.fees_24h_indexed_at >= NOW() - INTERVAL '36 hours'
+        THEN creator_coins.fees_24h_usd
+        ELSE EXCLUDED.fees_24h_usd
+      END,
       unique_holders = COALESCE(EXCLUDED.unique_holders, creator_coins.unique_holders),
       market_cap_delta_24h = COALESCE(EXCLUDED.market_cap_delta_24h, creator_coins.market_cap_delta_24h),
       fee_model = EXCLUDED.fee_model,
@@ -498,7 +504,12 @@ async function upsertExploreSnapshotBatch(db: Db, snapshots: readonly ExploreCoi
           chain_id = EXCLUDED.chain_id,
           market_cap_usd = EXCLUDED.market_cap_usd,
           volume_24h_usd = EXCLUDED.volume_24h_usd,
-          fees_24h_usd = EXCLUDED.fees_24h_usd,
+          fees_24h_usd = CASE
+            WHEN creator_coins.fees_24h_indexed_at IS NOT NULL
+              AND creator_coins.fees_24h_indexed_at >= NOW() - INTERVAL '36 hours'
+            THEN creator_coins.fees_24h_usd
+            ELSE EXCLUDED.fees_24h_usd
+          END,
           fee_model = EXCLUDED.fee_model,
           last_seen_at = NOW();
       `
@@ -851,6 +862,7 @@ export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<voi
           END
         ), 0)::NUMERIC AS market_cap_usd,
         COALESCE(SUM(volume_24h_usd), 0)::NUMERIC AS volume_24h_usd,
+        -- fees_24h_usd is on-chain indexed when fees_24h_indexed_at is fresh; else volume×rate.
         COALESCE(SUM(fees_24h_usd), 0)::NUMERIC AS fees_24h_usd
       FROM creator_coins
       WHERE chain_id = ${BASE_CHAIN_ID}

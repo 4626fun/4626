@@ -1,5 +1,5 @@
 export const EXPLORE_FEE_VERSION_HEADER_HINT =
-  '24h trading fees: indexed from on-chain market rewards when available (Creator/Platform/Zora/Doppler; LP derived). Otherwise estimated as volume × fee rate (v4 1% / legacy 3%). Expand a row for the payout split.'
+  '24h trading fees: summed from on-chain CoinMarketRewardsV4 when indexed (Creator/Platform/Zora/Doppler; LP derived). Coins without a fresh index fall back to volume × fee rate (v4 1% / legacy 3%). Expand a row for the payout split.'
 
 export function ExploreFeeInfoHint(props: { title: string; className?: string }) {
   return (
