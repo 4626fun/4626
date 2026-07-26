@@ -6,7 +6,6 @@ declare module '../../scripts/canvasTokens.mjs' {
   export function renderCanvasTokensCss(tokens: Record<string, string>): string
   export function resolveCanvasTokens(siteConfig: { backgroundColor: string }): Record<string, string>
 }
-
 interface ImportMetaEnv {
   readonly VITE_BASE_RPC?: string
   readonly VITE_CDP_PAYMASTER_URL?: string

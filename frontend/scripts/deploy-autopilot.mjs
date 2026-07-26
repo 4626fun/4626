@@ -2,6 +2,9 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import { shouldResumeDeploySession } from './shouldResumeDeploySession.mjs'
 
 import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
 import { base } from 'viem/chains'
@@ -405,26 +408,6 @@ async function main() {
       }
     }
 
-    const continueReady = new Set([
-      'created',
-      'phase1_confirmed',
-      'phase1_finalize_confirmed',
-      'phase2_core_confirmed',
-      'phase2_confirmed',
-      'ovault_mesh_sent',
-      'ovault_mesh_confirmed',
-      'phase3_confirmed',
-      'phase4_confirmed',
-    ])
-    const inFlight = new Set([
-      'phase1_sent',
-      'phase1_finalize_sent',
-      'phase2_core_sent',
-      'phase2_sent',
-      'phase3_sent',
-      'phase4_sent',
-      'cleanup_sent',
-    ])
     const terminal = new Set(['completed', 'failed', 'cancelled'])
     let lastStep = ''
     let lastContinueAttemptAt = 0
@@ -495,7 +478,12 @@ async function main() {
       }
 
       const now = Date.now()
-      if (driveContinue && continueReady.has(step) && !inFlight.has(step) && now - lastContinueAttemptAt > 12_000) {
+      if (shouldResumeDeploySession({
+        driveContinue,
+        nextAction: data.nextAction,
+        now,
+        lastContinueAttemptAt,
+      })) {
         lastContinueAttemptAt = now
         const continued = await apiPost({
           origin,
@@ -531,8 +519,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  const message = err?.message ? String(err.message) : String(err)
-  console.error(`deploy-autopilot failed: ${message}`)
-  process.exit(1)
-})
+if (import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    const message = err?.message ? String(err.message) : String(err)
+    console.error(`deploy-autopilot failed: ${message}`)
+    process.exit(1)
+  })
+}
