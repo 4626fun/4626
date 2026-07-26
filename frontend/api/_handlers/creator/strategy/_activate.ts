@@ -23,9 +23,14 @@ import {
 } from '../../../../server/_lib/creatorStrategy/catalog.js'
 import { getAlacarteDeployPurchaseBlockedMessage } from '../../../../server/_lib/creatorStrategy/bundleEntitlements.js'
 import {
+  expireAbandonedStripeCheckoutActivations,
   insertPendingActivation,
   toCreatorStrategyFeatureDto as toActivationDto,
 } from '../../../../server/_lib/creatorStrategy/activations.js'
+import {
+  assertSessionControlsCreatorToken,
+  isCreatorTokenAuthorityError,
+} from '../../../../server/_lib/creatorStrategy/creatorTokenAuthority.js'
 import {
   BASE_USDC_ADDRESS,
   resolveProtocolTreasuryForUsdcPayments,
@@ -101,6 +106,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const creatorToken = getAddress(creatorTokenRaw as Address)
 
+  try {
+    await assertSessionControlsCreatorToken({ creatorToken, sessionAddress })
+  } catch (error) {
+    if (isCreatorTokenAuthorityError(error)) {
+      return res.status(error.status).json({ success: false, error: error.message } satisfies ApiEnvelope<never>)
+    }
+    throw error
+  }
+
   const featureKey = typeof body.featureKey === 'string' ? body.featureKey.trim() : ''
   const retiredMessage = getRetiredCreatorStrategyFeatureMessage(featureKey)
   if (retiredMessage) {
@@ -146,6 +160,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .status(503)
       .json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
+
+  await expireAbandonedStripeCheckoutActivations(db as any, {
+    creatorToken,
+    featureKey: feature.key,
+  })
 
   const override = await findActivePriceOverride(db as any, {
     creatorToken,

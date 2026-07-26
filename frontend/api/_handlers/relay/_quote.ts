@@ -14,6 +14,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 import { RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD } from '../../../server/_lib/relay/getQuote.js'
+import { assertRelayOwnerMutationQuoteAccess } from '../../../server/_lib/relay/relayQuoteAccess.js'
 
 const RELAY_QUOTE_BODY_MAX_BYTES = 262_144
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
@@ -44,10 +45,6 @@ type RelayQuoteRequest = {
   originChainId?: unknown
   /** Optional. Defaults to `chainId` (same-chain) when omitted. */
   destinationChainId?: unknown
-}
-
-function isAddressString(value: unknown): value is string {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)
 }
 
 // Strict 0x-prefixed hex check. Enforces:
@@ -110,9 +107,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (chainId !== 8453) {
     return res.status(400).json({ success: false, error: 'chainId must be 8453 (Base mainnet)' } satisfies ApiEnvelope<never>)
   }
-  if (!isAddressString(body.to)) {
-    return res.status(400).json({ success: false, error: 'to must be a 20-byte address' } satisfies ApiEnvelope<never>)
-  }
   if (!isHexString(body.data, 4)) {
     return res.status(400).json({
       success: false,
@@ -123,9 +117,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!/^(0x[0-9a-fA-F]+|[0-9]+)$/.test(valueRaw)) {
     return res.status(400).json({ success: false, error: 'value must be a decimal or hex integer string' } satisfies ApiEnvelope<never>)
   }
-  if (!isAddressString(body.user)) {
-    return res.status(400).json({ success: false, error: 'user must be the CSW address' } satisfies ApiEnvelope<never>)
-  }
   const amountRaw =
     typeof body.amount === 'string' && body.amount.trim() !== ''
       ? body.amount.trim()
@@ -134,21 +125,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'amount must be a decimal integer string' } satisfies ApiEnvelope<never>)
   }
 
-  // recipient defaults to user (legacy single-wallet behavior). When the
-  // caller wants the funder/recipient split (see
-  // docs/operations/relay-sponsored-owner-mutation-flow.md),
-  // they pass `recipient` explicitly and we forward it. Validate it's a real
-  // address before trusting it.
-  let recipient: string = body.user
-  if (body.recipient !== undefined && body.recipient !== null && body.recipient !== '') {
-    if (!isAddressString(body.recipient)) {
-      return res.status(400).json({
-        success: false,
-        error: 'recipient must be a 20-byte address when provided',
-      } satisfies ApiEnvelope<never>)
-    }
-    recipient = body.recipient
+  // Ownership + owner-mutation shape: subsidized quotes are CSW self-calls only.
+  const access = await assertRelayOwnerMutationQuoteAccess({
+    principalAddress,
+    user: body.user,
+    to: body.to,
+    data: body.data,
+    recipient: body.recipient,
+  })
+  if (!access.ok) {
+    return res.status(access.status).json({ success: false, error: access.error } satisfies ApiEnvelope<never>)
   }
+
   // origin / destination chain ids default to the same `chainId` for the
   // legacy same-chain shape. Cross-chain callers can override.
   const originChainId =
@@ -160,8 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? body.destinationChainId
       : chainId
   const upstreamPayload = {
-    user: body.user,
-    recipient,
+    user: access.user,
+    recipient: access.recipient,
     originChainId,
     destinationChainId,
     originCurrency: NATIVE_CURRENCY,
@@ -172,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     subsidizeFees: true,
     originGasOverhead: RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD,
     source: '4626-owner-mutation',
-    txs: [{ to: body.to, data: body.data, value: valueRaw }],
+    txs: [{ to: access.to, data: body.data, value: valueRaw }],
   }
 
   const apiKey = resolveRelayApiKey()

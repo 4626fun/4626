@@ -12,6 +12,7 @@ const {
   txDbSqlMock,
   runInTransactionMock,
   hasAnyLiveActivationRowMock,
+  expireAbandonedStripeCheckoutActivationsMock,
   insertPendingActivationMock,
   settleX402PaymentMock,
   parseXPaymentHeaderMock,
@@ -22,6 +23,7 @@ const {
   dispatchProvisioningMock,
   recordPaymentActivationQueuedMock,
   recordPaymentProvisioningDispatchMock,
+  assertSessionControlsCreatorTokenMock,
 } = vi.hoisted(() => {
   const txDbSqlMock = vi.fn(async () => ({ rows: [] }))
   return {
@@ -31,6 +33,7 @@ const {
       fn({ sql: txDbSqlMock }),
     ),
     hasAnyLiveActivationRowMock: vi.fn(async () => false),
+    expireAbandonedStripeCheckoutActivationsMock: vi.fn(async () => 0),
     insertPendingActivationMock: vi.fn(),
     settleX402PaymentMock: vi.fn(async () => ({
       ok: true as const,
@@ -61,6 +64,7 @@ const {
       reused: false,
     })),
     recordPaymentProvisioningDispatchMock: vi.fn(async () => undefined),
+    assertSessionControlsCreatorTokenMock: vi.fn(async () => undefined),
   }
 })
 
@@ -96,9 +100,31 @@ vi.mock('../../server/_lib/creatorStrategy/bundleEntitlements.js', () => ({
 
 vi.mock('../../server/_lib/creatorStrategy/activations.js', () => ({
   hasAnyLiveActivationRow: hasAnyLiveActivationRowMock,
+  expireAbandonedStripeCheckoutActivations: expireAbandonedStripeCheckoutActivationsMock,
   insertPendingActivation: insertPendingActivationMock,
   toCreatorStrategyFeatureDto: vi.fn((row: any) => row),
 }))
+
+vi.mock('../../server/_lib/creatorStrategy/creatorTokenAuthority.js', () => {
+  class CreatorTokenAuthorityError extends Error {
+    status = 403 as const
+    constructor(message?: string) {
+      super(message ?? 'Creator token authority mismatch')
+      this.name = 'CreatorTokenAuthorityError'
+    }
+  }
+  return {
+    assertSessionControlsCreatorToken: assertSessionControlsCreatorTokenMock,
+    CreatorTokenAuthorityError,
+    isCreatorTokenAuthorityError: (error: unknown) =>
+      Boolean(
+        error &&
+          typeof error === 'object' &&
+          (error as { name?: unknown }).name === 'CreatorTokenAuthorityError' &&
+          (error as { status?: unknown }).status === 403,
+      ),
+  }
+})
 
 vi.mock('../../server/_lib/creatorStrategy/usdcPayment.js', () => ({
   BASE_USDC_ADDRESS: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -173,6 +199,20 @@ describe('x402 activate handler (C-1 regression)', () => {
     vi.clearAllMocks()
     hasAnyLiveActivationRowMock.mockResolvedValue(false)
     insertPendingActivationMock.mockResolvedValue({ ok: true, row: ACTIVATION_ROW })
+  })
+
+  it('rejects when the session does not control the creator token', async () => {
+    const { CreatorTokenAuthorityError } = await import(
+      '../../server/_lib/creatorStrategy/creatorTokenAuthority.js'
+    )
+    assertSessionControlsCreatorTokenMock.mockRejectedValueOnce(new CreatorTokenAuthorityError())
+
+    const res = createMockRes()
+    await handler(buildPaidRequest(), res)
+
+    expect(res.statusCode).toBe(403)
+    expect(settleX402PaymentMock).not.toHaveBeenCalled()
+    expect(hasAnyLiveActivationRowMock).not.toHaveBeenCalled()
   })
 
   it('never settles on-chain when a live activation row already exists', async () => {

@@ -11,6 +11,7 @@ import {
   rateLimitKey,
   RATE_LIMITS,
 } from '../../../packages/server-core/src/index.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 import { notifyRelaySolverDeposit } from '../../../server/_lib/relay/notifyRelaySolverDeposit.js'
 
 const BODY_MAX_BYTES = 8 * 1024
@@ -67,8 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+
   const limiter = await checkDurableRateLimit(
-    rateLimitKey('relay:notify-deposit', getClientIp(req)),
+    rateLimitKey('relay:notify-deposit', principalAddress.toLowerCase(), getClientIp(req)),
     RATE_LIMITS.creatorQuickstart,
     { failClosed: true },
   )

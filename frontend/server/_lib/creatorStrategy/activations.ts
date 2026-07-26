@@ -163,6 +163,49 @@ export async function hasAnyLiveActivationRow(
   return Array.isArray(result.rows) && result.rows.length > 0
 }
 
+/** Unpaid Stripe checkout pending rows older than this are treated as abandoned. */
+export const STRIPE_CHECKOUT_PENDING_TTL_MS = 60 * 60 * 1000
+
+/**
+ * Mark abandoned unpaid Stripe `pending` rows as `failed` so they no longer
+ * hold the `creator_strategy_features_one_live_per_feature` unique slot.
+ *
+ * Scoped to (creatorToken, featureKey). Only touches stripe rows with
+ * `payment_verified_at IS NULL` older than the TTL.
+ */
+export async function expireAbandonedStripeCheckoutActivations(
+  db: Db,
+  params: {
+    creatorToken: Address
+    featureKey: string
+    olderThanMs?: number
+  },
+): Promise<number> {
+  const creatorKey = params.creatorToken.toLowerCase()
+  const featureKey = String(params.featureKey ?? '')
+  if (!featureKey) return 0
+  const ttlMs =
+    typeof params.olderThanMs === 'number' && Number.isFinite(params.olderThanMs) && params.olderThanMs > 0
+      ? Math.floor(params.olderThanMs)
+      : STRIPE_CHECKOUT_PENDING_TTL_MS
+  const cutoffIso = new Date(Date.now() - ttlMs).toISOString()
+  const result = await db.sql`
+    UPDATE creator_strategy_features
+    SET status = 'failed',
+        failed_at = NOW(),
+        failure_reason = 'stripe_checkout_abandoned',
+        updated_at = NOW()
+    WHERE creator_token = ${creatorKey}
+      AND feature_key = ${featureKey}
+      AND status = 'pending'
+      AND payment_source = 'stripe'
+      AND payment_verified_at IS NULL
+      AND created_at < ${cutoffIso}
+    RETURNING id;
+  `
+  return Array.isArray(result.rows) ? result.rows.length : 0
+}
+
 export type InsertActivationInput = {
   creatorToken: Address
   featureKey: string
@@ -292,6 +335,11 @@ export async function insertStripeCheckoutActivation(
  * Webhook handler — fills in Stripe payment metadata + the actual
  * amount paid after `checkout.session.completed`. Idempotent: running
  * it twice for the same session leaves the row in the same state.
+ *
+ * If the unpaid pending row was marked `failed` by
+ * `expireAbandonedStripeCheckoutActivations` before the webhook arrived,
+ * revive it back to `pending` so a late-but-valid payment still unlocks
+ * entitlement (paired with Stripe `expires_at` matching the abandon TTL).
  */
 export async function finalizeStripeCheckoutActivation(
   db: Db,
@@ -308,6 +356,24 @@ export async function finalizeStripeCheckoutActivation(
           payment_verified_at = ${verifiedIso},
           stripe_payment_intent_id = ${input.stripePaymentIntentId},
           stripe_charge_id = ${input.stripeChargeId},
+          status = CASE
+            WHEN status = 'failed'
+              AND failure_reason = 'stripe_checkout_abandoned'
+            THEN 'pending'
+            ELSE status
+          END,
+          failed_at = CASE
+            WHEN status = 'failed'
+              AND failure_reason = 'stripe_checkout_abandoned'
+            THEN NULL
+            ELSE failed_at
+          END,
+          failure_reason = CASE
+            WHEN status = 'failed'
+              AND failure_reason = 'stripe_checkout_abandoned'
+            THEN NULL
+            ELSE failure_reason
+          END,
           updated_at = NOW()
       WHERE stripe_checkout_session_id = ${input.stripeCheckoutSessionId}
       RETURNING id, creator_token, feature_key, status, price_usdc_paid,
@@ -325,6 +391,14 @@ export async function finalizeStripeCheckoutActivation(
     }
     return { ok: true, row: rowToModel(row) }
   } catch (error) {
+    if (isUniqueViolation(error, 'creator_strategy_features_one_live_per_feature')) {
+      return {
+        ok: false,
+        reason: 'db_error',
+        message:
+          'Paid Stripe session could not revive abandoned activation because another live activation already exists for this creator/feature',
+      }
+    }
     return {
       ok: false,
       reason: 'db_error',

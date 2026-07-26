@@ -31,6 +31,8 @@
 
 import type Stripe from 'stripe'
 
+import { STRIPE_CHECKOUT_PENDING_TTL_MS } from './activations.js'
+
 let cachedClient: Stripe | null = null
 
 export function isStripeConfigured(): boolean {
@@ -116,9 +118,15 @@ export async function createCheckoutSession(
     throw new Error('Stripe unit amount must be > 0 (use a non-Stripe path for free activations)')
   }
 
+  // Keep Stripe session lifetime aligned with
+  // `expireAbandonedStripeCheckoutActivations` so a customer cannot pay after
+  // we have already released the live-activation unique slot.
+  const expiresAtUnix = Math.floor(Date.now() / 1000) + Math.floor(STRIPE_CHECKOUT_PENDING_TTL_MS / 1000)
+
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
+    expires_at: expiresAtUnix,
     line_items: [
       {
         price_data: {
