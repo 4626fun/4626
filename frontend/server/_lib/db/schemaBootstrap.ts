@@ -478,6 +478,23 @@ export async function ensureCreatorMetricsBaseSchema(db: Db): Promise<void> {
   await ensureMigrationApplied(db, '20260527010000_creator_metrics_base_tables.sql').catch(() => {})
 }
 
+/** CoinTradeRewards fee-bucket columns on creator_coins (Explore indexed fees). */
+export async function ensureCreatorCoinsFeeBucketColumns(db: Db): Promise<void> {
+  await withEnsureOnce('creatorCoinsFeeBuckets', async () => {
+    await ensureMigrationApplied(db, '20260726140000_creator_coins_fee_buckets.sql', async () => {
+      const result = await db.sql`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'creator_coins'
+            AND column_name = 'fees_24h_indexed_at'
+        ) AS ok;
+      `
+      return Boolean(result.rows?.[0]?.ok)
+    }).catch(() => {})
+  })
+}
+
 /**
  * Agent runtime leases, background task queue, API audit, control audit events,
  * and keepr send ledger.

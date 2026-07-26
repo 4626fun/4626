@@ -11,10 +11,10 @@ import { getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './t
 import {
   buildGroupSpans,
   formatCompactNumber,
-  formatFeeAmount,
   formatMarketCapDeltaPercent,
   getCoinFeeStatus,
   getMarketCapDeltaToneClass,
+  resolveExploreFeeBucketDisplay,
   resolveExploreFees24hDisplay,
   shortAddress,
 } from './rowFormatting'
@@ -113,13 +113,19 @@ export function TokenRow({
   const detailPath = `${linkPrefix}/${chain}/${address}`
 
   const totalFees = resolveExploreFees24hDisplay(coin.fees24hUsd, volumeForFees, feeRates.total)
+  const feeBucketDisplay = resolveExploreFeeBucketDisplay({
+    feeBuckets: coin.feeBuckets,
+    volumeForFees,
+    feeRates,
+  })
   const deltaToneClass = getMarketCapDeltaToneClass(change)
   const feeBreakdown = [
-    `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
-    `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
-    `LP Lock ${feeRates.lpRewards > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.lpRewards) : '-'}`,
-    `Zora ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.protocol)}`,
-    `Doppler ${feeRates.doppler > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.doppler) : '-'}`,
+    `Creator ${feeBucketDisplay.creator}`,
+    `Platform ${feeBucketDisplay.platform}`,
+    `LP Lock ${feeBucketDisplay.lp}`,
+    `Zora ${feeBucketDisplay.zora}`,
+    `Doppler ${feeBucketDisplay.doppler}`,
+    feeBucketDisplay.indexed ? 'indexed' : 'estimated',
   ].join(' • ')
 
   const columns = getExploreColumns({ variant: 'creators', timeframe, collapseIdentity })
@@ -285,27 +291,28 @@ export function TokenRow({
               <div className="grid gap-2">
                 <div>
                   <span className="text-zinc-500">Creator</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}</span>
+                  <span className="text-zinc-200">{feeBucketDisplay.creator}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Platform</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}</span>
+                  <span className="text-zinc-200">{feeBucketDisplay.platform}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">LP Lock</span>{' '}
-                  <span className="text-zinc-200">
-                    {feeRates.lpRewards > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.lpRewards) : '-'}
-                  </span>
+                  <span className="text-zinc-200">{feeBucketDisplay.lp}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Zora</span>{' '}
-                  <span className="text-zinc-200">{formatFeeAmount(volumeForFees, feeRates.total, feeRates.protocol)}</span>
+                  <span className="text-zinc-200">{feeBucketDisplay.zora}</span>
                 </div>
                 <div>
                   <span className="text-zinc-500">Doppler</span>{' '}
-                  <span className="text-zinc-200">
-                    {feeRates.doppler > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.doppler) : '-'}
-                  </span>
+                  <span className="text-zinc-200">{feeBucketDisplay.doppler}</span>
+                </div>
+                <div className="text-zinc-600">
+                  {feeBucketDisplay.indexed
+                    ? 'On-chain CoinTradeRewards (LP/Doppler derived)'
+                    : 'Estimated from volume × fee rate'}
                 </div>
               </div>
             </div>

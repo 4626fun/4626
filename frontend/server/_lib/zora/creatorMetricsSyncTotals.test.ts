@@ -63,6 +63,8 @@ describe('creator metrics hero totals', () => {
     const sqlText = strings.join('?')
     expect(sqlText).toContain('volume_24h_usd = 0')
     expect(sqlText).toContain('fees_24h_usd = 0')
+    expect(sqlText).toContain('fees_24h_creator_usd = 0')
+    expect(sqlText).toContain('fees_24h_indexed_at = NULL')
     expect(sqlText).toContain('make_interval')
     expect(sqlText).not.toContain('market_cap_usd = 0')
     expect(values).toEqual(expect.arrayContaining([8453, 48 * 60 * 60, 500]))

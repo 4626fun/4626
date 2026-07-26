@@ -78,6 +78,59 @@ export function resolveExploreFees24hDisplay(
   return formatFeeAmount(volumeForFees, totalFeeRate, 1)
 }
 
+export type ExploreFeeBucketAmounts = {
+  creator: string
+  platform: string
+  lp: string
+  zora: string
+  doppler: string
+  indexed: boolean
+}
+
+function formatIndexedFeeUsd(value: string | number | null | undefined): string | null {
+  if (value == null || value === '') return null
+  const n = typeof value === 'string' ? Number(value) : value
+  if (!Number.isFinite(n) || n < 0) return null
+  if (n === 0) return '-'
+  return formatCompactNumber(n)
+}
+
+/** Prefer CoinTradeRewards-indexed buckets; else volume × split rates. */
+export function resolveExploreFeeBucketDisplay(params: {
+  feeBuckets?: {
+    creatorUsd?: string | null
+    platformUsd?: string | null
+    protocolUsd?: string | null
+    lpUsd?: string | null
+    dopplerUsd?: string | null
+    indexedAt?: string | null
+  } | null
+  volumeForFees: string | undefined
+  feeRates: typeof FEE_RATES_V4
+}): ExploreFeeBucketAmounts {
+  const buckets = params.feeBuckets
+  const indexed = Boolean(buckets?.indexedAt)
+  if (indexed && buckets) {
+    return {
+      creator: formatIndexedFeeUsd(buckets.creatorUsd) ?? '-',
+      platform: formatIndexedFeeUsd(buckets.platformUsd) ?? '-',
+      lp: formatIndexedFeeUsd(buckets.lpUsd) ?? '-',
+      zora: formatIndexedFeeUsd(buckets.protocolUsd) ?? '-',
+      doppler: formatIndexedFeeUsd(buckets.dopplerUsd) ?? '-',
+      indexed: true,
+    }
+  }
+  const { volumeForFees, feeRates } = params
+  return {
+    creator: formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator),
+    platform: formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform),
+    lp: feeRates.lpRewards > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.lpRewards) : '-',
+    zora: formatFeeAmount(volumeForFees, feeRates.total, feeRates.protocol),
+    doppler: feeRates.doppler > 0 ? formatFeeAmount(volumeForFees, feeRates.total, feeRates.doppler) : '-',
+    indexed: false,
+  }
+}
+
 export function shortAddress(addr: string | undefined): string {
   if (!addr) return '-'
   if (addr.length <= 10) return addr

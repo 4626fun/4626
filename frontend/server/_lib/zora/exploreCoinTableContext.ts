@@ -4,9 +4,20 @@ import { parseSparklineValuesFromDb } from './exploreSparklineCache.js'
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
+export type ExploreCoinFeeBuckets = {
+  creatorUsd: string | null
+  platformUsd: string | null
+  tradeRefUsd: string | null
+  protocolUsd: string | null
+  lpUsd: string | null
+  dopplerUsd: string | null
+  indexedAt: string | null
+}
+
 export type ExploreCoinTableContext = {
   coinAddress: string
   fees24hUsd: string | null
+  feeBuckets: ExploreCoinFeeBuckets | null
   uniqueHolders: number | null
   marketCapDelta24h: string | null
   name: string | null
@@ -77,6 +88,13 @@ export async function loadExploreCoinTableContextByAddresses(
     SELECT
       lower(r.coin_address) AS coin_address,
       cc.fees_24h_usd,
+      cc.fees_24h_creator_usd,
+      cc.fees_24h_platform_usd,
+      cc.fees_24h_trade_ref_usd,
+      cc.fees_24h_protocol_usd,
+      cc.fees_24h_lp_usd,
+      cc.fees_24h_doppler_usd,
+      cc.fees_24h_indexed_at,
       cc.unique_holders AS coin_unique_holders,
       cc.market_cap_delta_24h,
       cc.sparkline_30d_values,
@@ -105,9 +123,23 @@ export async function loadExploreCoinTableContextByAddresses(
     const sparklineValues = parseSparklineValuesFromDb(row.sparkline_30d_values)
     const sparklineChangePct =
       sparklineValues.length >= 2 ? toFiniteNumberOrNull(row.sparkline_30d_change_pct) : null
+    const indexedAt =
+      row.fees_24h_indexed_at != null ? String(row.fees_24h_indexed_at) : null
+    const feeBuckets: ExploreCoinFeeBuckets | null = indexedAt
+      ? {
+          creatorUsd: toNumericString(row.fees_24h_creator_usd),
+          platformUsd: toNumericString(row.fees_24h_platform_usd),
+          tradeRefUsd: toNumericString(row.fees_24h_trade_ref_usd),
+          protocolUsd: toNumericString(row.fees_24h_protocol_usd),
+          lpUsd: toNumericString(row.fees_24h_lp_usd),
+          dopplerUsd: toNumericString(row.fees_24h_doppler_usd),
+          indexedAt,
+        }
+      : null
     map.set(coinAddress, {
       coinAddress,
       fees24hUsd: toNumericString(row.fees_24h_usd),
+      feeBuckets,
       uniqueHolders: coinUniqueHolders ?? profileUniqueHolders,
       marketCapDelta24h: toNumericString(row.market_cap_delta_24h),
       name: normalizeText(row.zora_creator_coin_name),

@@ -123,6 +123,7 @@ async function attachIndexedCoinTableFieldsToEdges(
     if (!address || !edge?.node) continue
     const ctx = contextMap.get(address)
     if (ctx?.fees24hUsd) edge.node.fees24hUsd = ctx.fees24hUsd
+    if (ctx?.feeBuckets) edge.node.feeBuckets = ctx.feeBuckets
     const trend30d = buildTrend30dFromTableContext(ctx)
     if (trend30d) edge.node.trend30d = trend30d
   }
@@ -402,6 +403,7 @@ async function assembleEthosSortedCreatorResponse(params: {
         marketCapDelta24h,
         volume24h,
         fees24hUsd,
+        ...(ctx?.feeBuckets ? { feeBuckets: ctx.feeBuckets } : {}),
         totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
         uniqueHolders,
         mediaContent,

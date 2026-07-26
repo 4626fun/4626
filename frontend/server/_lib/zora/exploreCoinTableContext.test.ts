@@ -24,6 +24,7 @@ describe('exploreCoinTableContext helpers', () => {
         {
           coinAddress: '0x123',
           fees24hUsd: null,
+          feeBuckets: null,
           uniqueHolders: null,
           marketCapDelta24h: null,
           name: 'jesse',
@@ -51,6 +52,7 @@ describe('exploreCoinTableContext helpers', () => {
       buildTrend30dFromTableContext({
         coinAddress: '0x123',
         fees24hUsd: null,
+        feeBuckets: null,
         uniqueHolders: null,
         marketCapDelta24h: null,
         name: null,

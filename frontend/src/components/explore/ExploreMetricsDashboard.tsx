@@ -40,7 +40,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   const marketCapHint = partial
     ? 'Liquidity-filtered indexed mcap'
     : 'Liquidity-filtered Base creator coins'
-  const feesHint = 'Estimated (volume × fee rate)'
+  const feesHint = 'Indexed when available'
 
   return (
     <div className={joinClasses('space-y-2', className)}>
@@ -79,7 +79,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           label="1D Fees"
           value={formatCompactUsd(fees24h)}
           hint={feesHint}
-          title={`Estimated 24H trading fees (volume × fee rate)${financialTitleSuffix}`}
+          title={`24H trading fees${financialTitleSuffix} · CoinTradeRewards-indexed when available, else volume × fee rate`}
         />
       </div>
 

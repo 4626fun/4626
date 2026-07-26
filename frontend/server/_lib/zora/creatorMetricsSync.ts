@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { createPublicClient, http, parseAbiItem, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 import { getDb, getDbForCron } from '../db/postgres.js'
-import { ensureMigrationApplied, ensureCreatorMetricsBaseSchema, ensureFinalAdditiveColumns } from '../db/schemaBootstrap.js'
+import {
+  ensureCreatorCoinsFeeBucketColumns,
+  ensureCreatorMetricsBaseSchema,
+  ensureFinalAdditiveColumns,
+} from '../db/schemaBootstrap.js'
 import { logger } from '../infra/logger.js'
 import { requireServerKey } from '../../zora/_shared.js'
 import {
@@ -27,6 +31,7 @@ import {
   type ExploreCoinFinancialSnapshot,
   type ExploreList,
 } from './creatorMetricsSyncHelpers.js'
+import { indexCreatorCoinTradeRewardsFees } from './coinTradeRewardsIndexer.js'
 import { precomputeExploreSparklinesForCoins } from './exploreSparklinePrecompute.js'
 
 type Db = {
@@ -280,6 +285,7 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
     // Existing deployments may have base tables from SQL migrations but miss later columns.
     await ensureCreatorMetricsStateColumns(db)
     await ensureCreatorCoinsDisplayColumns(db)
+    await ensureCreatorCoinsFeeBucketColumns(db)
     await ensureCreatorMetricsConstraints(db)
     await db.sql`INSERT INTO creator_metrics_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`
     creatorMetricsSchemaEnsured = true
@@ -882,7 +888,14 @@ export async function expireStaleCreatorCoinVolumeFees(
     UPDATE creator_coins AS c
     SET
       volume_24h_usd = 0,
-      fees_24h_usd = 0
+      fees_24h_usd = 0,
+      fees_24h_creator_usd = 0,
+      fees_24h_platform_usd = 0,
+      fees_24h_trade_ref_usd = 0,
+      fees_24h_protocol_usd = 0,
+      fees_24h_lp_usd = 0,
+      fees_24h_doppler_usd = 0,
+      fees_24h_indexed_at = NULL
     FROM stale
     WHERE c.coin_address = stale.coin_address
     RETURNING c.coin_address;
@@ -955,6 +968,11 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
       coinAddresses: hotRefresh.coinAddresses,
     })
+    // Index on-chain CoinTradeRewards into fee bucket columns for top-volume coins.
+    const feeIndex = await indexCreatorCoinTradeRewardsFees(db, { sdk })
+    if (feeIndex.coinsIndexed > 0) {
+      log.info('[creator-metrics-hot-sync] indexed trade-reward fees', feeIndex)
+    }
     // After explore refresh, drop volume/fees that no longer represent a live 24h window.
     const staleVolumeZeroed = await expireStaleCreatorCoinVolumeFees(db)
     if (staleVolumeZeroed > 0) {
@@ -970,6 +988,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     log.info('[creator-metrics-hot-sync] completed', {
       ...hotRefresh,
       sparklinePrecompute,
+      feeIndex,
       staleVolumeZeroed,
     })
     return {
@@ -981,6 +1000,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
       sparklinesAttempted: sparklinePrecompute.attempted,
       sparklinesSkippedFresh: sparklinePrecompute.skippedFresh,
       sparklinesFailed: sparklinePrecompute.failed,
+      feeCoinsIndexed: feeIndex.coinsIndexed,
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_hot_sync_failed'
