@@ -22,6 +22,7 @@ import { useSwapRecentTokens } from '@/lib/swap/useSwapRecentTokens'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { shouldStartAutoQuote, useSwapExecution } from '@/hooks/useSwapExecution'
+import { shouldResetSwapFormAfterCompletionDismiss } from '@/lib/swap/swapCompletionDismiss'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -790,6 +791,7 @@ export function Swap() {
     confirmAndExecute,
     resetTradeState,
     swapCompletion,
+    clearSwapCompletion,
   } = useSwapExecution({
     // Pass the csw (parent/main/zora csw) as the primary "address" / asset owner for the swap
     // execution path. This ensures that when the selector shows holdings/balances from the Zora CSW,
@@ -909,12 +911,38 @@ export function Swap() {
     return fmtBalFromAmount(tokenOutBalanceQuery.data.formatted, tokenOutSymbol)
   }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess, tokenOutSymbol])
 
+  const [confirmedSwapCompletionAt, setConfirmedSwapCompletionAt] = useState<number | null>(null)
+  const swapCompletionConfirmed =
+    swapCompletion != null && confirmedSwapCompletionAt === swapCompletion.completedAt
   const handleClearSwapCompletion = useCallback(() => {
-    setAmountInUnits('0')
-    resetTradeState()
+    const canResetCompletedTrade = shouldResetSwapFormAfterCompletionDismiss({
+      swapCompletionConfirmed,
+      amountInUnits,
+      completionAmountInUnits: swapCompletion?.amountInUnits,
+      busy,
+      txState,
+    })
+
+    if (canResetCompletedTrade) {
+      setAmountInUnits('0')
+      resetTradeState()
+    } else {
+      clearSwapCompletion()
+    }
     void tokenOutBalanceQuery.refetch()
     void tokenInBalanceQuery.refetch()
-  }, [resetTradeState, setAmountInUnits, tokenInBalanceQuery, tokenOutBalanceQuery])
+  }, [
+    amountInUnits,
+    busy,
+    clearSwapCompletion,
+    resetTradeState,
+    setAmountInUnits,
+    swapCompletion?.amountInUnits,
+    swapCompletionConfirmed,
+    tokenInBalanceQuery,
+    tokenOutBalanceQuery,
+    txState,
+  ])
 
   // Refresh both token balances after a swap. `swapCompletion.txHash` can appear as soon
   // as the transaction is *submitted* (eoaDirect / canonicalDirect send immediately return a
@@ -947,6 +975,33 @@ export function Swap() {
       cancelled = true
     }
   }, [publicClient, queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
+
+  // Arm auto-dismiss only after the completion tx is confirmed (or the receipt wait
+  // times out). Keep this effect free of unstable query-object deps so a cancelled
+  // cleanup cannot permanently skip marking confirmation.
+  useEffect(() => {
+    const txHash = swapCompletion?.txHash
+    if (!txHash || !isHex(txHash) || !publicClient) return
+    const completedAt = swapCompletion.completedAt
+    if (confirmedSwapCompletionAt === completedAt) return
+
+    let active = true
+    void publicClient
+      .waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+      .catch(() => null)
+      .then(() => {
+        if (!active) return
+        setConfirmedSwapCompletionAt(completedAt)
+      })
+    return () => {
+      active = false
+    }
+  }, [
+    confirmedSwapCompletionAt,
+    publicClient,
+    swapCompletion?.completedAt,
+    swapCompletion?.txHash,
+  ])
 
   const showCanonicalSessionGuardHint =
     activePanel === 'swap' &&
@@ -1310,6 +1365,7 @@ export function Swap() {
         swapChainId={swapChainId}
         switchChainAsync={switchChainAsync}
         swapCompletion={swapCompletion}
+        swapCompletionConfirmed={swapCompletionConfirmed}
         tokenIn={tokenInDisplay}
         tokenOut={tokenOutDisplay}
         handleClearSwapCompletion={handleClearSwapCompletion}

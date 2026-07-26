@@ -32,6 +32,7 @@ type SwapStatusAlertsProps = {
   swapChainId: SupportedChainId
   switchChainAsync: any
   swapCompletion: SwapCompletion | null
+  swapCompletionConfirmed: boolean
   tokenIn: TokenDisplay
   tokenOut: TokenDisplay
   handleClearSwapCompletion: () => void
@@ -64,6 +65,7 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
     swapChainId,
     switchChainAsync,
     swapCompletion,
+    swapCompletionConfirmed,
     tokenIn,
     tokenOut,
     handleClearSwapCompletion,
@@ -184,6 +186,7 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
         <SwapCompletionNotice
           key={swapCompletion.completedAt}
           completion={swapCompletion}
+          autoDismiss={swapCompletionConfirmed}
           tokenIn={tokenIn}
           tokenOut={tokenOut}
           onDismiss={handleClearSwapCompletion}

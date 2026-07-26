@@ -44,6 +44,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
+        autoDismiss
         onDismiss={vi.fn()}
       />,
     )
@@ -71,6 +72,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
+        autoDismiss={false}
         onDismiss={vi.fn()}
       />,
     )
@@ -78,6 +80,52 @@ describe('SwapCompletionNotice', () => {
     expect(screen.getByText('Swap submitted')).toBeTruthy()
     expect(screen.getByText('0.004321 USDC for 42.125 AKITA · Confirming on Base…')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('starts auto-dismiss only after a pending user operation confirms', async () => {
+    const onDismiss = vi.fn()
+    const userOpHash = `0x${'2'.repeat(64)}`
+    const txHash = `0x${'3'.repeat(64)}`
+    const completion = {
+      txHash: null,
+      userOpHash,
+      amountInUnits: '0.004321',
+      estimatedOut: '42.125',
+      completedAt: 1,
+    }
+    const { rerender } = render(
+      <SwapCompletionNotice
+        completion={completion}
+        tokenIn={tokenIn}
+        tokenOut={tokenOut}
+        autoDismiss={false}
+        onDismiss={onDismiss}
+      />,
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SWAP_COMPLETION_AUTO_DISMISS_MS + 500)
+    })
+    expect(screen.getByText('Swap submitted')).toBeTruthy()
+    expect(onDismiss).not.toHaveBeenCalled()
+
+    rerender(
+      <SwapCompletionNotice
+        completion={{ ...completion, txHash }}
+        tokenIn={tokenIn}
+        tokenOut={tokenOut}
+        autoDismiss
+        onDismiss={onDismiss}
+      />,
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SWAP_COMPLETION_AUTO_DISMISS_MS)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
   it('auto-dismisses after a few seconds once the fade completes', async () => {
@@ -92,6 +140,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
+        autoDismiss
         onDismiss={onDismiss}
       />,
     )

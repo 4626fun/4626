@@ -14,6 +14,7 @@ type SwapCompletionNoticeProps = {
   completion: SwapCompletion
   tokenIn: TokenDisplay
   tokenOut: TokenDisplay
+  autoDismiss: boolean
   onDismiss: () => void
 }
 
@@ -40,7 +41,7 @@ function formatSwapAmount(rawAmount: string): string {
 }
 
 export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
-  const { completion, tokenIn, tokenOut, onDismiss } = props
+  const { completion, tokenIn, tokenOut, autoDismiss, onDismiss } = props
   const [open, setOpen] = useState(true)
   const explorerHash = completion.txHash ?? completion.userOpHash ?? null
   const shortHash = explorerHash
@@ -51,13 +52,17 @@ export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
 
   // Parent remounts this notice via `key={completion.completedAt}` for each trade.
   useEffect(() => {
+    // A canonical UserOperation can take longer than the visible dwell to land.
+    // Keep its confirmation state mounted until the receipt poll resolves.
+    if (confirming || !autoDismiss) return
+
     const timer = window.setTimeout(() => {
       setOpen(false)
     }, SWAP_COMPLETION_AUTO_DISMISS_MS)
     return () => {
       window.clearTimeout(timer)
     }
-  }, [])
+  }, [autoDismiss, confirming])
 
   return (
     <AnimatePresence onExitComplete={onDismiss}>
