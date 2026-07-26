@@ -18,6 +18,22 @@ describe('isPrivyEmbeddedSignerAuthError', () => {
     ).toBe(true)
   })
 
+  it('matches Privy wallet RPC failed (401) summaries', () => {
+    expect(
+      isPrivyEmbeddedSignerAuthError(
+        'Privy wallet secp256k1_sign failed (401): No valid authorization signatures were provided.',
+      ),
+    ).toBe(true)
+  })
+
+  it('matches post-refresh raw digest failure lead-in', () => {
+    expect(
+      isPrivyEmbeddedSignerAuthError(
+        'Signing session was refreshed but raw digest signing still failed — sign out and sign in again, then retry.',
+      ),
+    ).toBe(true)
+  })
+
   it('does not match unrelated wallet extension collisions', () => {
     expect(isPrivyEmbeddedSignerAuthError('Cannot redefine property: ethereum')).toBe(false)
   })
@@ -39,7 +55,6 @@ describe('isSigningSessionRecoveryRequired', () => {
   it('does not match generic swap slippage errors', () => {
     expect(isSigningSessionRecoveryRequired('Slippage tolerance exceeded')).toBe(false)
   })
-})
 
   it('matches Privy wallet-id vs owner lane mismatch', () => {
     expect(
@@ -56,4 +71,4 @@ describe('isSigningSessionRecoveryRequired', () => {
       ),
     ).toBe(true)
   })
-
+})

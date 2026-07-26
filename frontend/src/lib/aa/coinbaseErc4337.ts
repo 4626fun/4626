@@ -38,8 +38,15 @@ import {
   CANONICAL_CSW_ADDRESS,
   isAllowedCanonicalCswExecutionSigner,
 } from '@/wallet/canonicalWalletPolicy'
-import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
-import { PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE } from '@/lib/privy/privyWalletSignerMatch'
+import {
+  isPrivyEmbeddedSignerAuthError,
+  isSigningSessionRecoveryRequired,
+} from '@/lib/auth/privyEmbeddedSignerAuthErrors'
+import {
+  isPrivyWalletSignerMismatchError,
+  PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE,
+  PRIVY_WALLET_SIGNER_MISMATCH_MESSAGE,
+} from '@/lib/privy/privyWalletSignerMatch'
 import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 import {
   ensureSignatureHex,
@@ -1156,6 +1163,19 @@ function isEthSignBlocked(error: unknown): boolean {
   return ETH_SIGN_BLOCKED_PATTERNS.some(p => lc.includes(p))
 }
 
+/** Map Privy auth / wallet-id mismatch failures to the Sign-in-again recovery CTA. */
+function mapPrivyUserOpSigningRecoveryError(...messages: Array<string | null | undefined>): Error | null {
+  const combined = messages.filter((value): value is string => Boolean(value && String(value).trim())).join(' | ')
+  if (!combined) return null
+  if (isPrivyWalletSignerMismatchError(combined)) {
+    return new Error(PRIVY_WALLET_SIGNER_MISMATCH_MESSAGE)
+  }
+  if (isSigningSessionRecoveryRequired(combined) || isPrivyEmbeddedSignerAuthError(combined)) {
+    return new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
+  }
+  return null
+}
+
 function createWalletBackedLocalAccount(params: {
   walletClient: WalletClientLike
   address: Address
@@ -1244,9 +1264,8 @@ function createWalletBackedLocalAccount(params: {
         } catch (ethSignError: unknown) {
           if (isUserRejection(ethSignError)) throw ethSignError
           const ethMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError ?? '')
-          if (isPrivyEmbeddedSignerAuthError(ethMsg)) {
-            throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
-          }
+          const ethRecovery = mapPrivyUserOpSigningRecoveryError(ethMsg)
+          if (ethRecovery) throw ethRecovery
           if (!allowSignMessageFallback || !isEthSignBlocked(ethSignError)) throw ethSignError
           try {
             return await tryPersonalSign()
@@ -1254,9 +1273,8 @@ function createWalletBackedLocalAccount(params: {
             if (isUserRejection(personalSignError)) throw personalSignError
             const personalMsg =
               personalSignError instanceof Error ? personalSignError.message : String(personalSignError ?? '')
-            if (isPrivyEmbeddedSignerAuthError(personalMsg) || isPrivyEmbeddedSignerAuthError(ethMsg)) {
-              throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
-            }
+            const personalRecovery = mapPrivyUserOpSigningRecoveryError(personalMsg, ethMsg)
+            if (personalRecovery) throw personalRecovery
             throw personalSignError
           }
         }
@@ -1297,10 +1315,9 @@ function createWalletBackedLocalAccount(params: {
             const ethMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError ?? '')
             const personalMsg =
               personalSignError instanceof Error ? personalSignError.message : String(personalSignError ?? '')
-            // Privy iframe/session failures should drive Sign-in-again UX, not Coinbase Wallet copy.
-            if (isPrivyEmbeddedSignerAuthError(ethMsg) || isPrivyEmbeddedSignerAuthError(personalMsg)) {
-              throw new Error(PRIVY_SIGNING_SESSION_RECOVERY_MESSAGE)
-            }
+            // Privy iframe/session / wallet-id mismatch → Sign-in-again UX, not Coinbase Wallet copy.
+            const recovery = mapPrivyUserOpSigningRecoveryError(ethMsg, personalMsg)
+            if (recovery) throw recovery
             // Both methods failed (capability)
             throw new Error(
               'Could not sign the UserOperation. Your wallet blocked eth_sign and signMessage also failed. ' +
@@ -1309,8 +1326,10 @@ function createWalletBackedLocalAccount(params: {
           }
         }
         
-        // Unknown error, rethrow with context
+        // Unknown error — still surface Privy recovery when the message matches.
         const errMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError)
+        const recovery = mapPrivyUserOpSigningRecoveryError(errMsg)
+        if (recovery) throw recovery
         throw new Error(`Failed to sign UserOperation: ${errMsg}`)
       }
     },

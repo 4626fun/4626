@@ -22,6 +22,45 @@ function normalizeAddressOrNull(value: unknown): Address | null {
   return getAddress(raw as Address)
 }
 
+function isPrivyEmbeddedWalletType(walletType: string): boolean {
+  return walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded')
+}
+
+/**
+ * Select the Privy embedded EOA wallet object for authorized Wallet RPC.
+ * Never falls back to session/admin EOAs (e.g. 0xb05cf…) — those mismatch
+ * wallet id l8pocg69… (embedded 0xceca…) and cause secp256k1_sign 401s.
+ */
+export function pickPrivyEmbeddedEoaWalletFromList(params: {
+  wallets: readonly unknown[]
+  preferredAddresses?: ReadonlyArray<string | null | undefined>
+  canonicalAddress?: string | null
+}): unknown | null {
+  const wallets = Array.isArray(params.wallets) ? params.wallets : []
+  const preferred = new Set(
+    (params.preferredAddresses ?? [])
+      .map((value) => normalizeAddressOrNull(value)?.toLowerCase())
+      .filter((value): value is string => Boolean(value)),
+  )
+  const canonical = normalizeAddressOrNull(params.canonicalAddress)?.toLowerCase() ?? null
+
+  let firstEmbedded: unknown | null = null
+  for (const wallet of wallets) {
+    const record = wallet && typeof wallet === 'object' ? (wallet as Record<string, unknown>) : null
+    if (!record) continue
+    const address = normalizeAddressOrNull(record.address)
+    if (!address) continue
+    if (canonical && address.toLowerCase() === canonical) continue
+    const walletType = normalizePrivyText(
+      record.wallet_client_type ?? record.walletClientType ?? record.connector_type ?? record.type ?? '',
+    )
+    if (!isPrivyEmbeddedWalletType(walletType)) continue
+    if (preferred.has(address.toLowerCase())) return wallet
+    if (!firstEmbedded) firstEmbedded = wallet
+  }
+  return firstEmbedded
+}
+
 function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
   const walletCandidates = [
     ...(user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []),
@@ -133,7 +172,12 @@ function createEmbeddedSignerWalletClient({
         const hashCandidate =
           params.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
           ''
-        if (hashCandidate) {
+        if (hashCandidate && isRawEcdsaDigest(hashCandidate)) {
+          // Prefer authorized Wallet API signing (owner_id / privy-v2) over the
+          // provider secp256k1_sign path, which 401s without auth-sig headers.
+          if (typeof signSecp256k1Digest === 'function') {
+            return signSecp256k1Digest(hashCandidate as `0x${string}`)
+          }
           try {
             const rawSig = await provider.request({
               method: 'secp256k1_sign',
@@ -239,27 +283,14 @@ export function useSwapEmbeddedEoa(params: {
   const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
 
   const privyEmbeddedEoaWallet = useMemo(() => {
-    const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
-    const fallbackAddresses = new Set(
-      [privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress, authAddress]
-        .filter((value): value is Address => Boolean(value))
-        .map((value) => value.toLowerCase()),
-    )
-    return (
-      wallets.find((wallet) => {
-        const walletType = normalizePrivyText(
-          wallet?.wallet_client_type ?? wallet?.walletClientType ?? wallet?.connector_type ?? wallet?.type ?? '',
-        )
-        const address = normalizeAddressOrNull(wallet?.address)
-        if (!address) return false
-        if (canonicalAddress && address.toLowerCase() === canonicalAddress.toLowerCase()) return false
-        const isEmbeddedType = walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded')
-        if (isEmbeddedType) return true
-        return fallbackAddresses.has(address.toLowerCase())
-      }) ?? null
-    )
+    // Do not include session authAddress here — it is often an external admin EOA
+    // (0xb05cf…) that must not bind to the embedded wallet id used for Wallet RPC.
+    return pickPrivyEmbeddedEoaWalletFromList({
+      wallets: Array.isArray(privyWallets) ? privyWallets : [],
+      preferredAddresses: [privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress],
+      canonicalAddress,
+    })
   }, [
-    authAddress,
     canonicalAddress,
     ensuredEmbeddedEoaAddress,
     privyEmbeddedEoaAddressFromUser,

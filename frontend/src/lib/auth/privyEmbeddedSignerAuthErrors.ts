@@ -22,7 +22,11 @@ export function isPrivyEmbeddedSignerAuthError(message: string): boolean {
     (m.includes('embedded wallet') && m.includes('auth')) ||
     m.includes('privy wallet secp256k1_sign failed (401)') ||
     (m.includes('401') && m.includes('privy wallet secp256k1_sign')) ||
-    (m.includes('privy') && m.includes('missing auth'))
+    (m.includes('privy wallet') && m.includes('failed (401)')) ||
+    (m.includes('privy') && m.includes('missing auth')) ||
+    // signRawEcdsaDigest recovery lead-in (attemptSummary may be truncated in UI)
+    m.includes('signing session was refreshed but') ||
+    m.includes('raw digest signing still failed')
   )
 }
 
