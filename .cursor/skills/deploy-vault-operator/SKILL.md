@@ -11,4 +11,4 @@ paths: frontend/api/_handlers/deploy/**, frontend/scripts/ops/**, contracts/help
 
 Autopilot: `pnpm -C frontend run deploy:autopilot -- --origin … --plan ./deploy-plan.json --auth-bearer "$CV_AUTH_SESSION_TOKEN"`
 
-Never `continue` before owner-install confirms. Report `sessionId`, `step`, `lastUserOpHash`, `lastError`.
+Never `resume` before owner-install confirms. Report `sessionId`, `step`, `lastUserOpHash`, `lastError`. Endpoints: `/api/deploy/v2/session/*`.

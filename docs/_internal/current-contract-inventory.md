@@ -10,10 +10,10 @@ Scope: current live `v1.19.3` deploy-bytecode infrastructure with the `v1.19.4` 
 
 ## Sources
 
-1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
+1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.3.md` (shell history: `v1.19.1-greenfield.md`)
 2. Bytecode / codeId manifest: `deployments/base/v1.19.3-bytecode-manifest.json` (historical seals: `v1.19.2-bytecode-manifest.json`, `v1.19.1-bytecode-manifest.json`)
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
-4. Handoff env: `tmp/base-v1.19.1-handoff.env`
+4. Handoff env: `tmp/base-v1.19.1-handoff.env` (greenfield shell; bytecode epoch is v1.19.3)
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
 6. Greenfield cutover runbook: `docs/_internal/deployment-releases-legacy/v1.19.1-greenfield.md`
 
@@ -104,7 +104,7 @@ Pre-v1.14.1 batcher (deprecated for new greenfield deploys): `0xa99058f424FB3ACC
 Versioning verifier (repo defaults + live getters + store seed):
 
 ```bash
-BYTECODE_MANIFEST=../../deployments/base/v1.19.3-bytecode-manifest.json \
+BYTECODE_MANIFEST=../deployments/base/v1.19.3-bytecode-manifest.json \
   UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
 ```
@@ -148,10 +148,10 @@ The active bytecode manifest must include all three entries.
 2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
 3. Run `forge test --match-contract SeedRegistry4626ConfigTest`.
 4. Confirm live batcher wiring onchain (`0xa18169caf37fa0347285B16aAFC2B09eCB43F145`):
-   - `cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "phase1Module()(address)"`
-   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "create2Deployer()(address)"`
-   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultCoreModule()(address)"`
-   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultStrategiesModule()(address)"`
-   - `cast call 0x33ABACC30a4179444d9d565245561B3988650bF5 "vaultAdminModule()(address)"`
-5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../../deployments/base/v1.19.1-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36`.
+   - `cast call 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 "phase1Module()(address)"` (expect `0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3`)
+   - `cast call 0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3 "create2Deployer()(address)"`
+   - `cast call 0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3 "vaultCoreModule()(address)"`
+   - `cast call 0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3 "vaultStrategiesModule()(address)"`
+   - `cast call 0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3 "vaultAdminModule()(address)"`
+5. Verify bytecode store seed: `pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts` with `BYTECODE_MANIFEST=../deployments/base/v1.19.3-bytecode-manifest.json` and `UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36`.
 6. After any future module rotation on the live batcher, ensure the new module code IDs are added to the active manifest and seeded into the UniversalBytecodeStore (see `docs/audits/general-audit-2026-05.md` for the hygiene note).

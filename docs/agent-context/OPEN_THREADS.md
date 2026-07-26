@@ -25,30 +25,33 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 
 ## Open — product / ops
 
-### 1. v1.19.1 Creator + Agent /deploy canaries (highest priority)
+### 1. v1.19.3 / v1.19.4 Creator `/deploy` canary (highest priority)
 
-**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 greenfield live** (Registry
-`0x1365e9…`, batcher `0xa18169…`, store `0xF96226…`, aux `0xaA9229…`, AMOE
-`0x630c37…`). Pipe-A shell readiness **PASS**. Allowlist roots 73–75 republished
-on the new router.
+**Repo truth:** `docs/reference/addresses.md` — **v1.19.1 greenfield shell** with
+**v1.19.3 bytecode** and **v1.19.4 Creator-core Phase1Module** `0x8C1C6C10…`
+(Registry `0x1365e9…`, batcher `0xa18169…`, store `0xF96226…`, aux `0xaA9229…`,
+AMOE `0x630c37…`). Pipe-A shell readiness **PASS**.
 
-**Outstanding:** one Creator and one Agent production canary via `/deploy` after
-the Vercel build that includes this cutover commit is Ready. Confirm no
+**Outstanding (Creator first):** one Creator production canary via `/deploy`
+after the Vercel build that includes this epoch is Ready. Confirm no
 `auxiliary_batcher_selector_not_allowed`, `batcher_aux_codeids_mismatch`,
 `CodeIdKindMismatch`, `InvalidCodeId`, `InvalidModuleAddress`, or `CODE_NOT_FOUND`.
+Agent canary remains a follow-up after Creator passes.
 
 **Paste into new chat:**
 
 ```
 /deploy-cutover
 
-RELEASE: v1.19.1
-Goal: Run Creator + Agent production canaries against greenfield batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 and aux 0xaA9229c1649a7eC6DA85a76097E0910B24F9408e.
+RELEASE: v1.19.3 (Phase1Module v1.19.4 Creator-core repair)
+Goal: Run Creator production canary against greenfield batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145, Phase1Module 0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3, and aux 0xaA9229c1649a7eC6DA85a76097E0910B24F9408e.
 
 @docs/reference/addresses.md
+@docs/_internal/deployment-releases-legacy/v1.19.3.md
+@docs/_internal/operations/operations/deployment/releases/current.md
 @docs/_internal/operations/deployment/deploy-capable-batcher-rotation.md
 
-Load archive: docs/agent-context/archives/deploy-cutovers-core.md
+Load archive: docs/agent-context/archives/deploy-cutovers-vault.md
 
 Validate: bash test/current-release-target-guard.sh
 Report every exit code.

@@ -195,7 +195,7 @@ This app follows [Base Mini App guidelines](https://docs.base.org/mini-apps/quic
 For the real launch path, start with:
 
 - `docs/operations/deployment/launch/ship-checklist.md`
-- `docs/guides/deploy-vault.md`
+- `docs/guides/index.md` (Launch a vault)
 
 Frontend build:
 

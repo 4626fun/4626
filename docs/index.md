@@ -40,7 +40,7 @@ hide_table_of_contents: true
 <div class="home-links">
   <a class="home-links__item" href="https://app.4626.fun/deploy/vault">Launch app</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
-  <a class="home-links__item" href="/reference/addresses">Addresses (v1.19.1 stack · v1.19.2 epoch)</a>
+  <a class="home-links__item" href="/reference/addresses">Addresses (v1.19.3 / v1.19.4 on v1.19.1 stack)</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits">Audits</a>
   <span class="home-links__sep" aria-hidden="true">·</span>

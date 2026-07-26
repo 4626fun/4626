@@ -193,7 +193,7 @@ ve■4626 / gauge voting / bribes / streams / surface registry are **not** on th
 **Runbook:** [rewards-ecosystem-canary-2026-07.md](../operations/rewards-ecosystem-canary-2026-07.md).  
 **Lottery posture:** leave LM `boostManager` / `vaultGaugeVoting` at `0x0` until lottery Phase 3 ([lottery-canary-checklist](../operations/lottery-canary-checklist-2026-07.md)).
 
-Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.19.1-bytecode-manifest.json` before traffic cutover.
+Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.19.3-bytecode-manifest.json` before traffic cutover.
 
 ### Per-Creator Deployments
 

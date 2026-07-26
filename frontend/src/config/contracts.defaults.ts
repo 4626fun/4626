@@ -90,9 +90,10 @@ export const SPLIT_PHASE1_PHASE2_MODULE_PRE_PENDING_HASH = addr(
   "3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba",
 );
 /**
- * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17).
+ * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17+).
  * F4 via module `setPendingInitCodeHashes` (shell ABI unchanged) + F7/F8.
- * Safe swap: `0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8`.
+ * Intermediate pending-hash Safe swap: `0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8`.
+ * Current live module Safe swap (addresses.md): `0x95cc671fc6854cc47425c501f63e8e59471e3340913a60a99ad64ab01dd77fbf`.
  */
 export const SPLIT_PHASE1_PHASE2_MODULE = addr(
   "1217bA070DBf64303117939301788925030295d1",

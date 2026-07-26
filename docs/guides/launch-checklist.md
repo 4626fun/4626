@@ -6,7 +6,7 @@ slug: /guides/launch-checklist
 
 # Launch checklist
 
-Prerequisites for a **new vault on Base** (**v1.19.1 stack · v1.19.2 epoch**). For the step map, see [Launch a vault](/guides).
+Prerequisites for a **new vault on Base** (**v1.19.1 stack · v1.19.3 bytecode epoch (v1.19.4 Creator-core repair)**). For the step map, see [Launch a vault](/guides).
 
 <div class="docs-at-a-glance">
 

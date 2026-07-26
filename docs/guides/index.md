@@ -5,7 +5,7 @@ sidebar_position: 0
 
 # Launch a vault
 
-Step-by-step path for a **new vault on Base** (**v1.19.1 stack · v1.19.2 epoch**). Legacy vaults may differ.
+Step-by-step path for a **new vault on Base** (**v1.19.1 stack · v1.19.3 bytecode epoch (v1.19.4 Creator-core repair)**). Legacy vaults may differ.
 
 <div class="docs-at-a-glance">
 

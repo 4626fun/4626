@@ -11,8 +11,8 @@ Rule: `.cursor/rules/deploy-ops.mdc`. Validate: `pnpm -C frontend validate:deplo
 
 - Determine target chain and deployment mode:
   - Foundry scripts (EOA / operator, infra only): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
-  - ERC-4337 / AA (smart account): use `frontend/src/pages/deploy/DeployVault.tsx` (CLI AA script is retired). This is the **server-side deploy-session** track — the parent CSW is the ERC-4337 `sender` with a temporary delegated owner. Not the same as the user-initiated sub-account track used for swaps / vault interactions; see `docs/4626-connection-methods.md` and `.cursor/rules/csw-agent-lifecycle.mdc`.
-  - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2; Phase 3 is strategies)
+  - ERC-4337 / AA (smart account): use `frontend/src/pages/deploy/DeployVault.tsx` (CLI AA script is retired). This is the **server-side deploy-session v2** track (`/api/deploy/v2/session/*`) — the parent CSW is the ERC-4337 `sender` with a temporary delegated owner. Not the same as the user-initiated sub-account track used for swaps / vault interactions; see `docs/4626-connection-methods.md` and `.cursor/rules/csw-agent-lifecycle.mdc`.
+  - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2 core/finalize; Phase 3 strategies; Phase 4 auction/aux when present; async Phase 5 Solana/Meteora)
   - “Infra v2” deterministic deployment helpers: `./script/deploy.sh infra-v2` → `script/DeployBaseMainnetDeployer.s.sol`
   - Post-deploy batchers (strategies + activation): `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`, `contracts/helpers/batchers/VaultActivationBatcher.sol`
 - Always do a read-only preflight first (RPC connectivity, owner/deployer identity, “already deployed?” checks).
@@ -72,8 +72,8 @@ Greenfield vault deploy requires paid **`vault_full_deploy`** ($499 USDC). That 
 - Payout routing:
   - `contracts/utilities/routers/CreatorPayoutRouter.sol`
 - “Required approvals” reminder:
-  - `docs/guides/deploy-vault.md`
-  - `docs/reference/current-contract-inventory.md`
+  - `docs/guides/index.md` (Launch a vault) · `docs/guides/launch-checklist.md` · `docs/guides/launch-token.md` · `docs/guides/activate-vault.md` · `docs/guides/strategy-bundle.md`
+  - `docs/_internal/current-contract-inventory.md`
   - `AGENTS.md`
 
 ## Read-only Preflight (do before any state changes)
@@ -139,7 +139,7 @@ Use when Base code-deposit limits prevent “all-in-one” deploys, or when you 
 ## Approvals / One-time protocol actions
 
 The most common “gotcha” is approvals for launch/batchers. See:
-- `docs/guides/deploy-vault.md`
+- `docs/guides/index.md` and `docs/guides/activate-vault.md`
 
 Common required approvals (high level):
 

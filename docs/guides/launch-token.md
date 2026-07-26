@@ -12,7 +12,7 @@ Deploy the per-creator stack in one transaction. **No creator coin moves yet** �
 | | |
 |---|---|
 | **You do** | Set names · submit Deploy |
-| **4626 does** | Deploy vault, shares, gauge, oracle, auction (v1.19.1 batcher) |
+| **4626 does** | Deploy vault, shares, gauge, oracle, auction (v1.19.3 / v1.19.4 on v1.19.1 stack) |
 | **Done when** | **Deployed** — vault exists, unfunded |
 | **Requires** | Launch bundle active |
 

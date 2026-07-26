@@ -26,7 +26,7 @@ Shared infrastructure (batcher, factories, registry) plus a **per-creator stack*
 
 ## Shared infrastructure
 
-**[Contract addresses](/reference/addresses)** (v1.19.1 stack · v1.19.2 epoch) — batcher, factories, modules.
+**[Contract addresses](/reference/addresses)** (v1.19.3 / v1.19.4 on v1.19.1 stack) — batcher, factories, modules.
 
 [Impairment disclosures](/reference/impairment-v1-disclosures) · [Glossary](/reference/glossary)
 

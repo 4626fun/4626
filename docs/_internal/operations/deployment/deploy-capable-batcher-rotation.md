@@ -97,10 +97,10 @@ forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore 
 ./script/seed-greenfield-bytecode-store.sh v1.19.1
 ```
 
-Verify:
+Verify (active epoch — use v1.19.3; v1.19.1 seal is historical only):
 
 ```bash
-BYTECODE_MANIFEST=deployments/base/v1.19.1-bytecode-manifest.json \
+BYTECODE_MANIFEST=deployments/base/v1.19.3-bytecode-manifest.json \
 UNIVERSAL_BYTECODE_STORE=0xF9622613682a12E46b914c7498716F42E44c4d36 \
 BASE_RPC_URL=$BASE_RPC_URL \
 pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts

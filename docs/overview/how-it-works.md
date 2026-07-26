@@ -59,6 +59,6 @@ Base is primary for deploy, auction, and lottery. ~30% of `■` still bridges at
 
 ## Core contracts
 
-Shared infra: [Addresses](/reference/addresses) (v1.19.1 stack · v1.19.2 epoch). Per creator: [Registry](/contracts/core/creator-registry) · [Vault](/contracts/core/creator-ovault) · [Wrapper](/contracts/core/creator-ovault-wrapper) · [ShareOFT](/contracts/core/creator-share-oft) · [Gauge](/contracts/governance/gauge-controller) · [CCA arm](/contracts/strategies/cca-launch) · [Lottery](/contracts/utilities/lottery-manager) · [Oracle](/contracts/utilities/creator-oracle).
+Shared infra: [Addresses](/reference/addresses) (v1.19.3 / v1.19.4 on v1.19.1 stack). Per creator: [Registry](/contracts/core/creator-registry) · [Vault](/contracts/core/creator-ovault) · [Wrapper](/contracts/core/creator-ovault-wrapper) · [ShareOFT](/contracts/core/creator-share-oft) · [Gauge](/contracts/governance/gauge-controller) · [CCA arm](/contracts/strategies/cca-launch) · [Lottery](/contracts/utilities/lottery-manager) · [Oracle](/contracts/utilities/creator-oracle).
 
 Prev: [What is 4626?](/getting-started) · Next: [Launch a vault](/guides)
