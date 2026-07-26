@@ -18,7 +18,7 @@ describe('coinTradeRewardsIndexer helpers', () => {
     expect(rawAmountToUsd(0n, 18, 1)).toBe(0)
   })
 
-  it('derives v4 LP and Doppler from observed market rewards', () => {
+  it('derives v4 LP and Doppler from observed market rewards when Doppler missing', () => {
     const M = 79
     const buckets = deriveFeeBucketsFromMarketRewards(
       {
@@ -36,6 +36,23 @@ describe('coinTradeRewardsIndexer helpers', () => {
     expect(buckets.dopplerUsd).toBeCloseTo(M * (V4_DOPPLER_OF_TOTAL / V4_EVENT_MARKET_SHARE), 8)
     expect(buckets.lpUsd).toBeCloseTo(M * (V4_LP_OF_TOTAL / V4_EVENT_MARKET_SHARE), 8)
     expect(buckets.totalUsd).toBeCloseTo(M + buckets.lpUsd + buckets.dopplerUsd, 8)
+  })
+
+  it('uses on-chain Doppler from CoinMarketRewardsV4 and still derives LP', () => {
+    const M = 79
+    const buckets = deriveFeeBucketsFromMarketRewards(
+      {
+        creatorUsd: 50,
+        platformUsd: 20,
+        tradeRefUsd: 4,
+        protocolUsd: 5,
+        dopplerUsd: 1.25,
+      },
+      'v4',
+    )
+    expect(buckets.dopplerUsd).toBe(1.25)
+    expect(buckets.lpUsd).toBeCloseTo(M * (V4_LP_OF_TOTAL / V4_EVENT_MARKET_SHARE), 8)
+    expect(buckets.totalUsd).toBeCloseTo(M + buckets.lpUsd + 1.25, 8)
   })
 
   it('keeps legacy fees as on-chain market sum with zero LP/Doppler', () => {

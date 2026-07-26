@@ -95,7 +95,7 @@ function formatIndexedFeeUsd(value: string | number | null | undefined): string 
   return formatCompactNumber(n)
 }
 
-/** Prefer CoinTradeRewards-indexed buckets; else volume × split rates. */
+/** Prefer on-chain market-reward indexed buckets; else volume × split rates. */
 export function resolveExploreFeeBucketDisplay(params: {
   feeBuckets?: {
     creatorUsd?: string | null

@@ -968,7 +968,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
       coinAddresses: hotRefresh.coinAddresses,
     })
-    // Index on-chain CoinTradeRewards into fee bucket columns for top-volume coins.
+    // Index on-chain market rewards (CoinMarketRewardsV4 + legacy CoinTradeRewards) into fee buckets.
     const feeIndex = await indexCreatorCoinTradeRewardsFees(db, { sdk })
     if (feeIndex.coinsIndexed > 0) {
       log.info('[creator-metrics-hot-sync] indexed trade-reward fees', feeIndex)

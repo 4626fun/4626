@@ -79,7 +79,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           label="1D Fees"
           value={formatCompactUsd(fees24h)}
           hint={feesHint}
-          title={`24H trading fees${financialTitleSuffix} · CoinTradeRewards-indexed when available, else volume × fee rate`}
+          title={`24H trading fees${financialTitleSuffix} · on-chain market rewards when available, else volume × fee rate`}
         />
       </div>
 

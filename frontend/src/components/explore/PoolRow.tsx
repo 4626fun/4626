@@ -201,7 +201,7 @@ export function PoolRow({
               </div>
               <div className="text-zinc-600">
                 {feeBucketDisplay.indexed
-                  ? 'On-chain CoinTradeRewards (LP/Doppler derived)'
+                  ? 'On-chain market rewards (LP derived)'
                   : 'Estimated from volume × fee rate'}
               </div>
             </div>

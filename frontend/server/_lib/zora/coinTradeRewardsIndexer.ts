@@ -7,16 +7,26 @@ type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
+/** Legacy coin-emitted event (pre-V4 / some older coins). */
 export const COIN_TRADE_REWARDS_EVENT =
   'event CoinTradeRewards(address indexed payoutRecipient,address indexed platformReferrer,address indexed tradeReferrer,address protocolRewardRecipient,uint256 creatorReward,uint256 platformReferrerReward,uint256 traderReferrerReward,uint256 protocolReward,address currency)'
+
+/**
+ * Current Zora V4 hook event. `coin` is not indexed — scan by topic, filter in-process.
+ * Doppler is included in the struct; LP is still not (see LpReward).
+ */
+export const COIN_MARKET_REWARDS_V4_EVENT =
+  'event CoinMarketRewardsV4(address coin, address currency, address payoutRecipient, address platformReferrer, address tradeReferrer, address protocolRewardRecipient, address dopplerRecipient, (uint256 creatorPayoutAmountCurrency, uint256 creatorPayoutAmountCoin, uint256 platformReferrerAmountCurrency, uint256 platformReferrerAmountCoin, uint256 tradeReferrerAmountCurrency, uint256 tradeReferrerAmountCoin, uint256 protocolAmountCurrency, uint256 protocolAmountCoin, uint256 dopplerAmountCurrency, uint256 dopplerAmountCoin) marketRewards)'
 
 export const ZORA_TOKEN_ADDRESS = '0x1111111111166b7fe7bd91427724b487980afc69'
 export const USDC_BASE_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
 
-/** Event market rewards ≈ 79% of total v4 fee (Doppler 1% missing from the event). */
+/** Market share of total v4 fee excluding LP (creator+platform+trade+protocol+doppler ≈ 80%). */
 export const V4_EVENT_MARKET_SHARE = 0.79
 export const V4_DOPPLER_OF_TOTAL = 0.01
 export const V4_LP_OF_TOTAL = 0.2
+/** creator+platform+trade+protocol portion of total fee (excludes doppler + LP). */
+export const V4_EVENT_CORE_MARKET_SHARE = 0.79
 
 const DEFAULT_FEE_INDEX_LIMIT = 40
 const DEFAULT_BLOCK_TIME_SECONDS = 2n
@@ -37,7 +47,10 @@ export type RawRewardTotals = {
   platformRaw: bigint
   tradeRefRaw: bigint
   protocolRaw: bigint
+  dopplerRaw: bigint
   currency: string
+  /** True when any contributing log included on-chain Doppler (CoinMarketRewardsV4). */
+  hasOnchainDoppler: boolean
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -46,11 +59,19 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Math.floor(n)
 }
 
+function isAlchemyFreeTierLogsUnusable(url: string): boolean {
+  // Alchemy free-tier eth_getLogs is capped at 10 blocks — cannot cover a 24h window.
+  return url.includes('alchemy.com') || url.includes('alchemyapi.io')
+}
+
 function getLogsRpcUrl(): string {
   const logs = String(process.env.BASE_LOGS_RPC_URL ?? '').trim()
-  if (logs) return logs
   const rpc = String(process.env.BASE_RPC_URL ?? '').trim()
+  // Prefer a logs-capable endpoint. Many envs set BASE_LOGS_RPC_URL to Alchemy while
+  // BASE_RPC_URL is a paid/matrixed provider that supports large getLogs ranges.
+  if (logs && !isAlchemyFreeTierLogsUnusable(logs)) return logs
   if (rpc) return rpc
+  if (logs) return logs
   return 'https://base.meowrpc.com'
 }
 
@@ -59,13 +80,14 @@ function getRange(rpcUrl: string): bigint {
   if (raw) {
     try {
       const n = BigInt(raw)
-      return n > 0n ? n : 100_000n
+      return n > 0n ? n : 25_000n
     } catch {
-      return 100_000n
+      return 25_000n
     }
   }
-  if (rpcUrl.includes('matrixed') || rpcUrl.includes('endpoints.matrixed.link')) return 100_000n
-  return 30_000n
+  // Topic-wide CoinMarketRewardsV4 scans can be dense; keep chunks under ~20k results.
+  if (rpcUrl.includes('matrixed') || rpcUrl.includes('endpoints.matrixed.link')) return 25_000n
+  return 15_000n
 }
 
 function normalizeAddress(value: unknown): string | null {
@@ -86,9 +108,9 @@ export function rawAmountToUsd(raw: bigint, decimals: number, usdPrice: number):
 }
 
 /**
- * Derive LP / Doppler from observed on-chain market rewards using fee_model.
- * v4: event omits Doppler (1% of total); LP is 20% of total.
- * legacy: UI rates have lp=0, doppler=0; treat M as full fee total.
+ * Derive LP (and Doppler when missing) from observed on-chain market rewards using fee_model.
+ * v4 CoinMarketRewardsV4 includes Doppler; LP remains derived (20% of total).
+ * legacy: UI rates have lp=0, doppler=0; treat core market sum as full fee total.
  */
 export function deriveFeeBucketsFromMarketRewards(
   marketUsd: {
@@ -96,6 +118,8 @@ export function deriveFeeBucketsFromMarketRewards(
     platformUsd: number
     tradeRefUsd: number
     protocolUsd: number
+    /** When set (from CoinMarketRewardsV4), use instead of deriving Doppler. */
+    dopplerUsd?: number | null
   },
   feeModel: FeeModel,
 ): FeeBucketUsd {
@@ -117,8 +141,17 @@ export function deriveFeeBucketsFromMarketRewards(
     }
   }
 
-  const dopplerUsd = M > 0 ? M * (V4_DOPPLER_OF_TOTAL / V4_EVENT_MARKET_SHARE) : 0
-  const lpUsd = M > 0 ? M * (V4_LP_OF_TOTAL / V4_EVENT_MARKET_SHARE) : 0
+  const lpUsd = M > 0 ? M * (V4_LP_OF_TOTAL / V4_EVENT_CORE_MARKET_SHARE) : 0
+  const providedDoppler =
+    typeof marketUsd.dopplerUsd === 'number' && Number.isFinite(marketUsd.dopplerUsd)
+      ? Math.max(0, marketUsd.dopplerUsd)
+      : null
+  const dopplerUsd =
+    providedDoppler != null
+      ? providedDoppler
+      : M > 0
+        ? M * (V4_DOPPLER_OF_TOTAL / V4_EVENT_CORE_MARKET_SHARE)
+        : 0
   return {
     creatorUsd,
     platformUsd,
@@ -212,16 +245,62 @@ async function loadFeeIndexCandidates(db: Db, limit: number): Promise<CandidateC
   return out
 }
 
-async function fetchTradeRewardLogs(params: {
+type RewardLog = {
+  coin: string
+  args: {
+    currency?: unknown
+    creatorReward?: unknown
+    platformReferrerReward?: unknown
+    traderReferrerReward?: unknown
+    protocolReward?: unknown
+    marketRewards?: {
+      creatorPayoutAmountCurrency?: unknown
+      platformReferrerAmountCurrency?: unknown
+      tradeReferrerAmountCurrency?: unknown
+      protocolAmountCurrency?: unknown
+      dopplerAmountCurrency?: unknown
+    }
+  }
+  source: 'v4' | 'legacy'
+}
+
+async function fetchMarketRewardsV4Logs(params: {
+  client: PublicClient
+  coinSet: Set<string>
+  fromBlock: bigint
+  toBlock: bigint
+  range: bigint
+}): Promise<RewardLog[]> {
+  const event = parseAbiItem(COIN_MARKET_REWARDS_V4_EVENT)
+  const logsOut: RewardLog[] = []
+  const { client, coinSet, fromBlock, toBlock, range } = params
+
+  for (let start = fromBlock; start <= toBlock; start += range + 1n) {
+    const end = start + range > toBlock ? toBlock : start + range
+    const logs = await client.getLogs({
+      event: event as any,
+      fromBlock: start,
+      toBlock: end,
+    })
+    for (const log of logs as any[]) {
+      const coin = normalizeAddress(log.args?.coin)
+      if (!coin || !coinSet.has(coin)) continue
+      logsOut.push({ coin, args: log.args ?? {}, source: 'v4' })
+    }
+  }
+  return logsOut
+}
+
+async function fetchLegacyTradeRewardLogs(params: {
   client: PublicClient
   coinAddresses: string[]
   fromBlock: bigint
   toBlock: bigint
   range: bigint
   addressBatchSize: number
-}): Promise<Array<{ coin: string; args: any }>> {
+}): Promise<RewardLog[]> {
   const event = parseAbiItem(COIN_TRADE_REWARDS_EVENT)
-  const logsOut: Array<{ coin: string; args: any }> = []
+  const logsOut: RewardLog[] = []
   const { client, coinAddresses, fromBlock, toBlock, range, addressBatchSize } = params
 
   for (let offset = 0; offset < coinAddresses.length; offset += addressBatchSize) {
@@ -237,19 +316,17 @@ async function fetchTradeRewardLogs(params: {
       for (const log of logs as any[]) {
         const coin = normalizeAddress(log.address)
         if (!coin) continue
-        logsOut.push({ coin, args: log.args })
+        logsOut.push({ coin, args: log.args ?? {}, source: 'legacy' })
       }
     }
   }
   return logsOut
 }
 
-function aggregateRawRewards(
-  logs: Array<{ coin: string; args: any }>,
-): Map<string, Map<string, RawRewardTotals>> {
+function aggregateRawRewards(logs: RewardLog[]): Map<string, Map<string, RawRewardTotals>> {
   // coin -> currency -> totals
   const byCoin = new Map<string, Map<string, RawRewardTotals>>()
-  for (const { coin, args } of logs) {
+  for (const { coin, args, source } of logs) {
     const currency = normalizeAddress(args?.currency)
     if (!currency) continue
     let byCurrency = byCoin.get(coin)
@@ -264,14 +341,27 @@ function aggregateRawRewards(
         platformRaw: 0n,
         tradeRefRaw: 0n,
         protocolRaw: 0n,
+        dopplerRaw: 0n,
         currency,
+        hasOnchainDoppler: false,
       }
       byCurrency.set(currency, totals)
     }
-    totals.creatorRaw += BigInt(args?.creatorReward ?? 0n)
-    totals.platformRaw += BigInt(args?.platformReferrerReward ?? 0n)
-    totals.tradeRefRaw += BigInt(args?.traderReferrerReward ?? 0n)
-    totals.protocolRaw += BigInt(args?.protocolReward ?? 0n)
+
+    if (source === 'v4') {
+      const mr = args.marketRewards
+      totals.creatorRaw += BigInt(mr?.creatorPayoutAmountCurrency ?? 0n)
+      totals.platformRaw += BigInt(mr?.platformReferrerAmountCurrency ?? 0n)
+      totals.tradeRefRaw += BigInt(mr?.tradeReferrerAmountCurrency ?? 0n)
+      totals.protocolRaw += BigInt(mr?.protocolAmountCurrency ?? 0n)
+      totals.dopplerRaw += BigInt(mr?.dopplerAmountCurrency ?? 0n)
+      totals.hasOnchainDoppler = true
+    } else {
+      totals.creatorRaw += BigInt(args?.creatorReward ?? 0n)
+      totals.platformRaw += BigInt(args?.platformReferrerReward ?? 0n)
+      totals.tradeRefRaw += BigInt(args?.traderReferrerReward ?? 0n)
+      totals.protocolRaw += BigInt(args?.protocolReward ?? 0n)
+    }
   }
   return byCoin
 }
@@ -310,7 +400,8 @@ export type CoinTradeRewardsIndexResult = {
 }
 
 /**
- * Index CoinTradeRewards for top recent-volume coins and write fee bucket USD columns.
+ * Index on-chain market reward events for top recent-volume coins and write fee bucket USD columns.
+ * Prefers CoinMarketRewardsV4 (hook); also scans legacy CoinTradeRewards on coin contracts.
  */
 export async function indexCreatorCoinTradeRewardsFees(
   db: Db,
@@ -332,6 +423,7 @@ export async function indexCreatorCoinTradeRewardsFees(
 
   const feeModelByCoin = new Map(candidates.map((c) => [c.coinAddress, c.feeModel]))
   const coinAddresses = candidates.map((c) => c.coinAddress)
+  const coinSet = new Set(coinAddresses)
 
   const rpcUrl = getLogsRpcUrl()
   const client = createPublicClient({
@@ -350,14 +442,31 @@ export async function indexCreatorCoinTradeRewardsFees(
     Math.min(10, parsePositiveInt(process.env.COIN_REWARDS_ADDRESS_BATCH_SIZE, 3)),
   )
 
-  const logs = await fetchTradeRewardLogs({
+  const v4Logs = await fetchMarketRewardsV4Logs({
     client,
-    coinAddresses,
+    coinSet,
     fromBlock,
     toBlock: latest,
     range,
-    addressBatchSize,
   })
+
+  // Legacy path for coins that still emit CoinTradeRewards on the coin contract.
+  // Skip coins already covered by V4 logs to avoid double-counting.
+  const coinsWithV4 = new Set(v4Logs.map((l) => l.coin))
+  const legacyAddresses = coinAddresses.filter((a) => !coinsWithV4.has(a))
+  const legacyLogs =
+    legacyAddresses.length > 0
+      ? await fetchLegacyTradeRewardLogs({
+          client,
+          coinAddresses: legacyAddresses,
+          fromBlock,
+          toBlock: latest,
+          range,
+          addressBatchSize,
+        })
+      : []
+
+  const logs = [...v4Logs, ...legacyLogs]
   const aggregated = aggregateRawRewards(logs)
 
   const envZoraPrice = Number(String(process.env.CREATOR_METRICS_ZORA_USD_PRICE ?? '').trim())
@@ -401,6 +510,8 @@ export async function indexCreatorCoinTradeRewardsFees(
     let platformUsd = 0
     let tradeRefUsd = 0
     let protocolUsd = 0
+    let dopplerUsd = 0
+    let hasOnchainDoppler = false
     let convertible = false
 
     for (const [currency, totals] of byCurrency) {
@@ -419,13 +530,23 @@ export async function indexCreatorCoinTradeRewardsFees(
       platformUsd += rawAmountToUsd(totals.platformRaw, decimals, price)
       tradeRefUsd += rawAmountToUsd(totals.tradeRefRaw, decimals, price)
       protocolUsd += rawAmountToUsd(totals.protocolRaw, decimals, price)
+      if (totals.hasOnchainDoppler) {
+        hasOnchainDoppler = true
+        dopplerUsd += rawAmountToUsd(totals.dopplerRaw, decimals, price)
+      }
     }
 
     if (!convertible) continue
 
     const feeModel = feeModelByCoin.get(coinAddress) ?? 'v4'
     const buckets = deriveFeeBucketsFromMarketRewards(
-      { creatorUsd, platformUsd, tradeRefUsd, protocolUsd },
+      {
+        creatorUsd,
+        platformUsd,
+        tradeRefUsd,
+        protocolUsd,
+        dopplerUsd: hasOnchainDoppler ? dopplerUsd : null,
+      },
       feeModel,
     )
     upserts.push({ coinAddress, buckets })
