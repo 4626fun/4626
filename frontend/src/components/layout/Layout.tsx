@@ -11,6 +11,7 @@ import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { requestOpenAccountTray } from '@/components/account/trayEvents'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { useMobileNavScrollHide } from '@/hooks/useMobileNavScrollHide'
 
 const LazyFlagToolbarBridge = lazy(async () => {
   const mod = await import('@/components/flags/FlagToolbarBridge')
@@ -191,6 +192,10 @@ export function LayoutFrame(props: {
     isMobileChatOverlayActive ||
     hideMobileNavForMarketingHost ||
     isWaitlistSurface
+  const isMobileNavScrollHidden = useMobileNavScrollHide({
+    enabled: !hideMobileNav,
+    pathname: location.pathname,
+  })
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -334,11 +339,18 @@ export function LayoutFrame(props: {
       {/* Mobile Nav — floating dock */}
       <nav
         aria-label="Mobile navigation"
-        className={`md:hidden fixed inset-x-0 bottom-0 z-70 pointer-events-none pb-[max(0.625rem,env(safe-area-inset-bottom))] px-3 ${
-          hideMobileNav ? 'hidden' : ''
+        aria-hidden={isMobileNavScrollHidden || undefined}
+        className={`md:hidden fixed inset-x-0 bottom-0 z-70 pointer-events-none pb-[max(0.625rem,env(safe-area-inset-bottom))] px-3 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none ${
+          hideMobileNav
+            ? 'hidden'
+            : isMobileNavScrollHidden
+              ? 'translate-y-[calc(100%+1.25rem)] opacity-0'
+              : 'translate-y-0 opacity-100'
         }`}
       >
-        <div className="pointer-events-auto mx-auto flex max-w-md items-stretch justify-between gap-0.5 overflow-x-auto scrollbar-hide rounded-[1.35rem] border border-white/[0.06] bg-zinc-950/55 px-1.5 py-1 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.92),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl backdrop-saturate-150">
+        <div
+          className={`${isMobileNavScrollHidden ? 'pointer-events-none' : 'pointer-events-auto'} mx-auto flex max-w-md items-stretch justify-between gap-0.5 overflow-x-auto scrollbar-hide rounded-[1.35rem] border border-white/[0.06] bg-zinc-950/55 px-1.5 py-1 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.92),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl backdrop-saturate-150`}
+        >
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
