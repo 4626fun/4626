@@ -182,6 +182,7 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
 
       {activePanel === 'swap' && swapCompletion ? (
         <SwapCompletionNotice
+          key={swapCompletion.completedAt}
           completion={swapCompletion}
           tokenIn={tokenIn}
           tokenOut={tokenOut}

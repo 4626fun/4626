@@ -790,7 +790,6 @@ export function Swap() {
     confirmAndExecute,
     resetTradeState,
     swapCompletion,
-    clearSwapCompletion,
   } = useSwapExecution({
     // Pass the csw (parent/main/zora csw) as the primary "address" / asset owner for the swap
     // execution path. This ensures that when the selector shows holdings/balances from the Zora CSW,
@@ -911,10 +910,11 @@ export function Swap() {
   }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess, tokenOutSymbol])
 
   const handleClearSwapCompletion = useCallback(() => {
-    clearSwapCompletion()
+    setAmountInUnits('0')
+    resetTradeState()
     void tokenOutBalanceQuery.refetch()
     void tokenInBalanceQuery.refetch()
-  }, [clearSwapCompletion, tokenInBalanceQuery, tokenOutBalanceQuery])
+  }, [resetTradeState, setAmountInUnits, tokenInBalanceQuery, tokenOutBalanceQuery])
 
   // Refresh both token balances after a swap. `swapCompletion.txHash` can appear as soon
   // as the transaction is *submitted* (eoaDirect / canonicalDirect send immediately return a
@@ -1075,6 +1075,8 @@ export function Swap() {
     if (isKeySwapActive || !executionAddress || !quoteReady || quoteCooldownActive) return
     if (txState === 'signing') return
     if (tokenInAmountExceedsBalance) return
+    // After a completed swap we reset amounts to 0 — do not auto-quote an empty form.
+    if (!(Number(amountInUnits) > 0)) return
     const timer = window.setTimeout(() => {
       // FIX H-3: never fire an auto-quote while any quote/review/build/execute
       // phase is in flight — restarting handleQuote mid-review clobbers the
