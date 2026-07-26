@@ -19,13 +19,12 @@ export function isWaitlistMessagingWagmiConnector(connectorId: string | null | u
 }
 
 export function isXmtpMessagingWagmiConnector(connectorOrId: unknown): boolean {
-  if (typeof connectorOrId === 'string') {
-    const id = connectorOrId.trim().toLowerCase()
-    if (!id) return false
-    if (id.includes('coinbase')) return true
-    return isWaitlistMessagingWagmiConnector(id)
-  }
+  // Coinbase Wallet SDK + Base Account ("Sign in with Base") share the parent
+  // CSW lane — keep raw string ids and connector objects on the same helper.
   if (isCoinbaseWalletConnector(connectorOrId)) return true
+  if (typeof connectorOrId === 'string') {
+    return isWaitlistMessagingWagmiConnector(connectorOrId)
+  }
   const connectorId = (connectorOrId as Connector | null | undefined)?.id
   return isWaitlistMessagingWagmiConnector(connectorId)
 }

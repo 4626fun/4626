@@ -8,6 +8,8 @@ import {
 } from '@/lib/privy/embeddedWallet'
 import type { PrivyAuthorizationSignatureGenerator } from '@/lib/privy/privyAuthorizedWalletRpc'
 
+import { isCoinbaseWalletConnector } from '@/lib/xmtp/signerUtils'
+
 import {
   isWaitlistMessagingWagmiConnector,
   prepareWaitlistMessagingWallet,
@@ -36,8 +38,7 @@ function normalizeAddress(value: unknown): string | null {
 }
 
 function isCoinbaseMessagingConnectorId(connectorId: string | null | undefined): boolean {
-  const id = String(connectorId ?? '').trim().toLowerCase()
-  return id.includes('coinbase')
+  return isCoinbaseWalletConnector(connectorId)
 }
 
 export function usePrepareWaitlistMessagingWallet(params: {

@@ -7,6 +7,7 @@ import {
   WAITLIST_EMBEDDED_CONNECTOR_ID,
   WAITLIST_MESSAGING_WALLET_VERIFY_MS,
 } from '@/lib/xmtp/waitForMessagingWallet'
+import { isCoinbaseWalletConnector } from '@/lib/xmtp/signerUtils'
 import { isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
@@ -290,17 +291,14 @@ async function connectEmbeddedWaitlistProvider(
 }
 
 function isCoinbaseMessagingConnectorId(connectorId: string | null | undefined): boolean {
-  const id = String(connectorId ?? '').trim().toLowerCase()
-  return id.includes('coinbase')
+  return isCoinbaseWalletConnector(connectorId)
 }
 
 function findCoinbaseMessagingConnector(
   connectors: ReadonlyArray<{ id: string; name: string }>,
 ): { id: string; name: string } | null {
   for (const connector of connectors) {
-    const id = connector.id.toLowerCase()
-    const name = connector.name.toLowerCase()
-    if (id.includes('coinbase') || name.includes('coinbase')) return connector
+    if (isCoinbaseWalletConnector(connector)) return connector
   }
   return null
 }

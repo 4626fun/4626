@@ -14,11 +14,24 @@ export function resolveXmtpChainId(walletChainId: unknown): number {
 
 export function isCoinbaseWalletConnector(connector: unknown): boolean {
   const c = (connector ?? {}) as any
-  const id = String(c?.id ?? '').trim().toLowerCase()
-  const name = String(c?.name ?? '').trim().toLowerCase()
-  // We treat Coinbase Wallet connector as SCW because our wagmi config pins it
-  // to `preference: 'smartWalletOnly'`.
-  return id.includes('coinbase') || name.includes('coinbase')
+  // Accept either a wagmi connector object or a raw connector id string.
+  const id = String(typeof connector === 'string' ? connector : (c?.id ?? ''))
+    .trim()
+    .toLowerCase()
+  const name = String(c?.name ?? '')
+    .trim()
+    .toLowerCase()
+  // Coinbase Wallet SDK and Base Account ("Sign in with Base") both surface the
+  // parent Coinbase Smart Wallet. Wagmi pin preference is smartWalletOnly for
+  // the Coinbase connector; Base Account is the same CSW identity lane.
+  return (
+    id.includes('coinbase') ||
+    name.includes('coinbase') ||
+    id === 'base-account' ||
+    id.includes('baseaccount') ||
+    name === 'base account' ||
+    name.includes('base account')
+  )
 }
 
 export function decideXmtpSignerType(params: {

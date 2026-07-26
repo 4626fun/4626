@@ -382,7 +382,7 @@ export function createLiquid(
 
   interface Program {
     program: WebGLProgram;
-    uniforms: Record<string, WebGLUniformLocation>;
+    uniforms: Record<string, WebGLUniformLocation | null | undefined>;
   }
 
   const programs: WebGLProgram[] = [];
@@ -393,11 +393,11 @@ export function createLiquid(
     gl!.attachShader(program, compile(gl!.FRAGMENT_SHADER, fragSource));
     gl!.linkProgram(program);
     programs.push(program);
-    const uniforms: Record<string, WebGLUniformLocation> = {};
+    const uniforms: Record<string, WebGLUniformLocation | null | undefined> = {};
     const count = gl!.getProgramParameter(program, gl!.ACTIVE_UNIFORMS);
     for (let i = 0; i < count; i++) {
       const info = gl!.getActiveUniform(program, i)!;
-      uniforms[info.name] = gl!.getUniformLocation(program, info.name)!;
+      uniforms[info.name] = gl!.getUniformLocation(program, info.name);
     }
     return { program, uniforms };
   }
@@ -612,18 +612,18 @@ export function createLiquid(
 
     gl!.useProgram(splatProgram.program);
     gl!.uniform1i(
-      splatProgram.uniforms.uTarget,
+      (splatProgram.uniforms.uTarget ?? null),
       bindTexture(velocity.read.texture, 0),
     );
-    gl!.uniform1f(splatProgram.uniforms.uAspect, aspect);
-    gl!.uniform2f(splatProgram.uniforms.uPoint, x, y);
-    gl!.uniform3f(splatProgram.uniforms.uColor, dx, dy, 10);
-    gl!.uniform1f(splatProgram.uniforms.uRadius, radius);
+    gl!.uniform1f((splatProgram.uniforms.uAspect ?? null), aspect);
+    gl!.uniform2f((splatProgram.uniforms.uPoint ?? null), x, y);
+    gl!.uniform3f((splatProgram.uniforms.uColor ?? null), dx, dy, 10);
+    gl!.uniform1f((splatProgram.uniforms.uRadius ?? null), radius);
     blit(velocity.write);
     velocity.swap();
 
     gl!.uniform1i(
-      splatProgram.uniforms.uTarget,
+      (splatProgram.uniforms.uTarget ?? null),
       bindTexture(dye.read.texture, 0),
     );
     blit(dye.write);
@@ -634,57 +634,57 @@ export function createLiquid(
     gl!.disable(gl!.BLEND);
 
     gl!.useProgram(curlProgram.program);
-    gl!.uniform2f(curlProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((curlProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      curlProgram.uniforms.uVelocity,
+      (curlProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 0),
     );
     blit(curl);
 
     gl!.useProgram(vorticityProgram.program);
-    gl!.uniform2f(vorticityProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((vorticityProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      vorticityProgram.uniforms.uVelocity,
+      (vorticityProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 0),
     );
     gl!.uniform1i(
-      vorticityProgram.uniforms.uCurl,
+      (vorticityProgram.uniforms.uCurl ?? null),
       bindTexture(curl.texture, 1),
     );
-    gl!.uniform1f(vorticityProgram.uniforms.uCurlStrength, config.curl);
-    gl!.uniform1f(vorticityProgram.uniforms.uDt, DT);
+    gl!.uniform1f((vorticityProgram.uniforms.uCurlStrength ?? null), config.curl);
+    gl!.uniform1f((vorticityProgram.uniforms.uDt ?? null), DT);
     blit(velocity.write);
     velocity.swap();
 
     gl!.useProgram(divergenceProgram.program);
-    gl!.uniform2f(divergenceProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((divergenceProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      divergenceProgram.uniforms.uVelocity,
+      (divergenceProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 0),
     );
     blit(divergence);
 
     gl!.useProgram(clearProgram.program);
     gl!.uniform1i(
-      clearProgram.uniforms.uTexture,
+      (clearProgram.uniforms.uTexture ?? null),
       bindTexture(pressure.read.texture, 0),
     );
     gl!.uniform1f(
-      clearProgram.uniforms.uValue,
+      (clearProgram.uniforms.uValue ?? null),
       Math.pow(config.pressure, delta * 60),
     );
     blit(pressure.write);
     pressure.swap();
 
     gl!.useProgram(pressureProgram.program);
-    gl!.uniform2f(pressureProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((pressureProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      pressureProgram.uniforms.uDivergence,
+      (pressureProgram.uniforms.uDivergence ?? null),
       bindTexture(divergence.texture, 0),
     );
     for (let i = 0; i < config.pressureIterations; i++) {
       gl!.uniform1i(
-        pressureProgram.uniforms.uPressure,
+        (pressureProgram.uniforms.uPressure ?? null),
         bindTexture(pressure.read.texture, 1),
       );
       blit(pressure.write);
@@ -692,46 +692,46 @@ export function createLiquid(
     }
 
     gl!.useProgram(gradientProgram.program);
-    gl!.uniform2f(gradientProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((gradientProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      gradientProgram.uniforms.uPressure,
+      (gradientProgram.uniforms.uPressure ?? null),
       bindTexture(pressure.read.texture, 0),
     );
     gl!.uniform1i(
-      gradientProgram.uniforms.uVelocity,
+      (gradientProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 1),
     );
     blit(velocity.write);
     velocity.swap();
 
     gl!.useProgram(advectProgram.program);
-    gl!.uniform2f(advectProgram.uniforms.texelSize, texelX, texelY);
+    gl!.uniform2f((advectProgram.uniforms.texelSize ?? null), texelX, texelY);
     gl!.uniform1i(
-      advectProgram.uniforms.uVelocity,
+      (advectProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 0),
     );
     gl!.uniform1i(
-      advectProgram.uniforms.uSource,
+      (advectProgram.uniforms.uSource ?? null),
       bindTexture(velocity.read.texture, 0),
     );
-    gl!.uniform1f(advectProgram.uniforms.uDt, DT);
+    gl!.uniform1f((advectProgram.uniforms.uDt ?? null), DT);
     gl!.uniform1f(
-      advectProgram.uniforms.uDissipation,
+      (advectProgram.uniforms.uDissipation ?? null),
       Math.pow(config.velocityDissipation, delta * 60),
     );
     blit(velocity.write);
     velocity.swap();
 
     gl!.uniform1i(
-      advectProgram.uniforms.uVelocity,
+      (advectProgram.uniforms.uVelocity ?? null),
       bindTexture(velocity.read.texture, 0),
     );
     gl!.uniform1i(
-      advectProgram.uniforms.uSource,
+      (advectProgram.uniforms.uSource ?? null),
       bindTexture(dye.read.texture, 1),
     );
     gl!.uniform1f(
-      advectProgram.uniforms.uDissipation,
+      (advectProgram.uniforms.uDissipation ?? null),
       Math.pow(config.densityDissipation, delta * 60),
     );
     blit(dye.write);
@@ -742,24 +742,24 @@ export function createLiquid(
     uploadContent();
     gl!.useProgram(displayProgram.program);
     gl!.uniform1i(
-      displayProgram.uniforms.uContent,
+      (displayProgram.uniforms.uContent ?? null),
       bindTexture(contentTexture, 0),
     );
     gl!.uniform1i(
-      displayProgram.uniforms.uFluid,
+      (displayProgram.uniforms.uFluid ?? null),
       bindTexture(dye.read.texture, 1),
     );
     gl!.uniform3f(
-      displayProgram.uniforms.uColor,
+      (displayProgram.uniforms.uColor ?? null),
       srgbToLinear(config.color[0]),
       srgbToLinear(config.color[1]),
       srgbToLinear(config.color[2]),
     );
-    gl!.uniform1f(displayProgram.uniforms.uDistortion, config.distortion);
-    gl!.uniform1f(displayProgram.uniforms.uIntensity, config.intensity);
-    gl!.uniform1f(displayProgram.uniforms.uBlend, config.blend);
-    gl!.uniform1f(displayProgram.uniforms.uRainbow, config.rainbow ? 1 : 0);
-    gl!.uniform1f(displayProgram.uniforms.uHasContent, htmlInCanvas ? 1 : 0);
+    gl!.uniform1f((displayProgram.uniforms.uDistortion ?? null), config.distortion);
+    gl!.uniform1f((displayProgram.uniforms.uIntensity ?? null), config.intensity);
+    gl!.uniform1f((displayProgram.uniforms.uBlend ?? null), config.blend);
+    gl!.uniform1f((displayProgram.uniforms.uRainbow ?? null), config.rainbow ? 1 : 0);
+    gl!.uniform1f((displayProgram.uniforms.uHasContent ?? null), htmlInCanvas ? 1 : 0);
     blit(null);
   }
 

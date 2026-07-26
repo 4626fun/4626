@@ -40,6 +40,18 @@ const ALLOWED_API_TO_SRC = new Set([
   'src/lib/relay/goldenRelayPart1Shape',
   // Pure CSW MultiOwnable ABI constants shared by owner preview handlers.
   'src/lib/wallet/cswOwnerAbi',
+  // Pure deploy-lane bytecode / batcher selector policy shared by paymaster +
+  // deploy-session create/dry-run handlers.
+  'src/lib/deploy/deployLaneBytecode',
+  'src/lib/deploy/deploymentBatcherSelectors',
+  // Pure vault-kind / agent-token integration policy shared by paymaster +
+  // deploy-session create.
+  'src/lib/onchain/agentTokenIntegration',
+  // Pure MultiOwnable addOwner calldata shape shared by wallet/onboarding
+  // owner-install handlers.
+  'src/lib/wallet/addOwnerCallShape',
+  // Pure AlfaClub key-defense risk policy shared by the key-safety API.
+  'src/lib/alfaclub/keyDefense',
 ])
 
 async function walk(dir) {

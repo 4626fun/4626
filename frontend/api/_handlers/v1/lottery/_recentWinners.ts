@@ -10,7 +10,7 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 
-import { getDb } from '../../../../server/_lib/db/postgres.js'
+import { getDb } from '@4626/server-core'
 import {
   resolveRecentWinners,
   resolveRecentWinnersBlockRange,

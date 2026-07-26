@@ -46,10 +46,12 @@ import {
 } from '@/lib/wallet/userExecutionTrack'
 import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
 import { isBaseAppDirectCswPath } from '@/lib/xmtp/baseAppDirectXmtp'
+import { isCoinbaseWalletConnector } from '@/lib/xmtp/signerUtils'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   deriveCanonicalOwnerCheckStatus,
   evaluateCanonicalSignerGate,
+  resolveSwapExecutionMode,
   type CanonicalAuthStatus,
   type CanonicalOwnerCheckStatus,
 } from '@/lib/uniswap/canonicalSignerGate'
@@ -146,7 +148,7 @@ export function Swap() {
     enabled: privyHooksEnabled,
     onUnavailable: (error) => warnSwapPrivyHookFailure('usePrivy', error),
   })
-  const { connectors: wagmiConnectors } = useConnect()
+  const { connectors: wagmiConnectors, connectAsync } = useConnect()
   const { reconnectAsync } = useReconnect()
   const [swapConnectBusy, setSwapConnectBusy] = useState(false)
   const [swapConnectError, setSwapConnectError] = useState<string | null>(null)
@@ -282,7 +284,7 @@ export function Swap() {
     () =>
       isBaseAppDirectCswPath({
         connectedAddress: address,
-        canonicalCswAddress: canonicalAddress ?? accountSignals?.canonicalCswAddress ?? null,
+        canonicalCswAddress: accountSignals?.canonicalCswAddress ?? canonicalAddress,
         connector,
       }),
     [address, canonicalAddress, accountSignals?.canonicalCswAddress, connector],
@@ -369,8 +371,12 @@ export function Swap() {
 
 
 
-  const executionMode: WalletMode =
-    accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const executionMode: WalletMode = resolveSwapExecutionMode({
+    activeAccountType: accountContext.activeAccountType,
+    isConnected,
+    executionTrack: effectiveExecutionTrack,
+    baseAppDirectConnected,
+  })
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
     if (privyClientStatus !== 'ready') return 'unknown'
     if (privyReady !== true) return 'unknown'
@@ -514,6 +520,14 @@ export function Swap() {
       canonicalSignerGate.code === 'embedded-wallet-not-owner' &&
       effectiveExecutionTrack === 'legacy-owner-install'
     )
+  // Base App / Sign in with Base population signs through the connected CSW
+  // connector — do not send those users to embedded-owner waitlist setup.
+  const needsBaseAppDirectConnect =
+    executionMode === 'canonical' &&
+    !accountMe.loading &&
+    !baseAppDirectConnected &&
+    effectiveExecutionTrack === 'base-app-direct' &&
+    canonicalSignerGate.code === 'execution-setup-required'
   const canonicalSetupActionLabel = 'Enable 4626 signing'
   const handleEnableCanonicalSigning = useCallback(() => {
     window.location.assign(buildWaitlistSetupUrl('owner-install'))
@@ -576,6 +590,46 @@ export function Swap() {
     }
     return recovered
   }, [reconnectAsync, refreshAccountContext])
+  const handleConnectBaseAppDirect = useCallback(() => {
+    if (swapConnectBusy) return
+
+    const baseConnector =
+      wagmiConnectors.find((candidate) => String(candidate.id ?? '').trim().toLowerCase() === 'base-account') ??
+      wagmiConnectors.find((candidate) => isCoinbaseWalletConnector(candidate))
+    if (!baseConnector) {
+      setSwapConnectError('Base wallet connector is unavailable. Refresh the page and try again.')
+      return
+    }
+
+    setSwapConnectError(null)
+    setSwapConnectBusy(true)
+    void connectAsync({ connector: baseConnector })
+      .catch(async (error: unknown) => {
+        if (
+          !isConnectorAlreadyConnectedError(error) ||
+          !(await recoverExistingWalletConnection(baseConnector))
+        ) {
+          throw error
+        }
+      })
+      .then(() => refreshAccountContext())
+      .catch((error: unknown) => {
+        setSwapConnectError(
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : 'Could not connect your Base wallet. Approve the wallet prompt and try again.',
+        )
+      })
+      .finally(() => {
+        setSwapConnectBusy(false)
+      })
+  }, [
+    connectAsync,
+    recoverExistingWalletConnection,
+    refreshAccountContext,
+    swapConnectBusy,
+    wagmiConnectors,
+  ])
   useEffect(() => {
     if (connectGate.state !== 'wallet-required' || authBusy || swapConnectBusy) return
 
@@ -1125,14 +1179,23 @@ export function Swap() {
                         tokenOutAddress={tokenOut}
                         isConnected={isConnected}
                         isReady={isReady && !tokenInAmountExceedsBalance}
-                        busy={busy}
+                        busy={
+                          needsBaseAppDirectConnect || signingSessionExpired || needsCanonicalSetupAction
+                            ? swapConnectBusy || signingRecoveryBusy
+                              ? 'connect'
+                              : null
+                            : busy
+                        }
                         status={swapCompletion ? null : status}
                         error={
                           swapCompletion
                             ? null
                             : tokenInBalanceError ??
                               error ??
-                              (needsCanonicalSetupAction ? null : canonicalSignerGuardError)
+                              swapConnectError ??
+                              (needsCanonicalSetupAction || needsBaseAppDirectConnect
+                                ? null
+                                : canonicalSignerGuardError)
                         }
                         quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
                         approvalRequired={approvalRequired}
@@ -1169,31 +1232,42 @@ export function Swap() {
                             ? signingRecoveryBusy
                               ? 'Signing in…'
                               : 'Sign in again to fix signing'
-                            : needsCanonicalSetupAction
-                              ? canonicalSetupActionLabel
-                              : undefined
+                            : needsBaseAppDirectConnect
+                              ? swapConnectBusy
+                                ? 'Connecting…'
+                                : 'Connect Base wallet'
+                              : needsCanonicalSetupAction
+                                ? canonicalSetupActionLabel
+                                : undefined
                         }
                         onPrimaryAction={
                           signingSessionExpired
                             ? () => {
                                 void handleSigningSessionRecovery()
                               }
-                            : needsCanonicalSetupAction
-                              ? handleEnableCanonicalSigning
-                              : undefined
+                            : needsBaseAppDirectConnect
+                              ? handleConnectBaseAppDirect
+                              : needsCanonicalSetupAction
+                                ? handleEnableCanonicalSigning
+                                : undefined
                         }
                         forcePrimaryActionEnabled={
-                          (signingSessionExpired && !signingRecoveryBusy) || needsCanonicalSetupAction
+                          (signingSessionExpired && !signingRecoveryBusy) ||
+                          needsBaseAppDirectConnect ||
+                          needsCanonicalSetupAction
                         }
                         primaryActionHint={
                           signingSessionExpired
                             ? 'Your embedded signing session expired. Sign in again (email code) to restore it, then retry the swap.'
-                            : needsCanonicalSetupAction
+                            : needsBaseAppDirectConnect
                               ? canonicalSignerGate.reason ??
-                                'Finish one-time account setup before canonical swaps can execute.'
-                              : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
-                                ? swapExecutionChrome.swapSenderLabel
-                                : null
+                                'Connect your Coinbase Smart Wallet in Base App or via Sign in with Base.'
+                              : needsCanonicalSetupAction
+                                ? canonicalSignerGate.reason ??
+                                  'Finish one-time account setup before canonical swaps can execute.'
+                                : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
+                                  ? swapExecutionChrome.swapSenderLabel
+                                  : null
                         }
                       />}
                     </motion.div>

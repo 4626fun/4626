@@ -1814,7 +1814,9 @@ export function useSwapExecution(params: {
     }
     if (!params.executionReady) {
       setError(
-        'Swap signer is not ready yet. Connect an external wallet for EOA mode at /swap, or finish waitlist setup if your embedded signer is already an on-chain owner.',
+        params.executionTrack === 'base-app-direct'
+          ? 'Swap signer is not ready yet. Connect your Coinbase Smart Wallet via Base App or Sign in with Base so it matches your parent CSW.'
+          : 'Swap signer is not ready yet. Connect an external wallet for EOA mode at /swap, or finish waitlist setup if your embedded signer is already an on-chain owner.',
       )
       return
     }
@@ -1984,6 +1986,7 @@ export function useSwapExecution(params: {
     finalizeZoraQuoteIfNeeded,
     params.executionAddress,
     params.executionReady,
+    params.executionTrack,
     buildQuoteRequest,
     swapDebugEnabled,
     swapSessionGate,

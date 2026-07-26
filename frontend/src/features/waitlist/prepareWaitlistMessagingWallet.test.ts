@@ -286,6 +286,26 @@ describe('prepareWaitlistMessagingWallet', () => {
     expect(connectAsync).toHaveBeenCalledTimes(1)
   })
 
+  it('connects the canonical CSW via Base Account connector for base-app-direct', async () => {
+    const CSW = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const connectAsync = vi.fn(async () => ({ accounts: [CSW] }))
+    const result = await prepareWaitlistMessagingWallet({
+      wallets: [],
+      embeddedEoaAddress: null,
+      ensureEmbeddedWallet: vi.fn(),
+      connectAsync,
+      connectors: [{ id: 'base-account', name: 'Base Account' }],
+      messagingWalletReady: false,
+      wagmiConfig,
+      connectTrack: 'base-app-direct',
+      canonicalCswAddress: CSW,
+    })
+    expect(result).toEqual({ ok: true })
+    expect(connectAsync).toHaveBeenCalledWith({
+      connector: { id: 'base-account', name: 'Base Account' },
+    })
+  })
+
   it('detects loopback hosts for authorized-sign gating', () => {
     vi.stubGlobal('window', {
       location: { hostname: '127.0.0.1' },

@@ -41,6 +41,17 @@ export type CanonicalSignerGateResult = {
   reason: string | null
 }
 
+export function resolveSwapExecutionMode(input: {
+  activeAccountType: 'EOA' | 'SMART_WALLET' | 'UNKNOWN'
+  isConnected: boolean
+  executionTrack?: UserExecutionTrack | null
+  baseAppDirectConnected?: boolean
+}): WalletMode {
+  if (input.baseAppDirectConnected) return 'canonical'
+  if (!input.isConnected && input.executionTrack === 'base-app-direct') return 'canonical'
+  return input.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+}
+
 export function deriveCanonicalOwnerCheckStatus(input: {
   probeLoading?: boolean
   probeFetching?: boolean
@@ -75,6 +86,34 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     }
   }
 
+  if (!input.canonicalAddress || !isAddress(input.canonicalAddress)) {
+    return gateFailure(
+      'missing-canonical-address',
+      'Canonical mode requires a canonical smart wallet address before signing can proceed.',
+    )
+  }
+
+  // Base App / Base Account population: parent CSW signs via the connected
+  // Coinbase/Base connector (wallet_sendCalls), not the Privy embedded-owner
+  // lane. Resolve this before Privy client/auth checks — Base App readiness
+  // must not wait on Privy hydration, and disconnected base-app-direct
+  // profiles still need the Connect CTA while Privy is loading/disabled.
+  if (input.baseAppDirectConnected) {
+    return {
+      required: true,
+      ready: true,
+      code: 'ok',
+      reason: null,
+    }
+  }
+
+  if (input.executionTrack === 'base-app-direct') {
+    return gateFailure(
+      'execution-setup-required',
+      'Connect your Coinbase Smart Wallet in Base App (or Sign in with Base) to enable swaps from your parent CSW.',
+    )
+  }
+
   if ((input.clientStatus ?? 'ready') === 'disabled') {
     return gateFailure(
       'privy-client-disabled',
@@ -86,13 +125,6 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     return gateFailure(
       'privy-auth-loading',
       'Privy client is still initializing before canonical signer checks can run.',
-    )
-  }
-
-  if (!input.canonicalAddress || !isAddress(input.canonicalAddress)) {
-    return gateFailure(
-      'missing-canonical-address',
-      'Canonical mode requires a canonical smart wallet address before signing can proceed.',
     )
   }
 

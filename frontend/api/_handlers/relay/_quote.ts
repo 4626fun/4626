@@ -11,8 +11,8 @@ import {
   rateLimitKey,
   RATE_LIMITS,
   logger,
+  readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 import { RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD } from '../../../server/_lib/relay/getQuote.js'
 import { assertRelayOwnerMutationQuoteAccess } from '../../../server/_lib/relay/relayQuoteAccess.js'
 

@@ -58,7 +58,15 @@ function parseCardId(raw: string | null): ShowcaseCardId {
 export function ShowcaseDemoInterstitial() {
   const [params] = useSearchParams()
   const cardId = parseCardId(params.get('card'))
-  const card = useMemo(() => CARDS.find((c) => c.id === cardId) ?? CARDS[0], [cardId])
+  const card = useMemo(() => {
+    const found = CARDS.find((c) => c.id === cardId)
+    if (found) return found
+    const fallback = CARDS[0]
+    if (!fallback) {
+      throw new Error('ShowcaseDemoInterstitial: CARDS is empty')
+    }
+    return fallback
+  }, [cardId])
 
   return (
     <>

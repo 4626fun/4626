@@ -11,9 +11,9 @@ import {
   checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
+  enableCswAgent,
   type ApiEnvelope,
 } from '@4626/server-core'
-import { enableCswAgent } from '../../../server/_lib/messaging/creatorXmtpAgents.js'
 import {
   readActivationStatus,
   resolveActivationContext,

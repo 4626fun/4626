@@ -5,7 +5,7 @@ import { getAddress, type Address } from 'viem'
 import type { DeploySessionRecord } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { verifyPrivyRequest } from '../../../../../server/_lib/wallet/canonicalCswDelegation.js'
-import { classifyLinkedAccounts } from '../../../../../server/_lib/wallet/walletMapping.js'
+import { classifyLinkedAccounts } from '@4626/server-core'
 
 const DEPLOY_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
 // APIAUTH-012: Deploy-critical operations (resume, advance, cancel) must require a fresh

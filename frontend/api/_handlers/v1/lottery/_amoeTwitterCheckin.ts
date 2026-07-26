@@ -14,7 +14,7 @@ import {
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
 import { verifyPrivyForAccounts } from '../../../../server/_lib/identity/accountsIdentity.js'
 import { resolvePrimaryProfileIdForPrivyUser } from '../../../../server/_lib/identity/profileIdForPrivyUser.js'
-import { getDb } from '../../../../server/_lib/db/postgres.js'
+import { getDb } from '@4626/server-core'
 import {
   extractTweetIdFromInput,
   verifyTweetForAmoe,

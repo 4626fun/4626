@@ -7,7 +7,7 @@ import {
   ENTRY_POINT_V06_BASE,
   RELAY_DEPOSITORY_BASE,
   RELAY_MULTICALL_SELECTOR,
-} from '@/lib/wallet/cswOwnerAbi'
+} from './cswOwnerAbi.js'
 
 /**
  * Canonical rule for adding an owner to a Base App Coinbase Smart Wallet (2026):

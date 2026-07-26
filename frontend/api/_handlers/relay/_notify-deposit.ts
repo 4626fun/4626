@@ -10,8 +10,8 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
+  readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 import { notifyRelaySolverDeposit } from '../../../server/_lib/relay/notifyRelaySolverDeposit.js'
 
 const BODY_MAX_BYTES = 8 * 1024

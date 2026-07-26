@@ -436,8 +436,14 @@ function supportsSendCallsHint(context: TxRouterContext): boolean {
 
   const connectorId = normalizeConnectorId(context.connectorId)
   const connectorName = normalizeConnectorName(context.connectorName)
-  const coinbaseConnector = connectorId.includes('coinbase') || connectorName.includes('coinbase')
-  if (coinbaseConnector && context.signerType === 'SMART_WALLET') return true
+  const coinbaseOrBaseAccountConnector =
+    connectorId.includes('coinbase') ||
+    connectorName.includes('coinbase') ||
+    connectorId === 'base-account' ||
+    connectorId.includes('baseaccount') ||
+    connectorName === 'base account' ||
+    connectorName.includes('base account')
+  if (coinbaseOrBaseAccountConnector && context.signerType === 'SMART_WALLET') return true
   return false
 }
 

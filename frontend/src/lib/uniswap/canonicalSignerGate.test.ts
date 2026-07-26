@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveCanonicalOwnerCheckStatus, evaluateCanonicalSignerGate } from './canonicalSignerGate'
+import {
+  deriveCanonicalOwnerCheckStatus,
+  evaluateCanonicalSignerGate,
+  resolveSwapExecutionMode,
+} from './canonicalSignerGate'
 import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 const USER_CANONICAL_CSW = '0xcccccccccccccccccccccccccccccccccccccccc'
@@ -16,6 +20,41 @@ describe('deriveCanonicalOwnerCheckStatus', () => {
   it('keeps loading probes pending even when prior data is absent', () => {
     expect(deriveCanonicalOwnerCheckStatus({ probeLoading: true })).toBe('pending')
     expect(deriveCanonicalOwnerCheckStatus({ probeFetching: true })).toBe('pending')
+  })
+})
+
+describe('resolveSwapExecutionMode', () => {
+  it('keeps a matching Base Account connector on canonical routing while signer detection hydrates', () => {
+    expect(
+      resolveSwapExecutionMode({
+        activeAccountType: 'EOA',
+        isConnected: true,
+        executionTrack: 'base-app-direct',
+        baseAppDirectConnected: true,
+      }),
+    ).toBe('canonical')
+  })
+
+  it('keeps a disconnected base-app-direct profile in canonical mode so the connect action is available', () => {
+    expect(
+      resolveSwapExecutionMode({
+        activeAccountType: 'UNKNOWN',
+        isConnected: false,
+        executionTrack: 'base-app-direct',
+        baseAppDirectConnected: false,
+      }),
+    ).toBe('canonical')
+  })
+
+  it('preserves direct EOA mode when an external wallet is connected', () => {
+    expect(
+      resolveSwapExecutionMode({
+        activeAccountType: 'EOA',
+        isConnected: true,
+        executionTrack: 'base-app-direct',
+        baseAppDirectConnected: false,
+      }),
+    ).toBe('eoa')
   })
 })
 
@@ -162,7 +201,7 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.code).toBe('ok')
   })
 
-  it('requires embedded-owner confirmation for the base-app-direct population', () => {
+  it('asks to connect Base App CSW when server track is base-app-direct but wallet is not linked', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'base-app-direct',
@@ -178,10 +217,52 @@ describe('evaluateCanonicalSignerGate', () => {
 
     expect(result.required).toBe(true)
     expect(result.ready).toBe(false)
-    expect(result.code).toBe('embedded-wallet-not-owner')
+    expect(result.code).toBe('execution-setup-required')
+    expect(result.reason).toContain('Base App')
   })
 
-  it('does not let a matching Base provider bypass embedded-owner setup', () => {
+  it('is ready for a live Base Account match even while Privy is disabled or loading', () => {
+    for (const clientStatus of ['disabled', 'loading'] as const) {
+      const result = evaluateCanonicalSignerGate({
+        executionMode: 'canonical',
+        executionTrack: 'base-app-direct',
+        canonicalAddress: USER_CANONICAL_CSW,
+        clientStatus,
+        authStatus: 'unauthenticated',
+        embeddedWalletDetected: false,
+        embeddedWalletAddress: null,
+        embeddedWalletCanSign: false,
+        ownerCheckStatus: 'unknown',
+        baseAppDirectConnected: true,
+      })
+
+      expect(result.required).toBe(true)
+      expect(result.ready).toBe(true)
+      expect(result.code).toBe('ok')
+    }
+  })
+
+  it('asks disconnected base-app-direct profiles to connect without waiting on Privy', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'base-app-direct',
+      canonicalAddress: USER_CANONICAL_CSW,
+      clientStatus: 'loading',
+      authStatus: 'unknown',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'unknown',
+      baseAppDirectConnected: false,
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('execution-setup-required')
+    expect(result.reason).toContain('Base App')
+  })
+
+  it('is ready for Base App direct CSW signing without embedded-owner install', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'base-app-direct',
@@ -196,21 +277,21 @@ describe('evaluateCanonicalSignerGate', () => {
     })
 
     expect(result.required).toBe(true)
-    expect(result.ready).toBe(false)
-    expect(result.code).toBe('embedded-wallet-missing')
+    expect(result.ready).toBe(true)
+    expect(result.code).toBe('ok')
   })
 
-  it('is ready for the base_account population after embedded-owner confirmation', () => {
+  it('is ready for a live Base Account CSW match even when server track still says none-yet', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
-      executionTrack: 'base-app-direct',
+      executionTrack: 'none-yet',
       canonicalAddress: USER_CANONICAL_CSW,
       clientStatus: 'ready',
-      authStatus: 'authenticated',
-      embeddedWalletDetected: true,
-      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
-      embeddedWalletCanSign: true,
-      ownerCheckStatus: 'owner',
+      authStatus: 'unauthenticated',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'not-owner',
       baseAppDirectConnected: true,
     })
 

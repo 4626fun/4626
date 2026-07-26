@@ -9,6 +9,7 @@ const CSW = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const EOA = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const coinbaseConnector = { id: 'coinbaseWalletSDK', name: 'Coinbase Wallet' }
+const baseAccountConnector = { id: 'base-account', name: 'Base Account' }
 const privyConnector = { id: 'privy-embedded-waitlist', name: 'Privy' }
 
 describe('baseAppDirectXmtp', () => {
@@ -18,6 +19,16 @@ describe('baseAppDirectXmtp', () => {
         connectedAddress: CSW,
         canonicalCswAddress: CSW,
         connector: coinbaseConnector,
+      }),
+    ).toBe(true)
+  })
+
+  it('accepts Sign in with Base (base-account) when address matches canonical CSW', () => {
+    expect(
+      isBaseAppDirectXmtpPath({
+        connectedAddress: CSW,
+        canonicalCswAddress: CSW,
+        connector: baseAccountConnector,
       }),
     ).toBe(true)
   })
@@ -32,7 +43,7 @@ describe('baseAppDirectXmtp', () => {
     ).toBe(false)
   })
 
-  it('rejects CSW match without Coinbase connector', () => {
+  it('rejects CSW match without Coinbase/Base Account connector', () => {
     expect(
       isBaseAppDirectXmtpPath({
         connectedAddress: CSW,

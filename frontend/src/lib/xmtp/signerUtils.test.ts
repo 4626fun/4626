@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from './signerUtils'
+import {
+  CANONICAL_SCW_CHAIN_ID,
+  decideXmtpSignerType,
+  isCoinbaseWalletConnector,
+  resolveXmtpChainId,
+} from './signerUtils'
+
+describe('isCoinbaseWalletConnector', () => {
+  it('recognizes Coinbase Wallet SDK and Base Account connectors', () => {
+    expect(isCoinbaseWalletConnector({ id: 'coinbaseWalletSDK', name: 'Coinbase Wallet' })).toBe(true)
+    expect(isCoinbaseWalletConnector({ id: 'base-account', name: 'Base Account' })).toBe(true)
+    expect(isCoinbaseWalletConnector('base-account')).toBe(true)
+    expect(isCoinbaseWalletConnector({ id: 'privy', name: 'Privy' })).toBe(false)
+    expect(isCoinbaseWalletConnector({ id: 'metaMask', name: 'MetaMask' })).toBe(false)
+  })
+})
 
 describe('xmtp signer utils', () => {
   it('defaults chainId to Base when wallet chainId is 0/invalid', () => {

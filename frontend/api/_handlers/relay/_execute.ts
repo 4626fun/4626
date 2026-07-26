@@ -11,8 +11,8 @@ import {
   rateLimitKey,
   RATE_LIMITS,
   logger,
+  readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
-import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 
 const RELAY_EXECUTE_BODY_MAX_BYTES = 262_144
 /**

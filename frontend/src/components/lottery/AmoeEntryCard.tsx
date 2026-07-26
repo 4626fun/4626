@@ -21,7 +21,6 @@ const AMOE_MIN_POINTS = 100
 const AMOE_MAX_POINTS = 1_000_000
 // Mirrors `AMOE_DAILY_*_CREDIT` in `frontend/server/_lib/lottery/lotteryAmoe.ts`.
 const AMOE_DAILY_TWITTER_CREDIT = 1
-const AMOE_DAILY_XMTP_CREDIT = 1
 
 function formatDailyCreditLabel(credits: number): string {
   return credits === 1 ? '1 point' : `${credits} points`
