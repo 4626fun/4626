@@ -99,4 +99,35 @@ describe('pickPrivyEmbeddedEoaWalletFromList', () => {
       }),
     ).toBe(first)
   })
+  it('accepts preferred address with wallet id even when walletClientType has not hydrated', () => {
+    const unified = {
+      id: WALLET_ID,
+      address: EMBEDDED,
+    }
+    const adminExternal = {
+      address: ADMIN_EOA,
+      walletClientType: 'metamask',
+    }
+    expect(
+      pickPrivyEmbeddedEoaWalletFromList({
+        wallets: [adminExternal, unified],
+        preferredAddresses: [EMBEDDED],
+      }),
+    ).toBe(unified)
+  })
+
+  it('still rejects preferred admin EOA without embedded typing even if it has an id', () => {
+    const adminWithId = {
+      id: 'not-the-embedded-id',
+      address: ADMIN_EOA,
+      walletClientType: 'metamask',
+    }
+    expect(
+      pickPrivyEmbeddedEoaWalletFromList({
+        wallets: [adminWithId],
+        preferredAddresses: [ADMIN_EOA],
+      }),
+    ).toBeNull()
+  })
+
 })

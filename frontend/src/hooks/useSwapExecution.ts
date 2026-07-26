@@ -1816,7 +1816,9 @@ export function useSwapExecution(params: {
       setError(
         params.executionTrack === 'base-app-direct'
           ? 'Swap signer is not ready yet. Connect your Coinbase Smart Wallet via Base App or Sign in with Base so it matches your parent CSW.'
-          : 'Swap signer is not ready yet. Connect an external wallet for EOA mode at /swap, or finish waitlist setup if your embedded signer is already an on-chain owner.',
+          : params.canonicalSignerDebug?.reason
+            ? params.canonicalSignerDebug.reason
+            : 'Account wallet execution is not ready. Sign in with Privy (email OTP) so your embedded signer can authorize the swap, or finish Enable 4626 signing in account setup.',
       )
       return
     }
@@ -1987,6 +1989,7 @@ export function useSwapExecution(params: {
     params.executionAddress,
     params.executionReady,
     params.executionTrack,
+    params.canonicalSignerDebug?.reason,
     buildQuoteRequest,
     swapDebugEnabled,
     swapSessionGate,

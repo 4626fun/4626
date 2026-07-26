@@ -26,6 +26,22 @@ function isPrivyEmbeddedWalletType(walletType: string): boolean {
   return walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded')
 }
 
+function isExternalNonEmbeddedWalletType(walletType: string): boolean {
+  if (!walletType || isPrivyEmbeddedWalletType(walletType)) return false
+  const normalized = walletType.replace(/[\s_-]+/g, '')
+  return (
+    walletType.includes('metamask') ||
+    walletType.includes('rabby') ||
+    walletType.includes('coinbase') ||
+    walletType.includes('walletconnect') ||
+    walletType.includes('injected') ||
+    walletType.includes('base_account') ||
+    walletType.includes('base account') ||
+    normalized.includes('smartwallet') ||
+    normalized.includes('smartaccount')
+  )
+}
+
 /**
  * Select the Privy embedded EOA wallet object for authorized Wallet RPC.
  * Never falls back to session/admin EOAs (e.g. 0xb05cf…) — those mismatch
@@ -45,6 +61,7 @@ export function pickPrivyEmbeddedEoaWalletFromList(params: {
   const canonical = normalizeAddressOrNull(params.canonicalAddress)?.toLowerCase() ?? null
 
   let firstEmbedded: unknown | null = null
+  let preferredUnified: unknown | null = null
   for (const wallet of wallets) {
     const record = wallet && typeof wallet === 'object' ? (wallet as Record<string, unknown>) : null
     if (!record) continue
@@ -54,11 +71,25 @@ export function pickPrivyEmbeddedEoaWalletFromList(params: {
     const walletType = normalizePrivyText(
       record.wallet_client_type ?? record.walletClientType ?? record.connector_type ?? record.type ?? '',
     )
-    if (!isPrivyEmbeddedWalletType(walletType)) continue
-    if (preferred.has(address.toLowerCase())) return wallet
-    if (!firstEmbedded) firstEmbedded = wallet
+    if (isExternalNonEmbeddedWalletType(walletType)) continue
+
+    const matchesPreferred = preferred.has(address.toLowerCase())
+    const hasWalletId = typeof record.id === 'string' && record.id.trim().length > 0
+    const isEmbeddedType = isPrivyEmbeddedWalletType(walletType)
+
+    if (isEmbeddedType) {
+      if (matchesPreferred) return wallet
+      if (!firstEmbedded) firstEmbedded = wallet
+      continue
+    }
+
+    // Unified-stack metadata often has wallet id + address before walletClientType hydrates.
+    // Accept only when preferred embedded address AND a Privy wallet id are present.
+    if (matchesPreferred && hasWalletId && !preferredUnified) {
+      preferredUnified = wallet
+    }
   }
-  return firstEmbedded
+  return preferredUnified ?? firstEmbedded
 }
 
 function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
@@ -146,38 +177,41 @@ function createEmbeddedSignerWalletClient({
     refreshSession,
     signSecp256k1Digest,
     request: async (args: { method: string; params?: any[] | Record<string, unknown> }) => {
-      const provider = await getProvider()
-      if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
-      await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
-      if (args?.method === 'secp256k1_sign' && typeof signSecp256k1Digest === 'function') {
+      const extractDigest = (): string => {
         const params = Array.isArray(args.params) ? args.params : []
         const paramsRecord =
           args.params && !Array.isArray(args.params) && typeof args.params === 'object'
             ? (args.params as Record<string, unknown>)
             : null
-        const hashCandidate =
-          typeof params[0] === 'string'
-            ? params[0]
-            : params[1] && typeof params[1] === 'string'
-              ? params[1]
-              : typeof paramsRecord?.hash === 'string'
-                ? String(paramsRecord.hash)
-                : ''
+        if (args?.method === 'eth_sign') {
+          return (
+            params.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
+            ''
+          )
+        }
+        if (typeof params[0] === 'string') return params[0]
+        if (params[1] && typeof params[1] === 'string') return params[1]
+        if (typeof paramsRecord?.hash === 'string') return String(paramsRecord.hash)
+        return ''
+      }
+
+      // Authorized Wallet API digests do not need the embedded iframe provider.
+      if (
+        (args?.method === 'secp256k1_sign' || args?.method === 'eth_sign') &&
+        typeof signSecp256k1Digest === 'function'
+      ) {
+        const hashCandidate = extractDigest()
         if (isRawEcdsaDigest(hashCandidate)) {
           return signSecp256k1Digest(hashCandidate as `0x${string}`)
         }
       }
+
+      const provider = await getProvider()
+      if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
+      await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
       if (args?.method === 'eth_sign') {
-        const params = Array.isArray(args.params) ? args.params : []
-        const hashCandidate =
-          params.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
-          ''
+        const hashCandidate = extractDigest()
         if (hashCandidate && isRawEcdsaDigest(hashCandidate)) {
-          // Prefer authorized Wallet API signing (owner_id / privy-v2) over the
-          // provider secp256k1_sign path, which 401s without auth-sig headers.
-          if (typeof signSecp256k1Digest === 'function') {
-            return signSecp256k1Digest(hashCandidate as `0x${string}`)
-          }
           try {
             const rawSig = await provider.request({
               method: 'secp256k1_sign',
@@ -192,9 +226,6 @@ function createEmbeddedSignerWalletClient({
       return await provider.request(args as any)
     },
     signMessage: async (args: { message: unknown }) => {
-      const provider = await getProvider()
-      if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
-      await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
       const raw =
         typeof args?.message === 'object' && args.message !== null && 'raw' in (args.message as Record<string, unknown>)
           ? (args.message as Record<string, unknown>).raw
@@ -210,7 +241,23 @@ function createEmbeddedSignerWalletClient({
             // Re-resolve the provider per request so retries after a session
             // refresh do not reuse a stale provider channel.
             request: async (requestArgs: any) => {
-              const liveProvider = (await getProvider()) ?? provider
+              if (
+                requestArgs?.method === 'secp256k1_sign' &&
+                typeof signSecp256k1Digest === 'function'
+              ) {
+                const params = Array.isArray(requestArgs.params) ? requestArgs.params : []
+                const hash =
+                  typeof params[0] === 'string'
+                    ? params[0]
+                    : typeof requestArgs.params?.hash === 'string'
+                      ? String(requestArgs.params.hash)
+                      : ''
+                if (isRawEcdsaDigest(hash)) return signSecp256k1Digest(hash as `0x${string}`)
+              }
+              const liveProvider = await getProvider()
+              if (!liveProvider?.request) {
+                throw new Error('Privy embedded EOA provider not available')
+              }
               return liveProvider.request(requestArgs as any)
             },
           },
@@ -218,6 +265,9 @@ function createEmbeddedSignerWalletClient({
           refreshSession,
         })
       }
+      const provider = await getProvider()
+      if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
+      await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
       const rawSig = await provider.request({
         method: 'personal_sign',
         params: [msgHex, address],
@@ -323,15 +373,6 @@ export function useSwapEmbeddedEoa(params: {
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
 
-  const privyEmbeddedEoaCanSign = useMemo(() => {
-    const walletAny: any = privyEmbeddedEoaWallet as any
-    if (!walletAny) return false
-    if (typeof walletAny?.request === 'function') return true
-    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return true
-    if (typeof walletAny?.getEthereumProvider === 'function') return true
-    return false
-  }, [privyEmbeddedEoaWallet])
-
   const getPrivyEmbeddedEoaProvider = useCallback(async () => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return null
@@ -380,19 +421,6 @@ export function useSwapEmbeddedEoa(params: {
     }
   }, [privyEmbeddedEoaWallet, setActivePrivyWallet])
 
-  useEffect(() => {
-    if (hydrationRecoveryRef.current.walletId !== privyEmbeddedEoaWallet) {
-      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'idle' }
-    }
-    if (!privyEmbeddedEoaWallet) return
-    if (privyEmbeddedEoaCanSign) return
-    if (hydrationRecoveryRef.current.status !== 'idle') return
-    hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'pending' }
-    void recoverEmbeddedWalletProvider().finally(() => {
-      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'attempted' }
-    })
-  }, [privyEmbeddedEoaCanSign, privyEmbeddedEoaWallet, recoverEmbeddedWalletProvider])
-
   const embeddedWalletEnsureRef = useRef(false)
   useEffect(() => {
     if (embeddedWalletEnsureRef.current) return
@@ -433,6 +461,31 @@ export function useSwapEmbeddedEoa(params: {
     }
     return true
   }, [privyEmbeddedEoaAddress, privyEmbeddedEoaWallet, privyUnifiedWalletId])
+
+  // Authorized Wallet API signing does not require a hydrated iframe provider.
+  // Treat that as sign-ready so canonicalSignerGate does not block on provider lag.
+  const privyEmbeddedEoaCanSign = useMemo(() => {
+    if (usePrivyAuthorizedSecp256k1) return true
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return false
+    if (typeof walletAny?.request === 'function') return true
+    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return true
+    if (typeof walletAny?.getEthereumProvider === 'function') return true
+    return false
+  }, [privyEmbeddedEoaWallet, usePrivyAuthorizedSecp256k1])
+
+  useEffect(() => {
+    if (hydrationRecoveryRef.current.walletId !== privyEmbeddedEoaWallet) {
+      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'idle' }
+    }
+    if (!privyEmbeddedEoaWallet) return
+    if (privyEmbeddedEoaCanSign) return
+    if (hydrationRecoveryRef.current.status !== 'idle') return
+    hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'pending' }
+    void recoverEmbeddedWalletProvider().finally(() => {
+      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'attempted' }
+    })
+  }, [privyEmbeddedEoaCanSign, privyEmbeddedEoaWallet, recoverEmbeddedWalletProvider])
 
   const signPrivyAuthorizedSecp256k1Digest = useCallback(
     async (digest: Hex) => {
