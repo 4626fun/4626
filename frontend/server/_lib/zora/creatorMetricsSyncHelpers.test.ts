@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   DEFAULT_HOT_REFRESH_LISTS,
+  DEFAULT_HERO_MCAP_MIN_HOLDERS,
+  DEFAULT_HERO_MCAP_MIN_VOLUME_USD,
+  DEFAULT_HERO_MCAP_SOFT_CAP_USD,
+  DEFAULT_STALE_VOLUME_MAX_AGE_MS,
+  coinPassesHeroMarketCapSanityGate,
   computeFees24hUsd,
   createDefaultExploreBackfillCheckpoints,
   detectFeeModel,
@@ -10,6 +15,8 @@ import {
   isStaleRunningLock,
   parseExploreBackfillCheckpoints,
   parseExploreCoinFinancialSnapshot,
+  resolveHeroMarketCapSanityGate,
+  resolveStaleVolumeMaxAgeMs,
   serializeExploreBackfillCheckpoints,
 } from './creatorMetricsSyncHelpers.js'
 
@@ -89,5 +96,78 @@ describe('creatorMetricsSyncHelpers', () => {
     parsed.TOP_VOLUME_CREATORS_24H.complete = true
     parsed.NEW_CREATORS.complete = true
     expect(isExploreBackfillComplete(parsed)).toBe(true)
+  })
+
+  it('resolves hero mcap sanity gate defaults and env overrides', () => {
+    expect(resolveHeroMarketCapSanityGate({})).toEqual({
+      minHolders: DEFAULT_HERO_MCAP_MIN_HOLDERS,
+      minVolumeUsd: DEFAULT_HERO_MCAP_MIN_VOLUME_USD,
+      mcapSoftCapUsd: DEFAULT_HERO_MCAP_SOFT_CAP_USD,
+    })
+    expect(
+      resolveHeroMarketCapSanityGate({
+        CREATOR_METRICS_HERO_MIN_HOLDERS: '100',
+        CREATOR_METRICS_HERO_MIN_VOLUME_USD: '5000',
+        CREATOR_METRICS_HERO_MCAP_SOFT_CAP_USD: '25000000',
+      }),
+    ).toEqual({
+      minHolders: 100,
+      minVolumeUsd: 5000,
+      mcapSoftCapUsd: 25_000_000,
+    })
+    expect(resolveStaleVolumeMaxAgeMs({})).toBe(DEFAULT_STALE_VOLUME_MAX_AGE_MS)
+    expect(resolveStaleVolumeMaxAgeMs({ CREATOR_METRICS_STALE_VOLUME_MAX_AGE_MS: '3600000' })).toBe(
+      3_600_000,
+    )
+  })
+
+  it('includes liquid coins and excludes illiquid spoof FDV from hero mcap', () => {
+    const gate = resolveHeroMarketCapSanityGate({})
+
+    // jesse-like: large mcap but real holders + volume
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 1_985_098.58, volume24hUsd: 35_924.92, uniqueHolders: 64_533 },
+        gate,
+      ),
+    ).toBe(true)
+
+    // below soft cap always included
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 9_999_999, volume24hUsd: 0, uniqueHolders: 0 },
+        gate,
+      ),
+    ).toBe(true)
+
+    // javie/datahedge-like: ~$1B FDV, tiny volume, few holders
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 1_002_682_349.53, volume24hUsd: 52.66, uniqueHolders: 7 },
+        gate,
+      ),
+    ).toBe(false)
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 967_942_053.31, volume24hUsd: 6.62, uniqueHolders: 19 },
+        gate,
+      ),
+    ).toBe(false)
+
+    // clears via volume floor alone
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 50_000_000, volume24hUsd: 1_000, uniqueHolders: 1 },
+        gate,
+      ),
+    ).toBe(true)
+
+    // clears via holders floor alone
+    expect(
+      coinPassesHeroMarketCapSanityGate(
+        { marketCapUsd: 50_000_000, volume24hUsd: 10, uniqueHolders: 50 },
+        gate,
+      ),
+    ).toBe(true)
   })
 })

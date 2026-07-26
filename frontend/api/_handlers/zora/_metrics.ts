@@ -6,6 +6,7 @@ import {
   cachedTotalsMaxAgeMs,
   ensureCreatorMetricsSchema,
 } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import { resolveHeroMarketCapSanityGate } from '../../../server/_lib/zora/creatorMetricsSyncHelpers.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'
@@ -245,6 +246,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const cachedTotalsFresh =
     Number.isFinite(cachedTotalsAtMs) && Date.now() - cachedTotalsAtMs <= cachedTotalsMaxAgeMs()
 
+  const heroMcapGate = resolveHeroMarketCapSanityGate()
   const totalsResult = cachedTotalsFresh
     ? {
         rows: [
@@ -266,7 +268,19 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         WHERE chain_id = 8453
           AND created_at >= NOW() - INTERVAL '24 hours'
       ) AS creators_new_24h,
-      (SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS market_cap_usd,
+      (
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN COALESCE(unique_holders, 0) >= ${heroMcapGate.minHolders}
+              OR COALESCE(volume_24h_usd, 0) >= ${heroMcapGate.minVolumeUsd}
+              OR COALESCE(market_cap_usd, 0) < ${heroMcapGate.mcapSoftCapUsd}
+            THEN market_cap_usd
+            ELSE 0
+          END
+        ), 0)::NUMERIC
+        FROM creator_coins
+        WHERE chain_id = 8453
+      ) AS market_cap_usd,
       (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
       (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
   `

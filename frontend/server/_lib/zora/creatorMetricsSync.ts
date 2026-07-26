@@ -18,6 +18,8 @@ import {
   parseExploreCoinFinancialSnapshot,
   parseTimestamp,
   resolveEnrichmentFinancials,
+  resolveHeroMarketCapSanityGate,
+  resolveStaleVolumeMaxAgeMs,
   serializeExploreBackfillCheckpoints,
   toFiniteNumber,
   toIntegerOrNull,
@@ -820,6 +822,9 @@ export async function runCreatorMetricsExploreBackfill(
 export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<void> {
   // Single pass over creator_coins for all three sums (the previous three scalar
   // subqueries each scanned the ~1M-row table separately: ~1.2s/call, 4.7K calls).
+  // Market Cap applies the hero liquidity sanity gate so illiquid spoof FDV
+  // (huge Zora marketCap, tiny volume/holders) cannot dominate the Explore hero.
+  const gate = resolveHeroMarketCapSanityGate()
   await db.sql`
     UPDATE creator_metrics_state
     SET
@@ -830,7 +835,15 @@ export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<voi
       cached_totals_at = NOW()
     FROM (
       SELECT
-        COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS market_cap_usd,
+        COALESCE(SUM(
+          CASE
+            WHEN COALESCE(unique_holders, 0) >= ${gate.minHolders}
+              OR COALESCE(volume_24h_usd, 0) >= ${gate.minVolumeUsd}
+              OR COALESCE(market_cap_usd, 0) < ${gate.mcapSoftCapUsd}
+            THEN market_cap_usd
+            ELSE 0
+          END
+        ), 0)::NUMERIC AS market_cap_usd,
         COALESCE(SUM(volume_24h_usd), 0)::NUMERIC AS volume_24h_usd,
         COALESCE(SUM(fees_24h_usd), 0)::NUMERIC AS fees_24h_usd
       FROM creator_coins
@@ -838,6 +851,43 @@ export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<voi
     ) AS totals
     WHERE id = 1;
   `
+}
+
+/**
+ * Expire stale 24h volume/fees for coins the hot path has not refreshed recently.
+ * Keeps market_cap_usd (hero Market Cap uses a separate liquidity gate).
+ */
+export async function expireStaleCreatorCoinVolumeFees(
+  db: Db,
+  options?: { maxAgeMs?: number; batchSize?: number },
+): Promise<number> {
+  const maxAgeMs = options?.maxAgeMs ?? resolveStaleVolumeMaxAgeMs()
+  const maxAgeSeconds = Math.max(1, Math.floor(maxAgeMs / 1000))
+  const batchSize = Math.max(
+    1,
+    options?.batchSize ??
+      parsePositiveInt(process.env.CREATOR_METRICS_STALE_VOLUME_BATCH_SIZE, 10_000),
+  )
+  const result = await db.sql`
+    WITH stale AS (
+      SELECT coin_address
+      FROM creator_coins
+      WHERE chain_id = ${BASE_CHAIN_ID}
+        AND last_seen_at IS NOT NULL
+        AND last_seen_at < NOW() - make_interval(secs => ${maxAgeSeconds})
+        AND (COALESCE(volume_24h_usd, 0) > 0 OR COALESCE(fees_24h_usd, 0) > 0)
+      ORDER BY last_seen_at ASC
+      LIMIT ${batchSize}
+    )
+    UPDATE creator_coins AS c
+    SET
+      volume_24h_usd = 0,
+      fees_24h_usd = 0
+    FROM stale
+    WHERE c.coin_address = stale.coin_address
+    RETURNING c.coin_address;
+  `
+  return result.rows?.length ?? 0
 }
 
 export function cachedTotalsMaxAgeMs(): number {
@@ -869,7 +919,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     DEFAULT_HOT_SYNC_MIN_INTERVAL_MS,
   )
   const throttleResult = await db.sql`
-    SELECT last_hot_refresh_at, cached_totals_at
+    SELECT last_hot_refresh_at
     FROM creator_metrics_state
     WHERE id = 1
     LIMIT 1;
@@ -878,10 +928,6 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
   if (lastHotRefreshAt != null && Date.now() - lastHotRefreshAt < minIntervalMs) {
     return { ok: true, runId, coinsRefreshed: 0, pagesFetched: 0, skipped: true }
   }
-  const cachedTotalsAt = parseOptionalTimestamp(throttleResult.rows?.[0]?.cached_totals_at)
-  const skipTotalsRecompute =
-    cachedTotalsAt != null && Date.now() - cachedTotalsAt < cachedTotalsMaxAgeMs()
-
   const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
   if (!apiKey) {
     return {
@@ -909,11 +955,13 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
       coinAddresses: hotRefresh.coinAddresses,
     })
-    // Hot sync runs every ~5m; Explore hero reads already tolerate a 15m cache TTL.
-    // Skipping fresh totals avoids a redundant full-table SUM on creator_coins.
-    if (!skipTotalsRecompute) {
-      await recomputeAndCacheCreatorMetricsTotals(db)
+    // After explore refresh, drop volume/fees that no longer represent a live 24h window.
+    const staleVolumeZeroed = await expireStaleCreatorCoinVolumeFees(db)
+    if (staleVolumeZeroed > 0) {
+      log.info('[creator-metrics-hot-sync] zeroed stale volume/fees', { staleVolumeZeroed })
     }
+    // Always recompute so hero Market Cap liquidity gate + volume expiry land in cache.
+    await recomputeAndCacheCreatorMetricsTotals(db)
     await db.sql`
       UPDATE creator_metrics_state
       SET last_hot_refresh_at = NOW()
@@ -922,6 +970,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     log.info('[creator-metrics-hot-sync] completed', {
       ...hotRefresh,
       sparklinePrecompute,
+      staleVolumeZeroed,
     })
     return {
       ok: true,

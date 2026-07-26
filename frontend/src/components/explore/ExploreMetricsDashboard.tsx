@@ -37,6 +37,10 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
 
   const financialHint = partial ? 'Sum of indexed coins' : 'All Base creator coins'
   const financialTitleSuffix = partial ? ' (indexed coins only)' : ''
+  const marketCapHint = partial
+    ? 'Liquidity-filtered indexed mcap'
+    : 'Liquidity-filtered Base creator coins'
+  const feesHint = 'Estimated (volume × fee rate)'
 
   return (
     <div className={joinClasses('space-y-2', className)}>
@@ -54,9 +58,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         <ExploreHeroMetric
           label="Market Cap"
           value={formatCompactUsd(marketCap)}
-          hint={financialHint}
+          hint={marketCapHint}
           accent
-          title={`Indexed creator-coin market cap${financialTitleSuffix} · 30D trend uses daily Supabase snapshots`}
+          title={`Liquidity-filtered creator-coin market cap${financialTitleSuffix} · excludes illiquid spoof FDV · 30D trend uses daily Supabase snapshots`}
           background={
             <ExploreHeroSparkline
               fill
@@ -74,8 +78,8 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         <ExploreHeroMetric
           label="1D Fees"
           value={formatCompactUsd(fees24h)}
-          hint={financialHint}
-          title={`24H fees from creator-coin trading${financialTitleSuffix}`}
+          hint={feesHint}
+          title={`Estimated 24H trading fees (volume × fee rate)${financialTitleSuffix}`}
         />
       </div>
 

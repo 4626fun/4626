@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, ensureCreatorMetricsSchemaMock } = vi.hoisted(() => ({
+const { getDbMock, ensureCreatorMetricsSchemaMock, sqlMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureCreatorMetricsSchemaMock: vi.fn(),
+  sqlMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -14,6 +15,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
 
 vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({
   ensureCreatorMetricsSchema: ensureCreatorMetricsSchemaMock,
+  cachedTotalsMaxAgeMs: () => 15 * 60 * 1000,
 }))
 
 vi.mock('../../server/zora/_shared.js', () => ({
@@ -27,7 +29,7 @@ describe('GET /api/zora/metrics', () => {
   beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
-    const sql = vi.fn()
+    sqlMock
       .mockResolvedValueOnce({
         rows: [{
           backfill_complete: false,
@@ -51,7 +53,7 @@ describe('GET /api/zora/metrics', () => {
         }],
       })
 
-    getDbMock.mockResolvedValue({ sql })
+    getDbMock.mockResolvedValue({ sql: sqlMock })
     ensureCreatorMetricsSchemaMock.mockResolvedValue(undefined)
   })
 
@@ -77,6 +79,16 @@ describe('GET /api/zora/metrics', () => {
       partial: true,
       sampledCreators: 24,
     })
+
+    // Live SUM path must apply the hero mcap liquidity gate (CASE over holders/volume/soft cap).
+    const liveTotalsCall = sqlMock.mock.calls.find((call) => {
+      const strings = call[0] as TemplateStringsArray
+      return typeof strings?.[0] === 'string' && strings.join('').includes('CASE')
+    })
+    expect(liveTotalsCall).toBeTruthy()
+    const liveSqlText = (liveTotalsCall?.[0] as TemplateStringsArray).join('?')
+    expect(liveSqlText).toContain('unique_holders')
+    expect(liveTotalsCall?.slice(1)).toEqual(expect.arrayContaining([50, 1_000, 10_000_000]))
   })
 
   it('does not blend live Zora explore financials into partial headline totals', async () => {

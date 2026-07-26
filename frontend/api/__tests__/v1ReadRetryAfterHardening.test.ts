@@ -36,6 +36,7 @@ vi.mock('@4626/server-core', () => ({
 
 vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({
   ensureCreatorMetricsSchema: mocks.ensureCreatorMetricsSchema,
+  cachedTotalsMaxAgeMs: () => 15 * 60 * 1000,
 }))
 
 vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({

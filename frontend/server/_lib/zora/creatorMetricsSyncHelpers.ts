@@ -41,6 +41,70 @@ export const DEFAULT_HOT_REFRESH_LISTS: readonly ExploreList[] = [
   'NEW_CREATORS',
 ]
 
+/** Hero Market Cap includes a coin when holders/volume clear the floor, or mcap is below the soft cap. */
+export const DEFAULT_HERO_MCAP_MIN_HOLDERS = 50
+export const DEFAULT_HERO_MCAP_MIN_VOLUME_USD = 1_000
+export const DEFAULT_HERO_MCAP_SOFT_CAP_USD = 10_000_000
+/** Zero volume/fees for coins not refreshed within this window (hot sync). */
+export const DEFAULT_STALE_VOLUME_MAX_AGE_MS = 48 * 60 * 60 * 1000
+
+export type HeroMarketCapSanityGate = {
+  minHolders: number
+  minVolumeUsd: number
+  mcapSoftCapUsd: number
+}
+
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+  const n = Number(String(value ?? '').trim())
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return n
+}
+
+export function resolveHeroMarketCapSanityGate(
+  env: NodeJS.ProcessEnv = process.env,
+): HeroMarketCapSanityGate {
+  return {
+    minHolders: Math.floor(
+      parsePositiveNumber(env.CREATOR_METRICS_HERO_MIN_HOLDERS, DEFAULT_HERO_MCAP_MIN_HOLDERS),
+    ),
+    minVolumeUsd: parsePositiveNumber(
+      env.CREATOR_METRICS_HERO_MIN_VOLUME_USD,
+      DEFAULT_HERO_MCAP_MIN_VOLUME_USD,
+    ),
+    mcapSoftCapUsd: parsePositiveNumber(
+      env.CREATOR_METRICS_HERO_MCAP_SOFT_CAP_USD,
+      DEFAULT_HERO_MCAP_SOFT_CAP_USD,
+    ),
+  }
+}
+
+export function resolveStaleVolumeMaxAgeMs(env: NodeJS.ProcessEnv = process.env): number {
+  return Math.floor(
+    parsePositiveNumber(env.CREATOR_METRICS_STALE_VOLUME_MAX_AGE_MS, DEFAULT_STALE_VOLUME_MAX_AGE_MS),
+  )
+}
+
+/**
+ * Illiquid / spoof FDV coins (huge Zora marketCap, tiny volume + holders) must not dominate
+ * Explore hero Market Cap. Row storage stays raw; only aggregates apply this gate.
+ */
+export function coinPassesHeroMarketCapSanityGate(
+  coin: {
+    marketCapUsd: number | null | undefined
+    volume24hUsd: number | null | undefined
+    uniqueHolders: number | null | undefined
+  },
+  gate: HeroMarketCapSanityGate = resolveHeroMarketCapSanityGate(),
+): boolean {
+  const marketCapUsd = toFiniteNumber(coin.marketCapUsd) ?? 0
+  const volume24hUsd = toFiniteNumber(coin.volume24hUsd) ?? 0
+  const uniqueHolders = toIntegerOrNull(coin.uniqueHolders) ?? 0
+  if (marketCapUsd < gate.mcapSoftCapUsd) return true
+  if (uniqueHolders >= gate.minHolders) return true
+  if (volume24hUsd >= gate.minVolumeUsd) return true
+  return false
+}
+
 export function toFiniteNumber(v: unknown): number | null {
   const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
   if (!Number.isFinite(n)) return null
