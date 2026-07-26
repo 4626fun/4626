@@ -7,6 +7,7 @@ import {
   ensureCreatorMetricsSchema,
 } from '../../../server/_lib/zora/creatorMetricsSync.js'
 import { resolveHeroMarketCapSanityGate } from '../../../server/_lib/zora/creatorMetricsSyncHelpers.js'
+import { sanitizeHeroMcapHistory } from '../../../src/lib/explore/heroMcapHistory.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'
@@ -124,7 +125,7 @@ function parseSyncStatus(v: unknown): SyncStatus {
 }
 
 function mapHistoryRows(rows: any[]): Array<{ date: string; creatorCoinsMarketCapUsd: number | null }> {
-  return (rows ?? [])
+  const mapped = (rows ?? [])
     .map((row) => {
       const dayRaw = typeof row.day === 'string' ? row.day : String(row.day ?? '')
       const dayMs = Date.parse(`${dayRaw}T00:00:00.000Z`)
@@ -135,6 +136,8 @@ function mapHistoryRows(rows: any[]): Array<{ date: string; creatorCoinsMarketCa
       }
     })
     .filter((entry): entry is { date: string; creatorCoinsMarketCapUsd: number | null } => entry != null)
+  // Scrub spoof-FDV spike days (e.g. Jul 24–25 ~$1B+) so the hero sparkline stays readable.
+  return sanitizeHeroMcapHistory(mapped)
 }
 
 function errorSignature(err: unknown): string {

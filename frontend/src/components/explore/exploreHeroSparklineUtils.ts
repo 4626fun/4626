@@ -1,3 +1,5 @@
+import { sanitizeHeroMcapHistory } from '@/lib/explore/heroMcapHistory'
+
 export type ExploreHeroSparklinePoint = {
   creatorCoinsMarketCapUsd: number | null
 }
@@ -10,7 +12,10 @@ export type SparklineLayoutPoint = {
 export function extractIndexedMcapSparklineValues(
   history: ReadonlyArray<ExploreHeroSparklinePoint>,
 ): number[] {
-  return history
+  return sanitizeHeroMcapHistory(history.map((row, index) => ({
+    date: String(index),
+    creatorCoinsMarketCapUsd: row.creatorCoinsMarketCapUsd,
+  })))
     .map((row) => row.creatorCoinsMarketCapUsd)
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0)
 }
