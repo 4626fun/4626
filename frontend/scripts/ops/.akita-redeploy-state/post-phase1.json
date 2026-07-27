@@ -12,5 +12,13 @@
     "phase1Core": "0x92a225a953f6cbdb265d41d2129a1ffc191e0b2022acae68fa6069361393aa3d",
     "phase1Finalize": "0x7b8a0b5a9c770fd06ea269ac5cdb1718585e04bad3ee3411a9b15c7f2a6564ae"
   },
-  "note": "Phase1-only via Privy CSW UserOps. Gauge/CCA/oracle await Phase2. OFT Store + LZ wire still required before finalize."
+  "note": "Phase1 + OFT Store + hub rebind + registry peer done. Base ShareOFT.setPeer(30168) deferred to finalize (batcher is owner). Solana LZ init-config/wire partially applied (6/12; Base setPeer failed as expected).",
+  "oftStore": "Asa8DaR3bxQCAb3io5pLcYHZK4t2SeMn5jGnb1YBoDWz",
+  "oftEscrow": "JDDbbSfCTXvEESY1xYo2gbuZM5yFGpZrnMLdMPGTHwZm",
+  "solanaSharePeer": "0x92adad3c49cc2b3375c34f036ecf0f08ee3c3fdce4597a5b5ea08d56008c88ab",
+  "oftProgramId": "6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s",
+  "hubRebindSig": "3BQMm77bAeiPJDzGZCoeD4fxuqW6fUqZPD9zHXfmJhLLfKgzboj2xV3a8Pm2eBxk3vjYEmQVz1aVKFvLtYeUxKbj",
+  "mintAuthorityTransferSig": "4YoauZb8iVMhzRBwLZpgfanveeQgsxiCnugcid6bLMz9GtZ93KYMurLEZQnTcgRosi2aVKf6xAJD2Jop7Hr9qKq7",
+  "registryRegisterTx": "0x19c19d0079b9d36a14f61c079b2e72de464f65ff85e86b34a05a7450e30fdcb7",
+  "registryPeerTx": "0xd3f285a337682f2ca8cd0e56e30775ebcc128e5e4c31c67444a694635a5b182f"
 }
