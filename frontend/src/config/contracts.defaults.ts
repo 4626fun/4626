@@ -243,7 +243,8 @@ export const BASE_DEFAULTS = {
   chainlinkEthUsd: addr("71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"),
   weth: addr("4200000000000000000000000000000000000006"),
   usdc: addr("833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
-  zora: addr("4200000000000000000000000000000000000777"),
+  // Canonical ZORA ERC-20 on Base (not the uninitialized 0x4200…0777 OP-Stack predeploy).
+  zora: addr("1111111111166b7FE7bd91427724B487980aFc69"),
 
   // Permit2 (canonical, chain-agnostic)
   permit2: addr("000000000022D473030F116dDEE9F6B43aC78BA3"),

@@ -5,7 +5,7 @@ import { getTokenLogo, isBlockedTokenLogoUrl } from './tokenLogo'
 describe('token logo known seeds', () => {
   it('prefers canonical ZORA logo seed for Base ZORA token address', () => {
     const lookup = getTokenLogo({
-      address: '0x4200000000000000000000000000000000000777',
+      address: '0x1111111111166b7FE7bd91427724B487980aFc69',
       chainId: 8453,
       group: 'core',
       symbol: 'ZORA',
