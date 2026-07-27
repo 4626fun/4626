@@ -145,6 +145,13 @@ describe("AlfaClub official Sudoswap market readiness", () => {
     ).toBeNull();
   });
 
+
+  it("requires a signing wallet client before submit", () => {
+    expect(
+      getAlfaClubLiquidityDisabledReason(ready({ walletClientReady: false })),
+    ).toBe("Wallet execution is not ready");
+  });
+
   it("allows an ETH-funded buy without a pre-existing Creator Coin balance", () => {
     expect(
       getAlfaClubLiquidityDisabledReason(

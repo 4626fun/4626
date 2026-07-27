@@ -114,6 +114,8 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   configReady: boolean;
   requestedMarketMatches: boolean;
   executionAddress: Address | null;
+  /** When false, sender is known but the signing wallet client is not ready. */
+  walletClientReady?: boolean;
   loading: boolean;
   snapshot: AlfaClubSudoswapSnapshot | null;
   mode: Mode;
@@ -125,6 +127,8 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   if (!params.requestedMarketMatches)
     return "No official Sudoswap market is configured for this key";
   if (!params.executionAddress) return "Connect an execution-ready wallet";
+  if (params.walletClientReady === false)
+    return "Wallet execution is not ready";
   if (!params.keyAmount) return "Enter a positive key amount";
   if (params.mode === "buyWithEth" && !params.ethAmount)
     return "Enter a positive ETH amount";
@@ -229,6 +233,8 @@ type AlfaClubLiquidityProps = {
   onSwitchTokens?: () => void;
   /** Prefer Swap's Privy embedded canonical signer client when provided. */
   walletClientOverride?: unknown;
+  /** UserOp / txRouter owner — must match the override wallet, not session admin EOA. */
+  signerAddressOverride?: Address | null;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   forcePrimaryActionEnabled?: boolean;
@@ -245,6 +251,7 @@ export function AlfaClubLiquidity({
   onOpenTokenSelector,
   onSwitchTokens,
   walletClientOverride = null,
+  signerAddressOverride = null,
   primaryActionLabel: primaryActionLabelOverride,
   onPrimaryAction,
   forcePrimaryActionEnabled,
@@ -741,9 +748,32 @@ export function AlfaClubLiquidity({
   const decimals = snapshot?.creatorCoinDecimals ?? 18;
   const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
 
+  const resolvedSignerAddress = useMemo((): Address | null => {
+    if (signerAddressOverride) return getAddress(signerAddressOverride);
+    const fromWallet = (walletClient as { account?: { address?: string } } | null | undefined)
+      ?.account?.address;
+    if (typeof fromWallet === "string" && fromWallet.startsWith("0x")) {
+      try {
+        return getAddress(fromWallet as Address);
+      } catch {
+        return null;
+      }
+    }
+    return (accountContext.signerAddress as Address | null) ?? null;
+  }, [accountContext.signerAddress, signerAddressOverride, walletClient]);
+
   const buildTxContext = useCallback((): TxRouterContext => {
     if (!walletClient || !publicClient || !executionAddress)
       throw new Error("Wallet execution is not ready");
+    if (!resolvedSignerAddress)
+      throw new Error("Wallet signer address is not ready");
+    // Privy embedded override: signer EOA ≠ CSW sender. Base App override keeps
+    // signer === execution (CSW) and must retain the connected connector metadata.
+    const usingPrivyEmbeddedOverride =
+      Boolean(walletClientOverride) &&
+      Boolean(signerAddressOverride) &&
+      getAddress(resolvedSignerAddress).toLowerCase() !==
+        getAddress(executionAddress).toLowerCase();
     return {
       chainId: base.id,
       executionMode,
@@ -751,11 +781,15 @@ export function AlfaClubLiquidity({
       walletClient,
       publicClient,
       canonicalAddress: accountContext.cswAddress ?? null,
-      signerAddress: accountContext.signerAddress ?? null,
+      signerAddress: resolvedSignerAddress,
       executionAddress,
-      signerType: accountContext.signerType,
-      connectorId: account.connector?.id ?? null,
-      connectorName: account.connector?.name ?? null,
+      signerType: usingPrivyEmbeddedOverride ? "EOA" : accountContext.signerType,
+      connectorId: usingPrivyEmbeddedOverride
+        ? "privy-embedded"
+        : (account.connector?.id ?? null),
+      connectorName: usingPrivyEmbeddedOverride
+        ? "Privy Embedded EOA"
+        : (account.connector?.name ?? null),
       capabilities: accountContext.capabilities,
       requireCanonicalSponsorship: executionMode === "canonical",
     };
@@ -764,18 +798,22 @@ export function AlfaClubLiquidity({
     account.connector?.name,
     accountContext.capabilities,
     accountContext.cswAddress,
-    accountContext.signerAddress,
     accountContext.signerType,
     executionAddress,
     executionMode,
     publicClient,
+    resolvedSignerAddress,
+    signerAddressOverride,
     walletClient,
+    walletClientOverride,
   ]);
 
   const submit = useCallback(async () => {
     if (
       !publicClient ||
       !executionAddress ||
+      !walletClient ||
+      !resolvedSignerAddress ||
       !keyAmount ||
       (mode === "buyWithEth" && !ethAmount) ||
       !router ||
@@ -784,7 +822,9 @@ export function AlfaClubLiquidity({
       !permit2
     ) {
       toast.error(
-        "The official AlfaClub market or execution wallet is not ready.",
+        !walletClient || !resolvedSignerAddress
+          ? "Wallet execution is not ready. Sign in with Privy so your embedded signer can authorize the trade."
+          : "The official AlfaClub market or execution wallet is not ready.",
       );
       return;
     }
@@ -1071,6 +1111,7 @@ export function AlfaClubLiquidity({
     router,
     slippageBps,
     slippageInput,
+    resolvedSignerAddress,
     switchChainAsync,
     walletClient,
   ]);
@@ -1079,6 +1120,7 @@ export function AlfaClubLiquidity({
     configReady,
     requestedMarketMatches,
     executionAddress,
+    walletClientReady: Boolean(walletClient),
     loading: marketQuery.isLoading || (Boolean(keyAmount) && quoteQuery.isFetching && !quoteQuery.data),
     snapshot,
     mode,
@@ -1192,7 +1234,8 @@ export function AlfaClubLiquidity({
       !disabledReason ||
       disabledReason.startsWith("Enter a positive") ||
       disabledReason === "Verifying the live Sudoswap market" ||
-      disabledReason === "Connect an execution-ready wallet";
+      disabledReason === "Connect an execution-ready wallet" ||
+      disabledReason === "Wallet execution is not ready";
     const hardError =
       snapshotQuery.error instanceof Error
         ? snapshotQuery.error.message
@@ -1388,7 +1431,9 @@ export function AlfaClubLiquidity({
             primaryActionHint ??
             (!executionAddress
               ? "Sign in to use your 4626 wallet for this key market."
-              : null)
+              : !walletClient
+                ? "Account wallet execution is not ready. Sign in with Privy (email OTP) so your embedded signer can authorize the trade."
+                : null)
           }
         />
 

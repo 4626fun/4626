@@ -174,6 +174,7 @@ function createEmbeddedSignerWalletClient({
   signSecp256k1Digest?: (digest: Hex) => Promise<Hex>
 }) {
   return {
+    account: { address, type: 'json-rpc' as const },
     refreshSession,
     signSecp256k1Digest,
     request: async (args: { method: string; params?: any[] | Record<string, unknown> }) => {

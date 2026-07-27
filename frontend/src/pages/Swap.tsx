@@ -107,6 +107,11 @@ function KeySwapSurface(props: {
   onSwitch: () => void
   onOpenPicker: (side: 'input' | 'output') => void
   walletClientOverride?: unknown
+  signerAddressOverride?: `0x${string}` | null
+  primaryActionLabel?: string
+  onPrimaryAction?: () => void
+  forcePrimaryActionEnabled?: boolean
+  primaryActionHint?: string | null
 }) {
   const sellingKey = props.selection.side === 'input'
   const key = props.selection.key
@@ -123,6 +128,11 @@ function KeySwapSurface(props: {
       onOpenTokenSelector={props.onOpenPicker}
       onSwitchTokens={props.onSwitch}
       walletClientOverride={props.walletClientOverride}
+      signerAddressOverride={props.signerAddressOverride}
+      primaryActionLabel={props.primaryActionLabel}
+      onPrimaryAction={props.onPrimaryAction}
+      forcePrimaryActionEnabled={props.forcePrimaryActionEnabled}
+      primaryActionHint={props.primaryActionHint}
       embedded
     />
   )
@@ -1217,6 +1227,56 @@ export function Swap() {
                         onSwitch={handleSwitchTokens}
                         onOpenPicker={openTokenSelector}
                         walletClientOverride={executionWalletClient}
+                        signerAddressOverride={
+                          executionSignerAddress && isAddress(executionSignerAddress)
+                            ? getAddress(executionSignerAddress)
+                            : null
+                        }
+                        primaryActionLabel={
+                          signingSessionExpired
+                            ? signingRecoveryBusy
+                              ? 'Signing in…'
+                              : 'Sign in again to fix signing'
+                            : needsBaseAppDirectConnect
+                              ? swapConnectBusy
+                                ? 'Connecting…'
+                                : 'Connect Base wallet'
+                              : needsCanonicalSetupAction
+                                ? canonicalSetupActionLabel
+                                : undefined
+                        }
+                        onPrimaryAction={
+                          signingSessionExpired
+                            ? () => {
+                                void handleSigningSessionRecovery()
+                              }
+                            : needsBaseAppDirectConnect
+                              ? handleConnectBaseAppDirect
+                              : needsCanonicalSetupAction
+                                ? handleEnableCanonicalSigning
+                                : undefined
+                        }
+                        forcePrimaryActionEnabled={
+                          (signingSessionExpired && !signingRecoveryBusy) ||
+                          needsBaseAppDirectConnect ||
+                          needsCanonicalSetupAction
+                        }
+                        primaryActionHint={
+                          signingSessionExpired
+                            ? 'Your embedded signing session expired. Sign in again (email code) to restore it, then retry the swap.'
+                            : needsBaseAppDirectConnect
+                              ? canonicalSignerGate.reason ??
+                                'Connect your Coinbase Smart Wallet in Base App or via Sign in with Base.'
+                              : needsCanonicalSetupAction
+                                ? canonicalSignerGate.reason ??
+                                  'Finish one-time account setup before canonical swaps can execute.'
+                                : !executionReady && executionMode === 'canonical'
+                                  ? canonicalSignerGate.reason ??
+                                    'Account wallet execution is not ready. Sign in with Privy (email OTP) so your embedded signer can authorize the trade.'
+                                  : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
+                                    ? swapExecutionChrome.swapSenderLabel
+                                    : null
+                        }
                       />
                     ) : <SwapCard
                       tokenInDisplay={tokenInDisplay}
@@ -1322,9 +1382,12 @@ export function Swap() {
                               : needsCanonicalSetupAction
                                 ? canonicalSignerGate.reason ??
                                   'Finish one-time account setup before canonical swaps can execute.'
-                                : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
-                                  ? swapExecutionChrome.swapSenderLabel
-                                  : null
+                                : !executionReady && executionMode === 'canonical'
+                                  ? canonicalSignerGate.reason ??
+                                    'Account wallet execution is not ready. Sign in with Privy (email OTP) so your embedded signer can authorize the swap.'
+                                  : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
+                                    ? swapExecutionChrome.swapSenderLabel
+                                    : null
                         }
                       />}
                     </motion.div>
