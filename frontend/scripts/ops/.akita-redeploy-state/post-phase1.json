@@ -1,0 +1,16 @@
+{
+  "phase": "post-phase1",
+  "recordedAt": "2026-07-27T17:40:00.000Z",
+  "version": "v1.19.4-akita-b2-20260727-v11gl",
+  "creatorToken": "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+  "vault": "0x4626539E5C01cc32C29755146D31755e3adA848A",
+  "wrapper": "0x2d66Fe297CDAE8B4325bB58887bE125CED4A81b4",
+  "shareOft": "0x44710150A469DE368Abc82F05e6217086Be84626",
+  "shareMeshMint": "A6HB5FWRjknVuMXpuwupr6QjZpsRSS98nBb1DW9dAZsH",
+  "txs": {
+    "approve": "0x3d8d75b0dd47486c0e201305b22fdded2f8902035c0eb1434b8132e623ec6477",
+    "phase1Core": "0x92a225a953f6cbdb265d41d2129a1ffc191e0b2022acae68fa6069361393aa3d",
+    "phase1Finalize": "0x7b8a0b5a9c770fd06ea269ac5cdb1718585e04bad3ee3411a9b15c7f2a6564ae"
+  },
+  "note": "Phase1-only via Privy CSW UserOps. Gauge/CCA/oracle await Phase2. OFT Store + LZ wire still required before finalize."
+}
