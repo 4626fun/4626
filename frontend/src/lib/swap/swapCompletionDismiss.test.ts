@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldResetSwapFormAfterCompletionDismiss } from './swapCompletionDismiss'
+import {
+  classifySwapCompletionReceipt,
+  shouldResetSwapFormAfterCompletionDismiss,
+} from './swapCompletionDismiss'
 
 const ready = {
   swapCompletionConfirmed: true,
@@ -47,5 +50,41 @@ describe('shouldResetSwapFormAfterCompletionDismiss', () => {
         txState: 'signing',
       }),
     ).toBe(false)
+  })
+})
+
+describe('classifySwapCompletionReceipt', () => {
+  it('confirms only a successful original or repriced transaction', () => {
+    expect(
+      classifySwapCompletionReceipt({
+        receiptStatus: 'success',
+      }),
+    ).toBe('confirmed')
+    expect(
+      classifySwapCompletionReceipt({
+        receiptStatus: 'success',
+        replacementReason: 'repriced',
+      }),
+    ).toBe('confirmed')
+  })
+
+  it('rejects reverted, cancelled, and changed replacements', () => {
+    expect(
+      classifySwapCompletionReceipt({
+        receiptStatus: 'reverted',
+      }),
+    ).toBe('failed')
+    expect(
+      classifySwapCompletionReceipt({
+        receiptStatus: 'success',
+        replacementReason: 'cancelled',
+      }),
+    ).toBe('failed')
+    expect(
+      classifySwapCompletionReceipt({
+        receiptStatus: 'success',
+        replacementReason: 'replaced',
+      }),
+    ).toBe('failed')
   })
 })

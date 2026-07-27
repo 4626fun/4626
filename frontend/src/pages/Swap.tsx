@@ -22,7 +22,11 @@ import { useSwapRecentTokens } from '@/lib/swap/useSwapRecentTokens'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { shouldStartAutoQuote, useSwapExecution } from '@/hooks/useSwapExecution'
-import { shouldResetSwapFormAfterCompletionDismiss } from '@/lib/swap/swapCompletionDismiss'
+import {
+  classifySwapCompletionReceipt,
+  shouldResetSwapFormAfterCompletionDismiss,
+  type SwapCompletionSettlement,
+} from '@/lib/swap/swapCompletionDismiss'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -921,9 +925,16 @@ export function Swap() {
     return fmtBalFromAmount(tokenOutBalanceQuery.data.formatted, tokenOutSymbol)
   }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess, tokenOutSymbol])
 
-  const [confirmedSwapCompletionAt, setConfirmedSwapCompletionAt] = useState<number | null>(null)
+  const [swapCompletionReceipt, setSwapCompletionReceipt] = useState<{
+    completedAt: number
+    settlement: Exclude<SwapCompletionSettlement, 'pending'>
+  } | null>(null)
+  const swapCompletionSettlement: SwapCompletionSettlement =
+    swapCompletion != null && swapCompletionReceipt?.completedAt === swapCompletion.completedAt
+      ? swapCompletionReceipt.settlement
+      : 'pending'
   const swapCompletionConfirmed =
-    swapCompletion != null && confirmedSwapCompletionAt === swapCompletion.completedAt
+    swapCompletion != null && swapCompletionSettlement === 'confirmed'
   const handleClearSwapCompletion = useCallback(() => {
     const canResetCompletedTrade = shouldResetSwapFormAfterCompletionDismiss({
       swapCompletionConfirmed,
@@ -986,31 +997,46 @@ export function Swap() {
     }
   }, [publicClient, queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
 
-  // Arm auto-dismiss only after the completion tx is confirmed (or the receipt wait
-  // times out). Keep this effect free of unstable query-object deps so a cancelled
-  // cleanup cannot permanently skip marking confirmation.
+  // Classify the receipt before arming dismissal. viem resolves reverted receipts,
+  // and a successful cancellation replacement is not a successful swap.
   useEffect(() => {
     const txHash = swapCompletion?.txHash
     if (!txHash || !isHex(txHash) || !publicClient) return
     const completedAt = swapCompletion.completedAt
-    if (confirmedSwapCompletionAt === completedAt) return
+    if (swapCompletionReceipt?.completedAt === completedAt) return
 
     let active = true
+    let replacementReason: string | null = null
     void publicClient
-      .waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
-      .catch(() => null)
-      .then(() => {
+      .waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000,
+        onReplaced: ({ reason }) => {
+          replacementReason = reason
+        },
+      })
+      .then((receipt) => {
         if (!active) return
-        setConfirmedSwapCompletionAt(completedAt)
+        setSwapCompletionReceipt({
+          completedAt,
+          settlement: classifySwapCompletionReceipt({
+            receiptStatus: receipt.status,
+            replacementReason,
+          }),
+        })
+      })
+      .catch(() => {
+        if (!active) return
+        setSwapCompletionReceipt({ completedAt, settlement: 'delayed' })
       })
     return () => {
       active = false
     }
   }, [
-    confirmedSwapCompletionAt,
     publicClient,
     swapCompletion?.completedAt,
     swapCompletion?.txHash,
+    swapCompletionReceipt?.completedAt,
   ])
 
   const showCanonicalSessionGuardHint =
@@ -1428,7 +1454,7 @@ export function Swap() {
         swapChainId={swapChainId}
         switchChainAsync={switchChainAsync}
         swapCompletion={swapCompletion}
-        swapCompletionConfirmed={swapCompletionConfirmed}
+        swapCompletionSettlement={swapCompletionSettlement}
         tokenIn={tokenInDisplay}
         tokenOut={tokenOutDisplay}
         handleClearSwapCompletion={handleClearSwapCompletion}

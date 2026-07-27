@@ -4,6 +4,7 @@ import { getChainMeta } from '@/config/chains'
 import { SwapCompletionNotice } from './SwapCompletionNotice'
 import type { SupportedChainId } from '@/config/chains'
 import type { SwapCompletion } from '@/hooks/useSwapExecution'
+import type { SwapCompletionSettlement } from '@/lib/swap/swapCompletionDismiss'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapStatusAlertsProps = {
@@ -32,7 +33,7 @@ type SwapStatusAlertsProps = {
   swapChainId: SupportedChainId
   switchChainAsync: any
   swapCompletion: SwapCompletion | null
-  swapCompletionConfirmed: boolean
+  swapCompletionSettlement: SwapCompletionSettlement
   tokenIn: TokenDisplay
   tokenOut: TokenDisplay
   handleClearSwapCompletion: () => void
@@ -65,7 +66,7 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
     swapChainId,
     switchChainAsync,
     swapCompletion,
-    swapCompletionConfirmed,
+    swapCompletionSettlement,
     tokenIn,
     tokenOut,
     handleClearSwapCompletion,
@@ -186,7 +187,7 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
         <SwapCompletionNotice
           key={swapCompletion.completedAt}
           completion={swapCompletion}
-          autoDismiss={swapCompletionConfirmed}
+          settlement={swapCompletionSettlement}
           tokenIn={tokenIn}
           tokenOut={tokenOut}
           onDismiss={handleClearSwapCompletion}

@@ -1,3 +1,16 @@
+export type SwapCompletionSettlement = 'pending' | 'confirmed' | 'failed' | 'delayed'
+
+export function classifySwapCompletionReceipt(input: {
+  receiptStatus: 'success' | 'reverted'
+  replacementReason?: string | null
+}): Extract<SwapCompletionSettlement, 'confirmed' | 'failed'> {
+  const replacementPreservedSwap =
+    input.replacementReason == null || input.replacementReason === 'repriced'
+  return input.receiptStatus === 'success' && replacementPreservedSwap
+    ? 'confirmed'
+    : 'failed'
+}
+
 export function shouldResetSwapFormAfterCompletionDismiss(input: {
   swapCompletionConfirmed: boolean
   amountInUnits: string

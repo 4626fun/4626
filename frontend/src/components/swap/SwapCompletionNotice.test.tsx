@@ -44,7 +44,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
-        autoDismiss
+        settlement="confirmed"
         onDismiss={vi.fn()}
       />,
     )
@@ -72,7 +72,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
-        autoDismiss={false}
+        settlement="pending"
         onDismiss={vi.fn()}
       />,
     )
@@ -80,6 +80,7 @@ describe('SwapCompletionNotice', () => {
     expect(screen.getByText('Swap submitted')).toBeTruthy()
     expect(screen.getByText('0.004321 USDC for 42.125 AKITA · Confirming on Base…')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dismiss swap confirmation' })).toBeNull()
   })
 
   it('starts auto-dismiss only after a pending user operation confirms', async () => {
@@ -98,7 +99,7 @@ describe('SwapCompletionNotice', () => {
         completion={completion}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
-        autoDismiss={false}
+        settlement="pending"
         onDismiss={onDismiss}
       />,
     )
@@ -114,7 +115,7 @@ describe('SwapCompletionNotice', () => {
         completion={{ ...completion, txHash }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
-        autoDismiss
+        settlement="confirmed"
         onDismiss={onDismiss}
       />,
     )
@@ -140,7 +141,7 @@ describe('SwapCompletionNotice', () => {
         }}
         tokenIn={tokenIn}
         tokenOut={tokenOut}
-        autoDismiss
+        settlement="confirmed"
         onDismiss={onDismiss}
       />,
     )
@@ -157,5 +158,36 @@ describe('SwapCompletionNotice', () => {
       await vi.advanceTimersByTimeAsync(500)
     })
     expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a reverted swap visible as failed with a BaseScan link', async () => {
+    const onDismiss = vi.fn()
+    const txHash = `0x${'4'.repeat(64)}`
+    render(
+      <SwapCompletionNotice
+        completion={{
+          txHash,
+          amountInUnits: '2',
+          estimatedOut: '10',
+          completedAt: 43,
+        }}
+        tokenIn={tokenIn}
+        tokenOut={tokenOut}
+        settlement="failed"
+        onDismiss={onDismiss}
+      />,
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SWAP_COMPLETION_AUTO_DISMISS_MS + 500)
+    })
+
+    expect(screen.getByText('Swap failed')).toBeTruthy()
+    expect(screen.getByText('2.00 USDC for 10.00 AKITA · Failed on Base')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /View swap transaction/i }).getAttribute('href')).toBe(
+      `https://basescan.org/tx/${txHash}`,
+    )
+    expect(screen.getByRole('button', { name: 'Dismiss swap confirmation' })).toBeTruthy()
+    expect(onDismiss).not.toHaveBeenCalled()
   })
 })
