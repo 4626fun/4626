@@ -19,7 +19,9 @@ rows remain off until the gates below pass for the exact B2 mint.
    claimed quote to Base with `forward_dlmm_fees` (Jupiter best-path WSOL→■ by
    default, Jito/private submit when enabled, LZ ShareOFT to `hubGaugeReceiver`,
    then `receiveBridgedFees`) — separate from lottery OApp messages.
-2. Meteora admin `token_badge` approval precedes DLMM pool creation.
+2. Meteora admin `token_badge` approval precedes DLMM pool creation
+   ([form](https://forms.gle/59n3zDiGS2C6qMfd7) + Meteora Discord ticket;
+   keeper cannot initialize the badge — requires Meteora `operator`).
 3. Finalized hook logs are ingested into `solana_lottery_entry_inbox`; the ring
    buffer is reconciliation-only.
 4. The submit worker resolves one canonical Solana wallet to its parent CSW,
@@ -70,7 +72,8 @@ remains disabled.
 - [ ] Post-LZ verification proves the OFT Store now controls mint authority,
       Base↔Solana peers are reciprocal, and Registry4626 maps the same ShareOFT
       and exact B2 mint/OFT Store identity.
-- [ ] Meteora admin `token_badge` is independently verified, then the B2 DLMM
+- [ ] Meteora admin `token_badge` is independently verified (request via
+      https://forms.gle/59n3zDiGS2C6qMfd7 + Discord), then the B2 DLMM
       pool account is verified at finalized commitment with base fee 690 bps,
       max fee ≤ 690 bps, and `CollectFeeMode.OnlyY`. Protocol LP positions for
       `SOLANA_B2_PROTOCOL_POSITION_OWNER` must have on-chain `feeOwner` equal to
