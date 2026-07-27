@@ -169,6 +169,7 @@ type Args = {
   solanaLotteryMode: "b1" | "b2" | null;
   solanaOvaultEnabled: boolean;
   phase1Only: boolean;
+  reuseDeployedVersion: boolean;
   out: string;
 };
 
@@ -203,7 +204,7 @@ function usage(): string {
     "  pnpm -C frontend exec tsx --env-file=.env scripts/ops/build-v1191-canary-deploy-plan.ts \\",
     "    --vault-kind creator|agent --creator-token 0x... --deployment-version v1.19.4-v... \\",
     "    [--share-oft-salt 0x...] [--share-mesh-mint <MINT> --solana-lottery-mode b1|b2 | --disable-solana-ovault] \\",
-    "    [--phase1-only] --out path.json",
+    "    [--phase1-only] [--reuse-deployed-version] --out path.json",
   ].join("\n");
 }
 
@@ -230,6 +231,7 @@ function parseArgs(argv: string[]): Args {
     .toLowerCase();
   const solanaOvaultEnabled = !argv.includes("--disable-solana-ovault");
   const phase1Only = argv.includes("--phase1-only");
+  const reuseDeployedVersion = argv.includes("--reuse-deployed-version");
   const out = String(getArg("--out") ?? "").trim();
 
   if (vaultKindRaw !== "creator" && vaultKindRaw !== "agent") {
@@ -310,6 +312,7 @@ function parseArgs(argv: string[]): Args {
     solanaLotteryMode,
     solanaOvaultEnabled,
     phase1Only,
+    reuseDeployedVersion,
     out,
   };
 }
@@ -456,6 +459,7 @@ async function searchVersionForVaultPrefix(params: {
   vaultSaltLabel: string;
   vaultPrefix: string | null;
   maxTries: number;
+  reuseDeployedVersion?: boolean;
 }): Promise<{ deploymentVersionUsed: string; vaultAddress: Address }> {
   const requestedPrefix = normalizeHexSuffix(params.vaultPrefix);
   if (!requestedPrefix) {
@@ -504,6 +508,15 @@ async function searchVersionForVaultPrefix(params: {
         label: `vanity vault candidate version ${version}`,
       });
       if (code && code !== "0x") {
+        // Continuation after a live Phase 1: keep the exact deployed version
+        // instead of grinding a new vanity suffix.
+        if (
+          params.reuseDeployedVersion &&
+          attempt === 0 &&
+          version === params.baseVersion
+        ) {
+          return { deploymentVersionUsed: version, vaultAddress };
+        }
         if (attempt > 0 && attempt % 4096 === 0) {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -536,6 +549,7 @@ async function resolveVanityPlanLite(params: {
   shareSymbol: string;
   vaultKind: TokenSymbolVaultKind;
   shareOftSaltOverride?: Hex | null;
+  reuseDeployedVersion?: boolean;
 }): Promise<VanityPlanLite> {
   const create2Deployer = params.batcherInfra.create2Deployer;
   const tempOwner = params.batcherAddress;
@@ -586,6 +600,7 @@ async function resolveVanityPlanLite(params: {
       vaultSaltLabel,
       vaultPrefix: vaultVanityPrefix,
       maxTries: DEFAULT_VAULT_VANITY_MAX_TRIES,
+      reuseDeployedVersion: params.reuseDeployedVersion,
     });
 
   const deterministicShareSalt = deriveShareOftSaltFromVersion({
@@ -617,6 +632,13 @@ async function resolveVanityPlanLite(params: {
         `Provided ShareOFT salt predicts ${overriddenShareAddress}, which does not end in ${requestedSuffix}`,
       );
     }
+  } else if (
+    params.reuseDeployedVersion &&
+    requestedSuffix &&
+    deterministicShareAddress.toLowerCase().endsWith(requestedSuffix)
+  ) {
+    // Keep the deterministic salt that produced the live Phase 1 ShareOFT.
+    shareOftSaltOverrideUsed = null;
   } else if (
     requestedSuffix &&
     !deterministicShareAddress.toLowerCase().endsWith(requestedSuffix)
@@ -691,6 +713,7 @@ async function resolveExpectedAddressesForPlan(params: {
   };
   deploymentVersion: string;
   shareOftSaltOverride?: Hex | null;
+  reuseDeployedVersion?: boolean;
 }): Promise<{
   contracts: ReturnType<typeof getApiContracts>;
   batcherInfra: CreatorVaultBatcherInfra;
@@ -733,6 +756,7 @@ async function resolveExpectedAddressesForPlan(params: {
     shareSymbol: params.names.shareSymbol,
     vaultKind: params.vaultKind,
     shareOftSaltOverride: params.shareOftSaltOverride,
+    reuseDeployedVersion: params.reuseDeployedVersion,
   });
 
   const expectedAddresses = await resolveDeployExpectedAddresses({
@@ -790,6 +814,7 @@ async function main(): Promise<void> {
       names,
       deploymentVersion: args.deploymentVersion,
       shareOftSaltOverride: args.shareOftSaltOverride,
+      reuseDeployedVersion: args.reuseDeployedVersion,
     });
 
   const expected = expectedAddresses.expected;

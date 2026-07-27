@@ -1,0 +1,18 @@
+{
+  "phase": "post-finalize",
+  "savedAt": "2026-07-27T19:07:38.907Z",
+  "addresses": {
+    "creator": "0x5b674196812451B7cEC024FE9d22D2c0b172fa75",
+    "shareOft": "0x44710150A469DE368Abc82F05e6217086Be84626",
+    "vault": "0x4626539E5C01cc32C29755146D31755e3adA848A",
+    "wrapper": "0x2d66Fe297CDAE8B4325bB58887bE125CED4A81b4",
+    "gauge": "0xFf168cc0E26F288c02509afc1bED1Be4F85834C5",
+    "cca": "0x44aCFe7E68031Bed3BE801fD242E884e72e0CFD4",
+    "oracle": "0x3954fC7c961f17699497BB3D7b7e903722881ffa"
+  },
+  "b2Mesh": {
+    "shareMeshMint": "A6HB5FWRjknVuMXpuwupr6QjZpsRSS98nBb1DW9dAZsH",
+    "oftStore": "Asa8DaR3bxQCAb3io5pLcYHZK4t2SeMn5jGnb1YBoDWz",
+    "peerBytes32": "0x92adad3c49cc2b3375c34f036ecf0f08ee3c3fdce4597a5b5ea08d56008c88ab"
+  }
+}

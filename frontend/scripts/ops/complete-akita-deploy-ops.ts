@@ -249,8 +249,9 @@ function printComposerBlock(addrs: DeployAddresses, mesh: B2MeshConfig): void {
 function writeDefaultsPatch(addrs: DeployAddresses): void {
   const defaultsPath = resolve(FRONTEND_ROOT, 'src/config/contracts.defaults.ts')
   let text = readFileSync(defaultsPath, 'utf8')
-  const replaceAddr = (label: string, oldVal: string, newVal: Address) => {
-    const pattern = new RegExp(`(${label}:\\s*addr\\(')[a-fA-F0-9]{40}('\\))`, 'g')
+  const replaceAddr = (label: string, _oldVal: string, newVal: Address) => {
+    // contracts.defaults.ts uses addr("…") double quotes.
+    const pattern = new RegExp(`(${label}:\\s*addr\\(["'])[a-fA-F0-9]{40}(["']\\))`, 'g')
     text = text.replace(pattern, `$1${newVal.slice(2)}$2`)
   }
   replaceAddr('vault', AKITA_DEFAULTS.vault.slice(2), addrs.vault)

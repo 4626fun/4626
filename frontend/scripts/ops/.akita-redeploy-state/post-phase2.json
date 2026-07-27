@@ -1,0 +1,36 @@
+{
+  "phase": "post-phase2",
+  "recordedAt": "2026-07-27T19:07:18.811580+00:00",
+  "version": "v1.19.4-akita-b2-20260727-v11gl",
+  "creatorToken": "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+  "shareMeshMint": "A6HB5FWRjknVuMXpuwupr6QjZpsRSS98nBb1DW9dAZsH",
+  "vault": "0x4626539E5C01cc32C29755146D31755e3adA848A",
+  "wrapper": "0x2d66Fe297CDAE8B4325bB58887bE125CED4A81b4",
+  "shareOft": "0x44710150A469DE368Abc82F05e6217086Be84626",
+  "gaugeController": "0xFf168cc0E26F288c02509afc1bED1Be4F85834C5",
+  "ccaLaunchArm": "0x44aCFe7E68031Bed3BE801fD242E884e72e0CFD4",
+  "oracle": "0x3954fC7c961f17699497BB3D7b7e903722881ffa",
+  "burnStream": "0xa67ecd019c21a4fce161f4D30296caAac84107F6",
+  "payoutRouter": "0xCAD0CC8175C58023B421f386477AaD751e9c8986",
+  "creatorCoinPolicyController": "0xaBf279b962Ff21a3D43A7e897d2Ab56E7b985A6D",
+  "shareOftPeer30168": "0x92adad3c49cc2b3375c34f036ecf0f08ee3c3fdce4597a5b5ea08d56008c88ab",
+  "txs": {
+    "codeIdApproval": "0xfdfb30ca5df5825c3ab9a657099d8589a375071798444ccc9124dd3c70c60f54",
+    "phase2CorePrecreate": [
+      "0x4c460fd7757e64b09f4d2d1972682035cf4c31ac2f7609982a20977b9c649043",
+      "0x413f5c82bed22270b8f18d78ab0673716736ac3fdd206f08ff476b6d3a6d7191",
+      "0x95a9d11418b5a031dc59ae7279c47e2419b5e5da4d57044202eece7beda8798a"
+    ],
+    "pendingInitCodeHashes": "0x20030608ffca1360b3b0cf00e9b5c5183c0d5daa3b7f0ae8a75bd082e4190015",
+    "phase2Core": "0x8dea1c69687bb44774b6e3e3f37cd95a56310f06e492e8e7de69a800f7b42b39",
+    "phase2Finalize": "0x530d3af7aa93ddba9155e1faf53fb743318b3f94bd0f4057764411a07a10f3d9",
+    "phase2Auxiliaries": "0x8e118e501cbcbbd47f24af9b51bb2fde045cf68c174b3c984e5b7ffb2dfd38a9",
+    "payoutRouterWhitelistNoFees": "safe-multicall-post-finalize"
+  },
+  "notes": [
+    "Gauge codeId ab01\u2026 required setApprovedCodeIds before phase2Core",
+    "AA95: precreate gauge/cca/oracle + Safe setPendingInitCodeHashes before phase2Core UserOp",
+    "VaultAuxiliaryDeployBatcher NotOwner requires vault.owner==CSW, so finalize ran before aux",
+    "Batcher whitelist/nofees helpers require batcher ownership; applied via treasury Safe after finalize"
+  ]
+}

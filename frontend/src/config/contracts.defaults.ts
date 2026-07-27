@@ -286,25 +286,24 @@ export const BASE_DEFAULTS = {
 } as const;
 
 export const AKITA_DEFAULTS = {
-  // NOTE: This is an example creator coin stack.
-  // If/when you redeploy the AKITA vault stack, update these addresses to the new deployment outputs.
+  // Live Akita B2 share-mesh stack (v1.19.4-akita-b2-20260727-v11gl).
   token: addr("5b674196812451b7cec024fe9d22d2c0b172fa75"),
-  vault: addr("82C06EaAE27B1Ca31fA29F22341A162A670A4471"),
-  wrapper: addr("58Cd1E9248F89138208A601e95A531d3c0fa0c4f"),
-  shareOFT: addr("4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"),
-  gaugeController: addr("B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1"),
-  ccaLaunchArm: addr("00c7897e0554b34A477D9D144AcC613Cdc97046F"),
-  oracle: addr("8C044aeF10d05bcC53912869db89f6e1f37bC6fC"),
+  vault: addr("4626539E5C01cc32C29755146D31755e3adA848A"),
+  wrapper: addr("2d66Fe297CDAE8B4325bB58887bE125CED4A81b4"),
+  shareOFT: addr("44710150A469DE368Abc82F05e6217086Be84626"),
+  gaugeController: addr("Ff168cc0E26F288c02509afc1bED1Be4F85834C5"),
+  ccaLaunchArm: addr("44aCFe7E68031Bed3BE801fD242E884e72e0CFD4"),
+  oracle: addr("3954fC7c961f17699497BB3D7b7e903722881ffa"),
 } as const;
 
 export const ERC4626_DEFAULTS = {
   // Canonical protocol token defaults currently point to the live Base protocol stack.
   // Keep explicit addresses here so this default set remains independent from AKITA aliases.
   token: addr("5b674196812451b7cec024fe9d22d2c0b172fa75"),
-  vault: addr("82C06EaAE27B1Ca31fA29F22341A162A670A4471"),
-  wrapper: addr("58Cd1E9248F89138208A601e95A531d3c0fa0c4f"),
-  shareOFT: addr("4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"),
-  gaugeController: addr("B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1"),
-  ccaLaunchArm: addr("00c7897e0554b34A477D9D144AcC613Cdc97046F"),
-  oracle: addr("8C044aeF10d05bcC53912869db89f6e1f37bC6fC"),
+  vault: addr("4626539E5C01cc32C29755146D31755e3adA848A"),
+  wrapper: addr("2d66Fe297CDAE8B4325bB58887bE125CED4A81b4"),
+  shareOFT: addr("44710150A469DE368Abc82F05e6217086Be84626"),
+  gaugeController: addr("Ff168cc0E26F288c02509afc1bED1Be4F85834C5"),
+  ccaLaunchArm: addr("44aCFe7E68031Bed3BE801fD242E884e72e0CFD4"),
+  oracle: addr("3954fC7c961f17699497BB3D7b7e903722881ffa"),
 } as const;
