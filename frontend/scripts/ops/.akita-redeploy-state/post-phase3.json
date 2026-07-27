@@ -1,0 +1,39 @@
+{
+  "phase": "post-phase3-partial",
+  "recordedAt": "2026-07-27T19:31:45.978670+00:00",
+  "version": "v1.19.4-akita-b2-20260727-v11gl",
+  "creatorToken": "0x5b674196812451B7cEC024FE9d22D2c0b172fa75",
+  "shareMeshMint": "A6HB5FWRjknVuMXpuwupr6QjZpsRSS98nBb1DW9dAZsH",
+  "txs": [
+    "0xfe7da0f30b9a14672c7e4576a03be8c4b0e9f0d4bf033ab2938a160124be64d5",
+    "0xcd03f30bb6e35c6b3d2b900d0b62c695c22ada238ccf66127a306a165f7cca4f",
+    "0x0de95ecd1d156b919161f2eb3e5db8ef24ca88125d75dd90c90e580d6f3682c3",
+    "0x9ee3e22259ad3cd0c010a4f076a18b59d593534c2280ad21790ae1675c685992",
+    "0x91384e9b1623dff96c6231d835c67079ac53c4a57341764fdc2bd48bdfdd5da8",
+    "0x0dad058d85e9900a577821266a5988e8cf677365c0543e4ea464afeb5198beb6",
+    "0x0c890ef5a2102bcbb7eb785a9bdada3337a36583cd1ca0e1bdf092b835d16e78",
+    "0x7b73fa55a76e73aac2c7a7873c92676b8591dbc74ffe0c7b1544075f74af0177",
+    "0x0e2739ef669f415872e27afb31d93d4bd7f3ff049f95a0d39aa4991389b696ac",
+    "0xb7f91c695c66affe778eb141db14c1aad62c98c09399cef9408e25a7d08ab1cb",
+    "0xb84d4892be0cc3eb8d5799c3703610bf75e96b01d42938f8b290a8337175295b",
+    "0x8f87547a774ff65a4fb6c0db9b5ea4ea34ddfadf12362efa44fb830eb80aed4b",
+    "0xd5f4f4204e1d24b65d3fe9eecc226a5ec476584c3cd19987227fa4c096401f6f",
+    "0x36814694bee76fe56c5faca479525326e9b65fcec44d91342f926dff9267debc",
+    "0xf6b294f3009cdb3cbc88ddea0b62117cd482602cb49a4f3a801c8e1bc25a24e6"
+  ],
+  "failed": [],
+  "ajnaOnly": {
+    "tx": "0x77fd57513a4450a213e37ddefc6c6e6b2ed19e0e4d860ba3d51a737349e31aea",
+    "ajnaStrategy": "0xa1A3A32C22b1A10Ea27D1688d48b90b1Ac6eD505",
+    "weightBps": 4500
+  },
+  "charmBlocked": "Base 2^24 gas ceiling \u2014 CharmStrategy CREATE2 (~25KB) + factory createVault OOGs even alone (~15.9M)",
+  "phase4Blocked": "LaunchOracleInvalidPrice \u2014 CCA launch needs valid oracle prices on new oracle 0x3954\u2026",
+  "meteoraBlocked": "token_badge PDA Cn2acJou\u2026 still AccountNotFound",
+  "pendingAuction": {
+    "shareOFT": "0x44710150A469DE368Abc82F05e6217086Be84626",
+    "cca": "0x44aCFe7E68031Bed3BE801fD242E884e72e0CFD4",
+    "amount": "15000000000000000000000000",
+    "lpReserve": "5000000000000000000000000"
+  }
+}
