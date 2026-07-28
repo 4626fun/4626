@@ -564,7 +564,36 @@ contract PayoutRouterTest is Test {
         router.convertAndQueue(address(usdc), 1e18, 1);
     }
 
-    function test_ODA520_L5_decayingWindowPreventsBoundaryDoubleSpend() public {
+    function test_ODA520_L5_idleWindowPreventsBoundaryDoubleSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        uint64 window = 1 days;
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+        uint256 spentAt = block.timestamp;
+
+        // Old fixed-boundary bug: fill near window end, then refill one second later.
+        // Idle-gated anchor slides to the spend time, so a wall-clock window end is not enough.
+        vm.warp(spentAt + window - 1);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        // Full idle window since the spend clears the ledger.
+        vm.warp(spentAt + window);
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+    }
+
+    function test_ODA520_L5_idleWindowBlocksHalfWindowRefill() public {
         address keeper = makeAddr("keeper");
         router.setKeeper(keeper);
         uint64 window = 1 days;
@@ -579,17 +608,38 @@ contract PayoutRouterTest is Test {
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // One second before a hard-boundary reset would have fired under the old logic,
-        // decaying window still has nearly-full accrued spend — no 2× burst.
-        vm.warp(block.timestamp + window - 1);
+        // Leaky-bucket would refill ~half cap here; idle-gated must still revert.
+        vm.warp(block.timestamp + window / 2);
         vm.prank(keeper);
         vm.expectRevert();
-        router.convertAndQueue(address(usdc), 10e18, 1);
+        router.convertAndQueue(address(usdc), 5e18, 1);
+    }
 
-        // After a full window of decay, the full cap is available again.
-        vm.warp(block.timestamp + 1);
+    function test_ODA520_L5_shorteningWindowDoesNotRefundSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 days);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
+
+        // Without re-anchor, shortening to 1 hour could idle-clear immediately if the
+        // prior windowStart was old. Re-anchor must keep accrued spend blocked.
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 hours);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 1e18, 1);
+
+        vm.warp(block.timestamp + 1 hours - 1);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 1e18, 1);
     }
 
     function test_ODA520_setSwapPathRejectsMalformedHopLength() public {

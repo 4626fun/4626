@@ -13,7 +13,7 @@
 | High/Med | Standing max `swapRouter` allowance | `setSwapPath` no longer approves; `_convertAndQueue` uses per-call approve/reset (also closes M4 self-revoke DoS) |
 | Medium | External `spender=swapRouter` zeros V3 allowance | Eliminated by removing standing allowance (above) |
 | Low | Residual `shareOFT` permanently stuck | `sweepShareOFT()` queues balance into burn stream |
-| Low | Cap window 2× burst + reconfigure reset | Decaying spend window; `setKeeperExternalSpendCap` preserves accrued spend |
+| Low | Cap window 2× burst + reconfigure reset | Idle-gated spend window; `setKeeperExternalSpendCap` preserves accrued spend |
 | Low | Controller ownership handoff had no delay | `OWNERSHIP_TRANSFER_DELAY = 1 days` before `acceptCreatorCoinOwnership` |
 
 ## Leads closed in the same pass
