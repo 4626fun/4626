@@ -15,7 +15,7 @@ import {
 const CORE = '0xfaebF89F739769A348B871289488fc1b99F53140' as const
 
 describe('ovaultModuleIdentity', () => {
-  it('uses .v5 as the v1.19.3 deploy vault fingerprint', () => {
+  it('uses .v5 as the v1.20.0 deploy vault fingerprint', () => {
     expect(DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION).toBe(CREATOR_OVAULT_MODULE_STORAGE_V5)
     expect(CREATOR_OVAULT_MODULE_STORAGE_CURRENT).toBe(CREATOR_OVAULT_MODULE_STORAGE_V5)
     expect(CREATOR_OVAULT_MODULE_STORAGE_LEGACY_CURRENT).toBe(
@@ -34,7 +34,7 @@ describe('ovaultModuleIdentity', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('fails with guidance when v1.19.3 bytecode is paired with v4 modules', async () => {
+  it('fails with guidance when v1.20.0 bytecode is paired with v4 modules', async () => {
     const result = await assertCreatorOvaultModuleStorageCompatible({
       publicClient: {
         readContract: vi.fn(async () => CREATOR_OVAULT_MODULE_STORAGE_V4),

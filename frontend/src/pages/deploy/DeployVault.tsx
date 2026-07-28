@@ -321,7 +321,7 @@ function resolveDeployMode(): DeployMode {
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.19.3'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.20.0'
 
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true
@@ -1922,7 +1922,7 @@ function DeployVaultBatcher({
         'Deploy bytecode and Phase1Module wiring must share the OVaultModuleStorage.v5 fingerprint. ' +
         'If the live batcher is not on the v1.19.4 Creator-core repair, protocol ops must rotate Phase1Module via setPhase1Module before a greenfield deploy. ' +
         'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
-        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.19.3, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.19.4-retry-1).'
+        'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.20.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.20.0-retry-1).'
       )
     }
     if (

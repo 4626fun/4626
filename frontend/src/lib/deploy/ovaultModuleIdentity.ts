@@ -24,7 +24,7 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V4 = keccak256(
   encodePacked(['string'], ['OVaultModuleStorage.v4']),
 ) as Hex
 
-/** Current source-ahead module stack (v1.19.3). */
+/** Current module stack (v1.20.0). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V5 = keccak256(
   encodePacked(['string'], ['OVaultModuleStorage.v5']),
 ) as Hex
@@ -130,7 +130,7 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
     const hint =
       expectsV5 && moduleIsV4
         ? ' Deploy bytecode expects OVaultModuleStorage.v5 but the live batcher still wires v4 modules. ' +
-          'Rotate Phase1Module and both lane core modules to the v1.19.3 v5 stack before greenfield deploy.'
+          'Rotate Phase1Module and both lane core modules to the v1.20.0 v5 stack before greenfield deploy.'
         : expectsV4 && moduleIsV3
         ? ' Deploy bytecode expects OVaultModuleStorage.v4 but the live batcher still wires v3 modules. ' +
           'Rotate Phase1Module / core modules to the v1.19.1 v4 stack, or re-seed deploy bytecode.'
