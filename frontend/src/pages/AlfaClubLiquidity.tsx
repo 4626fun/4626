@@ -78,6 +78,7 @@ import { useSiweAuth } from "@/hooks/useSiweAuth";
 import { useEnsurePrivyEmbeddedWallet } from "@/lib/privy/embeddedWallet";
 import { useSafePrivy } from "@/lib/privy/safeHooks";
 import { useSwapEmbeddedEoa } from "@/lib/swap/useSwapEmbeddedEoa";
+import { isBaseAppDirectCswPath } from "@/lib/xmtp/baseAppDirectXmtp";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ROOM_1659_CREATOR_COIN = getAddress(
@@ -89,6 +90,25 @@ const QUOTE_DEADLINE_SECONDS = 600n;
 
 export const ALFACLUB_MAX_KEY_AMOUNT = 100n;
 export const ALFACLUB_MAX_SLIPPAGE_BPS = 500n;
+
+/** Standalone SMART_WALLET client preference (matches /swap Base App > Privy). */
+export type AlfaClubSmartWalletClientPreference =
+  | "base-app-direct"
+  | "internal-embedded"
+  | "external-eoa"
+  | "none";
+
+export function resolveAlfaClubSmartWalletClientPreference(input: {
+  baseAppDirectReady: boolean;
+  internalEmbeddedReady: boolean;
+  externalEoaOwnerReady: boolean;
+}): AlfaClubSmartWalletClientPreference {
+  // Match /swap: Base App CSW-direct disables Privy embedded signing.
+  if (input.baseAppDirectReady) return "base-app-direct";
+  if (input.internalEmbeddedReady) return "internal-embedded";
+  if (input.externalEoaOwnerReady) return "external-eoa";
+  return "none";
+}
 
 type LegacyMode = "create" | "add" | "buy" | "sell" | "remove";
 type Mode = AlfaClubSudoswapDirection | "buyWithEth";
@@ -296,34 +316,36 @@ export function AlfaClubLiquidity({
   const internalCanonicalWalletClient = isSmartWalletAccount
     ? embeddedEoa.privyEmbeddedCanonicalWalletClient
     : null;
+  // Match /swap: Coinbase/Base App connected as the CSW itself prefers CSW-direct
+  // signing over Privy embedded, even when an embedded client is hydrated.
+  const baseAppDirectConnected = isBaseAppDirectCswPath({
+    connectedAddress: account.address,
+    canonicalCswAddress: accountContext.cswAddress,
+    connector: account.connector,
+  });
   // Match /swap: non-platform CSW may use a confirmed external EOA owner when the
   // embedded client is not ready. Platform CSW stays embedded-only.
-  const connectedAccountAddress =
-    typeof account.address === "string" ? account.address.toLowerCase() : null;
-  const cswAddressLower = accountContext.cswAddress
-    ? String(accountContext.cswAddress).toLowerCase()
-    : null;
-  const connectedIsCanonicalCsw =
-    Boolean(connectedAccountAddress) &&
-    Boolean(cswAddressLower) &&
-    connectedAccountAddress === cswAddressLower;
   const allowExternalEoaCanonicalSigner =
     isSmartWalletAccount &&
+    !baseAppDirectConnected &&
     !internalCanonicalWalletClient &&
     accountContext.eoaIsOwnerOfCsw === true &&
     Boolean(accountContext.cswAddress) &&
     !isCanonicalCsw(accountContext.cswAddress) &&
     Boolean(connectedWalletClient);
-  // Base App direct: connected connector account is the CSW itself.
-  const allowBaseAppDirectCanonicalSigner =
-    isSmartWalletAccount &&
-    !internalCanonicalWalletClient &&
-    connectedIsCanonicalCsw &&
-    Boolean(connectedWalletClient);
+  const smartWalletClientPreference = isSmartWalletAccount
+    ? resolveAlfaClubSmartWalletClientPreference({
+        baseAppDirectReady:
+          baseAppDirectConnected && Boolean(connectedWalletClient),
+        internalEmbeddedReady: Boolean(internalCanonicalWalletClient),
+        externalEoaOwnerReady: allowExternalEoaCanonicalSigner,
+      })
+    : null;
 
   type AlfaClubWalletClient = typeof connectedWalletClient | null;
   type AlfaClubWalletSource =
     | "override"
+    | "base-app-direct"
     | "internal-embedded"
     | "wagmi"
     | "none";
@@ -332,20 +354,18 @@ export function AlfaClubLiquidity({
   if (walletClientOverride !== undefined) {
     walletClient = (walletClientOverride as AlfaClubWalletClient) ?? null;
     walletClientSource = walletClient ? "override" : "none";
+  } else if (smartWalletClientPreference === "base-app-direct") {
+    walletClient = connectedWalletClient ?? null;
+    walletClientSource = walletClient ? "base-app-direct" : "none";
+  } else if (smartWalletClientPreference === "internal-embedded") {
+    walletClient = internalCanonicalWalletClient as unknown as AlfaClubWalletClient;
+    walletClientSource = "internal-embedded";
+  } else if (smartWalletClientPreference === "external-eoa") {
+    walletClient = connectedWalletClient ?? null;
+    walletClientSource = walletClient ? "wagmi" : "none";
   } else if (isSmartWalletAccount) {
-    if (internalCanonicalWalletClient) {
-      walletClient = internalCanonicalWalletClient as unknown as AlfaClubWalletClient;
-      walletClientSource = "internal-embedded";
-    } else if (
-      allowExternalEoaCanonicalSigner ||
-      allowBaseAppDirectCanonicalSigner
-    ) {
-      walletClient = connectedWalletClient ?? null;
-      walletClientSource = walletClient ? "wagmi" : "none";
-    } else {
-      walletClient = null;
-      walletClientSource = "none";
-    }
+    walletClient = null;
+    walletClientSource = "none";
   } else {
     walletClient = connectedWalletClient ?? null;
     walletClientSource = walletClient ? "wagmi" : "none";
@@ -879,10 +899,12 @@ export function AlfaClubLiquidity({
         getAddress(executionAddress).toLowerCase();
     const usingPrivyEmbeddedSigner =
       walletIsInternalEmbedded || walletIsSwapEmbeddedOverride;
+    const executionTrack: UserExecutionTrack | null =
+      walletClientSource === "base-app-direct" ? "base-app-direct" : null;
     return {
       chainId: base.id,
       executionMode,
-      executionTrack: null as UserExecutionTrack | null,
+      executionTrack,
       walletClient,
       publicClient,
       canonicalAddress: accountContext.cswAddress ?? null,

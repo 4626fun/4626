@@ -4,6 +4,7 @@ import { getAddress } from "viem";
 import {
   getAlfaClubLiquidityDisabledReason,
   parseSlippageBps,
+  resolveAlfaClubSmartWalletClientPreference,
   type AlfaClubSudoswapSnapshot,
 } from "./AlfaClubLiquidity";
 
@@ -64,6 +65,38 @@ function ready(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("AlfaClub SMART_WALLET client preference", () => {
+  it("prefers Base App CSW-direct over a hydrated Privy embedded client", () => {
+    expect(
+      resolveAlfaClubSmartWalletClientPreference({
+        baseAppDirectReady: true,
+        internalEmbeddedReady: true,
+        externalEoaOwnerReady: true,
+      }),
+    ).toBe("base-app-direct");
+  });
+
+  it("uses Privy embedded when Base App direct is not ready", () => {
+    expect(
+      resolveAlfaClubSmartWalletClientPreference({
+        baseAppDirectReady: false,
+        internalEmbeddedReady: true,
+        externalEoaOwnerReady: true,
+      }),
+    ).toBe("internal-embedded");
+  });
+
+  it("falls back to confirmed external EOA owner last", () => {
+    expect(
+      resolveAlfaClubSmartWalletClientPreference({
+        baseAppDirectReady: false,
+        internalEmbeddedReady: false,
+        externalEoaOwnerReady: true,
+      }),
+    ).toBe("external-eoa");
+  });
+});
 
 describe("AlfaClub official Sudoswap market readiness", () => {
   it("fails closed until every deployment pin is configured", () => {
