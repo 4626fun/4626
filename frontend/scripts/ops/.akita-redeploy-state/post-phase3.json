@@ -1,13 +1,9 @@
 {
-  "phase": "post-phase4-partial",
-  "recordedAt": "2026-07-28T05:16:22.853438+00:00",
+  "phase": "post-charm-sleeve",
+  "recordedAt": "2026-07-28T06:30:00.000000+00:00",
   "version": "v1.19.4-akita-b2-20260727-v11gl",
   "creatorToken": "0x5b674196812451B7cEC024FE9d22D2c0b172fa75",
   "shareMeshMint": "A6HB5FWRjknVuMXpuwupr6QjZpsRSS98nBb1DW9dAZsH",
-  "txs": [
-    "0xe79efe49a4cc8a6668ed220b09517d2cf6a660ea5cab2911642d0bf3832c646a"
-  ],
-  "failed": [],
   "oracleInit": {
     "tx": "0x6ecf0bfe0560a91bb6c524d58062b83b55e1cd0c530d3c2bbe946147d0bcc83a",
     "oracle": "0x3954fC7c961f17699497BB3D7b7e903722881ffa",
@@ -26,12 +22,26 @@
     "ajnaStrategy": "0xa1A3A32C22b1A10Ea27D1688d48b90b1Ac6eD505",
     "weightBps": 4500
   },
-  "charmPartial": {
-    "blocked": "Base EIP-7825 per-tx gas cap 2^24; CharmStrategy CREATE2 alone OOGs near ~8M+ and combined path OOGs at 16.7M. Bundler eth_estimateUserOperationGas also hits DeployFailed under low callGas.",
-    "charmVaultCreated": "0x4461d22bF3762F148AB754A8788a066714ad10Cc",
-    "createVaultTx": "0x1e702bb097806b14a2b58b9584f33d62d44364c6d7759df370a2ae96a90b3e55",
-    "cswAuthorizedOnCreate2": true,
-    "next": "Fund EOA ~0.1+ ETH (or bundler with manual callGasLimit~16M) \u2192 CREATE2 CharmStrategy \u2192 thin Phase3 attach helper or batcher management path for addStrategy(4500)"
+  "charmSleeve": {
+    "rootCause": "Stored CharmStrategy4626 codeId 0x7dd5… creation 25840B / runtime ~24793B exceeded EIP-170 (24576). CREATE2 returned DeployFailed; eth_estimate/bundler OOG was a symptom.",
+    "fix": "Rebuild runtime 22472B (creation 23479B), codeId 0x39c9a1ba65d0d76872a2154b2e5d6ca7fba49c2f80011276fa3b5ed31424e82f",
+    "seedTx": "0x820c2ebd8994b5218e0c0fcd300fee4b62286733eba2578c0f3e2224381e3bbd",
+    "approveTx": "0x0d30ef017d57c1080c78087c2a36a8cca73679f28fdb0471c35c7ca23349c504",
+    "deployTx": "0x628e2189267a4eb46cb2a842a30d4b7cc0647ade40190284635d9a31d9864704",
+    "gasUsed": 5746196,
+    "charmVault": "0x3DDcB21E0F21b79EA39Dd94E822a44B20131EaB2",
+    "charmStrategy": "0xea0dCe880FcDabAE5942b836f90751B49621598c",
+    "weightBps": 4500,
+    "owner": "0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3",
+    "codesize": 22472,
+    "priorOrphanCharmVault": "0x4461d22bF3762F148AB754A8788a066714ad10Cc",
+    "plan": "frontend/artifacts/akita-charm-only-phase3-20260728.json"
   },
-  "meteoraBlocked": "token_badge PDA Cn2acJou\u2026 still AccountNotFound"
+  "meteoraBlocked": "token_badge PDA Cn2acJou… still AccountNotFound",
+  "txs": [
+    "0x820c2ebd8994b5218e0c0fcd300fee4b62286733eba2578c0f3e2224381e3bbd",
+    "0x0d30ef017d57c1080c78087c2a36a8cca73679f28fdb0471c35c7ca23349c504",
+    "0x628e2189267a4eb46cb2a842a30d4b7cc0647ade40190284635d9a31d9864704"
+  ],
+  "failed": []
 }
