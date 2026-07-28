@@ -27,6 +27,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     error VaultPaused();
     error InvalidQuoteToken();
     error BufferLiquidityInsufficient();
+    /// @notice Partial LP exit priced to zero quote — refusing prevents accidental full drain.
+    error ZeroQuoteAmount();
     // FIX: F-08 — prevent unbounded _buckets array from causing gas DoS in totalAssets()
     error MaxBucketsReached();
 
@@ -368,10 +370,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         // ODA-519-5: allow drain while paused (entries remain gated).
         uint256 requestedLp = AjnaVaultLibrary.burnableLp(bucketLp[fromIndex], bucketLpAmount);
         // ODA-519-3: Ajna `removeQuoteToken` takes quote-token WAD, not LP.
-        uint256 maxQuote = requestedLp == bucketLp[fromIndex]
-            ? type(uint256).max
-            : AjnaVaultLibrary.lpToAssets(AJNA_POOL, fromIndex, requestedLp, address(this));
-        if (maxQuote == 0) maxQuote = type(uint256).max;
+        uint256 maxQuote = _quoteAmountForLpExit(fromIndex, requestedLp);
         (pulledAssets, burnedBucketLp) = AJNA_POOL.removeQuoteToken(maxQuote, fromIndex);
 
         bucketLp[fromIndex] -= burnedBucketLp;
@@ -393,10 +392,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
         uint256 trackedLp = AjnaVaultLibrary.burnableLp(bucketLp[fromIndex], bucketLpAmount);
         // ODA-519-3: Ajna `moveQuoteToken` takes quote-token WAD, not LP.
-        uint256 maxQuote = trackedLp == bucketLp[fromIndex]
-            ? type(uint256).max
-            : AjnaVaultLibrary.lpToAssets(AJNA_POOL, fromIndex, trackedLp, address(this));
-        if (maxQuote == 0) maxQuote = type(uint256).max;
+        uint256 maxQuote = _quoteAmountForLpExit(fromIndex, trackedLp);
         (fromBucketLp, toBucketLp,) =
             AJNA_POOL.moveQuoteToken(maxQuote, fromIndex, toIndex, block.timestamp + 1 hours);
 
@@ -426,6 +422,15 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function buffer() external view returns (address) {
         return address(BUFFER);
+    }
+
+    /// @dev Full exits use Ajna's max-quote sentinel. Partial exits must not fall back to max
+    ///      when quote rounds to zero — that would silently drain the whole bucket (Codex P2).
+    function _quoteAmountForLpExit(uint256 fromIndex, uint256 requestedLp) internal view returns (uint256) {
+        if (requestedLp == bucketLp[fromIndex]) return type(uint256).max;
+        uint256 maxQuote = AjnaVaultLibrary.lpToAssets(AJNA_POOL, fromIndex, requestedLp, address(this));
+        if (maxQuote == 0) revert ZeroQuoteAmount();
+        return maxQuote;
     }
 
     function _bufferDeposit(uint256 assets) internal {

@@ -345,10 +345,30 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         emit StrategyHarvest(profit);
     }
 
-    /// @notice Permissionless valuation snapshot refresh (ODA-519-7).
-    /// @dev Refuses to re-anchor when current PPS is outside the trusted band (ODA-519-8).
+    /// @notice Permissionless valuation liveness heartbeat (ODA-519-7).
+    /// @dev Advances only the timestamp when current PPS is in-band. Does **not** ratchet
+    ///      `lastValuationAssetsPerShare` — a permissionless PPS write would allow compounding
+    ///      in-band manipulations across repeated syncs. Use `forceSyncValuation` / strategy ops
+    ///      to advance the trusted PPS baseline (ODA-519-8).
     function syncValuation() external {
-        _syncValuationSnapshotBestEffort();
+        (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
+        if (!ok) return;
+
+        // No ERC-4626 share exposure: keep PPS at 0 and refresh liveness.
+        if (currentAssetsPerShare == 0) {
+            lastValuationAssetsPerShare = 0;
+            lastValuationTimestamp = block.timestamp;
+            emit ValuationSnapshotSynced(0, block.timestamp);
+            return;
+        }
+
+        uint256 snapshot = lastValuationAssetsPerShare;
+        // Bootstrap with exposure requires a privileged path.
+        if (snapshot == 0) return;
+        if (!_isWithinValuationBounds(snapshot, currentAssetsPerShare)) return;
+
+        lastValuationTimestamp = block.timestamp;
+        emit ValuationSnapshotSynced(snapshot, block.timestamp);
     }
 
     /// @notice Owner escape hatch to re-arm the valuation snapshot after a genuine regime change.

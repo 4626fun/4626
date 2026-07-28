@@ -45,3 +45,11 @@
 - `test/ERC4626StrategyAdapter.AjnaInnerVault.t.sol`
 - `test/oda/ODA466_468_464_Remediations.t.sol` (`test_466_11`)
 - `test/vault/CharmStrategy4626.Oracle.t.sol`
+
+## Codex follow-up (PR review)
+
+| Item | Fix |
+|------|-----|
+| Permissionless PPS ratchet via `syncValuation` | Heartbeat-only (timestamp); PPS advanced by ops / `forceSyncValuation` |
+| Partial exit with zero quote → full drain | `ZeroQuoteAmount` revert; max-quote sentinel only on full exit |
+

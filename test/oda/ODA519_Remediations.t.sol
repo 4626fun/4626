@@ -33,6 +33,11 @@ contract ODA519MockAjnaPool is IAjnaPool {
 
     function setBankruptcy(uint256 index, uint256 t) external { bankruptcyTimes[index] = t; }
 
+    function setBucketAccounting(uint256 index, uint256 lpTotal, uint256 deposits) external {
+        bucketLpTotal[index] = lpTotal;
+        bucketDeposits[index] = deposits;
+    }
+
     function addQuoteToken(uint256 amount, uint256 index, uint256) external returns (uint256, uint256) {
         quoteToken.transferFrom(msg.sender, address(this), amount);
         lenderLpBalance[index][msg.sender] += amount;
@@ -188,5 +193,21 @@ contract ODA519_RemediationsTest is Test {
         vm.warp(block.timestamp + 1 days);
         adapter.syncValuation();
         assertEq(adapter.lastValuationTimestamp(), block.timestamp);
+    }
+
+    function test_519_3_partialZeroQuoteDoesNotFullDrain() public {
+        vm.prank(swapper);
+        vault.deposit(100e18, swapper);
+        vm.prank(swapper);
+        vault.moveFromBuffer(4156, 50e18);
+
+        // Impair bucket so 1 wei LP prices to 0 quote: deposits << lpTotal.
+        pool.setBucketAccounting(4156, /*lpTotal*/ 1e18, /*deposits*/ 1);
+
+        vm.prank(swapper);
+        vm.expectRevert(AjnaERC4626Vault.ZeroQuoteAmount.selector);
+        vault.moveToBuffer(4156, 1);
+
+        assertEq(vault.bucketLp(4156), 50e18, "partial zero-quote must not drain");
     }
 }
