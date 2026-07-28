@@ -216,6 +216,12 @@ type XmtpContextValue = {
   /** Clears only this browser's local XMTP database and reconnects with a fresh installation. */
   resetLocalState: () => Promise<void>
   /**
+   * Soft recovery for OPFS lock contention: ask peer tabs to release, clear the
+   * local tab lock, then reload once so a stuck same-tab worker drops its handle.
+   * Does not delete the local database.
+   */
+  reloadToReleaseLocalDatabaseLock: () => void
+  /**
    * Awaits full teardown (client close + OPFS access-handle release) before
    * resolving, so callers that immediately reconnect (e.g. waitlist chat's
    * repair-and-retry) don't race a still-open OPFS handle from the prior
@@ -377,6 +383,7 @@ const XmtpContext = createContext<XmtpContextValue>({
   connect: async () => {},
   resetInstallations: async () => {},
   resetLocalState: async () => {},
+  reloadToReleaseLocalDatabaseLock: noop,
   disconnect: async () => {},
   conversations: [],
   loadMessages: async () => [],
@@ -2187,10 +2194,13 @@ export function XmtpChatProvider({
       const opfsProbe = await probeOpfsDatabase()
       if (connectEpoch !== connectEpochRef.current) return
       if (opfsProbe.status === 'locked') {
+        const tabLockHint = formatActiveTabLockHint()
         setStatus('error')
         setError(
           'XMTP local database is currently locked by another active tab/window or connect attempt. ' +
-            'Close other 4626 chat tabs/windows and retry.',
+            'Close other 4626 chat tabs in Base App or your browser, then retry. ' +
+            'If only one tab is open, use Reload to release lock.' +
+            (tabLockHint ? ` ${tabLockHint}` : ''),
         )
         return
       }
@@ -2235,9 +2245,13 @@ export function XmtpChatProvider({
           }
 
           if (restoreFailureKind === 'opfs_lock') {
+            const tabLockHint = formatActiveTabLockHint()
             setStatus('error')
             setError(
-              'XMTP local database is currently locked by another tab/window. Close other 4626 chat tabs and retry.',
+              'XMTP local database is currently locked by another tab/window. ' +
+                'Close other 4626 chat tabs in Base App or your browser, then retry. ' +
+                'If only one tab is open, use Reload to release lock.' +
+                (tabLockHint ? ` ${tabLockHint}` : ''),
             )
             return
           }
@@ -2526,10 +2540,13 @@ export function XmtpChatProvider({
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
         if (isOpfsAccessHandleError(msg)) {
+          const tabLockHint = formatActiveTabLockHint()
           setStatus('error')
           setError(
             'XMTP local storage is locked by another active tab/window. ' +
-              'Close other 4626 tabs/windows using chat, then retry.',
+              'Close other 4626 chat tabs in Base App or your browser, then retry. ' +
+              'If only one tab is open, use Reload to release lock.' +
+              (tabLockHint ? ` ${tabLockHint}` : ''),
           )
           return
         }
@@ -2946,6 +2963,20 @@ export function XmtpChatProvider({
       throw err
     }
   }, [address, walletClient, installationLimitInboxId, publicClient, connect, connector, xmtpModeOverride, resolveXmtpIdentityAddress])
+
+  const reloadToReleaseLocalDatabaseLock = useCallback(() => {
+    connectEpochRef.current += 1
+    connectInFlightRef.current = false
+    connectCooldownUntilRef.current = 0
+    stopTabLockHeartbeat()
+    forceClearTabLock()
+    broadcastPeerTabXmtpRelease()
+    setStatus('connecting')
+    setError('Reloading once to release the local XMTP database lock…')
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
+  }, [stopTabLockHeartbeat])
 
   const resetLocalState = useCallback(async () => {
     const activeAddress = address ?? null
@@ -3657,6 +3688,7 @@ export function XmtpChatProvider({
         connect,
         resetInstallations,
         resetLocalState,
+        reloadToReleaseLocalDatabaseLock,
         disconnect,
         conversations,
         loadMessages,

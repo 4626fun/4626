@@ -33,6 +33,7 @@ vi.mock('@/lib/xmtp/provider', () => ({
     error: null,
     localStateResetRequired: false,
     resetLocalState: vi.fn(),
+    reloadToReleaseLocalDatabaseLock: vi.fn(),
     resetInstallations: vi.fn(),
     installationLimitInboxId: null,
     identityAddress: null,
