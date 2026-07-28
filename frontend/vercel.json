@@ -928,6 +928,18 @@
       "dest": "/api/token/image?address=$1&format=$2&size=64"
     },
     {
+      "src": "/v1/token/([a-fA-F0-9x]+)/image",
+      "dest": "/api/token/image?address=$1"
+    },
+    {
+      "src": "/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)",
+      "dest": "/api/token/image?address=$1&format=$2&size=64"
+    },
+    {
+      "src": "/v1/(.*)",
+      "dest": "/api/[...path]?path=v1/$1"
+    },
+    {
       "src": "/api/telegram/webhook",
       "has": [
         {
