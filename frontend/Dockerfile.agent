@@ -33,6 +33,8 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 # (frontend/package.json). The repo-root `patches/` is for the Solidity
 # workspace and does not contain frontend patches.
 COPY frontend/patches/ ./patches/
+# package.json overrides bigint-buffer -> file:./vendor/bigint-buffer
+COPY frontend/vendor ./vendor
 
 # Include @4626/server-core (workspace package) so pnpm can resolve the
 # workspace:* link during install. Command families and server/_lib modules

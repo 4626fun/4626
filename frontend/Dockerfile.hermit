@@ -46,6 +46,8 @@ FROM base AS deps
 # Copy package manifests + patch files
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 COPY frontend/patches/ ./patches/
+# package.json overrides bigint-buffer -> file:./vendor/bigint-buffer
+COPY frontend/vendor ./vendor
 
 # Include @4626/server-core (required by command families and server/_lib)
 COPY frontend/packages/server-core/package.json ./packages/server-core/package.json

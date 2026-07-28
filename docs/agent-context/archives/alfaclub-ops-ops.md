@@ -3,7 +3,7 @@
 Cross-cutting operator prefs: [preferences-active.md](../preferences-active.md).
 Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only**.
 
-- **Agent/Hermit Docker build context:** `frontend/Dockerfile.agent` runner must COPY `frontend/shared` (`site-config.json` — imported by `agentRegistration.ts`); `4626-keepr-agent` crashes without it. `frontend/Dockerfile.hermit` deps stage must COPY `frontend/server` plus `src/config`, `src/lib`, and `src/wallet` **before** `packages/server-core` `build.mjs` (re-export scan needs those sources).
+- **Agent/Hermit Docker build context:** `frontend/Dockerfile.agent` / `Dockerfile.hermit` deps stage must COPY `frontend/vendor` before `pnpm install` (`bigint-buffer` is `file:./vendor/bigint-buffer` — missing COPY fails with `ENOENT …/vendor/bigint-buffer`). Runner must COPY `frontend/shared` (`site-config.json` — imported by `agentRegistration.ts`); `4626-keepr-agent` crashes without it. Hermit deps stage must also COPY `frontend/server` plus `src/config`, `src/lib`, and `src/wallet` **before** `packages/server-core` `build.mjs` (re-export scan needs those sources).
 
 - **Hermit creative drafts run on Vercel** through `POST /api/hermit/draft`; Railway calls that endpoint via `HERMIT_AGENT_*` and must not run a second creative model. Pinata remains an asset gateway only, not a Hermit agent runtime.
 
