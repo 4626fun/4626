@@ -6,6 +6,7 @@ import {
   classifySwapCompletionReceipt,
   isSwapExecutionLocked,
   shouldBlockSwapSubmitWhileSettling,
+  shouldClearSwapCompletionOnTradeReset,
   shouldResetSwapFormAfterCompletionDismiss,
 } from './swapCompletionDismiss'
 
@@ -119,7 +120,7 @@ describe('swap settlement execution lock', () => {
         hasSwapCompletion: true,
         settlement: null,
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       shouldBlockSwapSubmitWhileSettling({
         hasSwapCompletion: true,
@@ -152,5 +153,12 @@ describe('swap settlement execution lock', () => {
     expect(canManuallyDismissSwapCompletion('delayed')).toBe(true)
     expect(canManuallyDismissSwapCompletion('failed')).toBe(true)
     expect(canManuallyDismissSwapCompletion('confirmed')).toBe(true)
+  })
+
+  it('preserves completion across ordinary form resets', () => {
+    expect(shouldClearSwapCompletionOnTradeReset()).toBe(false)
+    expect(shouldClearSwapCompletionOnTradeReset({})).toBe(false)
+    expect(shouldClearSwapCompletionOnTradeReset({ clearCompletion: false })).toBe(false)
+    expect(shouldClearSwapCompletionOnTradeReset({ clearCompletion: true })).toBe(true)
   })
 })

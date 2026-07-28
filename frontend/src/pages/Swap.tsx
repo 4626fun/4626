@@ -872,7 +872,7 @@ export function Swap() {
         await Promise.resolve(privyLogout()).catch(() => null)
       }
       const bridged = await signIn({ method: 'privy' })
-      if (bridged) resetTradeState()
+      if (bridged) resetTradeState({ clearCompletion: true })
     } finally {
       setSigningRecoveryBusy(false)
     }
@@ -955,7 +955,7 @@ export function Swap() {
 
     if (canResetCompletedTrade) {
       setAmountInUnits('0')
-      resetTradeState()
+      resetTradeState({ clearCompletion: true })
     } else {
       clearSwapCompletion()
     }
@@ -1158,9 +1158,9 @@ export function Swap() {
     [persistRecentToken, registerTokenForIdentity, resetTradeState, setTokenIn, setTokenOut, tokenSelectorSide],
   )
 
-  // Reset when execution address changes
+  // Reset when execution address changes (different wallet → drop prior completion lock)
   useEffect(() => {
-    resetTradeState()
+    resetTradeState({ clearCompletion: true })
   }, [executionAddress, resetTradeState])
 
   // Sync busy into a ref so the auto-quote timer can check it without becoming

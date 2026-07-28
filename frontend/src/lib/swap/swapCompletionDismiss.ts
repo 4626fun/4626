@@ -28,13 +28,26 @@ export function canManuallyDismissSwapCompletion(settlement: SwapCompletionSettl
   return settlement !== 'pending'
 }
 
-/** Caller-level guard for review/submit paths while settlement is unresolved. */
+/**
+ * Caller-level guard for review/submit paths while settlement is unresolved.
+ * `settlement: null` means "this caller does not know classified settlement" —
+ * do not default to pending (that would re-lock confirmed/failed tx-hash
+ * completions). Receipt-wait pending is enforced by the page-level lock.
+ */
 export function shouldBlockSwapSubmitWhileSettling(input: {
   hasSwapCompletion: boolean
   settlement: SwapCompletionSettlement | null | undefined
 }): boolean {
   if (!input.hasSwapCompletion) return false
-  return isSwapExecutionLocked(input.settlement ?? 'pending')
+  if (input.settlement == null) return false
+  return isSwapExecutionLocked(input.settlement)
+}
+
+/** Ordinary token/side/chain edits must preserve an in-flight completion lock. */
+export function shouldClearSwapCompletionOnTradeReset(options?: {
+  clearCompletion?: boolean
+}): boolean {
+  return Boolean(options?.clearCompletion)
 }
 
 export function shouldResetSwapFormAfterCompletionDismiss(input: {

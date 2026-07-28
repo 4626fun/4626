@@ -44,7 +44,10 @@ import {
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
 import { assertRefreshedSwapPreservesReview } from '@/lib/swap/swapReviewBinding'
 import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
-import { shouldBlockSwapSubmitWhileSettling } from '@/lib/swap/swapCompletionDismiss'
+import {
+  shouldBlockSwapSubmitWhileSettling,
+  shouldClearSwapCompletionOnTradeReset,
+} from '@/lib/swap/swapCompletionDismiss'
 import { refreshWalletClientSession } from '@/lib/wallet/refreshWalletClientSession'
 import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
@@ -1536,7 +1539,7 @@ export function useSwapExecution(params: {
     ],
   )
 
-  const resetTradeState = useCallback(() => {
+  const resetTradeState = useCallback((options?: { clearCompletion?: boolean }) => {
     quoteRunRef.current += 1
     setQuote(null)
     setQuoteCooldownUntil(null)
@@ -1556,7 +1559,11 @@ export function useSwapExecution(params: {
     setError('')
     setTxState('idle')
     setTxHash(null)
-    setSwapCompletion(null)
+    // Ordinary form resets (token/side/chain edits) must not clear an unresolved
+    // completion — that would drop the settlement lock and allow a second submit.
+    if (shouldClearSwapCompletionOnTradeReset(options)) {
+      setSwapCompletion(null)
+    }
     resetQuoteFailureTracker()
     if (swapDebugEnabled) {
       setTxDebug((prev) => ({
@@ -1808,8 +1815,8 @@ export function useSwapExecution(params: {
     if (
       shouldBlockSwapSubmitWhileSettling({
         hasSwapCompletion: Boolean(swapCompletion),
-        // Hook-authored unresolved states: UserOp still confirming, or any timed-out confirmation.
-        // Receipt-wait pending (has txHash, not timed out) is gated by Swap.tsx settlement lock.
+        // Only encode hook-authored unresolved states. Settled tx-hash completions
+        // (confirmed/failed) and receipt-wait pending defer to Swap.tsx settlement.
         settlement:
           swapCompletion?.confirmationTimedOut
             ? 'delayed'
