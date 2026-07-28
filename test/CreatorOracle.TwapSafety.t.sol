@@ -48,7 +48,13 @@ contract MockChainlinkFeedForCreatorOracleTwapSafety {
         view
         returns (uint80 roundId, int256 _answer, uint256 startedAt, uint256 _updatedAt, uint80 answeredInRound)
     {
-        return (0, answer, 0, updatedAt, 0);
+        return (1, answer, updatedAt, updatedAt, 1);
+    }
+}
+
+contract MockErc20MetadataForCreatorOracleTwapSafety {
+    function decimals() external pure returns (uint8) {
+        return 18;
     }
 }
 
@@ -125,7 +131,7 @@ contract CreatorOracleTwapSafetyTest is Test {
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleTwapSafety());
         PoolKey memory key = _defaultPoolKey(creatorToken);
         PoolId poolId = key.toId();
 
@@ -152,7 +158,8 @@ contract CreatorOracleTwapSafetyTest is Test {
         uint256 expectedUsdPerCreator18 = Math.mulDiv(ethUsd18, 1e18, creatorPerEth);
 
         oracle.initializeAssetPrice(int256(expectedUsdPerCreator18));
-        oracle.setPriceUpdateCooldown(0);
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
+        vm.warp(block.timestamp + oracle.MIN_PRICE_UPDATE_COOLDOWN());
         oracle.updateAssetPriceFromTWAP(duration);
 
         assertEq(oracle.assetPriceUSD(), int256(expectedUsdPerCreator18));
@@ -165,7 +172,7 @@ contract CreatorOracleTwapSafetyTest is Test {
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleTwapSafety());
         PoolKey memory key = _defaultPoolKey(creatorToken);
         PoolId poolId = key.toId();
 
@@ -195,7 +202,7 @@ contract CreatorOracleTwapSafetyTest is Test {
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleTwapSafety());
         PoolKey memory key = _defaultPoolKey(creatorToken);
         PoolId poolId = key.toId();
 
@@ -211,10 +218,10 @@ contract CreatorOracleTwapSafetyTest is Test {
         vm.warp(block.timestamp + 10);
         oracle.recordSwapObservation();
 
-        // Ask for a much longer duration than we actually have history for.
-        // Correct behavior: use the oldest *initialized* observation (shorter window) rather than an uninitialized slot.
-        int24 twapTick = oracle.getTWAPTick(1800);
-        assertEq(twapTick, tick, "TWAP should match the constant tick, not collapse toward 0");
+        // Public TWAP views now enforce the same minimum realized window as write paths,
+        // so this shortened history must fail closed instead of silently using a 10s sample.
+        vm.expectRevert(CreatorOracle.StaleObservationWindow.selector);
+        oracle.getTWAPTick(1800);
     }
 
     function test_recordSwapObservation_BaseAutoUpdate_RequiresMinWindow() public {
@@ -225,11 +232,11 @@ contract CreatorOracleTwapSafetyTest is Test {
         feed.setLatestAnswer(2000e8, block.timestamp);
 
         CreatorOracle oracle = _deployOracle(address(feed));
-        oracle.setPriceUpdateCooldown(0);
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleTwapSafety());
         PoolKey memory key = _defaultPoolKey(creatorToken);
         PoolId poolId = key.toId();
 
@@ -242,9 +249,8 @@ contract CreatorOracleTwapSafetyTest is Test {
         // H-01: auto-updates must not bootstrap; anchor the first price via the owner path.
         // tick = 0 => CREATOR/ETH = 1 => USD/CREATOR = 2000.
         oracle.initializeAssetPrice(int256(2000e18));
-        // NOTE: literal instead of a block.timestamp snapshot — via-IR may rematerialize
-        // block.timestamp reads across vm.warp calls.
-        uint256 initTs = 1_700_000_000;
+        // Snapshot after initialize — cooldown floor remediations may advance time earlier in setUp paths.
+        uint256 initTs = oracle.assetPriceTimestamp();
 
         // 1) First record (creates 2nd observation state) - auto-update may run but should not write price yet.
         vm.warp(block.timestamp + 1);
@@ -272,11 +278,11 @@ contract CreatorOracleTwapSafetyTest is Test {
         feed.setLatestAnswer(2000e8, block.timestamp);
 
         CreatorOracle oracle = _deployOracle(address(feed));
-        oracle.setPriceUpdateCooldown(0);
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        PoolKey memory key = _defaultPoolKey(address(0xC0FFEE));
+        PoolKey memory key = _defaultPoolKey(address(new MockErc20MetadataForCreatorOracleTwapSafety()));
         PoolId poolId = key.toId();
 
         poolManager.setSlot0Tick(poolId, 0);
@@ -305,11 +311,11 @@ contract CreatorOracleTwapSafetyTest is Test {
         feed.setLatestAnswer(2000e8, block.timestamp); // ETH/USD = 2000, 8 decimals
 
         CreatorOracle oracle = _deployOracle(address(feed));
-        oracle.setPriceUpdateCooldown(0);
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         MockPoolManagerExtsloadForCreatorOracleTwapSafety poolManager =
             new MockPoolManagerExtsloadForCreatorOracleTwapSafety();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleTwapSafety());
         PoolKey memory key = _defaultPoolKey(creatorToken);
         PoolId poolId = key.toId();
 

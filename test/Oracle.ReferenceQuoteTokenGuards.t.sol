@@ -68,7 +68,8 @@ contract MockQuoteUsdFeedForOracleQuoteTokenGuard {
     }
 
     function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
-        return (1, answer, 0, updatedAt, 1);
+        // ODA-514: CreatorOracle rejects startedAt==0 as an invalid round.
+        return (1, answer, updatedAt, updatedAt, 1);
     }
 }
 
@@ -237,10 +238,14 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
 
     function test_agentOracle_lockedReferenceQuoteTokenCannotChange() external {
         AgentOracle oracle = _deployAgentOracle();
+        address agentToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
         address virtualToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
         address otherToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address pool = address(new MockV3PoolForOracleQuoteTokenGuard(agentToken, virtualToken));
 
         oracle.setReferenceQuoteToken(virtualToken);
+        // ODA-513: lock requires a configured lane matching the reference quote.
+        oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
         oracle.lockReferenceQuoteToken();
 
         vm.expectRevert(AgentOracle.ReferenceQuoteTokenIsLocked.selector);
@@ -265,7 +270,8 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setReferenceQuoteToken(zoraToken);
         oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
         oracle.initializeAssetPrice(int256(1e18));
-        oracle.setPriceUpdateCooldown(0);
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
+        vm.warp(block.timestamp + oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         // Pinned non-stable quote without a quote/USD feed must not store a ZORA-denominated price as USD.
         vm.expectRevert(abi.encodeWithSelector(CreatorOracle.MissingQuoteUsdFeed.selector, zoraToken));
@@ -286,7 +292,9 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
         oracle.setQuoteUsdFeed(address(quoteFeed));
         oracle.initializeAssetPrice(int256(0.5e18));
-        oracle.setPriceUpdateCooldown(0);
+        // ODA-514: cooldown floor is 30s; warp past it for the TWAP write.
+        oracle.setPriceUpdateCooldown(oracle.MIN_PRICE_UPDATE_COOLDOWN());
+        vm.warp(block.timestamp + oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         // Tick 0 => 1 ZORA per CREATOR; ZORA/USD = 0.50 => USD/CREATOR = 0.50.
         quoteFeed.setLatestAnswer(0.5e8, block.timestamp);
@@ -308,7 +316,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setReferenceQuoteToken(virtualToken);
         oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
         oracle.initializeAssetPrice(int256(1e18));
-        oracle.setPriceUpdateCooldown(0);
+        vm.warp(block.timestamp + oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         vm.expectRevert(abi.encodeWithSelector(AgentOracle.MissingQuoteUsdFeed.selector, virtualToken));
         oracle.updateAssetPriceFromV3TWAP(1800);
@@ -328,7 +336,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
         oracle.setQuoteUsdFeed(address(quoteFeed));
         oracle.initializeAssetPrice(int256(2e18));
-        oracle.setPriceUpdateCooldown(0);
+        vm.warp(block.timestamp + oracle.MIN_PRICE_UPDATE_COOLDOWN());
 
         // Tick 0 => 1 VIRTUAL per AGENT; VIRTUAL/USD = 2.00 => USD/AGENT = 2.00.
         quoteFeed.setLatestAnswer(2e8, block.timestamp);

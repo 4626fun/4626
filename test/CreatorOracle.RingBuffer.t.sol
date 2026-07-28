@@ -68,6 +68,12 @@ contract MockPoolManagerExtsloadForRingBuffer {
     }
 }
 
+contract MockErc20MetadataForCreatorOracleRingBuffer {
+    function decimals() external pure returns (uint8) {
+        return 18;
+    }
+}
+
 contract CreatorOracleRingBufferTest is Test {
     using PoolIdLibrary for PoolKey;
 
@@ -94,7 +100,7 @@ contract CreatorOracleRingBufferTest is Test {
         oracle = new CreatorOracle(address(registry), address(0), "TEST", address(this));
 
         poolManager = new MockPoolManagerExtsloadForRingBuffer();
-        address creatorToken = address(0xC0FFEE);
+        address creatorToken = address(new MockErc20MetadataForCreatorOracleRingBuffer());
         key = PoolKey({
             currency0: Currency.wrap(address(0)),
             currency1: Currency.wrap(creatorToken),
@@ -125,7 +131,7 @@ contract CreatorOracleRingBufferTest is Test {
         poolManager.setSlot0Tick(poolId, 100);
         oracle.recordSwapObservation();
 
-        vm.warp(block.timestamp + 60);
+        vm.warp(block.timestamp + 1800);
         poolManager.setSlot0Tick(poolId, 200);
         oracle.recordSwapObservation();
 
@@ -172,11 +178,11 @@ contract CreatorOracleRingBufferTest is Test {
         assertEq(idxAfter2, idxBefore, "subsequent same-block writes remain idempotent");
         assertEq(cardAfter2, cardBefore, "subsequent same-block writes remain idempotent");
 
-        // TWAP over the last 60s must still be computable and finite.
+        // TWAP over the last minimum 30 minute window must still be computable and finite.
         // Step to a new block first so block.timestamp != newest obs timestamp.
         vm.warp(block.timestamp + 1);
-        int24 twap = oracle.getTWAPTick(60);
-        // With ticks (100 -> 200) held over 60s, twap should be near 200 (integrating 200 over the window).
+        int24 twap = oracle.getTWAPTick(1800);
+        // With the newest tick held across the realized 30 minute window, the TWAP should still recover 200.
         assertEq(twap, int24(200), "twap across idempotent window unchanged");
     }
 
@@ -188,7 +194,8 @@ contract CreatorOracleRingBufferTest is Test {
         int24 heldTick = 100;
         poolManager.setSlot0Tick(poolId, heldTick);
 
-        // Advance one second per write so every call passes the `delta > 0` gate.
+        // Advance two seconds per write so every call passes the `delta > 0` gate and
+        // the final observation history exceeds MIN_TWAP_DURATION.
         // First call initializes the second slot (cardinality 1 -> 2).
         // We need MAX_CARDINALITY total writes to fully initialize the ring, then
         // one more to verify wrap semantics.
@@ -206,7 +213,7 @@ contract CreatorOracleRingBufferTest is Test {
         uint256 fills = uint256(MAX_CARDINALITY) - 1;
         uint256 nextTimestamp = block.timestamp;
         for (uint256 i = 0; i < fills; i++) {
-            nextTimestamp += 1;
+            nextTimestamp += 2;
             vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
@@ -223,7 +230,7 @@ contract CreatorOracleRingBufferTest is Test {
         (, int56 tcNewestPre,,,,) = oracle.observations(MAX_CARDINALITY - 1);
 
         // The N+1'th write — wrap.
-        nextTimestamp += 1;
+        nextTimestamp += 2;
         vm.warp(nextTimestamp);
         oracle.recordSwapObservation();
 
@@ -243,7 +250,7 @@ contract CreatorOracleRingBufferTest is Test {
         assertGt(tcNewestPost, tcNewestPre, "tickCumulative strictly increases across wrap");
 
         // TWAP is still computable after the wrap and matches the held tick.
-        int24 twap = oracle.getTWAPTick(10);
+        int24 twap = oracle.getTWAPTick(1800);
         assertEq(twap, heldTick, "TWAP across wrap recovers the held tick");
     }
 
@@ -259,7 +266,7 @@ contract CreatorOracleRingBufferTest is Test {
         uint256 fills = uint256(MAX_CARDINALITY) - 1;
         uint256 nextTimestamp = block.timestamp;
         for (uint256 i = 0; i < fills; i++) {
-            nextTimestamp += 1;
+            nextTimestamp += 2;
             vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
@@ -268,7 +275,7 @@ contract CreatorOracleRingBufferTest is Test {
 
         // 5 post-wrap writes.
         for (uint256 j = 0; j < 5; j++) {
-            nextTimestamp += 1;
+            nextTimestamp += 2;
             vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
@@ -280,7 +287,7 @@ contract CreatorOracleRingBufferTest is Test {
         nextTimestamp += 1;
         vm.warp(nextTimestamp);
 
-        uint32[7] memory windows = [uint32(2), 5, 10, 30, 60, 120, 300];
+        uint32[7] memory windows = [uint32(1800), 1802, 1810, 1830, 1860, 1920, 2100];
         for (uint256 k = 0; k < windows.length; k++) {
             int24 twap = oracle.getTWAPTick(windows[k]);
             assertEq(twap, heldTick, "TWAP monotonically recovers held tick across wrap");

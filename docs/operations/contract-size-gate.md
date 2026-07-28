@@ -28,7 +28,7 @@ Measured under `FOUNDRY_PROFILE=ci` (2026-07). These need a dedicated split PR; 
 | `AgentShareOFT` | ~28.1 KB | Agent OFT |
 | `CreatorShareOFT` | ~27.6 KB | Creator OFT |
 | `CharmStrategy4626Factory` | ~25.3 KB | Strategy factory |
-| `CreatorOracle` | ~24.6 KB | Creator oracle |
+| `CreatorOracle` | ~24.7 KB | Creator oracle; quote/feed helpers in `CreatorOracleQuoteLib` |
 
 `LotteryManager4626` is under the hard cap after module split; keep
 `amoe/tools/ci/check_manager_size_warn.sh` as the early-warning lane.
