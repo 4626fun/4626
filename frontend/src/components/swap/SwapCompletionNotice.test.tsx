@@ -190,4 +190,37 @@ describe('SwapCompletionNotice', () => {
     expect(screen.getByRole('button', { name: 'Dismiss swap confirmation' })).toBeTruthy()
     expect(onDismiss).not.toHaveBeenCalled()
   })
+
+  it('keeps delayed confirmation mounted and manually dismissible', async () => {
+    const onDismiss = vi.fn()
+    render(
+      <SwapCompletionNotice
+        completion={{
+          txHash: null,
+          userOpHash: `0x${'5'.repeat(64)}`,
+          amountInUnits: '2',
+          estimatedOut: '10',
+          completedAt: 44,
+          confirmationTimedOut: true,
+        }}
+        tokenIn={tokenIn}
+        tokenOut={tokenOut}
+        settlement="delayed"
+        onDismiss={onDismiss}
+      />,
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SWAP_COMPLETION_AUTO_DISMISS_MS + 500)
+    })
+
+    expect(screen.getByText('Confirmation delayed')).toBeTruthy()
+    expect(
+      screen.getByText(
+        '2.00 USDC for 10.00 AKITA · Still confirming — dismiss only if you want to unlock another swap',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Dismiss swap confirmation' })).toBeTruthy()
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
 })

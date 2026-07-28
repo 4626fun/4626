@@ -24,6 +24,7 @@ import { CONTRACTS } from '@/config/contracts'
 import { shouldStartAutoQuote, useSwapExecution } from '@/hooks/useSwapExecution'
 import {
   classifySwapCompletionReceipt,
+  isSwapExecutionLocked,
   shouldResetSwapFormAfterCompletionDismiss,
   type SwapCompletionSettlement,
 } from '@/lib/swap/swapCompletionDismiss'
@@ -804,8 +805,10 @@ export function Swap() {
     handleReviewTrade,
     confirmAndExecute,
     resetTradeState,
+    setStatus,
     swapCompletion,
     clearSwapCompletion,
+    markSwapCompletionConfirmationTimedOut,
   } = useSwapExecution({
     // Pass the csw (parent/main/zora csw) as the primary "address" / asset owner for the swap
     // execution path. This ensures that when the selector shows holdings/balances from the Zora CSW,
@@ -930,11 +933,17 @@ export function Swap() {
     settlement: Exclude<SwapCompletionSettlement, 'pending'>
   } | null>(null)
   const swapCompletionSettlement: SwapCompletionSettlement =
-    swapCompletion != null && swapCompletionReceipt?.completedAt === swapCompletion.completedAt
-      ? swapCompletionReceipt.settlement
-      : 'pending'
+    swapCompletion == null
+      ? 'pending'
+      : swapCompletionReceipt?.completedAt === swapCompletion.completedAt
+        ? swapCompletionReceipt.settlement
+        : swapCompletion.confirmationTimedOut
+          ? 'delayed'
+          : 'pending'
   const swapCompletionConfirmed =
     swapCompletion != null && swapCompletionSettlement === 'confirmed'
+  const swapExecutionLocked =
+    swapCompletion != null && isSwapExecutionLocked(swapCompletionSettlement)
   const handleClearSwapCompletion = useCallback(() => {
     const canResetCompletedTrade = shouldResetSwapFormAfterCompletionDismiss({
       swapCompletionConfirmed,
@@ -1028,12 +1037,18 @@ export function Swap() {
       .catch(() => {
         if (!active) return
         setSwapCompletionReceipt({ completedAt, settlement: 'delayed' })
+        markSwapCompletionConfirmationTimedOut()
+        setStatus(
+          'Swap confirmation is delayed. Check BaseScan, then dismiss the notice before starting another swap.',
+        )
       })
     return () => {
       active = false
     }
   }, [
+    markSwapCompletionConfirmationTimedOut,
     publicClient,
+    setStatus,
     swapCompletion?.completedAt,
     swapCompletion?.txHash,
     swapCompletionReceipt?.completedAt,
@@ -1321,7 +1336,7 @@ export function Swap() {
                         tokenInAddress={tokenIn}
                         tokenOutAddress={tokenOut}
                         isConnected={isConnected}
-                        isReady={isReady && !tokenInAmountExceedsBalance}
+                        isReady={isReady && !tokenInAmountExceedsBalance && !swapExecutionLocked}
                         busy={
                           needsBaseAppDirectConnect || signingSessionExpired || needsCanonicalSetupAction
                             ? swapConnectBusy || signingRecoveryBusy
@@ -1329,9 +1344,13 @@ export function Swap() {
                               : null
                             : busy
                         }
-                        status={swapCompletion ? null : status}
+                        status={
+                          swapCompletionSettlement === 'pending' && swapCompletion
+                            ? null
+                            : status
+                        }
                         error={
-                          swapCompletion
+                          swapCompletionSettlement === 'pending' && swapCompletion
                             ? null
                             : tokenInBalanceError ??
                               error ??
@@ -1364,6 +1383,14 @@ export function Swap() {
                         }}
                         onSwitchTokens={handleSwitchTokens}
                         onReviewTrade={() => {
+                          if (swapExecutionLocked) {
+                            setStatus(
+                              swapCompletionSettlement === 'delayed'
+                                ? 'Previous swap confirmation is delayed. Dismiss that notice before starting another swap.'
+                                : 'Previous swap is still confirming. Wait for settlement before starting another swap.',
+                            )
+                            return
+                          }
                           void handleReviewTrade()
                         }}
                         onSetSlippagePct={setSlippagePct}

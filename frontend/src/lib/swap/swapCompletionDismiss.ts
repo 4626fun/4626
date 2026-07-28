@@ -11,6 +11,32 @@ export function classifySwapCompletionReceipt(input: {
     : 'failed'
 }
 
+/** Pending/delayed completions still represent an in-flight value-moving swap. */
+export function isSwapExecutionLocked(settlement: SwapCompletionSettlement | null | undefined): boolean {
+  return settlement === 'pending' || settlement === 'delayed'
+}
+
+export function canAutoDismissSwapCompletion(settlement: SwapCompletionSettlement): boolean {
+  return settlement === 'confirmed'
+}
+
+/**
+ * Pending stays non-dismissible so the notice cannot clear the in-flight lock.
+ * Delayed is manually dismissible as an explicit recovery acknowledgment.
+ */
+export function canManuallyDismissSwapCompletion(settlement: SwapCompletionSettlement): boolean {
+  return settlement !== 'pending'
+}
+
+/** Caller-level guard for review/submit paths while settlement is unresolved. */
+export function shouldBlockSwapSubmitWhileSettling(input: {
+  hasSwapCompletion: boolean
+  settlement: SwapCompletionSettlement | null | undefined
+}): boolean {
+  if (!input.hasSwapCompletion) return false
+  return isSwapExecutionLocked(input.settlement ?? 'pending')
+}
+
 export function shouldResetSwapFormAfterCompletionDismiss(input: {
   swapCompletionConfirmed: boolean
   amountInUnits: string

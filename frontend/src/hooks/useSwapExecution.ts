@@ -44,6 +44,7 @@ import {
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
 import { assertRefreshedSwapPreservesReview } from '@/lib/swap/swapReviewBinding'
 import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
+import { shouldBlockSwapSubmitWhileSettling } from '@/lib/swap/swapCompletionDismiss'
 import { refreshWalletClientSession } from '@/lib/wallet/refreshWalletClientSession'
 import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
@@ -107,6 +108,8 @@ export type SwapCompletion = {
   amountInUnits: string
   estimatedOut: string
   completedAt: number
+  /** Set when UserOp / receipt confirmation polling timed out without a terminal outcome. */
+  confirmationTimedOut?: boolean
 }
 
 type Swap7702Diagnostics = {
@@ -1802,6 +1805,26 @@ export function useSwapExecution(params: {
       setError('Connect your execution wallet before swapping.')
       return
     }
+    if (
+      shouldBlockSwapSubmitWhileSettling({
+        hasSwapCompletion: Boolean(swapCompletion),
+        // Hook-authored unresolved states: UserOp still confirming, or any timed-out confirmation.
+        // Receipt-wait pending (has txHash, not timed out) is gated by Swap.tsx settlement lock.
+        settlement:
+          swapCompletion?.confirmationTimedOut
+            ? 'delayed'
+            : swapCompletion && !swapCompletion.txHash
+              ? 'pending'
+              : null,
+      })
+    ) {
+      setStatus(
+        swapCompletion?.confirmationTimedOut
+          ? 'Previous swap confirmation is delayed. Dismiss that notice before starting another swap.'
+          : 'Previous swap is still confirming. Wait for settlement before starting another swap.',
+      )
+      return
+    }
     if (busy === 'executeSwap' || txState === 'signing' || txState === 'pending') {
       setStatus('Swap already in progress. Wait for the current transaction to finish.')
       return
@@ -2000,6 +2023,7 @@ export function useSwapExecution(params: {
     strictCanonicalWrappedEthLane,
     busy,
     txState,
+    swapCompletion,
   ])
 
   const run7702DryRun = useCallback(
@@ -2210,6 +2234,23 @@ export function useSwapExecution(params: {
 
   const executeSwapNow = useCallback(async (options?: { approvalTx?: TransactionRequest | null }) => {
     if (!swapTx) return
+    if (
+      shouldBlockSwapSubmitWhileSettling({
+        hasSwapCompletion: Boolean(swapCompletion),
+        settlement:
+          swapCompletion?.confirmationTimedOut
+            ? 'delayed'
+            : swapCompletion && !swapCompletion.txHash
+              ? 'pending'
+              : null,
+      })
+    ) {
+      throw new Error(
+        swapCompletion?.confirmationTimedOut
+          ? 'Previous swap confirmation is delayed. Dismiss that notice before starting another swap.'
+          : 'Previous swap is still confirming. Wait for settlement before starting another swap.',
+      )
+    }
     if (busy === 'executeSwap' || txState === 'signing' || txState === 'pending') {
       throw new Error('Swap already in progress. Wait for the current transaction to finish.')
     }
@@ -2851,6 +2892,13 @@ export function useSwapExecution(params: {
             if (pollController.signal.aborted) return
             const message = getErrorMessage(pollError, 'Swap submitted but confirmation timed out')
             setStatus(message)
+            // Surface a bounded delayed/recovery settlement when only a userOpHash exists.
+            // Without this, Swap.tsx stays stuck on pending (non-dismissible) forever.
+            setSwapCompletion((prev) =>
+              prev && prev.completedAt && !prev.txHash
+                ? { ...prev, confirmationTimedOut: true }
+                : prev,
+            )
           })
       }
     } catch (e: any) {
@@ -2866,6 +2914,7 @@ export function useSwapExecution(params: {
     swapTx,
     busy,
     txState,
+    swapCompletion,
     buildRouterContext,
     canary7702Eligible,
     run7702DryRun,
@@ -3008,6 +3057,10 @@ export function useSwapExecution(params: {
     setStatus('')
   }, [])
 
+  const markSwapCompletionConfirmationTimedOut = useCallback(() => {
+    setSwapCompletion((prev) => (prev ? { ...prev, confirmationTimedOut: true } : prev))
+  }, [])
+
   return {
     estimatedOut,
     effectiveSlippagePct: effectiveParsedSlippage,
@@ -3055,5 +3108,6 @@ export function useSwapExecution(params: {
     run7702DryRun,
     resetTradeState,
     clearSwapCompletion,
+    markSwapCompletionConfirmationTimedOut,
   }
 }

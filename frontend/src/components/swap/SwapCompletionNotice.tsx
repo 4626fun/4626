@@ -4,7 +4,11 @@ import { ExternalLink, X } from 'lucide-react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import type { SwapCompletion } from '@/hooks/useSwapExecution'
-import type { SwapCompletionSettlement } from '@/lib/swap/swapCompletionDismiss'
+import {
+  canAutoDismissSwapCompletion,
+  canManuallyDismissSwapCompletion,
+  type SwapCompletionSettlement,
+} from '@/lib/swap/swapCompletionDismiss'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 /** Visible dwell before fade-out begins. */
@@ -49,9 +53,7 @@ export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
     ? `${explorerHash.slice(0, 8)}…${explorerHash.slice(-6)}`
     : null
   const confirming = settlement === 'pending'
-  // Pending must stay non-dismissible so users cannot clear the quote/tx blocker
-  // and start a second overlapping swap before settlement.
-  const canDismissManually = settlement !== 'pending'
+  const canDismissManually = canManuallyDismissSwapCompletion(settlement)
   const statusLabel =
     settlement === 'confirmed'
       ? 'Swapped'
@@ -64,7 +66,9 @@ export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
     settlement === 'failed'
       ? 'Failed on Base'
       : settlement === 'delayed'
-        ? 'Check BaseScan for the latest status'
+        ? completion.txHash
+          ? 'Check BaseScan, then dismiss to continue'
+          : 'Still confirming — dismiss only if you want to unlock another swap'
         : confirming
           ? 'Confirming on Base…'
           : null
@@ -72,9 +76,9 @@ export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
 
   // Parent remounts this notice via `key={completion.completedAt}` for each trade.
   useEffect(() => {
-    // Keep pending and failed notices mounted: pending until receipt classification,
-    // failed until the user dismisses after reviewing BaseScan.
-    if (settlement === 'pending' || settlement === 'failed') return
+    // Only confirmed receipts auto-dismiss. Delayed is not terminal on-chain —
+    // keep it mounted until the user explicitly acknowledges recovery.
+    if (!canAutoDismissSwapCompletion(settlement)) return
 
     const timer = window.setTimeout(() => {
       setOpen(false)
