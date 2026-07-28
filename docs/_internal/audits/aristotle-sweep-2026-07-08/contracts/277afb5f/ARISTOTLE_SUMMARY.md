@@ -1,0 +1,14 @@
+# Summary of changes for run 64435fec-a95f-42b6-84b0-8e081c58cc54
+Performed a security audit of the 4626 Solidity vault infrastructure (~40k LoC, 104 files) prioritizing the requested categories (reentrancy, access control, upgradeability, accounting, signature validation, oracle, token-transfer edge cases, initialization).
+
+Deliverable: a full report at `docs/audits/SECURITY_AUDIT_2026-07.md` with severity ratings, concrete exploit paths, affected files/functions, and remediation for each finding, plus a list of areas reviewed with no material findings.
+
+Key results:
+- The codebase is already strongly hardened from a prior audit cycle (ERC-4626 inflation protection, CEI ordering, nonReentrant guards, oracle staleness/deviation/sequencer checks, EIP-712 nonce/deadline signatures, LayerZero peer/EID auth). No new critical/high issue was found in the reviewed core contracts.
+- Two Medium issues were found as lane-parity drift — security fixes present in the creator lane were never mirrored to the agent lane (the project’s own policy requires these fork pairs to stay logic-identical):
+  - M-1: `AgentRevenueRouter` was missing the external-swap allowlist guard (creator fix L-3), letting a careless/compromised owner allowlist custody addresses (vault/wrapper/burnStream/tokens) that a compromised keeper could then exploit via arbitrary `swapCallData`.
+  - M-2: `AgentRevenueRouter` and `AgentGaugeController` `emergencyWithdraw` did not protect in-flight WETH fees (creator fix L-4), letting the owner drain WETH awaiting distribution.
+- Both Medium issues were remediated in place by mirroring the verified creator-lane reference code (added `_requireSafeExternalSwapAddress`/`InvalidExternalSwapAddress` and both approval-setter guards, `|| token == weth` on the router’s protected-asset check, and `PendingWethFeesProtected` on the gauge). Edits were verified for structure/brace balance; because this environment has no Solidity compiler, the team should compile and run the lane-parity CI guard and tests to confirm.
+- Lower-severity/process observations documented: the lane-parity CI guard failed to catch the above logic drift (L-1); `OVaultLPManager` rebalance slippage bounds only token0 value (L-2); the single-relayer/PULL drand randomness source is trust-assuming and publicly readable (L-3, mitigated by VRF-primary design); and two informational items on the owner-less burn-stream bootstrap invariant and remote-oracle symbol overwrite.
+
+All work is committed and pushed to the branch. Note this was a prioritized pass over the largest/most value-bearing contracts, not an exhaustive line-by-line review of all 40k lines; the report flags where deeper review is still warranted.

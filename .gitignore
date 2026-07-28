@@ -131,6 +131,8 @@ logs/
 /4626.png
 /*AKITA.png
 /*.mp4
+# Aristotle sweep raw drops belong filed under docs/audits or docs/_internal/audits, not repo root
+/*-aristotle.tar.gz
 
 # Local workspace/tooling caches
 /.worktrees/
