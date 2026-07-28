@@ -240,10 +240,10 @@ export async function refreshCreatorEthosProjection(params: {
   // but skips chart/snapshot maintenance to keep hot-lane pressure predictable.
   const projectionMode = params.mode ?? 'full'
 
-  // Volume arm: only ~hundreds of coins have volume_24h_usd > 0. Split into
-  // hot (partial idx_creator_coins_volume_rank_hot) + zero-volume mcap fill
-  // (idx_creator_coins_mcap_fill) so we never walk a full 1M-row volume index.
-  const volumeCandidateLimit = volumeLimit * 4
+  // Volume arm: only positive-volume coins (~hundreds). Uses partial index
+  // idx_creator_coins_volume_rank_hot. Zero-vol mcap fill was removed 2026-07-28:
+  // after dropping the 167MB fill index it seq-scanned ~1M rows every refresh;
+  // ethos_signal arm already covers high-score creators without volume.
 
   const result = await params.db.sql`
     WITH ethos_signal_eoas AS (
@@ -284,38 +284,17 @@ export async function refreshCreatorEthosProjection(params: {
         cc.created_at DESC NULLS LAST,
         cc.coin_address ASC
     ),
-    volume_fill AS (
-      SELECT
-        cc.coin_address,
-        lower(cc.creator_address) AS creator_address,
-        cc.created_at,
-        cc.market_cap_usd,
-        cc.volume_24h_usd
-      FROM creator_coins cc
-      WHERE cc.chain_id = 8453
-        AND cc.volume_24h_usd = 0
-      ORDER BY
-        cc.market_cap_usd DESC NULLS LAST,
-        cc.created_at DESC NULLS LAST,
-        cc.coin_address ASC
-      LIMIT ${volumeCandidateLimit}
-    ),
-    volume_candidates AS (
-      SELECT * FROM volume_hot
-      UNION ALL
-      SELECT * FROM volume_fill
-    ),
     top_by_volume AS (
       SELECT *
       FROM (
-        SELECT DISTINCT ON (vc.creator_address) vc.*
-        FROM volume_candidates vc
+        SELECT DISTINCT ON (vh.creator_address) vh.*
+        FROM volume_hot vh
         ORDER BY
-          vc.creator_address,
-          vc.volume_24h_usd DESC NULLS LAST,
-          vc.market_cap_usd DESC NULLS LAST,
-          vc.created_at DESC NULLS LAST,
-          vc.coin_address ASC
+          vh.creator_address,
+          vh.volume_24h_usd DESC NULLS LAST,
+          vh.market_cap_usd DESC NULLS LAST,
+          vh.created_at DESC NULLS LAST,
+          vh.coin_address ASC
       ) dedup
       ORDER BY volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, creator_address ASC
       LIMIT ${volumeLimit}
