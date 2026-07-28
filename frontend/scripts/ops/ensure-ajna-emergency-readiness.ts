@@ -17,14 +17,11 @@
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
+import { readCliValue } from '../../server/_lib/ajnaVaultManager/emergencyUnwindGuards.js'
 import { ensureAjnaEmergencyReadiness } from '../../server/_lib/ajnaVaultManager/ensureAjnaEmergencyReadiness.js'
 
 function getArg(name: string): string {
-  const idx = process.argv.indexOf(name)
-  if (idx === -1) return ''
-  const v = process.argv[idx + 1]
-  if (!v || v.startsWith('--')) return ''
-  return v
+  return readCliValue(process.argv, name)
 }
 
 function hasFlag(name: string): boolean {

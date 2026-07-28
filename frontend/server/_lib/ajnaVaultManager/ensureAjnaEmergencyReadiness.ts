@@ -47,6 +47,20 @@ const AUTH_ABI = [
   },
   {
     type: 'function',
+    name: 'swapper',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'paused',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
     name: 'setKeeper',
     stateMutability: 'nonpayable',
     inputs: [
@@ -118,9 +132,15 @@ export type AjnaEmergencyReadinessReport = {
   }
   /** When true, vault emergencyWithdrawFromStrategies alone should pull Ajna. */
   adapterEmergencySelfDrains: boolean
+  authState: {
+    paused: boolean
+    swapper: Address
+    swapperIsAdapter: boolean
+  }
   automationIsKeeper: boolean
   acceptedAdmin: boolean
   drainedBuckets: Array<{ bucket: string; lp: string; txHash?: Hex }>
+  remainingBuckets: Array<{ bucket: string; lp: string }>
   dryRun: boolean
   notes: string[]
   txs: Array<{ label: string; txHash: Hex }>
@@ -128,6 +148,38 @@ export type AjnaEmergencyReadinessReport = {
 
 function bytecodeHasSelector(code: Hex, selector: Hex): boolean {
   return code.toLowerCase().includes(selector.slice(2).toLowerCase())
+}
+
+export function canAdapterSelfDrain(params: {
+  hasDrainSelector: boolean
+  paused: boolean
+  swapper: Address
+  adapter: Address
+}): boolean {
+  return params.hasDrainSelector && !params.paused && getAddress(params.swapper) === getAddress(params.adapter)
+}
+
+export async function readAjnaTrackedBucketLp(params: {
+  publicClient: PublicClient
+  innerVault: Address
+}): Promise<Array<{ bucket: bigint; lp: bigint }>> {
+  const buckets = (await params.publicClient.readContract({
+    address: params.innerVault,
+    abi: INNER_ABI,
+    functionName: 'getBuckets',
+  })) as readonly bigint[]
+  const positions = await Promise.all(
+    buckets.map(async (bucket) => ({
+      bucket,
+      lp: (await params.publicClient.readContract({
+        address: params.innerVault,
+        abi: INNER_ABI,
+        functionName: 'bucketLp',
+        args: [bucket],
+      })) as bigint,
+    })),
+  )
+  return positions.filter(({ lp }) => lp !== 0n)
 }
 
 async function resolveNestedAjnaSleeve(params: {
@@ -192,13 +244,11 @@ export async function ensureAjnaEmergencyReadiness(params: {
     moveToBuffer: bytecodeHasSelector(adapterCode, MOVE_TO_BUFFER_SELECTOR),
     moveFromBuffer: bytecodeHasSelector(adapterCode, MOVE_FROM_BUFFER_SELECTOR),
   }
-  const adapterEmergencySelfDrains = adapterSelectors.drainBucketsToBuffer
-
   const txs: Array<{ label: string; txHash: Hex }> = []
   const notes: string[] = []
   let acceptedAdmin = false
 
-  const [admin, pendingAdmin, automationIsKeeperBefore] = await Promise.all([
+  const [admin, pendingAdmin, automationIsKeeperBefore, swapper, paused] = await Promise.all([
     params.publicClient.readContract({ address: sleeve.auth, abi: AUTH_ABI, functionName: 'admin' }),
     params.publicClient.readContract({ address: sleeve.auth, abi: AUTH_ABI, functionName: 'pendingAdmin' }),
     params.publicClient.readContract({
@@ -207,7 +257,25 @@ export async function ensureAjnaEmergencyReadiness(params: {
       functionName: 'isKeeper',
       args: [automationSafe],
     }),
+    params.publicClient.readContract({ address: sleeve.auth, abi: AUTH_ABI, functionName: 'swapper' }),
+    params.publicClient.readContract({ address: sleeve.auth, abi: AUTH_ABI, functionName: 'paused' }),
   ])
+  const normalizedSwapper = getAddress(swapper)
+  const swapperIsAdapter = normalizedSwapper === sleeve.adapter
+  const adapterEmergencySelfDrains = canAdapterSelfDrain({
+    hasDrainSelector: adapterSelectors.drainBucketsToBuffer,
+    paused: Boolean(paused),
+    swapper: normalizedSwapper,
+    adapter: sleeve.adapter,
+  })
+  if (paused) {
+    throw new Error(`ajna_auth_paused:${sleeve.auth}`)
+  }
+  if (!swapperIsAdapter) {
+    throw new Error(
+      `ajna_auth_swapper_mismatch:actual=${normalizedSwapper};expected=${sleeve.adapter}`,
+    )
+  }
 
   if (getAddress(admin) !== automationSafe && getAddress(pendingAdmin) === automationSafe) {
     if (!dryRun) {
@@ -252,21 +320,11 @@ export async function ensureAjnaEmergencyReadiness(params: {
   const drainedBuckets: AjnaEmergencyReadinessReport['drainedBuckets'] = []
   const needsLegacyDrain = drainBuckets && !adapterEmergencySelfDrains
   if (needsLegacyDrain) {
-    const buckets = (await params.publicClient.readContract({
-      address: sleeve.innerVault,
-      abi: INNER_ABI,
-      functionName: 'getBuckets',
-    })) as readonly bigint[]
-
-    for (const bucket of buckets) {
-      const lp = (await params.publicClient.readContract({
-        address: sleeve.innerVault,
-        abi: INNER_ABI,
-        functionName: 'bucketLp',
-        args: [bucket],
-      })) as bigint
-      if (lp === 0n) continue
-
+    const positions = await readAjnaTrackedBucketLp({
+      publicClient: params.publicClient,
+      innerVault: sleeve.innerVault,
+    })
+    for (const { bucket, lp } of positions) {
       const entry: AjnaEmergencyReadinessReport['drainedBuckets'][number] = {
         bucket: bucket.toString(),
         lp: lp.toString(),
@@ -286,6 +344,17 @@ export async function ensureAjnaEmergencyReadiness(params: {
         })
         entry.txHash = r.txHash
         txs.push({ label: `moveToBuffer(${bucket})`, txHash: r.txHash })
+        const remainingLp = (await params.publicClient.readContract({
+          address: sleeve.innerVault,
+          abi: INNER_ABI,
+          functionName: 'bucketLp',
+          args: [bucket],
+        })) as bigint
+        if (remainingLp !== 0n) {
+          throw new Error(
+            `ajna_bucket_drain_incomplete:bucket=${bucket};before=${lp};remaining=${remainingLp}`,
+          )
+        }
       }
       drainedBuckets.push(entry)
     }
@@ -301,6 +370,12 @@ export async function ensureAjnaEmergencyReadiness(params: {
           args: [automationSafe],
         }),
       )
+  const remainingBuckets = (
+    await readAjnaTrackedBucketLp({
+      publicClient: params.publicClient,
+      innerVault: sleeve.innerVault,
+    })
+  ).map(({ bucket, lp }) => ({ bucket: bucket.toString(), lp: lp.toString() }))
 
   return {
     vault,
@@ -310,9 +385,15 @@ export async function ensureAjnaEmergencyReadiness(params: {
     automationSafe,
     adapterSelectors,
     adapterEmergencySelfDrains,
+    authState: {
+      paused: Boolean(paused),
+      swapper: normalizedSwapper,
+      swapperIsAdapter,
+    },
     automationIsKeeper: automationIsKeeperAfter,
     acceptedAdmin,
     drainedBuckets,
+    remainingBuckets,
     dryRun,
     notes,
     txs,

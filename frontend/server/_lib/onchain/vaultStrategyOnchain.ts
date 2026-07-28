@@ -62,6 +62,13 @@ const CREATOR_OVAULT_STRATEGY_VIEW_ABI = [
     inputs: [{ name: 'strategy', type: 'address' }],
     outputs: [{ type: 'uint256' }],
   },
+  {
+    type: 'function',
+    name: 'activeStrategies',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
 ] as const
 
 const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
@@ -291,15 +298,26 @@ export async function readVaultActiveStrategies(params: {
     if (seen.has(key)) continue
     seen.add(key)
 
-    const weightRaw = await readContractSafe<bigint>({
-      client: params.client,
-      address: params.vault,
-      abi: CREATOR_OVAULT_STRATEGY_VIEW_ABI,
-      functionName: 'strategyWeights',
-      args: [strategy],
-    })
+    const [weightRaw, activeRaw] = await Promise.all([
+      readContractSafe<bigint>({
+        client: params.client,
+        address: params.vault,
+        abi: CREATOR_OVAULT_STRATEGY_VIEW_ABI,
+        functionName: 'strategyWeights',
+        args: [strategy],
+      }),
+      readContractSafe<boolean>({
+        client: params.client,
+        address: params.vault,
+        abi: CREATOR_OVAULT_STRATEGY_VIEW_ABI,
+        functionName: 'activeStrategies',
+        args: [strategy],
+      }),
+    ])
     const weight = typeof weightRaw === 'bigint' ? weightRaw : 0n
-    if (weight > 0n) out.push({ strategy, weight })
+    if (activeRaw === true || (activeRaw == null && weight > 0n)) {
+      out.push({ strategy, weight })
+    }
   }
 
   return out

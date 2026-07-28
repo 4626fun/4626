@@ -16,7 +16,8 @@
  *     --execute --confirm=AKITA-B2-UNWIND \
  *     [--vault 0x...] [--recipient 0x...] [--confirm-recipient=0x...] \
  *     [--step all|ajna-buffer|strategies|idle|shutdown|drain] [--skip-ajna-buffer] [--no-simulate]
- *     [--allow-remaining-debt]  # continue even if strategyDebt remains after emergencyWithdrawFromStrategies
+ *
+ * A partial strategy unwind still completes shutdown/drain containment, then exits 1.
  */
 import {
   createPublicClient,
@@ -36,7 +37,16 @@ import {
 } from 'viem/account-abstraction'
 import { base } from 'viem/chains'
 
-import { ensureAjnaEmergencyReadiness } from '../../server/_lib/ajnaVaultManager/ensureAjnaEmergencyReadiness.js'
+import {
+  assertSuccessfulUserOperationReceipt,
+  evaluateUnwindCompletion,
+  parseUnwindStep,
+  readCliValue,
+} from '../../server/_lib/ajnaVaultManager/emergencyUnwindGuards.js'
+import {
+  ensureAjnaEmergencyReadiness,
+  readAjnaTrackedBucketLp,
+} from '../../server/_lib/ajnaVaultManager/ensureAjnaEmergencyReadiness.js'
 import {
   readCanonicalCswAddressEnv,
   readCanonicalCswOwnerIndexEnv,
@@ -88,6 +98,13 @@ const VAULT_ABI = [
   },
   {
     type: 'function',
+    name: 'totalDebt',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
     name: 'strategyDebt',
     stateMutability: 'view',
     inputs: [{ name: '', type: 'address' }],
@@ -123,17 +140,30 @@ const VAULT_ABI = [
   },
 ] as const
 
+const STRATEGY_ABI = [
+  {
+    type: 'function',
+    name: 'getTotalAssets',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ERC4626_VAULT',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 const DEFAULT_VAULT = '0x4626539E5C01cc32C29755146D31755e3adA848A' as Address
 const AJNA = '0xa1A3A32C22b1A10Ea27D1688d48b90b1Ac6eD505' as Address
 const CHARM = '0xEA0dCE880FCdaBAe5942B836F90751b49621598c' as Address
 const CONFIRM_TOKEN = 'AKITA-B2-UNWIND'
 
 function getArg(name: string): string {
-  const idx = process.argv.indexOf(name)
-  if (idx === -1) return ''
-  const v = process.argv[idx + 1]
-  if (!v || v.startsWith('--')) return ''
-  return v
+  return readCliValue(process.argv, name)
 }
 
 function hasFlag(name: string): boolean {
@@ -161,7 +191,7 @@ function readBundlerUrl(): string {
 async function main(): Promise<void> {
   const mode = parseMode()
   const vault = getAddress((getArg('--vault') || DEFAULT_VAULT) as Address)
-  const step = (getArg('--step') || 'all').toLowerCase()
+  const step = parseUnwindStep(getArg('--step'))
   const noSimulate = hasFlag('--no-simulate')
 
   const smartWalletRaw = readCanonicalCswAddressEnv()
@@ -216,9 +246,10 @@ async function main(): Promise<void> {
 
   const snapshot = async () => {
     const asset = await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'asset' })
-    const [totalAssets, ajnaDebt, charmDebt, minimumTotalIdle, isShutdown, vaultAssetBal, recipientBal] =
+    const [totalAssets, totalDebt, ajnaDebt, charmDebt, minimumTotalIdle, isShutdown, vaultAssetBal, recipientBal] =
       await Promise.all([
         publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'totalAssets' }),
+        publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'totalDebt' }),
         publicClient.readContract({
           address: vault,
           abi: VAULT_ABI,
@@ -249,6 +280,7 @@ async function main(): Promise<void> {
     return {
       asset,
       totalAssets: totalAssets.toString(),
+      totalDebt: totalDebt.toString(),
       ajnaDebt: ajnaDebt.toString(),
       charmDebt: charmDebt.toString(),
       minimumTotalIdle: minimumTotalIdle.toString(),
@@ -261,6 +293,14 @@ async function main(): Promise<void> {
   const before = await snapshot()
   const plan: string[] = []
   const results: Array<{ step: string; txHash?: Hex; userOpHash?: Hex; skipped?: string }> = []
+  let unwindVerification: {
+    complete: boolean
+    totalDebt: string
+    ajnaAdapterAssets: string | null
+    remainingAjnaBuckets: Array<{ bucket: string; lp: string }>
+    error: string | null
+  } | null = null
+  let ajnaReadinessError: string | null = null
 
   const runCall = async (label: string, data: Hex, callGasLimit = 2_000_000n) => {
     plan.push(label)
@@ -308,6 +348,7 @@ async function main(): Promise<void> {
       hash: userOpHash,
       timeout: 180_000,
     })
+    assertSuccessfulUserOperationReceipt(userOpReceipt, label)
     const txHash = userOpReceipt.receipt.transactionHash as Hex
     const txReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
     if (txReceipt.status !== 'success') throw new Error(`UserOp reverted (${label}): ${txHash}`)
@@ -330,8 +371,14 @@ async function main(): Promise<void> {
       plan.push('ensureAjnaEmergencyReadiness')
     } catch (error) {
       const message = String((error as Error)?.message ?? error)
-      if (!message.includes('ajna_sleeve_not_found')) throw error
-      plan.push('ensureAjnaEmergencyReadiness:skipped_no_sleeve')
+      if (message.includes('ajna_sleeve_not_found') && BigInt(before.ajnaDebt) === 0n) {
+        plan.push('ensureAjnaEmergencyReadiness:skipped_no_sleeve')
+      } else if (step === 'ajna-buffer') {
+        throw error
+      } else {
+        ajnaReadinessError = message
+        plan.push(`ensureAjnaEmergencyReadiness:failed:${message}`)
+      }
     }
   }
 
@@ -341,17 +388,6 @@ async function main(): Promise<void> {
       encodeFunctionData({ abi: VAULT_ABI, functionName: 'emergencyWithdrawFromStrategies' }),
       10_000_000n,
     )
-    const mid = await snapshot()
-    const remainingDebt = BigInt(mid.ajnaDebt) + BigInt(mid.charmDebt)
-    if (remainingDebt > 0n) {
-      const msg = `strategy_debt_remaining:ajna=${mid.ajnaDebt};charm=${mid.charmDebt}`
-      if (mode.execute && !mode.dryRun && !hasFlag('--allow-remaining-debt')) {
-        throw new Error(`${msg} (vault emergencyWithdraw swallows strategy failures; re-run readiness or pass --allow-remaining-debt)`)
-      }
-      results.push({ step: 'verifyStrategyDebtCleared', skipped: msg })
-    } else {
-      results.push({ step: 'verifyStrategyDebtCleared' })
-    }
   }
 
   if (want('idle')) {
@@ -402,10 +438,58 @@ async function main(): Promise<void> {
   }
 
   const after = mode.execute && !mode.dryRun ? await snapshot() : before
+  if (mode.execute && !mode.dryRun && want('strategies')) {
+    let ajnaAdapterAssets: bigint | null = null
+    let remainingAjnaBuckets: Array<{ bucket: bigint; lp: bigint }> = []
+    let verificationError: string | null = null
+    try {
+      const adapter = ajnaReadiness?.adapter ?? AJNA
+      const innerVault =
+        ajnaReadiness?.innerVault ??
+        getAddress(
+          await publicClient.readContract({
+            address: adapter,
+            abi: STRATEGY_ABI,
+            functionName: 'ERC4626_VAULT',
+          }),
+        )
+      ajnaAdapterAssets = await publicClient.readContract({
+        address: adapter,
+        abi: STRATEGY_ABI,
+        functionName: 'getTotalAssets',
+      })
+      remainingAjnaBuckets = await readAjnaTrackedBucketLp({
+        publicClient: publicClient as never,
+        innerVault,
+      })
+    } catch (error) {
+      verificationError = String((error as Error)?.message ?? error)
+    }
+    const complete = evaluateUnwindCompletion({
+      totalDebt: BigInt(after.totalDebt),
+      ajnaAdapterAssets,
+      ajnaBucketLp: remainingAjnaBuckets.map(({ lp }) => lp),
+      verificationError,
+    })
+    unwindVerification = {
+      complete,
+      totalDebt: after.totalDebt,
+      ajnaAdapterAssets: ajnaAdapterAssets?.toString() ?? null,
+      remainingAjnaBuckets: remainingAjnaBuckets.map(({ bucket, lp }) => ({
+        bucket: bucket.toString(),
+        lp: lp.toString(),
+      })),
+      error: verificationError,
+    }
+    results.push({
+      step: 'verifyStrategyUnwind',
+      ...(complete ? null : { skipped: 'residual_strategy_position' }),
+    })
+  }
   process.stdout.write(
     `${JSON.stringify(
       {
-        ok: true,
+        ok: unwindVerification?.complete ?? true,
         mode: mode.execute && !mode.dryRun ? 'EXECUTE' : 'DRY_RUN',
         vault,
         recipient,
@@ -416,12 +500,17 @@ async function main(): Promise<void> {
         before,
         after,
         ajnaReadiness,
+        ajnaReadinessError,
+        unwindVerification,
         results,
       },
       null,
       2,
     )}\n`,
   )
+  if (unwindVerification && !unwindVerification.complete) {
+    process.exitCode = 1
+  }
 }
 
 main().catch((error) => {

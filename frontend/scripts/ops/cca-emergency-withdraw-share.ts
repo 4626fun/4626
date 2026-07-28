@@ -13,6 +13,7 @@
 import { createPublicClient, encodeFunctionData, erc20Abi, getAddress, http, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
+import { readCliValue } from '../../server/_lib/ajnaVaultManager/emergencyUnwindGuards.js'
 import { executeViaProtocolTreasurySafe } from '../../server/_lib/wallet/protocolTreasurySafe.js'
 
 const CCA = getAddress('0x44aCFe7E68031Bed3BE801fD242E884e72e0CFD4')
@@ -40,11 +41,7 @@ function hasFlag(name: string): boolean {
 }
 
 function getArg(name: string): string {
-  const idx = process.argv.indexOf(name)
-  if (idx === -1) return ''
-  const v = process.argv[idx + 1]
-  if (!v || v.startsWith('--')) return ''
-  return v
+  return readCliValue(process.argv, name)
 }
 
 async function main() {
