@@ -126,6 +126,19 @@ export type SwapCompletion = {
   confirmationTimedOut?: boolean
 }
 
+/** Hashless wallet_sendCalls outcomes are already past the bounded status poll. */
+export function shouldMarkSwapCompletionConfirmationTimedOut(input: {
+  txHash: string | null | undefined
+  userOpHash: string | null | undefined
+  callsId: string | null | undefined
+}): boolean {
+  // sendViaSendCalls only returns a callsId without a transaction hash after
+  // waitForCallsStatus exhausts its timeout (or never observes a receipt hash).
+  return Boolean(input.callsId && !input.txHash && !input.userOpHash)
+}
+
+
+
 type Swap7702Diagnostics = {
   at: number
   chainId: number
@@ -2819,9 +2832,20 @@ export function useSwapExecution(params: {
       const userOpHash = send.userOpHash ?? null
       const nextHash = send.transactionHash ?? send.txHashes[send.txHashes.length - 1] ?? null
       const debugHash = nextHash ?? userOpHash
+      const confirmationTimedOut = shouldMarkSwapCompletionConfirmationTimedOut({
+        txHash: nextHash,
+        userOpHash,
+        callsId: send.callsId,
+      })
       setTxHash(debugHash)
       setTxState('success')
-      setStatus(nextHash ? '' : 'Swap submitted. Confirming on Base…')
+      setStatus(
+        nextHash
+          ? ''
+          : confirmationTimedOut
+            ? 'Swap confirmation is delayed. Dismiss the notice before starting another swap.'
+            : 'Swap submitted. Confirming on Base…',
+      )
 
       if (bundledApprovalTx) {
         const approvalHash = send.txHashes[0] ?? debugHash
@@ -2853,6 +2877,7 @@ export function useSwapExecution(params: {
         estimatedOut,
         completedAt: Date.now(),
         chainId: Number(params.chainId ?? BASE_CHAIN_ID),
+        confirmationTimedOut: confirmationTimedOut || undefined,
         tokenIn: {
           symbol: params.tokenInDisplay.symbol,
           name: params.tokenInDisplay.name,

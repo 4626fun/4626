@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/StdStorage.sol";
 import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
 import {SendParam, MessagingFee} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
@@ -16,6 +17,8 @@ contract MockFlushRegistry {
 }
 
 contract CreatorShareOFTDirectSpokeFeeFlushTest is Test {
+    using stdStorage for StdStorage;
+
     address internal constant OWNER = address(0xA11CE);
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
@@ -57,6 +60,24 @@ contract CreatorShareOFTDirectSpokeFeeFlushTest is Test {
         assertEq(sendParam.amountLD, 0);
         assertEq(sendParam.minAmountLD, 0);
         assertGt(sendParam.extraOptions.length, 0);
+    }
+
+    function test_flushFees_revertsWhenComposeMsgNonEmpty() external {
+        vm.prank(OWNER);
+        oft.setHubConfig(false, 30_184, address(0x1234));
+        stdstore.target(address(oft)).sig("pendingFees()").checked_write(uint256(1e18));
+
+        SendParam memory sendParam = oft.buildFlushSendParam();
+        sendParam.composeMsg = hex"01";
+
+        vm.expectRevert(bytes("No compose allowed"));
+        oft.flushFees(sendParam, MessagingFee({nativeFee: 0, lzTokenFee: 0}));
+    }
+
+    function test_renounceOwnership_disabled() external {
+        vm.prank(OWNER);
+        vm.expectRevert(bytes("RenounceDisabled"));
+        oft.renounceOwnership();
     }
 
     function _emptySendParam() internal pure returns (SendParam memory) {

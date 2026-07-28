@@ -1,0 +1,74 @@
+{
+  "commissionedAt": "2026-07-28T11:38:40Z",
+  "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "amountUsdcEach": 1,
+  "spendUsdc": 2.0,
+  "publicRepo": "4626fun/4626",
+  "publicTag": "audit/oda-2026-07-28-agent-lane",
+  "publicSha": "0c47be24efb9f48b03f54c289e2734f4cfd50cd8",
+  "publicPinUrl": "https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts",
+  "context": "Priority spend: lottery stack delta vs 496 (pin-ahead-of-live) + CreatorOracle (matches live seal). AgentOracle deferred until agent canary / after 509 triage.",
+  "jobs": [
+    {
+      "id": "lottery",
+      "title": "Lottery stack (delta vs 496)",
+      "files": [
+        "contracts/shared/lottery/manager/LotteryManager4626.sol",
+        "contracts/shared/lottery/manager/LotteryManager4626PricingLib.sol",
+        "contracts/shared/lottery/manager/VRFConsumer4626.sol",
+        "contracts/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol",
+        "contracts/shared/lottery/zk/LotteryAmoeRouter.sol"
+      ],
+      "liveAddresses": {
+        "LotteryManager4626": "0xB45E68a5867935a5734E4185977F81c528006650",
+        "VRFConsumer4626": "0x98fb5e0af3120B32E2E03400B6E51d0bde433670",
+        "LotteryAmoeRouter": "0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e"
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "bytecodeDetails": {},
+      "priorJobsContextOnly": [
+        496,
+        461
+      ],
+      "ok": true,
+      "jobId": 510,
+      "jobUrl": "https://onedollaraudit.com/audit/510",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/510",
+      "estimatedCompletionSeconds": 3600
+    },
+    {
+      "id": "creator_oracle",
+      "title": "CreatorOracle",
+      "files": [
+        "contracts/creator/oracles/CreatorOracle.sol"
+      ],
+      "liveAddresses": {
+        "note": "Per-creator CREATE2 at launch; implementation audit",
+        "Registry4626": "0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2",
+        "LotteryManager4626": "0xB45E68a5867935a5734E4185977F81c528006650"
+      },
+      "bytecodeMatch": "match",
+      "bytecodeDetails": {
+        "CreatorOracle": {
+          "match": true,
+          "head": "0x00d8de27c2775fb6f315b1f2f67948a39db99a8d5e1b8364808de0577717526d",
+          "live": "0x00d8de27c2775fb6f315b1f2f67948a39db99a8d5e1b8364808de0577717526d",
+          "detail": "matches v1.19.3 seal"
+        }
+      },
+      "priorJobsContextOnly": [],
+      "ok": true,
+      "jobId": 511,
+      "jobUrl": "https://onedollaraudit.com/audit/511",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/511",
+      "estimatedCompletionSeconds": 3600
+    }
+  ],
+  "deferred": [
+    {
+      "id": "agent_oracle",
+      "reason": "Deferred per priority \u2014 seal match but no live agent canary; revisit after agent launch or 509 triage"
+    }
+  ],
+  "note": "Do not re-pay to re-check. No broadcast/redeploy."
+}

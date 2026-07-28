@@ -11,7 +11,10 @@ REWARDS_DEPLOY="$ROOT_DIR/script/DeployRewardsEcosystem.s.sol"
 POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
 VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
+KPR_REGISTRY="$ROOT_DIR/kpr/utils/registry.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
+BATCHER_REGISTRY_AUTH="$ROOT_DIR/frontend/server/_lib/deploy/ensureBatcherRegistryAuthorization.ts"
+DEPLOY_VAULT_PAGE="$ROOT_DIR/frontend/src/pages/deploy/DeployVault.tsx"
 CURRENT_RELEASE="v1.20.0"
 CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
 # The production deploy payload is the checked-in DEPLOY_BYTECODE bundle, not
@@ -140,17 +143,38 @@ require_rg_regex "payoutRouterFactory:[[:space:]]*addr\\(['\"]000000000000000000
 require_rg "deploymentBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcher default'
 require_rg "deploymentBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" 'frontend deploymentBatcherAutoHandoff default'
 require_rg_regex "['\"]$lottery_manager['\"][[:space:]]+as[[:space:]]+const" "$KPR_SOLANA_CANONICAL" 'KPR canonical LotteryManager4626'
+require_rg_regex "DEFAULT_REGISTRY_4626 = ['\"]$registry['\"]" "$KPR_REGISTRY" 'KPR default Registry4626'
+require_rg 'BASE_DEFAULTS.registry' "$BATCHER_REGISTRY_AUTH" 'deploy dry-run registry auth uses BASE_DEFAULTS'
+require_rg "DEFAULT_DEPLOYMENT_VERSION = 'v1.20.0'" "$DEPLOY_VAULT_PAGE" 'DeployVault default deployment version'
 require_rg '0x5c0115589d7F4930A0dc93417aE409f44186f4E7' "$KPR_SOLANA_SEED_ENV" 'KPR retired v1.13 LotteryManager migration'
 require_rg '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1' "$KPR_SOLANA_SEED_ENV" 'KPR superseded v1.18 LotteryManager migration'
 
 require_rg "VAULT_BATCHER = $batcher;" "$SEED_REGISTRY" 'SeedRegistry4626 VAULT_BATCHER'
 require_rg "VAULT_ACT_BATCHER = $activation_batcher;" "$SEED_REGISTRY" 'SeedRegistry4626 VAULT_ACT_BATCHER'
 require_rg "DEFAULT_REGISTRY = $registry;" "$SEED_REGISTRY" 'SeedRegistry4626 registry'
+require_rg "OVAULT_FACTORY = $factory;" "$SEED_REGISTRY" 'SeedRegistry4626 OVaultFactory'
 require_rg "LOTTERY_MANAGER = $lottery_manager;" "$SEED_REGISTRY" 'SeedRegistry4626 lottery manager'
 require_rg "DEFAULT_REGISTRY = $registry;" "$REWARDS_DEPLOY" 'rewards registry'
 require_rg "DEFAULT_LOTTERY_MANAGER = $lottery_manager;" "$REWARDS_DEPLOY" 'rewards lottery manager'
-require_rg "LOTTERY_MANAGER=\"\${LOTTERY_MANAGER:-$lottery_manager}\"" "$POST_BROADCAST" 'post-broadcast lottery manager'
-require_rg "LOTTERY_MANAGER=\"\${LOTTERY_MANAGER:-$lottery_manager}\"" "$VERCEL_SYNC" 'Vercel sync lottery manager'
+require_rg "DEFAULT_REGISTRY = $registry;" "$ROOT_DIR/script/DeployBaseMainnetDeployer.s.sol" 'BaseMainnetDeployer registry'
+require_rg "DEFAULT_LOTTERY_MANAGER = $lottery_manager;" "$ROOT_DIR/script/DeployBaseMainnetDeployer.s.sol" 'BaseMainnetDeployer lottery manager'
+require_rg "DEFAULT_VAULT_ACTIVATION_BATCHER = $activation_batcher;" "$ROOT_DIR/script/DeployBaseMainnetDeployer.s.sol" 'BaseMainnetDeployer activation batcher'
+require_rg "LOTTERY_MANAGER=\"$lottery_manager\"" "$POST_BROADCAST" 'post-broadcast lottery manager'
+require_rg "UNIVERSAL_CREATE2_DEPLOYER=\"$create2_from_store\"" "$POST_BROADCAST" 'post-broadcast CREATE2 deployer'
+require_rg "DEPLOYMENT_BATCHER_PHASE3_HELPER=\"$phase3_helper\"" "$POST_BROADCAST" 'post-broadcast Phase3 helper'
+require_rg "DEPLOYMENT_BATCHER_SHARE_MESH_HELPER=\"$share_mesh_helper\"" "$POST_BROADCAST" 'post-broadcast ShareMesh helper'
+require_rg "CREATE2=\"$create2_from_store\"" "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script CREATE2 deployer'
+require_rg "FACTORY=\"$factory\"" "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script OVaultFactory'
+require_rg "BATCHER=\"$batcher\"" "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script DeploymentBatcher'
+require_rg "PHASE3=\"$phase3_helper\"" "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script Phase3 helper'
+require_rg "SHARE_MESH=\"$share_mesh_helper\"" "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script ShareMesh helper'
+require_rg "LOTTERY_MANAGER=\"$lottery_manager\"" "$VERCEL_SYNC" 'Vercel sync lottery manager'
+require_rg "UNIVERSAL_CREATE2_DEPLOYER=\"$create2_from_store\"" "$VERCEL_SYNC" 'Vercel sync CREATE2 deployer'
+require_rg "DEPLOYMENT_BATCHER=\"$batcher\"" "$VERCEL_SYNC" 'Vercel sync DeploymentBatcher'
+require_rg "REGISTRY=\"$registry\"" "$VERCEL_SYNC" 'Vercel sync Registry4626'
+require_rg 'tmp/base-v1.20.0-handoff.env' "$ROOT_DIR/script/authorize-v1180-batcher-deployers.sh" 'authorize-script prefers v1.20.0 handoff'
+require_rg 'tmp/base-v1.20.0-handoff.env' "$POST_BROADCAST" 'post-broadcast prefers v1.20.0 handoff'
+require_rg 'tmp/base-v1.20.0-handoff.env' "$VERCEL_SYNC" 'Vercel sync prefers v1.20.0 handoff'
 
 for retired_script in \
   "$ROOT_DIR/script/DeployLotteryManagerCreate2.s.sol" \

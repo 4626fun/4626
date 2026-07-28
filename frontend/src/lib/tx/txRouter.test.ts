@@ -806,6 +806,40 @@ describe('txRouter', () => {
     expect(result.send.callsId).toBe('0xcallbundle')
   })
 
+  it('keeps polling wallet_sendCalls after a transient status error', async () => {
+    let statusAttempts = 0
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'wallet_sendCalls') return '0xcallbundle'
+      if (method === 'wallet_getCallsStatus') {
+        statusAttempts += 1
+        if (statusAttempts === 1) throw new Error('temporary provider failure')
+        return { status: 200, receipts: [{ transactionHash: HASH_A }] }
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const context = makeContext({
+      executionMode: 'canonical',
+      walletClient: { request },
+      capabilities: {
+        paymasterService: true,
+        atomicStatus: 'supported',
+        supports5792: true,
+      },
+    })
+
+    const result = await buildAndSendCalls({
+      context,
+      calls: [
+        { to: ADDRESS_B, from: ADDRESS_A, data: '0xaaaa', value: '0', chainId: 8453 },
+        { to: ADDRESS_C, from: ADDRESS_A, data: '0xbbbb', value: '0', chainId: 8453 },
+      ],
+    })
+
+    expect(statusAttempts).toBe(2)
+    expect(result.send.transactionHash).toBe(HASH_A)
+  })
+
+
   it('adds Builder Codes suffix on outbound EOA request payloads', async () => {
     const request = vi.fn(async ({ method }: { method: string; params?: unknown[] }) => {
       if (method !== 'eth_sendTransaction') throw new Error(`unexpected method: ${method}`)

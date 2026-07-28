@@ -7,11 +7,18 @@ import type { ShareBridgeReadClient } from './shareBridgeReadClient'
 import { BASE_DEFAULTS } from '../../config/contracts.defaults.js'
 
 import {
+  attachFinalizeShareBridgeValueToCalls,
   decodeFinalizePhase2Call,
+  isFinalizePhase2CallSelector,
   quoteFinalizeShareBridgeNativeFee,
   readFinalizePhase2WrapperHasBytecode,
+  type DeploySessionStyleCall,
   type FinalizeShareBridgeQuoteError,
 } from './finalizeShareBridgeFee.js'
+import {
+  formatBaseShareMeshUlnGateFailure,
+  readAndAssessBaseShareMeshUln,
+} from './shareMeshLzBaseUlnGate.js'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 
@@ -56,6 +63,7 @@ export class ShareBridgeOftWiringError extends Error {
     | 'oft_peer_not_configured'
     | 'share_oft_peer_mismatch'
     | 'quote_failed'
+    | 'lz_uln_pathway_not_ready'
 
   constructor(
     code: ShareBridgeOftWiringError['code'],
@@ -166,4 +174,62 @@ export async function assertShareBridgeOftWiringForFinalize(params: {
   }
 
   if (!status.bridgeRequired) return
+
+  const decoded = decodeFinalizePhase2Call(params.finalizeCallData)
+  if (!decoded) {
+    throw new ShareBridgeOftWiringError(
+      'finalize_decode_failed',
+      'Unable to decode finalizePhase2 calldata for Share-mesh ULN gate.',
+    )
+  }
+
+  const uln = await readAndAssessBaseShareMeshUln({
+    publicClient: params.publicClient,
+    shareOft: decoded.params.shareOFT,
+    solanaEid: status.solanaEid,
+  })
+  if (!uln.ok) {
+    throw new ShareBridgeOftWiringError('lz_uln_pathway_not_ready', formatBaseShareMeshUlnGateFailure(uln))
+  }
+}
+
+/**
+ * Finalize-send prep for deploy-session continue/advance.
+ *
+ * Session create may run `assertShareBridgeOftWiringForFinalize` before the
+ * Phase 1 wrapper exists (early-return). OVault mesh preflight runs only after
+ * `phase2_finalize_confirmed` — too late to stop a B2-class ShareOFT burn.
+ * Re-run fee attach + ULN assert immediately before submitting finalize.
+ */
+export async function prepareFinalizeShareBridgeCallsForSend<T extends DeploySessionStyleCall>(params: {
+  publicClient: ShareBridgeReadClient
+  calls: T[]
+  registryAddress?: Address
+}): Promise<T[]> {
+  const attached = await attachFinalizeShareBridgeValueToCalls({
+    publicClient: params.publicClient,
+    calls: params.calls,
+  })
+
+  for (const call of attached) {
+    if (typeof call.data !== 'string') continue
+    const data = call.data as Hex
+    if (data.length <= 10) continue
+    const selector = data.slice(0, 10).toLowerCase()
+    if (!isFinalizePhase2CallSelector(selector)) continue
+    if (typeof call.to !== 'string' || !isAddress(call.to)) {
+      throw new ShareBridgeOftWiringError(
+        'bridge_not_configured',
+        'finalizePhase2 call target must be a valid deployment batcher address.',
+      )
+    }
+    await assertShareBridgeOftWiringForFinalize({
+      publicClient: params.publicClient,
+      batcherAddress: getAddress(call.to as Address),
+      finalizeCallData: data,
+      registryAddress: params.registryAddress,
+    })
+  }
+
+  return attached
 }

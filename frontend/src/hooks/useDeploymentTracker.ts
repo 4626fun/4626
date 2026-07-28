@@ -185,5 +185,5 @@ export function useDeploymentTracker(owner: Address | null, version: string) {
 export function getDeploymentVersion(): string {
   const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.20.0'
   const v = String(raw).trim()
-  return v.length > 0 ? v : 'v1.14.0'
+  return v.length > 0 ? v : 'v1.20.0'
 }

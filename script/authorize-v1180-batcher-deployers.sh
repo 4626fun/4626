@@ -25,20 +25,31 @@ if [[ -z "${PRIVATE_KEY:-}" || -z "${BASE_RPC_URL:-}" ]]; then
   set +a
 fi
 
-HANDOFF="${ROOT_DIR}/tmp/base-v1.18.0-handoff.env"
-if [[ -f "$HANDOFF" ]]; then
+HANDOFF="${BASE_RELEASE_HANDOFF_ENV_PATH:-}"
+if [[ -z "$HANDOFF" ]]; then
+  if [[ -f "${ROOT_DIR}/tmp/base-v1.20.0-handoff.env" ]]; then
+    HANDOFF="${ROOT_DIR}/tmp/base-v1.20.0-handoff.env"
+  elif [[ -f "${ROOT_DIR}/tmp/base-v1.19.1-handoff.env" ]]; then
+    HANDOFF="${ROOT_DIR}/tmp/base-v1.19.1-handoff.env"
+  elif [[ -f "${ROOT_DIR}/tmp/base-v1.18.0-handoff.env" ]]; then
+    HANDOFF="${ROOT_DIR}/tmp/base-v1.18.0-handoff.env"
+  fi
+fi
+if [[ -n "$HANDOFF" && -f "$HANDOFF" ]]; then
   set -a
   # shellcheck disable=SC1091
   source "$HANDOFF"
   set +a
 fi
 
-# v1.19.1 greenfield defaults (docs/reference/addresses.md)
-CREATE2="${UNIVERSAL_CREATE2_DEPLOYER:-0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2}"
-FACTORY="${OVAULT_FACTORY:-0xCAb65a066A4D52DD29ffB418B319819176b89610}"
-BATCHER="${DEPLOYMENT_BATCHER:-0xa18169caf37fa0347285B16aAFC2B09eCB43F145}"
-PHASE3="${DEPLOYMENT_BATCHER_PHASE3_HELPER:-0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74}"
-SHARE_MESH="${DEPLOYMENT_BATCHER_SHARE_MESH_HELPER:-0x73b6efB7196CdFa6c095Dc196559c88818Cd3211}"
+# Force live v1.20.0 pins (docs/reference/addresses.md) after handoff source.
+# Authorizing the new batcher on a superseded CREATE2 reports success while
+# live deploys still fail with NotAuthorizedDeployer.
+CREATE2="0xdffB25505F5050E15B3602296330Ef352127d1Ef"
+FACTORY="0x29AB55092F4009aa3F3603f32b11A6B02e6F0eb5"
+BATCHER="0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032"
+PHASE3="0x3Ed642288cd03846e9dA956cF95812d3125dD274"
+SHARE_MESH="0x1BCd4768180671Aa435C845239e05Afc81a496cA"
 
 authorize_create2() {
   local deployer="$1"

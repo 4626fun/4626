@@ -26,7 +26,15 @@
   let accountFrom = null
   /** @type {Array<{subject:string,balance:bigint,sellable:bigint,supply:bigint,estWei:bigint,stuck:boolean}>} */
   let positions = []
+  /** Lowercase owner that `positions` was scanned for. */
+  /** @type {string|null} */
+  let positionsOwner = null
   let busy = false
+  /** Monotonic generation so interleaved refresh() commits cannot clobber a newer scan. */
+  let refreshGeneration = 0
+  /** Subjects accepted by wallet_sendCalls but not yet confirmed/refreshed away. */
+  /** @type {Set<string>} */
+  const lockedSubjects = new Set()
   /** @type {bigint} */
   let lastGasWei = 0n
   /** MetaMask atomic batches — keep ≤20 so ~96 sells ≈ 5 confirms. */
@@ -244,10 +252,12 @@
       return
     }
 
+    const ownerAtStart = account
+    const generation = ++refreshGeneration
     busy = true
     updateButtons()
     try {
-      const gasWei = await getGasWei(account)
+      const gasWei = await getGasWei(ownerAtStart)
       lastGasWei = gasWei
       $('gas').textContent = formatEth(gasWei) + ' ETH'
       const gasOk = gasWei >= MIN_GAS_WEI
@@ -258,7 +268,7 @@
 
       setStatus(`Leyendo saldos de ${subjects.length} sujetos…`, 'info')
 
-      const balResults = await multicall(subjects.map((s) => callDataBalance(s, account)))
+      const balResults = await multicall(subjects.map((s) => callDataBalance(s, ownerAtStart)))
 
       const held = []
       for (let i = 0; i < subjects.length; i++) {
@@ -269,6 +279,9 @@
       }
 
       if (!held.length) {
+        if (generation !== refreshGeneration || account !== ownerAtStart) return
+        lockedSubjects.clear()
+        positionsOwner = ownerAtStart
         positions = []
         renderPositions()
         setStatus('Esta cartera no tiene shares de Friend.tech v1 (según la lista de sujetos preparada).', 'warn')
@@ -313,7 +326,20 @@
       }
 
       priced.sort((a, b) => (a.estWei < b.estWei ? 1 : a.estWei > b.estWei ? -1 : 0))
-      positions = priced
+      if (generation !== refreshGeneration || account !== ownerAtStart) {
+        return
+      }
+      // Drop locks for subjects that no longer have a balance for this owner.
+      const heldSubjects = new Set(priced.map((p) => String(p.subject).toLowerCase()))
+      for (const subject of [...lockedSubjects]) {
+        if (!heldSubjects.has(subject)) lockedSubjects.delete(subject)
+      }
+      positionsOwner = ownerAtStart
+      positions = priced.map((p) =>
+        lockedSubjects.has(String(p.subject).toLowerCase())
+          ? { ...p, sellable: 0n }
+          : p,
+      )
       renderPositions()
 
       const sellable = positions.filter((p) => p.sellable > 0n)
@@ -401,13 +427,36 @@
     throw new Error('wallet_sendCalls no devolvió un id de lote.')
   }
 
+
+  function lockSubjects(rows) {
+    for (const row of rows) {
+      const subject = String(row.subject || '').toLowerCase()
+      if (!subject) continue
+      lockedSubjects.add(subject)
+    }
+    if (!positions.length) return
+    positions = positions.map((p) =>
+      lockedSubjects.has(String(p.subject || '').toLowerCase())
+        ? { ...p, sellable: 0n }
+        : p,
+    )
+    renderPositions()
+  }
+
   async function waitForAtomicCompletion(provider, callsId) {
     const deadline = Date.now() + ATOMIC_STATUS_TIMEOUT_MS
     while (Date.now() < deadline) {
-      const result = await provider.request({
-        method: 'wallet_getCallsStatus',
-        params: [callsId],
-      })
+      let result
+      try {
+        result = await provider.request({
+          method: 'wallet_getCallsStatus',
+          params: [callsId],
+        })
+      } catch (_) {
+        // Transient status RPC failures are not terminal for an accepted bundle.
+        await new Promise((resolve) => setTimeout(resolve, ATOMIC_STATUS_POLL_MS))
+        continue
+      }
       const numericStatus = Number(result && result.status)
       if (Number.isFinite(numericStatus)) {
         if (numericStatus >= 200 && numericStatus < 300) return result
@@ -563,7 +612,17 @@
         const { ok, fail } = await sellSequential(provider, remaining, lines, from)
         return { submitted: submitted + ok, fail, aborted: false, err }
       }
-      await waitForAtomicCompletion(provider, callsId)
+      // Preserve accepted-bundle state even if status polling is interrupted.
+      lockSubjects(chunk)
+      try {
+        await waitForAtomicCompletion(provider, callsId)
+      } catch (err) {
+        lines.push(
+          `lote ${label} aceptado (${callsId}) pero sin confirmación aún; no se reenvía.`,
+        )
+        setLog(lines)
+        throw err
+      }
       submitted += chunk.length
       lines.push(`lote ${label} confirmado (${chunk.length}): ${callsId}`)
       setLog(lines)
@@ -578,25 +637,39 @@
     const from = txFrom()
     if (!from) return
 
-    const sellable = positions.filter((p) => p.sellable > 0n)
+    const fromLower = from.toLowerCase()
+    if (positionsOwner && positionsOwner !== fromLower) {
+      setStatus('Las posiciones escaneadas son de otra cuenta. Vuelve a escanear antes de retirar.', 'warn')
+      return
+    }
+
+    const sellable = positions.filter(
+      (p) => p.sellable > 0n && !lockedSubjects.has(String(p.subject).toLowerCase()),
+    )
     if (!sellable.length) {
-      setStatus('No hay nada vendible.', 'warn')
+      setStatus(
+        lockedSubjects.size
+          ? 'Hay ventas pendientes de confirmación. Espera o vuelve a escanear.'
+          : 'No hay nada vendible.',
+        'warn',
+      )
       return
     }
 
-    const gasWei = await getGasWei(from)
-    if (gasWei < MIN_GAS_WEI) {
-      setStatus('Hace falta ~0,001 ETH en Base para el gas antes de retirar.', 'warn')
-      $('gasHint').hidden = false
-      return
-    }
-
+    // Acquire the withdrawal lock before any await so double-clicks cannot race.
     busy = true
     updateButtons()
     const lines = []
     setLog(lines)
 
     try {
+      const gasWei = await getGasWei(from)
+      if (gasWei < MIN_GAS_WEI) {
+        setStatus('Hace falta ~0,001 ETH en Base para el gas antes de retirar.', 'warn')
+        $('gasHint').hidden = false
+        return
+      }
+
       await ensureBase(provider)
       const canBatch = await walletSupportsAtomicBatch(provider, from)
       const clicks = Math.ceil(sellable.length / ATOMIC_CHUNK)
@@ -690,6 +763,9 @@
         accountFrom = accs[0] || null
         account = accountFrom ? accountFrom.toLowerCase() : null
         $('wallet').textContent = accountFrom || '—'
+        refreshGeneration += 1
+        positionsOwner = null
+        lockedSubjects.clear()
         positions = []
         renderPositions()
         if (account) refresh().catch(() => {})

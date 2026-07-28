@@ -14,6 +14,9 @@ on the **bounded allowlist** in `scripts/check-eip170-size-gate.mjs`.
 
 Compile failures always fail the gate.
 
+Multi-solc builds (`auto_detect_solc` + exact-pinned import graphs) emit
+`<Contract>.<solcVersion>` artifact variants; these share the base contract's allowlist entry.
+
 ## Known oversize (allowlisted)
 
 Measured under `FOUNDRY_PROFILE=ci` (2026-07). These need a dedicated split PR; they are

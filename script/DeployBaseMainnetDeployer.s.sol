@@ -83,15 +83,15 @@ contract DeployBaseMainnetDeployer is Script {
     string constant SHARE_MESH_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherShareMeshHelper:";
     string constant UTILS_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUtilsHelper:";
 
-    // Live product-address fallbacks (v1.19.1 greenfield — docs/reference/addresses.md).
+    // Live product-address fallbacks (v1.20.0 greenfield — docs/reference/addresses.md).
     // Independent of DEFAULT_DEPLOYMENT_EPOCH_TAG, which only drives CREATE2 salt derivation.
-    address constant DEFAULT_REGISTRY = 0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2;
+    address constant DEFAULT_REGISTRY = 0xF60a1490C4129f2b6ae540734D3C2C8C6111824e;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA;
-    address constant DEFAULT_LOTTERY_MANAGER = 0xB45E68a5867935a5734E4185977F81c528006650;
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x37A9136dcD3e3245E4E992a1302dfEBD3d8673B3;
+    address constant DEFAULT_LOTTERY_MANAGER = 0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;

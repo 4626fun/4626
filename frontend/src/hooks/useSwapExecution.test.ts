@@ -10,6 +10,7 @@ import {
   shouldSimulateSwapBuild,
   shouldSimulateSwapTransaction,
   shouldStartAutoQuote,
+  shouldMarkSwapCompletionConfirmationTimedOut,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
@@ -505,5 +506,35 @@ describe('assertSwapSpendBalancePreflight', () => {
         getTokenDecimals: async () => 18,
       }),
     ).resolves.toBeUndefined()
+  })
+})
+
+
+describe('shouldMarkSwapCompletionConfirmationTimedOut', () => {
+  it('marks an exhausted wallet_sendCalls poll as delayed', () => {
+    expect(
+      shouldMarkSwapCompletionConfirmationTimedOut({
+        txHash: null,
+        userOpHash: null,
+        callsId: '0xcalls',
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps transaction and UserOp confirmation paths pending', () => {
+    expect(
+      shouldMarkSwapCompletionConfirmationTimedOut({
+        txHash: `0x${'1'.repeat(64)}`,
+        userOpHash: null,
+        callsId: '0xcalls',
+      }),
+    ).toBe(false)
+    expect(
+      shouldMarkSwapCompletionConfirmationTimedOut({
+        txHash: null,
+        userOpHash: `0x${'2'.repeat(64)}`,
+        callsId: '0xcalls',
+      }),
+    ).toBe(false)
   })
 })

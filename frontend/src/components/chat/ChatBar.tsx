@@ -8,6 +8,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
+import {
+  isXmtpLocalDatabaseLockError,
+  XMTP_OPFS_LOCK_RECOVERY_STEPS,
+  XMTP_OPFS_LOCK_RECOVERY_TITLE,
+} from '@/lib/xmtp/xmtpOpfsLockRecovery'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
 import { LoadingInline } from '@/components/ui/LoadingState'
@@ -134,6 +139,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
     conversations,
     resetInstallations,
     resetLocalState,
+    reloadToReleaseLocalDatabaseLock,
     installationLimitInboxId,
     localStateResetRequired,
   } = useXmtp()
@@ -144,6 +150,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
     accountContext.activeAccountType === 'SMART_WALLET'
       ? 'Connected as Smart Wallet'
       : 'Connected as User Wallet'
+  const isOpfsLockError = isXmtpLocalDatabaseLockError(error)
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
@@ -291,7 +298,14 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
               <MessageSquare className="w-8 h-8 text-zinc-500" />
               <div className="text-sm text-zinc-400">
-                {error ? (
+                {isOpfsLockError ? (
+                  <div className="space-y-2">
+                    <div className="text-amber-200 text-xs font-medium">{XMTP_OPFS_LOCK_RECOVERY_TITLE}</div>
+                    <div className="text-amber-200/80 text-[11px] leading-relaxed">
+                      {XMTP_OPFS_LOCK_RECOVERY_STEPS}
+                    </div>
+                  </div>
+                ) : error ? (
                   <span className="text-red-400 text-xs">{error}</span>
                 ) : (
                   'Sign in to start chatting'
@@ -317,6 +331,26 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                     ? `Connect Messaging (${xmtpModeLabel})`
                     : 'Connect Messaging'}
                 </button>
+              ) : null}
+              {isOpfsLockError && !localStateResetRequired ? (
+                <div className="flex w-full max-w-[280px] flex-col items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => reloadToReleaseLocalDatabaseLock()}
+                    className="px-4 py-2 rounded-lg bg-amber-500/15 text-amber-200 text-sm font-medium hover:bg-amber-500/25 transition-colors"
+                    title="Asks other tabs to release messaging storage, then reloads this page once."
+                  >
+                    Reload to release lock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void resetLocalState()}
+                    className="px-4 py-2 rounded-lg bg-white/5 text-zinc-300 text-xs font-medium hover:bg-white/10 transition-colors"
+                    title="Last resort: clears only this browser's local XMTP database, then reconnects."
+                  >
+                    Reset local XMTP state
+                  </button>
+                </div>
               ) : null}
               {localStateResetRequired ? (
                 <>

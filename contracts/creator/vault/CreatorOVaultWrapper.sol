@@ -505,7 +505,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
 
         // Include user dust so normalization never destroys value.
-        uint256 priorDust = userDustShares[accountingUser];
+        // ODA-507 Info: only fold dust when mint recipient is the accounting user —
+        // otherwise depositFor could mint a beneficiary's dust to the operator.
+        uint256 priorDust = (accountingUser == mintTo) ? userDustShares[accountingUser] : 0;
         uint256 normalizedInput = vaultSharesAfterFee + priorDust;
 
         // NORMALIZE: Divide by 1000 to get share token amount
@@ -775,6 +777,11 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      */
     function refreshApproval() external onlyOwner {
         creatorCoin.forceApprove(address(vault), type(uint256).max);
+    }
+
+    /// @notice Disable renounce — would brick one-shot ShareOFT binding / recovery paths.
+    function renounceOwnership() public pure override {
+        revert("RenounceDisabled");
     }
 
     function _requiredLockedBacking() internal view returns (uint256) {

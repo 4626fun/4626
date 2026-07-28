@@ -22,7 +22,9 @@ import {
   getNumberQuery,
   getStringQuery,
   handleOptions,
+  isPublicReadMethod,
   requireServerKey,
+  sendPublicReadBody,
   setPublicCors,
 } from '../../../server/zora/_shared.js'
 import {
@@ -348,7 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const host = typeof req.headers.host === 'string' ? req.headers.host : ''
   const isLocalPreview = host.includes('localhost') || host.includes('127.0.0.1')
 
-  if (req.method !== 'GET') {
+  if (!isPublicReadMethod(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -417,10 +419,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const b64 = bounded.toString('base64')
           const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
           res.setHeader('Content-Type', 'image/svg+xml')
-          return res.status(200).send(svg)
+          return sendPublicReadBody(req, res, 200, svg)
         }
         res.setHeader('Content-Type', 'image/png')
-        return res.status(200).send(bounded)
+        return sendPublicReadBody(req, res, 200, bounded)
       }
     } catch (error) {
       console.warn('[token/image] static share icon serve failed; falling back to renderer:', error)
@@ -576,10 +578,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const b64 = boundedRaw.toString('base64')
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:${contentType};base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
             res.setHeader('Content-Type', 'image/svg+xml')
-            return res.status(200).send(svg)
+            return sendPublicReadBody(req, res, 200, svg)
           }
           res.setHeader('Content-Type', 'image/png')
-          return res.status(200).send(boundedRaw)
+          return sendPublicReadBody(req, res, 200, boundedRaw)
         } catch (error) {
           console.warn('[token/image] raw source processing failed; falling back to deterministic icon:', error)
         }
@@ -613,7 +615,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
       res.setHeader('Content-Type', 'image/svg+xml')
-      return res.status(200).send(svg)
+      return sendPublicReadBody(req, res, 200, svg)
     }
 
     // PNG default: generate/serve a cached raster (durable via Vercel Blob).
@@ -633,7 +635,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Cache for 24 hours at the edge; the underlying blob is content-addressed via cache keys.
     res.setHeader('Cache-Control', isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800')
     res.setHeader('Content-Type', 'image/png')
-    return res.status(200).send(Buffer.from(png))
+    return sendPublicReadBody(req, res, 200, Buffer.from(png))
   } catch (e: any) {
     console.error('[token/image] Error:', e)
     return res.status(500).json({ error: e?.message || 'Failed to generate token image' })

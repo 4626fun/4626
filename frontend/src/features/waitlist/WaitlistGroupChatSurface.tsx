@@ -4,6 +4,10 @@ import { ChatWindow } from '@/components/chat/ChatWindow'
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { useXmtp } from '@/lib/xmtp/provider'
+import {
+  isXmtpLocalDatabaseLockError,
+  XMTP_OPFS_LOCK_RECOVERY_STEPS,
+} from '@/lib/xmtp/xmtpOpfsLockRecovery'
 
 import { usePrepareWaitlistMessagingWallet } from './usePrepareWaitlistMessagingWallet'
 import { useWaitlistGroupSync } from './useWaitlistGroupSync'
@@ -74,6 +78,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     identityAddress,
     localStateResetRequired,
     resetLocalState,
+    reloadToReleaseLocalDatabaseLock,
     resetInstallations,
     installationLimitInboxId,
     refreshConversations,
@@ -136,6 +141,8 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
 
   const displayXmtpError = formatWaitlistChatError(error) ?? error
   const displayErrorForPhase = prepareError ?? displayXmtpError
+  const isOpfsLockError =
+    isXmtpLocalDatabaseLockError(error) || isXmtpLocalDatabaseLockError(prepareError)
 
   const isReauthError =
     isPrivyEmbeddedSignerAuthError(rawMessaging.prepareError || '') ||
@@ -201,12 +208,14 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     return () => window.clearTimeout(timer)
   }, [chatReady, connectAndJoin, isConnecting, joinStatus, messagingConnected, prepareBusy, walletReady])
 
-  const statusMessage = waitlistXmtpPhaseMessage(phase, {
-    joinStatus,
-    walletReady,
-    error: displayErrorForPhase,
-    syncTimedOut,
-  })
+  const statusMessage = isOpfsLockError
+    ? XMTP_OPFS_LOCK_RECOVERY_STEPS
+    : waitlistXmtpPhaseMessage(phase, {
+        joinStatus,
+        walletReady,
+        error: displayErrorForPhase,
+        syncTimedOut,
+      })
 
   const recoverGroupConversation = useCallback(async (): Promise<string | null> => {
     await syncWaitlistGroups({ resyncMembership: true })
@@ -255,7 +264,11 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
           {statusMessage ? (
             <p
               className={`text-sm leading-relaxed ${
-                isReauthError ? 'text-amber-300' : phase === 'connect_error' ? 'text-red-300' : 'text-zinc-400'
+                isOpfsLockError || isReauthError
+                  ? 'text-amber-300'
+                  : phase === 'connect_error'
+                    ? 'text-red-300'
+                    : 'text-zinc-400'
               }`}
               role="status"
               aria-live="polite"
@@ -278,6 +291,22 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
           ) : null}
 
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            {isOpfsLockError && phase !== 'local_reset_required' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => reloadToReleaseLocalDatabaseLock()}
+                >
+                  Reload to release lock
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void resetLocalState()}>
+                  Reset local XMTP state
+                </Button>
+              </>
+            ) : null}
+
             {phase === 'local_reset_required' ? (
               <Button type="button" variant="secondary" size="sm" onClick={() => void resetLocalState()}>
                 Reset local XMTP state

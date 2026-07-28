@@ -5,7 +5,7 @@ import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
-import { resolveAlfaClubCanonicalPath } from '@/lib/alfaclub/hostPaths'
+import { buildAlfaClubAbsoluteUrl, resolveAlfaClubCanonicalPath } from '@/lib/alfaclub/hostPaths'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { apiFetch } from '@/lib/api/apiBase'
 import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
@@ -125,7 +125,15 @@ export function RootRouter() {
   const legacyAlfaClubPath = resolveAlfaClubCanonicalPath(location.pathname)
   // Only legacy room/key paths move hosts. Arena, chat, and other AlfaClub
   // routes remain on their existing product host.
-  const shouldRouteToAlfaClub = Boolean(legacyAlfaClubPath)
+  // Skip when the current window is already the canonical target — otherwise
+  // AlfaClubHostRedirect parks forever on AppLoadingRegistrar.
+  const alfaClubRedirectTarget = buildAlfaClubAbsoluteUrl({
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+  })
+  const shouldRouteToAlfaClub =
+    Boolean(legacyAlfaClubPath) && !isCurrentWindowUrl(alfaClubRedirectTarget)
   const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
   const shouldRouteToApp =
     isMarketingHost &&

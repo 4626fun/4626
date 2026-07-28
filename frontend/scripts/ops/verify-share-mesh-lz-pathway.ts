@@ -40,7 +40,6 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
-import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'
 import { SOLANA_PROTOCOL_PROGRAMS } from '../../src/config/solanaProtocol.js'
 import {
   SHARE_MESH_BASE_EID,
@@ -179,8 +178,12 @@ async function readSolanaPeerBytes32(
 }
 
 async function main(): Promise<void> {
-  const shareOft = requireAddress(getArg('--share-oft', AKITA_DEFAULTS.shareOFT), 'share-oft')
-  const oftStoreRaw = getArg('--oft-store', 'Asa8DaR3bxQCAb3io5pLcYHZK4t2SeMn5jGnb1YBoDWz')
+  const shareOftRaw = getArg('--share-oft')
+  const oftStoreRaw = getArg('--oft-store')
+  if (!shareOftRaw || !oftStoreRaw) {
+    throw new Error('usage: --share-oft 0x… --oft-store <SolanaOFTStore> required (no defaults)')
+  }
+  const shareOft = requireAddress(shareOftRaw, 'share-oft')
   const mintRaw = getArg('--mint')
   const destRaw = getArg('--dest')
   const skipDestAta =

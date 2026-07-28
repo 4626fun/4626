@@ -260,6 +260,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     event LotteryResolverSet(address indexed resolver, bool allowed);
     /// @notice FIX: H-14 — duplicate callback observed and rejected
     event WinnerCallbackReplayRejected(bytes32 indexed reportId);
+    /// @notice Hub lottery forward failed; LZ delivery still succeeds so OFT path is not bricked.
+    event RemoteLotteryEntryForwardFailed(uint32 indexed srcEid, bytes32 originSender);
     event SharesMinted(address indexed to, uint256 amount);
     event SharesBurned(address indexed from, uint256 amount);
     event BuyFee(address indexed from, address indexed to, uint256 amount, uint256 fee);
@@ -728,16 +730,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (pendingFees == 0) revert NothingToFlush();
         if (hubGaugeReceiver == address(0) || hubEid == 0) revert HubNotConfigured();
 
+        // ODA-507-7: OFT `_debit` burns only `_removeDust(amountLD)` — retain shared-decimal dust
+        // in `pendingFees` so accounting matches the amount actually bridged.
         uint256 amount = pendingFees;
-        pendingFees = 0;
-        totalFeesFlushed += amount;
+        uint256 amountToSend = _removeDust(amount);
+        if (amountToSend == 0) revert NothingToFlush();
 
         // Validate the send param matches our state
         require(_sendParam.dstEid == hubEid, "Invalid dstEid");
         require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
-        require(_sendParam.amountLD == amount, "Amount mismatch");
+        require(_sendParam.amountLD == amountToSend, "Amount mismatch");
         // ODA-498-2: permissionless callers must not inject lzCompose payloads.
         require(_sendParam.composeMsg.length == 0, "No compose allowed");
+
+        pendingFees = amount - amountToSend;
+        totalFeesFlushed += amountToSend;
 
         // Execute OFT send with the contract as the debited sender.
         // Calling `this.send` makes msg.sender == address(this) in OFTCore._send,
@@ -745,7 +752,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // from the external caller's wallet.
         this.send{value: msg.value}(_sendParam, _fee, payable(msg.sender));
 
-        emit FeesFlushed(amount, hubGaugeReceiver, hubEid);
+        emit FeesFlushed(amountToSend, hubGaugeReceiver, hubEid);
     }
 
     /**
@@ -756,11 +763,12 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // FIX: M-4 — use _removeDust on minAmountLD to account for OFT shared-decimals
         // trimming; previously minAmountLD == pendingFees could be unreachable after
         // dust trimming, permanently blocking fee flushes
+        uint256 amountToSend = _removeDust(pendingFees);
         sendParam = SendParam({
             dstEid: hubEid,
             to: bytes32(uint256(uint160(hubGaugeReceiver))),
-            amountLD: pendingFees,
-            minAmountLD: _removeDust(pendingFees),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
             extraOptions: _lzReceiveOptions(DEFAULT_FLUSH_GAS_LIMIT, 0),
             composeMsg: "",
             oftCmd: ""
@@ -1026,9 +1034,17 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // FIX: AUDIT-2026-07-01-H06 — remote lottery entries arrive at the hub ShareOFT peer;
         // forward to the hub LotteryManager with the original LZ origin preserved.
         if (isHub && _isRemoteLotteryEntryMessage(_message)) {
+            // Defense-in-depth peer check (AgentShareOFT / ODA-498 inbound allowlist residual).
+            if (peers[_origin.srcEid] == bytes32(0) || _origin.sender != peers[_origin.srcEid]) {
+                revert InvalidCallback();
+            }
             address mgr = address(uint160(uint256(hubLotteryPeer)));
             if (mgr == address(0)) revert HubNotConfigured();
-            ILotteryManager4626(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
+            // ODA-507-6 parity: do not let LotteryManager reverts brick the shared OFT entrypoint.
+            try ILotteryManager4626(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message) {
+            } catch {
+                emit RemoteLotteryEntryForwardFailed(_origin.srcEid, _origin.sender);
+            }
             return;
         }
 
@@ -1408,6 +1424,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
     // GAS FUNDING
     // ================================
+
+    /// @notice Disable renounce — would brick fee/hub wiring recovery paths.
+    function renounceOwnership() public pure override {
+        revert("RenounceDisabled");
+    }
 
     // FIX: I-1 — add ETH withdrawal path for hub deployment; previously ETH from
     // LZ refunds accumulated with no recovery mechanism

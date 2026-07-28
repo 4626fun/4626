@@ -83,6 +83,7 @@ import {
 } from "@/lib/tx/txRouter";
 import type { TransactionRequest } from "@/lib/uniswap/tradingApi";
 import { useAccountContext } from "@/wallet/accountContext";
+import { useAccountMe } from "@/hooks/useAccountMe";
 import { isCanonicalCsw } from "@/wallet/canonicalWalletPolicy";
 import { useSiweAuth } from "@/hooks/useSiweAuth";
 import { useEnsurePrivyEmbeddedWallet } from "@/lib/privy/embeddedWallet";
@@ -100,6 +101,27 @@ export const ALFACLUB_MAX_KEY_AMOUNT = 100n;
 export const ALFACLUB_MAX_SLIPPAGE_BPS = 500n;
 
 /** Standalone SMART_WALLET client preference (matches /swap Base App > Privy). */
+
+export function isAlfaClubBaseAppDirectReady(input: {
+  connectedAddress: string | null | undefined;
+  connectedWalletClientAddress: string | null | undefined;
+  profileCanonicalCswAddress: string | null | undefined;
+  connector?: unknown;
+}): boolean {
+  return (
+    isBaseAppDirectCswPath({
+      connectedAddress: input.connectedAddress,
+      canonicalCswAddress: input.profileCanonicalCswAddress,
+      connector: input.connector,
+    }) &&
+    isBaseAppDirectCswPath({
+      connectedAddress: input.connectedWalletClientAddress,
+      canonicalCswAddress: input.profileCanonicalCswAddress,
+      connector: input.connector,
+    })
+  );
+}
+
 export type AlfaClubSmartWalletClientPreference =
   | "base-app-direct"
   | "internal-embedded"
@@ -147,6 +169,8 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   configReady: boolean;
   requestedMarketMatches: boolean;
   executionAddress: Address | null;
+  /** Blocks submit while another swap settlement lock is active (embedded /swap). */
+  submissionBlockedReason?: string | null;
   /** When false, sender is known but the signing wallet client is not ready. */
   walletClientReady?: boolean;
   loading: boolean;
@@ -161,6 +185,7 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   /** When buyWithEth: Zora ETH→AKITA quote request failed. */
   ethFundingQuoteFailed?: boolean;
 }): string | null {
+  if (params.submissionBlockedReason) return params.submissionBlockedReason;
   if (!params.configReady)
     return "Official Sudoswap market deployment is not configured";
   if (!params.requestedMarketMatches)
@@ -288,6 +313,8 @@ type AlfaClubLiquidityProps = {
   onPrimaryAction?: () => void;
   forcePrimaryActionEnabled?: boolean;
   primaryActionHint?: string | null;
+  /** When set, disables key-trade submit (e.g. unresolved /swap settlement). */
+  submissionBlockedReason?: string | null;
 };
 
 export function AlfaClubLiquidity({
@@ -305,10 +332,14 @@ export function AlfaClubLiquidity({
   onPrimaryAction,
   forcePrimaryActionEnabled,
   primaryActionHint = null,
+  submissionBlockedReason = null,
 }: AlfaClubLiquidityProps = {}) {
   const queryClient = useQueryClient();
   const account = useAccount();
   const accountContext = useAccountContext();
+  const accountMe = useAccountMe();
+  const profileCanonicalCswAddress =
+    accountMe.me?.accountSignals?.canonicalCswAddress ?? null;
   const publicClient = usePublicClient({ chainId: base.id });
   const { data: connectedWalletClient } = useWalletClient({ chainId: base.id });
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
@@ -330,7 +361,7 @@ export function AlfaClubLiquidity({
     ensuredEmbeddedEoaAddress,
     ensureEmbeddedWallet,
     authAddress: (authAddress as Address | null) ?? null,
-    canonicalAddress: (accountContext.cswAddress as Address | null) ?? null,
+    canonicalAddress: (profileCanonicalCswAddress as Address | null) ?? null,
   });
   const isSmartWalletAccount = accountContext.activeAccountType === "SMART_WALLET";
   const internalCanonicalWalletClient = isSmartWalletAccount
@@ -338,9 +369,16 @@ export function AlfaClubLiquidity({
     : null;
   // Match /swap: Coinbase/Base App connected as the CSW itself prefers CSW-direct
   // signing over Privy embedded, even when an embedded client is hydrated.
-  const baseAppDirectConnected = isBaseAppDirectCswPath({
+  const connectedWalletClientAddress = (
+    connectedWalletClient as
+      | { account?: { address?: string } }
+      | null
+      | undefined
+  )?.account?.address;
+  const baseAppDirectConnected = isAlfaClubBaseAppDirectReady({
     connectedAddress: account.address,
-    canonicalCswAddress: accountContext.cswAddress,
+    connectedWalletClientAddress,
+    profileCanonicalCswAddress,
     connector: account.connector,
   });
   // Match /swap: non-platform CSW may use a confirmed external EOA owner when the
@@ -350,8 +388,8 @@ export function AlfaClubLiquidity({
     !baseAppDirectConnected &&
     !internalCanonicalWalletClient &&
     accountContext.eoaIsOwnerOfCsw === true &&
-    Boolean(accountContext.cswAddress) &&
-    !isCanonicalCsw(accountContext.cswAddress) &&
+    Boolean(profileCanonicalCswAddress) &&
+    !isCanonicalCsw(profileCanonicalCswAddress) &&
     Boolean(connectedWalletClient);
   const smartWalletClientPreference = isSmartWalletAccount
     ? resolveAlfaClubSmartWalletClientPreference({
@@ -456,11 +494,14 @@ export function AlfaClubLiquidity({
     accountContext.activeAccountType === "SMART_WALLET" ? "canonical" : "eoa";
   // Match /swap sender resolution: prefer the active account, then the profile CSW
   // (session can be execution-ready via CSW even when wagmi has no signer yet).
-  const executionAddress = (accountContext.activeAccount ??
-    accountContext.cswAddress ??
-    (executionMode === "eoa"
-      ? (accountContext.signerAddress ?? account.address ?? null)
-      : null)) as Address | null;
+  const executionAddress = (
+    executionMode === "canonical"
+      ? profileCanonicalCswAddress
+      : (accountContext.activeAccount ??
+        accountContext.signerAddress ??
+        account.address ??
+        null)
+  ) as Address | null;
 
   const marketQuery = useQuery({
     queryKey: [
@@ -1075,7 +1116,7 @@ export function AlfaClubLiquidity({
       executionTrack,
       walletClient,
       publicClient,
-      canonicalAddress: accountContext.cswAddress ?? null,
+      canonicalAddress: profileCanonicalCswAddress ?? null,
       signerAddress: resolvedSignerAddress,
       executionAddress,
       signerType: usingPrivyEmbeddedSigner ? "EOA" : accountContext.signerType,
@@ -1092,7 +1133,7 @@ export function AlfaClubLiquidity({
     account.connector?.id,
     account.connector?.name,
     accountContext.capabilities,
-    accountContext.cswAddress,
+    profileCanonicalCswAddress,
     accountContext.signerType,
     executionAddress,
     executionMode,
@@ -1104,6 +1145,10 @@ export function AlfaClubLiquidity({
   ]);
 
   const submit = useCallback(async () => {
+    if (submissionBlockedReason) {
+      toast.error(submissionBlockedReason);
+      return;
+    }
     if (
       !publicClient ||
       !executionAddress ||
@@ -1325,6 +1370,7 @@ export function AlfaClubLiquidity({
         calls = buildAlfaClubEthFundingCalls({
           fundingSwap,
           preparatoryCalls,
+          expectedFundingInputAmount: ethAmount,
           fundingOutputAmount,
           sender: executionAddress,
           router,
@@ -1414,6 +1460,7 @@ export function AlfaClubLiquidity({
     slippageBps,
     slippageInput,
     resolvedSignerAddress,
+    submissionBlockedReason,
     switchChainAsync,
     walletClient,
   ]);
@@ -1422,6 +1469,7 @@ export function AlfaClubLiquidity({
     configReady,
     requestedMarketMatches,
     executionAddress,
+    submissionBlockedReason,
     walletClientReady: Boolean(walletClient),
     loading: marketQuery.isLoading || (Boolean(keyAmount) && quoteQuery.isFetching && !quoteQuery.data),
     snapshot,

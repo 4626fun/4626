@@ -30,3 +30,5 @@ pnpm -C frontend ops:verify-share-mesh-lz \
 ```
 
 Exit **0** required before finalize / Pipe A. Compatible-but-wrong values (e.g. both sides at 10) still fail — restore `[15, 32]`.
+
+**Deploy UI** Pipe A panel (`ShareBridgeFinalizeWiringPanel`) shows Base ULN pathway status; finalize also fail-closes on Base→Solana ULN via `assertShareBridgeOftWiringForFinalize` → `readAndAssessBaseShareMeshUln` (`lz_uln_pathway_not_ready`). Full bidirectional Solana checks remain ops CLI + `verify-post-phase1-mesh-readiness` (quoteSend then `ops:verify-share-mesh-lz`).

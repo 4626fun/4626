@@ -70,6 +70,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     // FIX: M-01 — per-user flash loan protection (wrapper-level cooldown)
     mapping(address => uint256) public lastWrapperDepositBlock;
+    /// @notice ShareOFT units still under wrapper cooldown ("hot" balance).
+    /// @dev ODA-507-1 / Creator M-08 parity — gates only hot units so dust transfers
+    ///      cannot freeze an established holder's cooled balance.
+    mapping(address => uint256) public cooldownShareOFTBalance;
     uint256 public wrapperWithdrawDelayBlocks = 1;
 
     /// @notice Fees (basis points) - 0 by default for simplicity
@@ -159,8 +163,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         isWhitelisted[_owner] = true;
         isBeneficiaryOperator[_owner] = true;
 
-        // Infinite approval for vault deposits
-        IERC20(_agentToken).approve(_vault, type(uint256).max);
+        // Infinite approval for vault deposits (ODA-507-13 / Creator forceApprove parity)
+        IERC20(_agentToken).forceApprove(_vault, type(uint256).max);
     }
 
     // ================================
@@ -265,8 +269,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // 4. Check slippage
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 / ODA-507-1 — record hot ShareOFT units for wrapper cooldown
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(msg.sender, received, shareOFTOut);
     }
@@ -282,8 +286,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 vaultShareAmount = vault.deposit(received, address(this));
         shareOFTOut = _wrapInternal(vaultShareAmount, msg.sender, msg.sender);
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 / ODA-507-1 — record hot ShareOFT units for wrapper cooldown
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(msg.sender, received, shareOFTOut);
     }
@@ -308,8 +312,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         shareOFTOut = _wrapInternal(vaultShareAmount, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
-        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        // FIX: M-01 / ODA-507-1 — record hot ShareOFT units for wrapper cooldown
+        _recordWrapperCooldown(msg.sender, shareOFTOut);
 
         emit Deposited(beneficiary, received, shareOFTOut);
     }
@@ -332,8 +336,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     function withdraw(uint256 amount, uint256 minOut) external nonReentrant returns (uint256 agentTokenOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
-        // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        // FIX: M-01 / ODA-507-1 — enforce per-user cooldown on hot units only
+        _requireWrapperCooldown(msg.sender, amount);
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
         uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
@@ -354,8 +358,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     function withdraw(uint256 amount) external nonReentrant returns (uint256 agentTokenOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
-        // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        // FIX: M-01 / ODA-507-1 — enforce per-user cooldown on hot units only
+        _requireWrapperCooldown(msg.sender, amount);
 
         uint256 vaultShareAmount = _unwrapInternal(amount, msg.sender, msg.sender);
         _requireSynchronousRedemption(vaultShareAmount);
@@ -378,8 +382,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         _requireBeneficiaryOperator(beneficiary);
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
-        // FIX: M-01 — enforce per-user cooldown
-        _requireWrapperCooldown(msg.sender);
+        // FIX: M-01 / ODA-507-1 — enforce per-user cooldown on hot units only
+        _requireWrapperCooldown(msg.sender, amount);
 
         uint256 vaultShareAmount = _unwrapInternal(amount, beneficiary, msg.sender);
         _requireSynchronousRedemption(vaultShareAmount);
@@ -410,9 +414,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // Wrap internally
         amountOut = _wrapInternal(amount, msg.sender, msg.sender);
 
-        // FIX: M-08 — advanced wrap mints ShareOFT and must participate in
+        // FIX: M-08 / ODA-507-1 — advanced wrap mints ShareOFT and must participate in
         // the same wrapper-level cooldown as deposit paths.
-        lastWrapperDepositBlock[msg.sender] = block.number;
+        _recordWrapperCooldown(msg.sender, amountOut);
     }
 
     /**
@@ -424,12 +428,14 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     function unwrap(uint256 amount) external nonReentrant returns (uint256 amountOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
-        // FIX: M-08 — advanced unwrap releases vault shares directly and must
+        // FIX: M-08 / ODA-507-1 — advanced unwrap releases vault shares directly and must
         // enforce the same cooldown as withdraw paths.
-        _requireWrapperCooldown(msg.sender);
+        _requireWrapperCooldown(msg.sender, amount);
 
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
+        // ODA-498-4 parity: large unwraps must not bypass the async redemption gate.
+        _requireSynchronousRedemption(amountOut);
 
         // Transfer vault shares to user
         IERC20(address(vault)).safeTransfer(msg.sender, amountOut);
@@ -469,7 +475,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         }
 
         // Include user dust so normalization never destroys value.
-        uint256 priorDust = userDustShares[accountingUser];
+        // ODA-507 Info: only fold dust when mint recipient is the accounting user —
+        // otherwise depositFor could mint a beneficiary's dust to the operator.
+        uint256 priorDust = (accountingUser == mintTo) ? userDustShares[accountingUser] : 0;
         uint256 normalizedInput = vaultSharesAfterFee + priorDust;
 
         // NORMALIZE: Divide by 1000 to get share token amount
@@ -513,7 +521,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     {
         // DENORMALIZE: Multiply by 1000 and include user's accumulated dust.
         // 1 ◆ATIKA → 1000 ◇ATIKA (+ user dust remainder)
-        uint256 userDust = userDustShares[accountingUser];
+        // ODA-507-2 / ODA-498-3 parity: only reclaim dust when the ShareOFT burner is
+        // the accounting user — otherwise a beneficiary-operator withdrawFor could
+        // siphon a third party's dust into the operator's redemption.
+        uint256 userDust = (accountingUser == burnFrom) ? userDustShares[accountingUser] : 0;
         uint256 vaultSharesBeforeFee = shareOFTIn * NORMALIZATION_FACTOR + userDust;
 
         uint256 fee = 0;
@@ -740,7 +751,12 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      * @notice Refresh vault approval if needed
      */
     function refreshApproval() external onlyOwner {
-        agentToken.approve(address(vault), type(uint256).max);
+        agentToken.forceApprove(address(vault), type(uint256).max);
+    }
+
+    /// @notice Disable renounce — would brick one-shot ShareOFT binding / recovery paths.
+    function renounceOwnership() public pure override {
+        revert("RenounceDisabled");
     }
 
     function _requiredLockedBacking() internal view returns (uint256) {
@@ -754,11 +770,28 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         }
     }
 
-    // FIX: M-01 — enforce per-user cooldown at the wrapper level
-    function _requireWrapperCooldown(address user) internal view {
+    // FIX: M-01 / ODA-507-1 — record newly minted ShareOFT as hot at the wrapper level.
+    function _recordWrapperCooldown(address user, uint256 amount) internal {
+        uint256 priorBlock = lastWrapperDepositBlock[user];
+        uint256 priorHotBalance = cooldownShareOFTBalance[user];
+        if (block.number >= priorBlock + wrapperWithdrawDelayBlocks) {
+            priorHotBalance = 0;
+        }
+
+        lastWrapperDepositBlock[user] = block.number;
+        cooldownShareOFTBalance[user] = priorHotBalance + amount;
+    }
+
+    // FIX: M-01 / ODA-507-1 — permit cooled units to exit while retaining the delay on hot units.
+    function _requireWrapperCooldown(address user, uint256 amount) internal view {
         if (isWhitelisted[user] || isBeneficiaryOperator[user]) return;
         uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
-        if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
+        if (block.number >= requiredBlock) return;
+
+        uint256 balance = shareOFT.balanceOf(user);
+        uint256 hotBalance = cooldownShareOFTBalance[user];
+        uint256 cooledBalance = balance > hotBalance ? balance - hotBalance : 0;
+        if (amount > cooledBalance) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
     }
 
     /// @dev Measure the first transfer-tax hop so the wrapper never asks the vault
@@ -773,21 +806,20 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice FIX: M-08 — propagate the wrapper cooldown on ShareOFT transfers.
+     * @notice FIX: M-08 / ODA-507-1 — propagate the wrapper cooldown on ShareOFT transfers.
      * @dev Called by AgentShareOFT._update on every non-mint/non-burn ERC20 movement
      *      (including LayerZero credit/debit via the OFT transfer hooks). Propagates
      *      `lastWrapperDepositBlock[from]` forward to `to` so a user cannot deposit,
      *      transfer the resulting ShareOFT to a fresh address, and withdraw in the
      *      same block.
      *
-     *      Only the registered `shareOFT` may call this function. The hook is a
-     *      monotonically-increasing max-propagator: it never decreases an existing
-     *      cooldown on the recipient, so stacking deposits from multiple sources
-     *      behaves correctly.
+     *      Only the registered `shareOFT` may call this function. Hot units move with
+     *      the transfer while cooled units remain withdrawable. This prevents both
+     *      pre-seeded-address laundering and dust-transfer griefing (Creator parity).
      *
      *      Mint (from == 0) and burn (to == 0) are skipped: deposit paths in this
-     *      contract already record `lastWrapperDepositBlock[msg.sender] = block.number`
-     *      on the original depositor, and burns have no recipient.
+     *      contract already record cooldown on the original depositor, and burns have
+     *      no recipient.
      */
     function propagateCooldownOnTransfer(address from, address to, uint256 amount) external {
         if (msg.sender != address(shareOFT)) revert CooldownHookUnauthorizedCaller(msg.sender);
@@ -798,13 +830,22 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) return;
 
         uint256 fromBlock = lastWrapperDepositBlock[from];
-        if (fromBlock == 0) return;
+        if (fromBlock == 0 || block.number >= fromBlock + wrapperWithdrawDelayBlocks) return;
+
+        uint256 fromHotBalance = cooldownShareOFTBalance[from];
+        if (fromHotBalance == 0) return;
+        uint256 hotTransferred = amount < fromHotBalance ? amount : fromHotBalance;
+        cooldownShareOFTBalance[from] = fromHotBalance - hotTransferred;
 
         uint256 toBlock = lastWrapperDepositBlock[to];
-        if (fromBlock > toBlock) {
-            lastWrapperDepositBlock[to] = fromBlock;
-            emit CooldownPropagated(from, to, fromBlock);
+        uint256 toHotBalance = cooldownShareOFTBalance[to];
+        if (block.number >= toBlock + wrapperWithdrawDelayBlocks) {
+            toHotBalance = 0;
         }
+        uint256 propagatedBlock = fromBlock > toBlock ? fromBlock : toBlock;
+        lastWrapperDepositBlock[to] = propagatedBlock;
+        cooldownShareOFTBalance[to] = toHotBalance + hotTransferred;
+        emit CooldownPropagated(from, to, propagatedBlock);
     }
 
     function _requireSynchronousRedemption(uint256 vaultShareAmount) internal view {

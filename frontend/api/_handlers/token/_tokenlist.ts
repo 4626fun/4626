@@ -7,7 +7,9 @@ import {
   getNumberQuery,
   getStringQuery,
   handleOptions,
+  isPublicReadMethod,
   requireServerKey,
+  sendPublicReadJson,
   setPublicCors,
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/infra/shareTokenMetadata.js'
@@ -66,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (handleOptions(req, res)) return
 
-  if (req.method !== 'GET') {
+  if (!isPublicReadMethod(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -100,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenDecimals = toNumberOrDefault(metadata?.decimals, 18)
 
     res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200')
-    return res.status(200).json({
+    return sendPublicReadJson(req, res, 200, {
       name: `4626 Share Token List`,
       timestamp: new Date().toISOString(),
       version: TOKEN_LIST_VERSION,

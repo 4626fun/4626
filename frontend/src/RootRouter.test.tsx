@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let mockAppOrigin = 'https://app.4626.fun'
 let mockHostMode: 'app' | 'marketing' | 'alfaclub' = 'app'
+let mockIsCurrentWindowUrl: boolean | null = null
 const { apiFetchMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
 }))
@@ -18,6 +19,8 @@ vi.mock('@/lib/env/host', async () => {
       return mockAppOrigin
     },
     getHostMode: () => mockHostMode,
+    isCurrentWindowUrl: (target: string) =>
+      mockIsCurrentWindowUrl ?? actual.isCurrentWindowUrl(target),
   }
 })
 
@@ -54,6 +57,7 @@ describe('RootRouter', () => {
     vi.resetModules()
     mockAppOrigin = 'https://app.4626.fun'
     mockHostMode = 'app'
+    mockIsCurrentWindowUrl = null
     apiFetchMock.mockReset()
     window.history.replaceState({}, '', '/')
     ;({ RootRouter } = await import('./RootRouter'))
@@ -88,7 +92,7 @@ describe('RootRouter', () => {
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
   })
 
-  it.each(['/explore/rooms', '/inverseakita', '/arena/positions'])(
+  it.each(['/explore/rooms'])(
     'routes canonical AlfaClub path %s to the AlfaClub host',
     async (pathname) => {
       render(
@@ -101,6 +105,33 @@ describe('RootRouter', () => {
       expect(screen.queryByTestId('protected-app')).toBeNull()
     },
   )
+
+  it.each(['/inverseakita', '/arena/positions'])(
+    'keeps non-key AlfaClub path %s on the protected app',
+    async (pathname) => {
+      render(
+        <MemoryRouter initialEntries={[pathname]}>
+          <RootRouter />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByTestId('protected-app')).toBeTruthy()
+      expect(screen.queryByTestId('alfaclub-host-redirect')).toBeNull()
+    },
+  )
+
+  it('renders canonical AlfaClub paths through the protected app on the current host', async () => {
+    mockIsCurrentWindowUrl = true
+
+    render(
+      <MemoryRouter initialEntries={['/explore/pools']}>
+        <RootRouter />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('protected-app')).toBeTruthy()
+    expect(screen.queryByTestId('alfaclub-host-redirect')).toBeNull()
+  })
 
   it('routes the root marketing path through Home', async () => {
     mockHostMode = 'marketing'
@@ -115,7 +146,7 @@ describe('RootRouter', () => {
     expect(screen.queryByTestId('protected-app')).toBeNull()
   })
 
-  it('does not route AlfaClub host traffic through the marketing Home shell', async () => {
+  it('routes legacy AlfaClub host key traffic to the canonical app host', async () => {
     mockHostMode = 'alfaclub'
 
     render(
@@ -124,9 +155,7 @@ describe('RootRouter', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByTestId('home-page')).toBeNull()
-    expect(await screen.findByTestId('alfaclub-host-app')).toBeTruthy()
-    expect(screen.getByTestId('app-query-provider')).toBeTruthy()
+    expect(await screen.findByTestId('alfaclub-host-redirect')).toBeTruthy()
     expect(screen.queryByTestId('protected-app')).toBeNull()
   })
 

@@ -99,6 +99,7 @@ import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBa
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
 import {
   attachFinalizeShareBridgeValueToCalls,
+  isFinalizePhase2CallSelector,
   parseCallValue,
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
@@ -175,6 +176,7 @@ import { computeMarketFloorQuote, creatorUsdPrice1e18FromEthFloor } from '@/lib/
 import {
   evaluateOracleLaunchPreflight,
   impliedFdvEthFromWeiPerToken,
+  usesZoraV4MarketFloorCrossCheck,
 } from '@/lib/cca/oracleLaunchPreflight'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -5232,9 +5234,19 @@ function DeployVaultBatcher({
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
             if (!allow.has(to)) throw new Error(`Unsafe call target blocked: ${to}`)
-            if (c.value !== 0n) throw new Error('Unsafe call value blocked (non-zero ETH value)')
             const d = String(c.data ?? '')
             if (!d.startsWith('0x')) throw new Error('Unsafe call data blocked (missing 0x prefix)')
+            if (c.value !== 0n) {
+              // Share-mesh finalizePhase2 is payable (LZ native fee). Allow only that
+              // batcher selector family; server/paymaster still bound the amount.
+              const selector = d.slice(0, 10).toLowerCase()
+              const isBatcherFinalize =
+                to === getAddress(batcherAddress).toLowerCase() &&
+                isFinalizePhase2CallSelector(selector)
+              if (!isBatcherFinalize) {
+                throw new Error('Unsafe call value blocked (non-zero ETH value)')
+              }
+            }
           }
         }
 
@@ -6135,9 +6147,10 @@ function DeployVaultBatcher({
                 'Launch floor is enforced onchain from oracle data; refresh oracle state before launching auction.',
             )
           }
-          // Keep CCA floor tied to the underlying Zora V4 creator/agent market — not a
-          // stale or dust-V3 oracle seed. requiredRaise (0.1 ETH default) is unrelated.
-          {
+          // Creator Coins: keep CCA floor tied to the Zora V4 market — not a stale or
+          // dust-V3 oracle seed. AgentTokenV4 has no Zora getPoolKey(); agents already
+          // passed onchain previewLaunchPricing above. requiredRaise is unrelated.
+          if (usesZoraV4MarketFloorCrossCheck(vaultKind)) {
             const GET_ASSET_PRICE_ABI = [
               {
                 type: 'function',

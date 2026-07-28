@@ -7,6 +7,7 @@ import {
   isSwapExecutionLocked,
   shouldBlockSwapSubmitWhileSettling,
   shouldClearSwapCompletionOnTradeReset,
+  shouldClearSwapCompletionForExecutionAddressChange,
   shouldResetSwapFormAfterCompletionDismiss,
 } from './swapCompletionDismiss'
 
@@ -160,5 +161,26 @@ describe('swap settlement execution lock', () => {
     expect(shouldClearSwapCompletionOnTradeReset({})).toBe(false)
     expect(shouldClearSwapCompletionOnTradeReset({ clearCompletion: false })).toBe(false)
     expect(shouldClearSwapCompletionOnTradeReset({ clearCompletion: true })).toBe(true)
+  })
+
+  it('clears completion only when switching between distinct execution accounts', () => {
+    expect(
+      shouldClearSwapCompletionForExecutionAddressChange({
+        previousExecutionAddress: '0xAbc',
+        nextExecutionAddress: null,
+      }),
+    ).toBe(false)
+    expect(
+      shouldClearSwapCompletionForExecutionAddressChange({
+        previousExecutionAddress: '0xAbc',
+        nextExecutionAddress: '0xabc',
+      }),
+    ).toBe(false)
+    expect(
+      shouldClearSwapCompletionForExecutionAddressChange({
+        previousExecutionAddress: '0xAbc',
+        nextExecutionAddress: '0xDef',
+      }),
+    ).toBe(true)
   })
 })

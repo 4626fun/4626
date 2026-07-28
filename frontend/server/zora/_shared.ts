@@ -18,8 +18,43 @@ export function setCors(req: VercelRequest, res: VercelResponse) {
  */
 export function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  // Indexers and CDNs often probe with HEAD before GET.
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+}
+
+export function isPublicReadMethod(method: string | undefined): method is 'GET' | 'HEAD' {
+  return method === 'GET' || method === 'HEAD'
+}
+
+/** GET returns body; HEAD returns the same headers with Content-Length and no body. */
+export function sendPublicReadBody(
+  req: VercelRequest,
+  res: VercelResponse,
+  status: number,
+  body: Buffer | string,
+): VercelResponse {
+  const length = Buffer.isBuffer(body) ? body.length : Buffer.byteLength(body)
+  res.setHeader('Content-Length', String(length))
+  if (req.method === 'HEAD') {
+    return res.status(status).end()
+  }
+  return res.status(status).send(body)
+}
+
+export function sendPublicReadJson(
+  req: VercelRequest,
+  res: VercelResponse,
+  status: number,
+  payload: unknown,
+): VercelResponse {
+  if (req.method === 'HEAD') {
+    const json = JSON.stringify(payload)
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Content-Length', String(Buffer.byteLength(json)))
+    return res.status(status).end()
+  }
+  return res.status(status).json(payload)
 }
 
 export function handleOptions(req: VercelRequest, res: VercelResponse): boolean {

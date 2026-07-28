@@ -6,8 +6,9 @@
  *     --share-oft 0xNewShareOFT \
  *     --vault 0x... --wrapper 0x...
  *
- * Exit 0 = LZ quoteSend works (safe to finalize with mesh). Exit 1 = blocked (usually missing LZ Base wire).
+ * Exit 0 = LZ quoteSend + ops:verify-share-mesh-lz ULN gate green. Exit 1 = blocked (peer/quote/ULN).
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -204,8 +205,35 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(`\n✓ LZ quoteSend native fee: ${quote.nativeFee} wei\n`)
-  process.stdout.write(`✓ Bridge amount (30%):      ${quote.solanaAmount} LD\n\n`)
-  process.stdout.write('SAFE TO FINALIZE (with mesh enabled) when Deploy UI Pipe A panel shows ready.\n\n')
+  process.stdout.write(`✓ Bridge amount (30%):      ${quote.solanaAmount} LD\n`)
+
+  process.stdout.write('\n=== Share-mesh LZ ULN pathway gate ===\n')
+  const gate = spawnSync(
+    'pnpm',
+    [
+      'exec',
+      'tsx',
+      'scripts/ops/verify-share-mesh-lz-pathway.ts',
+      '--share-oft',
+      shareOft,
+      '--oft-store',
+      oftStore.toBase58(),
+      // mint/dest must be paired; omit both when dest unset (ULN still gates; ATA optional)
+      ...(process.env.SOLANA_SHARE_DEST
+        ? ['--mint', shareMeshMint.toBase58(), '--dest', process.env.SOLANA_SHARE_DEST]
+        : []),
+    ],
+    { cwd: FRONTEND_ROOT, encoding: 'utf8', env: process.env },
+  )
+  if (gate.stdout) process.stdout.write(gate.stdout)
+  if (gate.stderr) process.stderr.write(gate.stderr)
+  if (gate.status !== 0) {
+    process.stdout.write('\n✗ Share-mesh LZ ULN gate failed — do not finalize Pipe A until green.\n')
+    process.stdout.write('  Fix: wire layerzero-share-mesh.config.ts [15,32] then re-run.\n\n')
+    process.exit(1)
+  }
+
+  process.stdout.write('\nSAFE TO FINALIZE (with mesh enabled) when Deploy UI Pipe A panel shows ready.\n\n')
 
   process.stdout.write('--- Vultr (after finalize, for keeper ticks) ---\n')
   process.stdout.write(

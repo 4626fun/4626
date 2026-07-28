@@ -28,7 +28,9 @@ type FtTestHooks = {
     lines: string[],
     from: string,
   ) => Promise<{ submitted: number; fail?: number; aborted: boolean }>
+  waitForAtomicCompletion: (provider: Provider, callsId: string) => Promise<unknown>
   setAccountFrom: (from: string) => void
+  getLockedSubjects: () => string[]
 }
 
 function loadFtTestHooks(): FtTestHooks {
@@ -36,10 +38,19 @@ function loadFtTestHooks(): FtTestHooks {
     new URL('../../../public/ft/app.js', import.meta.url),
     'utf8',
   )
-  const instrumented = source.replace(
-    /\n\}\)\(\)\s*$/,
-    '\n  window.__ftTestHooks = { sendOneSell, sellSequential, sellAtomicBatches, setAccountFrom: (value) => { accountFrom = value } }\n})()\n',
-  )
+  const instrumented = source
+    .replace(
+      'const ATOMIC_STATUS_TIMEOUT_MS = 90_000',
+      'const ATOMIC_STATUS_TIMEOUT_MS = 40',
+    )
+    .replace(
+      'const ATOMIC_STATUS_POLL_MS = 1_000',
+      'const ATOMIC_STATUS_POLL_MS = 5',
+    )
+    .replace(
+      /\n\}\)\(\)\s*$/,
+      '\n  window.__ftTestHooks = { sendOneSell, sellSequential, sellAtomicBatches, waitForAtomicCompletion, setAccountFrom: (value) => { accountFrom = value }, getLockedSubjects: () => [...lockedSubjects] }\n})()\n',
+    )
   const elements = new Map<
     string,
     { textContent: string; dataset: Record<string, string> }
@@ -206,4 +217,41 @@ describe('Friend.tech public withdrawal safety', () => {
       'wallet_getCallsStatus',
     ])
   })
+
+  it('preserves accepted bundle locks when status polling times out', async () => {
+    const { sellAtomicBatches, getLockedSubjects } = loadFtTestHooks()
+    const request = vi.fn(async ({ method }) => {
+      if (method === 'wallet_sendCalls') return { id: 'bundle-lock' }
+      if (method === 'wallet_getCallsStatus') {
+        throw new Error('temporary status failure')
+      }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    await expect(sellAtomicBatches({ request }, ROWS, [], ACCOUNT_A)).rejects.toThrow(
+      /sigue pendiente|pendiente/i,
+    )
+    expect(getLockedSubjects().sort()).toEqual(
+      ROWS.map((row) => row.subject.toLowerCase()).sort(),
+    )
+    // Accepted bundle must not be re-submitted while locked.
+    expect(request.mock.calls.filter(([args]) => args.method === 'wallet_sendCalls')).toHaveLength(1)
+  })
+
+  it('retries transient wallet_getCallsStatus errors inside the poll window', async () => {
+    const { waitForAtomicCompletion } = loadFtTestHooks()
+    let attempts = 0
+    const request = vi.fn(async ({ method }) => {
+      if (method !== 'wallet_getCallsStatus') throw new Error(`Unexpected method: ${method}`)
+      attempts += 1
+      if (attempts === 1) throw new Error('temporary provider failure')
+      return { status: 200 }
+    })
+
+    await expect(waitForAtomicCompletion({ request }, 'bundle-1')).resolves.toEqual({
+      status: 200,
+    })
+    expect(attempts).toBe(2)
+  })
+
 })

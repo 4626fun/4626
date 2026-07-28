@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {LotteryManager4626, LotteryManager4626AdminModule} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 
 // =====================================================================
 // Audit 2026-07-08 P2 — R-H04 local VRF consumer timelock
@@ -148,11 +148,23 @@ contract Audit20260708_RH04_LocalVrfTimelock is Test {
     }
 
     function test_singleVaultJackpotOnly_defaultTrue_andToggle() public {
-        // R-H05: launch default single-vault; owner can flip multi-vault after disclosure.
+        // R-H05 / ODA-510-4: launch default single-vault; multi-vault flip is timelocked.
         assertTrue(manager.singleVaultJackpotOnly());
         manager.setSingleVaultJackpotOnly(false);
+        assertTrue(manager.singleVaultJackpotOnly(), "queued only");
+        bytes memory execSel = abi.encodeWithSelector(
+            LotteryManager4626AdminModule.executeSingleVaultJackpotOnlyChange.selector
+        );
+        vm.expectRevert(LotteryManager4626AdminModule.SingleVaultJackpotOnlyTimelockActive.selector);
+        manager.adminModuleCall(execSel);
+        vm.warp(block.timestamp + manager.LOCAL_VRF_CONSUMER_TIMELOCK());
+        manager.adminModuleCall(execSel);
         assertFalse(manager.singleVaultJackpotOnly());
         manager.setSingleVaultJackpotOnly(true);
+        vm.warp(block.timestamp + manager.LOCAL_VRF_CONSUMER_TIMELOCK());
+        manager.adminModuleCall(
+            abi.encodeWithSelector(LotteryManager4626AdminModule.executeSingleVaultJackpotOnlyChange.selector)
+        );
         assertTrue(manager.singleVaultJackpotOnly());
     }
 }

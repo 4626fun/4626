@@ -222,3 +222,48 @@ export function assessShareMeshLzPathway(snapshot: PathwayConfirmationSnapshot):
 
   return { ok: checks.every((c) => c.ok), checks }
 }
+
+
+/**
+ * Base-only Pipe A gate (no Solana RPC). Catches B2-class Base send confirmations
+ * below template [15] and missing Solana lzReceive enforced options / DVN shape.
+ * Full bidirectional checks remain in ops:verify-share-mesh-lz.
+ */
+export function assessBaseShareMeshUlnForPipeA(params: {
+  baseSend: UlnConfirmationsSlice
+  baseReceive: UlnConfirmationsSlice
+  enforcedOptionsHex: string
+}): { ok: boolean; checks: PathwayGateCheck[] } {
+  const checks: PathwayGateCheck[] = []
+  checks.push({
+    id: 'base_send_confirmations_policy',
+    ok: params.baseSend.confirmations === EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS,
+    detail: `expected=${EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS} actual=${params.baseSend.confirmations}`,
+  })
+  checks.push({
+    id: 'base_send_meets_template_solana_inbound',
+    ok: outboundMeetsInbound(params.baseSend.confirmations, EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS),
+    detail: `baseSend=${params.baseSend.confirmations} minInbound=${EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS}`,
+  })
+  checks.push({
+    id: 'base_receive_confirmations_policy',
+    ok: params.baseReceive.confirmations === EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS,
+    detail: `expected=${EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS} actual=${params.baseReceive.confirmations}`,
+  })
+  checks.push({
+    id: 'base_send_dvn_3of5',
+    ok: isExpectedDvnShape(params.baseSend),
+    detail: `required=${params.baseSend.requiredDvnCount} optional=${params.baseSend.optionalDvnCount} threshold=${params.baseSend.optionalDvnThreshold}`,
+  })
+  checks.push({
+    id: 'base_receive_dvn_3of5',
+    ok: isExpectedDvnShape(params.baseReceive),
+    detail: `required=${params.baseReceive.requiredDvnCount} optional=${params.baseReceive.optionalDvnCount} threshold=${params.baseReceive.optionalDvnThreshold}`,
+  })
+  checks.push({
+    id: 'shareoft_enforced_options_template',
+    ok: enforcedOptionsMatchSolanaTemplate(params.enforcedOptionsHex),
+    detail: `enforcedOptions=${params.enforcedOptionsHex}`,
+  })
+  return { ok: checks.every((c) => c.ok), checks }
+}

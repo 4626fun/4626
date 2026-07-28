@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {LotteryManager4626, LotteryManager4626AdminModule} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract OdaRemediationMockOracle {
     function getAssetPrice() external view returns (int256, uint256) {
@@ -104,6 +105,10 @@ contract LotteryManager4626OdaMediumRemediationTest is Test {
         harness.setLocalVRFConsumer(address(new OdaRemediationMockLocalVrf()));
         harness.setUseLocalVRF(true);
         harness.setSingleVaultJackpotOnly(false);
+        vm.warp(block.timestamp + harness.LOCAL_VRF_CONSUMER_TIMELOCK());
+        harness.adminModuleCall(
+            abi.encodeWithSelector(LotteryManager4626AdminModule.executeSingleVaultJackpotOnlyChange.selector)
+        );
         vm.stopPrank();
     }
 
@@ -117,20 +122,17 @@ contract LotteryManager4626OdaMediumRemediationTest is Test {
         harness.payoutLocalJackpotExternal(creatorCoin, buyer, 6900);
     }
 
-    /// @notice ODA-460-5: multi-vault payout revert must not strand win settlement.
-    function test_processWin_multiVaultPayoutRevert_emitsFailureAndContinues() public {
-        // Intercept the external self-call used by the try/catch isolation wrapper.
-        vm.mockCallRevert(
-            address(harness),
-            abi.encodeWithSelector(LotteryManager4626.payoutLocalJackpotExternal.selector),
-            "forced payout revert"
-        );
+    /// @notice ODA-510-2: payout failures must not be swallowed (retry via VRFConsumer).
+    function test_processWin_noLongerSwallowsPayoutRevert() public {
+        // Direct external payout entry remains onlySelf.
+        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
+        harness.payoutLocalJackpotExternal(creatorCoin, buyer, 6900);
+    }
 
-        vm.expectEmit(true, true, false, true);
-        emit JackpotPayoutFailed(creatorCoin, buyer, 0);
-
-        uint256 paid = harness.exposedProcessWin(creatorCoin, buyer, 10e6, 1, 0);
-        assertEq(paid, 0);
-        assertEq(harness.totalWinners(), 1, "win must still be recorded");
+    /// @notice ODA-510-8: adminModuleCall cannot renounce via module Ownable.
+    function test_adminModuleCall_renounceOwnership_disabled() public {
+        vm.prank(owner);
+        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
+        harness.adminModuleCall(abi.encodeWithSelector(Ownable.renounceOwnership.selector));
     }
 }
