@@ -9,6 +9,45 @@ function missingSelectorError(): Error {
   return error
 }
 
+const FINALIZE_PHASE2_PARAMS_COMPONENTS = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vault', type: 'address' },
+  { name: 'wrapper', type: 'address' },
+  { name: 'shareOFT', type: 'address' },
+  { name: 'gaugeController', type: 'address' },
+  { name: 'ccaLaunchArm', type: 'address' },
+  { name: 'oracle', type: 'address' },
+  { name: 'version', type: 'string' },
+  { name: 'depositAmount', type: 'uint256' },
+  { name: 'requiredRaise', type: 'uint128' },
+  { name: 'floorPriceQ96', type: 'uint256' },
+  { name: 'auctionSteps', type: 'bytes' },
+] as const
+
+function makeFinalizeParams(params?: {
+  creatorToken?: `0x${string}`
+  shareToken?: `0x${string}`
+  gaugeController?: `0x${string}`
+  ccaLaunchArm?: `0x${string}`
+}) {
+  return {
+    creatorToken: params?.creatorToken ?? '0x0000000000000000000000000000000000000003',
+    owner: '0x0000000000000000000000000000000000000002',
+    vault: '0x0000000000000000000000000000000000000101',
+    wrapper: '0x0000000000000000000000000000000000000102',
+    shareOFT: params?.shareToken ?? '0x0000000000000000000000000000000000000103',
+    gaugeController: params?.gaugeController ?? '0x0000000000000000000000000000000000000104',
+    ccaLaunchArm: params?.ccaLaunchArm ?? '0x0000000000000000000000000000000000000105',
+    oracle: '0x0000000000000000000000000000000000000106',
+    version: 'vtest',
+    depositAmount: 5_000_000n * 10n ** 18n,
+    requiredRaise: 1n,
+    floorPriceQ96: 1n,
+    auctionSteps: '0x',
+  } as const
+}
+
 function makeFinalizePhase2Data(params?: {
   creatorToken?: `0x${string}`
   shareToken?: `0x${string}`
@@ -25,48 +64,121 @@ function makeFinalizePhase2Data(params?: {
           {
             name: 'params',
             type: 'tuple',
-            components: [
-              { name: 'creatorToken', type: 'address' },
-              { name: 'owner', type: 'address' },
-              { name: 'vault', type: 'address' },
-              { name: 'wrapper', type: 'address' },
-              { name: 'shareToken', type: 'address' },
-              { name: 'gaugeController', type: 'address' },
-              { name: 'ccaLaunchArm', type: 'address' },
-              { name: 'oracle', type: 'address' },
-              { name: 'version', type: 'string' },
-              { name: 'depositAmount', type: 'uint256' },
-              { name: 'requiredRaise', type: 'uint128' },
-              { name: 'floorPriceQ96', type: 'uint256' },
-              { name: 'auctionSteps', type: 'bytes' },
-            ],
+            components: FINALIZE_PHASE2_PARAMS_COMPONENTS,
           },
         ],
         outputs: [],
       },
     ] as const,
     functionName: 'finalizePhase2',
-    args: [
+    args: [makeFinalizeParams(params)],
+  })
+}
+
+function makeFinalizePhase2WithPermit2Data(params?: {
+  creatorToken?: `0x${string}`
+  shareToken?: `0x${string}`
+  gaugeController?: `0x${string}`
+  ccaLaunchArm?: `0x${string}`
+}) {
+  const finalizeParams = makeFinalizeParams(params)
+  return encodeFunctionData({
+    abi: [
       {
-        creatorToken: params?.creatorToken ?? '0x0000000000000000000000000000000000000003',
-        owner: '0x0000000000000000000000000000000000000002',
-        vault: '0x0000000000000000000000000000000000000101',
-        wrapper: '0x0000000000000000000000000000000000000102',
-        shareToken: params?.shareToken ?? '0x0000000000000000000000000000000000000103',
-        gaugeController: params?.gaugeController ?? '0x0000000000000000000000000000000000000104',
-        ccaLaunchArm: params?.ccaLaunchArm ?? '0x0000000000000000000000000000000000000105',
-        oracle: '0x0000000000000000000000000000000000000106',
-        version: 'vtest',
-        depositAmount: 5_000_000n * 10n ** 18n,
-        requiredRaise: 1n,
-        floorPriceQ96: 1n,
-        auctionSteps: '0x',
+        type: 'function',
+        name: 'finalizePhase2WithPermit2',
+        stateMutability: 'payable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: FINALIZE_PHASE2_PARAMS_COMPONENTS,
+          },
+          {
+            name: 'permit',
+            type: 'tuple',
+            components: [
+              {
+                name: 'permitted',
+                type: 'tuple',
+                components: [
+                  { name: 'token', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                ],
+              },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          { name: 'signature', type: 'bytes' },
+        ],
+        outputs: [],
       },
+    ] as const,
+    functionName: 'finalizePhase2WithPermit2',
+    args: [
+      finalizeParams,
+      {
+        permitted: {
+          token: finalizeParams.creatorToken,
+          amount: finalizeParams.depositAmount,
+        },
+        nonce: 1n,
+        deadline: 1_900_000_000n,
+      },
+      '0x',
     ],
   })
 }
 
 describe('verifyDeployPhase2Invariants', () => {
+  it('decodes current finalizePhase2WithPermit2 and runs the invariant gate', async () => {
+    const gaugeController = '0x0000000000000000000000000000000000000104'
+    const zero = '0x0000000000000000000000000000000000000000'
+    const readContract = async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case 'feeRecipient':
+          return gaugeController
+        case 'gaugeController':
+          return gaugeController
+        case 'payoutRecipient':
+          return gaugeController
+        case 'creatorShareBps':
+          return 1n
+        case 'creatorTreasury':
+          return '0x0000000000000000000000000000000000000200'
+        case 'boostManager':
+        case 'vaultGaugeVoting':
+          return zero
+        default:
+          throw new Error(`unexpected functionName=${functionName}`)
+      }
+    }
+
+    const result = await verifyDeployPhase2Invariants({
+      publicClient: {
+        readContract,
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+      },
+      phase2FinalizeCalls: [
+        {
+          to: '0x0000000000000000000000000000000000000010',
+          value: 0n,
+          data: makeFinalizePhase2WithPermit2Data(),
+        },
+      ],
+      payload: {},
+      lotteryManager: '0x0000000000000000000000000000000000000999',
+      enforceProductionReadiness: true,
+    })
+
+    expect(makeFinalizePhase2WithPermit2Data().slice(0, 10).toLowerCase()).toBe('0x8e782ae1')
+    expect(result.checked).toBe(true)
+    expect(result.violations).toEqual([])
+    expect(result.expectations?.shareToken).toBe('0x0000000000000000000000000000000000000103')
+  })
+
   it('passes when strategy, share collector, and CreatorCoin payoutRecipient all match the gauge collector', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
     const zero = '0x0000000000000000000000000000000000000000'

@@ -36,6 +36,7 @@ import { parseGrant, validateCallsAgainstGrant } from '../../../../../server/_li
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
+import { decodeFinalizePhase2Call } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
 import { persistAndQueueSolanaDeploySessionMapping } from '../../../../../server/_lib/deploy/solanaDeploySessionMapping.js'
@@ -199,76 +200,6 @@ const OWNABLE_OWNER_VIEW_ABI = [
   },
 ] as const
 
-const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
-
-const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
-
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
@@ -283,6 +214,12 @@ function parseBigIntLike(value: unknown): bigint | null {
   return null
 }
 
+function normalizeAddress(value: unknown): Address | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null
+  const addr = getAddress(value as Address)
+  return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+}
+
 function extractFinalizePhase2Info(data: Hex): {
   creatorToken: Address | null
   shareToken: Address | null
@@ -293,48 +230,20 @@ function extractFinalizePhase2Info(data: Hex): {
   ccaLaunchArm: Address | null
   oracle: Address | null
 } | null {
-  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
-    try {
-      const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as {
-        creatorToken?: string
-        shareToken?: string
-        shareOFT?: string
-        depositAmount?: bigint | string | number
-        owner?: string
-        vault?: string
-        gaugeController?: string
-        ccaLaunchArm?: string
-        oracle?: string
-      } | null
-      const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
-        ? getAddress(params.creatorToken as Address)
-        : null
-      const creatorToken =
-        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
-          ? creatorTokenCandidate
-          : null
-      if (!creatorToken) continue
-      const normalizeAddress = (value: unknown): Address | null => {
-        if (typeof value !== 'string' || !isAddress(value)) return null
-        const addr = getAddress(value as Address)
-        return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
-      }
-      return {
-        creatorToken,
-        shareToken: normalizeAddress(params?.shareToken),
-        depositAmount: parseBigIntLike(params?.depositAmount),
-        owner: normalizeAddress(params?.owner),
-        vault: normalizeAddress(params?.vault),
-        gaugeController: normalizeAddress(params?.gaugeController),
-        ccaLaunchArm: normalizeAddress(params?.ccaLaunchArm),
-        oracle: normalizeAddress(params?.oracle),
-      }
-    } catch {
-      continue
-    }
+  const decoded = decodeFinalizePhase2Call(data)
+  if (!decoded) return null
+  const creatorToken = normalizeAddress(decoded.params.creatorToken)
+  if (!creatorToken) return null
+  return {
+    creatorToken,
+    shareToken: normalizeAddress(decoded.params.shareOFT),
+    depositAmount: parseBigIntLike(decoded.params.depositAmount),
+    owner: normalizeAddress(decoded.params.owner),
+    vault: normalizeAddress(decoded.params.vault),
+    gaugeController: normalizeAddress(decoded.params.gaugeController),
+    ccaLaunchArm: normalizeAddress(decoded.params.ccaLaunchArm),
+    oracle: normalizeAddress(decoded.params.oracle),
   }
-  return null
 }
 
 function findFinalizePhase2Entry(calls: Array<{ to: Address; value: bigint; data: Hex }>): {

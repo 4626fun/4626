@@ -108,6 +108,82 @@ function makePhase2FinalizeCall() {
   return [{ to: ADDR.owner as `0x${string}`, value: 0n, data }]
 }
 
+function makePhase2FinalizeWithPermit2Call() {
+  const data = encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'finalizePhase2WithPermit2',
+        stateMutability: 'payable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'wrapper', type: 'address' },
+              { name: 'shareOFT', type: 'address' },
+              { name: 'gaugeController', type: 'address' },
+              { name: 'ccaLaunchArm', type: 'address' },
+              { name: 'oracle', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'depositAmount', type: 'uint256' },
+              { name: 'requiredRaise', type: 'uint128' },
+              { name: 'floorPriceQ96', type: 'uint256' },
+              { name: 'auctionSteps', type: 'bytes' },
+            ],
+          },
+          {
+            name: 'permit',
+            type: 'tuple',
+            components: [
+              {
+                name: 'permitted',
+                type: 'tuple',
+                components: [
+                  { name: 'token', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                ],
+              },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          { name: 'signature', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const,
+    functionName: 'finalizePhase2WithPermit2',
+    args: [
+      {
+        creatorToken: ADDR.creatorToken,
+        owner: ADDR.owner,
+        vault: ADDR.vault,
+        wrapper: '0x4000000000000000000000000000000000000004',
+        shareOFT: ADDR.shareOft,
+        gaugeController: '0x5000000000000000000000000000000000000005',
+        ccaLaunchArm: '0x6000000000000000000000000000000000000006',
+        oracle: '0x8000000000000000000000000000000000000008',
+        version: 'v1.4.10',
+        depositAmount: 1n,
+        requiredRaise: 1n,
+        floorPriceQ96: 1n,
+        auctionSteps: '0x',
+      },
+      {
+        permitted: { token: ADDR.creatorToken, amount: 1n },
+        nonce: 1n,
+        deadline: 1_900_000_000n,
+      },
+      '0x',
+    ],
+  })
+  return [{ to: ADDR.owner as `0x${string}`, value: 0n, data }]
+}
+
 function makePhase4LaunchCall() {
   const data = encodeFunctionData({
     abi: LAUNCH_DEFERRED_AUCTION_ABI,
@@ -195,6 +271,39 @@ describe('deploy launch image gate', () => {
         launchImageVerifiedBytes: 3,
       }),
     )
+  })
+
+  it('decodes finalizePhase2WithPermit2 for the phase4 image gate', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    }))
+    ;(globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
+
+    mocks.getCompletedImageProjectForVaultMock.mockResolvedValueOnce({
+      projectId: 'imgproj_permit2',
+      outputBlobUrl: 'https://blob.local/output-permit2.png',
+    })
+
+    const { ensureLaunchImageReady } = await import('./deployLaunchImage.ts')
+    const result = await ensureLaunchImageReady({
+      req: createMockReq({ method: 'POST' }),
+      sessionId: 'sess_permit2',
+      sessionAddress: ADDR.owner as `0x${string}`,
+      payload: {},
+      phase2FinalizeCalls: makePhase2FinalizeWithPermit2Call(),
+      phase4Calls: makePhase4LaunchCall(),
+      persistPayloadPatch: async () => {},
+    })
+
+    expect(makePhase2FinalizeWithPermit2Call()[0]?.data.slice(0, 10).toLowerCase()).toBe('0x8e782ae1')
+    expect(result).toMatchObject({
+      projectId: 'imgproj_permit2',
+      vaultAddress: ADDR.vault,
+      shareOFT: ADDR.shareOft,
+    })
   })
 
   it('handles compose in-progress conflicts and still completes image gate', async () => {

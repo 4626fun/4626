@@ -2,6 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { decodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
 
+import { decodeFinalizePhase2Call } from '../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import {
   createImageGenerationProject,
   getCompletedImageProjectForVault,
@@ -23,76 +24,6 @@ export const LAUNCH_IMAGE_VERIFIED_BYTES_KEY = 'launchImageVerifiedBytes'
 const IMAGE_GATE_RETRY_ATTEMPTS = 5
 const IMAGE_GATE_VERIFY_RETRY_ATTEMPTS = 4
 const IMAGE_GATE_RETRY_BASE_MS = 250
-
-const FINALIZE_PHASE2_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
-
-const FINALIZE_PHASE2_LEGACY_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
 
 const LAUNCH_DEFERRED_AUCTION_ABI = [
   {
@@ -137,18 +68,11 @@ function normalizeAddress(value: unknown): Address | null {
 
 function extractFinalizeInfo(calls: Array<{ data: Hex }>): { creatorToken: Address; vault: Address } | null {
   for (const call of calls) {
-    for (const abi of [FINALIZE_PHASE2_ABI, FINALIZE_PHASE2_LEGACY_ABI]) {
-      try {
-        const decoded = decodeFunctionData({ abi, data: call.data })
-        if (decoded.functionName !== 'finalizePhase2') continue
-        const params = (decoded.args?.[0] ?? null) as { creatorToken?: unknown; vault?: unknown } | null
-        const creatorToken = normalizeAddress(params?.creatorToken)
-        const vault = normalizeAddress(params?.vault)
-        if (creatorToken && vault) return { creatorToken, vault }
-      } catch {
-        continue
-      }
-    }
+    const decoded = decodeFinalizePhase2Call(call.data)
+    if (!decoded) continue
+    const creatorToken = normalizeAddress(decoded.params.creatorToken)
+    const vault = normalizeAddress(decoded.params.vault)
+    if (creatorToken && vault) return { creatorToken, vault }
   }
   return null
 }

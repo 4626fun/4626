@@ -1,88 +1,18 @@
 import {
   ContractFunctionZeroDataError,
-  decodeFunctionData,
   getAddress,
   isAddress,
   type Address,
   type Hex,
 } from 'viem'
 
+import { decodeFinalizePhase2Call } from '../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { verifyLotteryProductionReadiness } from '../lottery/lotteryProductionReadiness.js'
 import { getApiContracts } from '../onchain/contracts.js'
 import { verifyPayoutRouterHarvestReadiness } from '../onchain/payoutRouterHarvestReadiness.js'
 import { verifyPayoutRouterProductionReadiness } from '../onchain/payoutRouterProductionReadiness.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
-
-const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
-
-const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
-  {
-    type: 'function',
-    name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'creatorToken', type: 'address' },
-          { name: 'owner', type: 'address' },
-          { name: 'vault', type: 'address' },
-          { name: 'wrapper', type: 'address' },
-          { name: 'shareToken', type: 'address' },
-          { name: 'gaugeController', type: 'address' },
-          { name: 'ccaLaunchArm', type: 'address' },
-          { name: 'oracle', type: 'address' },
-          { name: 'version', type: 'string' },
-          { name: 'depositAmount', type: 'uint256' },
-          { name: 'requiredRaise', type: 'uint128' },
-          { name: 'floorPriceQ96', type: 'uint256' },
-          { name: 'auctionSteps', type: 'bytes' },
-          { name: 'meteoraAlphaVault', type: 'bytes32' },
-          {
-            name: 'solanaIxs',
-            type: 'tuple[]',
-            components: [
-              { name: 'programId', type: 'bytes32' },
-              { name: 'serializedAccounts', type: 'bytes[]' },
-              { name: 'data', type: 'bytes' },
-            ],
-          },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
 
 const CCA_STRATEGY_FEE_RECIPIENT_VIEW_ABI = [
   {
@@ -218,27 +148,15 @@ function extractFinalizePhase2Info(calls: Array<{ to: Address; value: bigint; da
   const finalizeCall = calls[0]
   if (!finalizeCall || typeof finalizeCall.data !== 'string') return null
 
-  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
-    try {
-      const decoded = decodeFunctionData({ abi, data: finalizeCall.data })
-      const params = (decoded.args?.[0] ?? null) as {
-        creatorToken?: string
-        shareToken?: string
-        shareOFT?: string
-        gaugeController?: string
-        ccaLaunchArm?: string
-      } | null
-      const creatorToken = normalizeAddress(params?.creatorToken)
-      const shareToken = normalizeAddress(params?.shareToken ?? params?.shareOFT)
-      const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
-      if (!creatorToken || !shareToken || !gaugeController || !ccaLaunchArm) continue
-      return { creatorToken, shareToken, gaugeController, ccaLaunchArm }
-    } catch {
-      continue
-    }
-  }
-  return null
+  // Shared decoder covers current/legacy finalizePhase2 and finalizePhase2WithPermit2.
+  const decoded = decodeFinalizePhase2Call(finalizeCall.data)
+  if (!decoded) return null
+  const creatorToken = normalizeAddress(decoded.params.creatorToken)
+  const shareToken = normalizeAddress(decoded.params.shareOFT)
+  const gaugeController = normalizeAddress(decoded.params.gaugeController)
+  const ccaLaunchArm = normalizeAddress(decoded.params.ccaLaunchArm)
+  if (!creatorToken || !shareToken || !gaugeController || !ccaLaunchArm) return null
+  return { creatorToken, shareToken, gaugeController, ccaLaunchArm }
 }
 
 export async function verifyDeployPhase2Invariants(

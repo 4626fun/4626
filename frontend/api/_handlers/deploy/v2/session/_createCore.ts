@@ -19,6 +19,7 @@ import { base } from 'viem/chains'
 import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
 import {
   attachFinalizeShareBridgeValueToCalls,
+  decodeFinalizePhase2Call,
   isFinalizePhase2CallSelector,
 } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import {
@@ -1886,29 +1887,17 @@ function extractFinalizePhase2InvariantInfo(data: Hex): {
   shareToken: Address
   gaugeController: Address
 } | null {
-  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
-    try {
-      const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as {
-        creatorToken?: string
-        shareToken?: string
-        shareOFT?: string
-        gaugeController?: string
-      } | null
-      const creatorToken = normalizeAddressOrNull(params?.creatorToken)
-      const shareToken = normalizeAddressOrNull(params?.shareToken ?? params?.shareOFT)
-      const gaugeController = normalizeAddressOrNull(params?.gaugeController)
-      if (!creatorToken || !shareToken || !gaugeController) continue
-      return {
-        creatorToken,
-        shareToken,
-        gaugeController,
-      }
-    } catch {
-      continue
-    }
+  const decoded = decodeFinalizePhase2Call(data)
+  if (!decoded) return null
+  const creatorToken = normalizeAddressOrNull(decoded.params.creatorToken)
+  const shareToken = normalizeAddressOrNull(decoded.params.shareOFT)
+  const gaugeController = normalizeAddressOrNull(decoded.params.gaugeController)
+  if (!creatorToken || !shareToken || !gaugeController) return null
+  return {
+    creatorToken,
+    shareToken,
+    gaugeController,
   }
-  return null
 }
 
 function findFinalizePhase2InvariantCall(calls: Call[]): {
@@ -1986,34 +1975,16 @@ function extractFinalizePhase2ApprovalInfo(data: Hex): {
   depositAmount: bigint
   vault: Address | null
 } | null {
-  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
-    try {
-      const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as {
-        creatorToken?: string
-        depositAmount?: bigint | string | number
-        vault?: string
-      } | null
-      const creatorTokenCandidate =
-        params?.creatorToken && isAddress(params.creatorToken)
-          ? getAddress(params.creatorToken as Address)
-          : null
-      const creatorToken =
-        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
-          ? creatorTokenCandidate
-          : null
-      const depositAmount = parseBigIntLike(params?.depositAmount)
-      if (!creatorToken || !depositAmount || depositAmount <= 0n) continue
-      const vault =
-        params?.vault && isAddress(params.vault)
-          ? getAddress(params.vault as Address)
-          : null
-      return { creatorToken, depositAmount, vault }
-    } catch {
-      continue
-    }
+  const decoded = decodeFinalizePhase2Call(data)
+  if (!decoded) return null
+  const creatorToken = normalizeAddressOrNull(decoded.params.creatorToken)
+  const depositAmount = parseBigIntLike(decoded.params.depositAmount)
+  if (!creatorToken || depositAmount === null || depositAmount <= 0n) return null
+  return {
+    creatorToken,
+    depositAmount,
+    vault: normalizeAddressOrNull(decoded.params.vault),
   }
-  return null
 }
 
 function callFingerprint(call: Call | null | undefined): string | null {
