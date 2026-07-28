@@ -240,10 +240,9 @@ export async function refreshCreatorEthosProjection(params: {
   // but skips chart/snapshot maintenance to keep hot-lane pressure predictable.
   const projectionMode = params.mode ?? 'full'
 
-  // Top-N candidate window for the volume arm. A creator's best coin is, by definition,
-  // the first of their coins in the global volume/mcap ordering, so scanning the top
-  // 4x oversampled slice via idx_creator_coins_volume_rank and deduping per creator is
-  // equivalent to ranking all ~1M coins with a window function -- at a fraction of the IO.
+  // Volume arm: only ~hundreds of coins have volume_24h_usd > 0. Split into
+  // hot (partial idx_creator_coins_volume_rank_hot) + zero-volume mcap fill
+  // (idx_creator_coins_mcap_fill) so we never walk a full 1M-row volume index.
   const volumeCandidateLimit = volumeLimit * 4
 
   const result = await params.db.sql`
@@ -269,7 +268,7 @@ export async function refreshCreatorEthosProjection(params: {
       ) signals
       GROUP BY creator_address
     ),
-    volume_candidates AS (
+    volume_hot AS (
       SELECT
         cc.coin_address,
         lower(cc.creator_address) AS creator_address,
@@ -278,12 +277,33 @@ export async function refreshCreatorEthosProjection(params: {
         cc.volume_24h_usd
       FROM creator_coins cc
       WHERE cc.chain_id = 8453
+        AND cc.volume_24h_usd > 0
       ORDER BY
-        cc.volume_24h_usd DESC NULLS LAST,
+        cc.volume_24h_usd DESC,
+        cc.market_cap_usd DESC NULLS LAST,
+        cc.created_at DESC NULLS LAST,
+        cc.coin_address ASC
+    ),
+    volume_fill AS (
+      SELECT
+        cc.coin_address,
+        lower(cc.creator_address) AS creator_address,
+        cc.created_at,
+        cc.market_cap_usd,
+        cc.volume_24h_usd
+      FROM creator_coins cc
+      WHERE cc.chain_id = 8453
+        AND cc.volume_24h_usd = 0
+      ORDER BY
         cc.market_cap_usd DESC NULLS LAST,
         cc.created_at DESC NULLS LAST,
         cc.coin_address ASC
       LIMIT ${volumeCandidateLimit}
+    ),
+    volume_candidates AS (
+      SELECT * FROM volume_hot
+      UNION ALL
+      SELECT * FROM volume_fill
     ),
     top_by_volume AS (
       SELECT *
