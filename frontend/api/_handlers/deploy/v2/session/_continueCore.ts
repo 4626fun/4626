@@ -39,7 +39,7 @@ import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
 import { persistAndQueueSolanaDeploySessionMapping } from '../../../../../server/_lib/deploy/solanaDeploySessionMapping.js'
-import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import { prepareFinalizeShareBridgeCallsForSend } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
 import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
@@ -927,7 +927,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       calls: Array<{ to: Address; value: bigint; data: Hex }>,
     ): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
       if (calls.length === 0) return calls
-      const attached = await attachFinalizeShareBridgeValueToCalls({
+      // Fee attach alone is not enough: create-time ULN assert often no-ops before
+      // Phase 1 deploys the wrapper. Re-assert Base Share-mesh ULN at send time.
+      const attached = await prepareFinalizeShareBridgeCallsForSend({
         publicClient,
         calls: calls.map((call) => ({
           to: call.to,

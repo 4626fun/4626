@@ -9,6 +9,7 @@ import {
 } from './finalizeShareBridgeFee'
 import {
   assertShareBridgeOftWiringForFinalize,
+  prepareFinalizeShareBridgeCallsForSend,
   readShareBridgeOftWiringStatus,
   ShareBridgeOftWiringError,
 } from './shareBridgeOftWiring'
@@ -247,6 +248,29 @@ describe('shareBridgeOftWiring', () => {
     ).rejects.toMatchObject({
       code: 'lz_uln_pathway_not_ready',
     } satisfies Partial<ShareBridgeOftWiringError>)
+  })
+
+  it('prepareFinalizeShareBridgeCallsForSend blocks B2-class ULN before finalize submit', async () => {
+    const callData = buildFinalizeCalldata()
+    const badClient = createWiringMockClient({ sendConfirmations: 10n })
+    await expect(
+      prepareFinalizeShareBridgeCallsForSend({
+        publicClient: badClient,
+        calls: [{ to: BATCHER, value: '0', data: callData }],
+        registryAddress: REGISTRY,
+      }),
+    ).rejects.toMatchObject({
+      code: 'lz_uln_pathway_not_ready',
+    } satisfies Partial<ShareBridgeOftWiringError>)
+
+    const goodClient = createWiringMockClient({ sendConfirmations: 15n })
+    const prepared = await prepareFinalizeShareBridgeCallsForSend({
+      publicClient: goodClient,
+      calls: [{ to: BATCHER, value: '0', data: callData }],
+      registryAddress: REGISTRY,
+    })
+    expect(prepared).toHaveLength(1)
+    expect(prepared[0]?.value).toBe('1500000000000000')
   })
 
   it('reports ready wiring when registry peer exists', async () => {

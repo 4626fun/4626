@@ -62,7 +62,7 @@ import { ensureShareMeshOvaultPreflight } from '../../../../../server/_lib/deplo
 import { persistAndQueueSolanaDeploySessionMapping } from '../../../../../server/_lib/deploy/solanaDeploySessionMapping.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
-import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import { prepareFinalizeShareBridgeCallsForSend } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -1957,7 +1957,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const withFinalizeShareBridgeFees = async (
     stageCalls: Array<{ to: Address; value: bigint; data: Hex }>,
   ): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
-    const attached = await attachFinalizeShareBridgeValueToCalls({
+    // Mirror continueCore: attach LZ native fee and re-run Share-mesh ULN assert
+    // at finalize send (create-time gate often early-returns pre-Phase-1).
+    const attached = await prepareFinalizeShareBridgeCallsForSend({
       publicClient,
       calls: stageCalls.map((call) => ({
         to: call.to,
