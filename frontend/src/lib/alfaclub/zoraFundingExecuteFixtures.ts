@@ -72,7 +72,6 @@ export function encodeWethFundingWithV4SettlePull(params: {
 }): Hex {
   const sender = params.sender ?? SENDER
   const creatorCoin = params.creatorCoin ?? CREATOR
-  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
   const v4Actions = encodePacked(
     ['uint8', 'uint8', 'uint8'],
     [0x06, 0x0b, 0x0e], // SWAP_EXACT_IN_SINGLE, SETTLE, TAKE

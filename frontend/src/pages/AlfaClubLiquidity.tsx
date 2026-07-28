@@ -1116,7 +1116,7 @@ export function AlfaClubLiquidity({
       executionTrack,
       walletClient,
       publicClient,
-      canonicalAddress: profileCanonicalCswAddress ?? null,
+      canonicalAddress: (profileCanonicalCswAddress as Address | null) ?? null,
       signerAddress: resolvedSignerAddress,
       executionAddress,
       signerType: usingPrivyEmbeddedSigner ? "EOA" : accountContext.signerType,
