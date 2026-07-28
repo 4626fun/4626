@@ -94,6 +94,12 @@ contract SeedUniversalBytecodeStore is Script {
             _storeIfMissing(store, vm.getCode("out/CCALaunchArm.sol/CCALaunchArm.json"), "CCALaunchArm");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            // Deploy on-chain via EIP-2470 salt 0 before any linked CreatorOracle is used.
+            _storeIfMissing(
+                store, vm.getCode("CreatorOracleQuoteLib.sol:CreatorOracleQuoteLib"), "CreatorOracleQuoteLib"
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {

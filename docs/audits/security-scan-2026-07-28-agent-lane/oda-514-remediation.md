@@ -38,3 +38,15 @@
 ODA-514 remediations grew CreatorOracle past the bounded allowlist. Quote/tick/feed helpers
 were extracted to `CreatorOracleQuoteLib` (external CALL, CREATE2 salt 0 @ EIP-2470) so the
 main runtime stays within `maxRuntimeBytes` (~24.7 KB under `FOUNDRY_PROFILE=ci`).
+
+## Deploy cutover (required before remediations hit new vaults)
+
+`frontend/src/deploy/bytecode.generated.ts` still carries pre-#877 CreatorOracle initcode until regen.
+
+Before the next CreatorOracle cutover:
+
+1. `forge script script/DeployCreatorOracleQuoteLib.s.sol:DeployCreatorOracleQuoteLib --rpc-url $BASE_RPC_URL --broadcast`
+2. `./script/generate_frontend_deploy_bytecode.sh` (links CreatorOracle → QuoteLib @ EIP-2470 salt 0)
+3. Re-seed `UniversalBytecodeStore` (`SeedUniversalBytecodeStore` now includes `CreatorOracleQuoteLib`)
+4. Confirm `CreatorOracleQuoteLib` is in `deployments/base/<release>-bytecode-manifest.json`
+

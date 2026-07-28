@@ -68,19 +68,37 @@ def _resolve_library_artifact(root: Path, source_path: str, lib_name: str) -> Pa
     """Map solc linkReference path → Foundry out/<file>/<Contract>.json."""
     # source_path like contracts/shared/lottery/manager/LotteryManager4626PricingLib.sol
     file_name = Path(source_path).name  # LotteryManager4626PricingLib.sol
-    candidate = root / "out" / file_name / f"{lib_name}.json"
+    out_dir = root / "out" / file_name
+    candidate = out_dir / f"{lib_name}.json"
     if candidate.is_file():
         return candidate
+
+    # Multi-solc / profile builds emit `<Contract>.<solcVersion>[.<profile>].json`
+    # without a bare `<Contract>.json` (e.g. CreatorOracleQuoteLib.0.8.34.json).
+    if out_dir.is_dir():
+        versioned = sorted(
+            p
+            for p in out_dir.glob(f"{lib_name}.*.json")
+            if p.is_file()
+        )
+        if versioned:
+            return versioned[-1]
+
     # Fallback: search out/
     matches = list((root / "out").rglob(f"{lib_name}.json"))
+    if not matches:
+        matches = sorted(
+            p
+            for p in (root / "out").rglob(f"{lib_name}.*.json")
+            if p.is_file() and p.name.startswith(f"{lib_name}.")
+        )
     if len(matches) == 1:
         return matches[0]
     if matches:
-        # Prefer exact file stem match
         for m in matches:
             if m.parent.name == file_name:
                 return m
-        return matches[0]
+        return matches[-1]
     raise SystemExit(
         f"Cannot resolve library artifact for {source_path}:{lib_name} "
         f"(expected {candidate})"

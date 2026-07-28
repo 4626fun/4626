@@ -49,6 +49,9 @@ contracts=(
   "CreatorGaugeController"
   "AgentGaugeController"
   "CCALaunchArm"
+  # Quote lib must be CREATE2-deployed (Foundry salt 0 @ EIP-2470) before
+  # CreatorOracle; CreatorOracle creation bytecode is linked to that address.
+  "CreatorOracleQuoteLib"
   "CreatorOracle"
   "AgentOracle"
   "CreatorPayoutRouter"
@@ -82,6 +85,21 @@ artifact_path() {
         printf "%s/out/LotteryManager4626PricingLib.sol/%s.json" "$ROOT_DIR" "$contract"
       else
         printf "%s/out/LotteryManager4626.sol/%s.json" "$ROOT_DIR" "$contract"
+      fi
+      ;;
+    CreatorOracleQuoteLib)
+      # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; prefer unversioned then newest.
+      local dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
+      if [[ -f "$dir/CreatorOracleQuoteLib.json" ]]; then
+        printf "%s/CreatorOracleQuoteLib.json" "$dir"
+      else
+        local newest
+        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort | tail -1 || true)"
+        if [[ -z "$newest" ]]; then
+          printf "%s/CreatorOracleQuoteLib.json" "$dir"
+        else
+          printf "%s" "$newest"
+        fi
       fi
       ;;
     *)

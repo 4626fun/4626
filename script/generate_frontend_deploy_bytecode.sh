@@ -31,6 +31,20 @@ artifact_path() {
     ApprovedV4HooksRegistry|OVaultLPManager)
       printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
       ;;
+    CreatorOracleQuoteLib)
+      local dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
+      if [[ -f "$dir/CreatorOracleQuoteLib.json" ]]; then
+        printf "%s/CreatorOracleQuoteLib.json" "$dir"
+      else
+        local newest
+        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort | tail -1 || true)"
+        if [[ -z "$newest" ]]; then
+          printf "%s/CreatorOracleQuoteLib.json" "$dir"
+        else
+          printf "%s" "$newest"
+        fi
+      fi
+      ;;
     *)
       printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
       ;;
@@ -71,6 +85,7 @@ printf "  OFTBootstrapRegistry: '0x' + '%s',\n" "$(bytecode OFTBootstrapRegistry
 printf "  CreatorGaugeController: '0x' + '%s',\n" "$(bytecode CreatorGaugeController)" >>"$OUT_FILE"
 printf "  AgentGaugeController: '0x' + '%s',\n" "$(bytecode AgentGaugeController)" >>"$OUT_FILE"
 printf "  CCALaunchArm: '0x' + '%s',\n" "$(bytecode CCALaunchArm)" >>"$OUT_FILE"
+printf "  CreatorOracleQuoteLib: '0x' + '%s',\n" "$(bytecode CreatorOracleQuoteLib)" >>"$OUT_FILE"
 printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FILE"
 printf "  AgentOracle: '0x' + '%s',\n" "$(bytecode AgentOracle)" >>"$OUT_FILE"
 printf "  CreatorPayoutRouter: '0x' + '%s',\n" "$(bytecode CreatorPayoutRouter)" >>"$OUT_FILE"
