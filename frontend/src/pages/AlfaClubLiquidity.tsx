@@ -73,6 +73,11 @@ import {
 } from "@/lib/tx/txRouter";
 import type { TransactionRequest } from "@/lib/uniswap/tradingApi";
 import { useAccountContext } from "@/wallet/accountContext";
+import { isCanonicalCsw } from "@/wallet/canonicalWalletPolicy";
+import { useSiweAuth } from "@/hooks/useSiweAuth";
+import { useEnsurePrivyEmbeddedWallet } from "@/lib/privy/embeddedWallet";
+import { useSafePrivy } from "@/lib/privy/safeHooks";
+import { useSwapEmbeddedEoa } from "@/lib/swap/useSwapEmbeddedEoa";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ROOM_1659_CREATOR_COIN = getAddress(
@@ -231,7 +236,11 @@ type AlfaClubLiquidityProps = {
   initialKeyLabel?: string | null;
   onOpenTokenSelector?: (side: "input" | "output") => void;
   onSwitchTokens?: () => void;
-  /** Prefer Swap's Privy embedded canonical signer client when provided. */
+  /**
+   * Prefer Swap's Privy embedded canonical signer client when provided.
+   * `undefined` = hydrate locally / fall back to wagmi.
+   * `null` = explicit not-ready from Swap (do not use a connected admin EOA).
+   */
   walletClientOverride?: unknown;
   /** UserOp / txRouter owner — must match the override wallet, not session admin EOA. */
   signerAddressOverride?: Address | null;
@@ -250,7 +259,7 @@ export function AlfaClubLiquidity({
   initialKeyLabel = null,
   onOpenTokenSelector,
   onSwitchTokens,
-  walletClientOverride = null,
+  walletClientOverride,
   signerAddressOverride = null,
   primaryActionLabel: primaryActionLabelOverride,
   onPrimaryAction,
@@ -262,10 +271,85 @@ export function AlfaClubLiquidity({
   const accountContext = useAccountContext();
   const publicClient = usePublicClient({ chainId: base.id });
   const { data: connectedWalletClient } = useWalletClient({ chainId: base.id });
-  const walletClient =
-    (walletClientOverride as typeof connectedWalletClient | null) ??
-    connectedWalletClient;
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
+
+  // When Swap passes an explicit override (including null), do not fall back to a
+  // connected MetaMask/admin EOA — that rebinds UserOps to the wrong signer.
+  // When override is omitted (standalone AlfaClub pages), hydrate the Privy
+  // embedded canonical client for SMART_WALLET accounts.
+  const privyClient = useSafePrivy({ enabled: true });
+  const { embeddedEoaAddress: ensuredEmbeddedEoaAddress, ensureEmbeddedWallet } =
+    useEnsurePrivyEmbeddedWallet();
+  const { authAddress } = useSiweAuth();
+  const embeddedEoa = useSwapEmbeddedEoa({
+    privyUser: privyClient.user,
+    privyAuthenticated:
+      typeof privyClient.authenticated === "boolean"
+        ? privyClient.authenticated
+        : null,
+    ensuredEmbeddedEoaAddress,
+    ensureEmbeddedWallet,
+    authAddress: (authAddress as Address | null) ?? null,
+    canonicalAddress: (accountContext.cswAddress as Address | null) ?? null,
+  });
+  const isSmartWalletAccount = accountContext.activeAccountType === "SMART_WALLET";
+  const internalCanonicalWalletClient = isSmartWalletAccount
+    ? embeddedEoa.privyEmbeddedCanonicalWalletClient
+    : null;
+  // Match /swap: non-platform CSW may use a confirmed external EOA owner when the
+  // embedded client is not ready. Platform CSW stays embedded-only.
+  const connectedAccountAddress =
+    typeof account.address === "string" ? account.address.toLowerCase() : null;
+  const cswAddressLower = accountContext.cswAddress
+    ? String(accountContext.cswAddress).toLowerCase()
+    : null;
+  const connectedIsCanonicalCsw =
+    Boolean(connectedAccountAddress) &&
+    Boolean(cswAddressLower) &&
+    connectedAccountAddress === cswAddressLower;
+  const allowExternalEoaCanonicalSigner =
+    isSmartWalletAccount &&
+    !internalCanonicalWalletClient &&
+    accountContext.eoaIsOwnerOfCsw === true &&
+    Boolean(accountContext.cswAddress) &&
+    !isCanonicalCsw(accountContext.cswAddress) &&
+    Boolean(connectedWalletClient);
+  // Base App direct: connected connector account is the CSW itself.
+  const allowBaseAppDirectCanonicalSigner =
+    isSmartWalletAccount &&
+    !internalCanonicalWalletClient &&
+    connectedIsCanonicalCsw &&
+    Boolean(connectedWalletClient);
+
+  type AlfaClubWalletClient = typeof connectedWalletClient | null;
+  type AlfaClubWalletSource =
+    | "override"
+    | "internal-embedded"
+    | "wagmi"
+    | "none";
+  let walletClient: AlfaClubWalletClient;
+  let walletClientSource: AlfaClubWalletSource;
+  if (walletClientOverride !== undefined) {
+    walletClient = (walletClientOverride as AlfaClubWalletClient) ?? null;
+    walletClientSource = walletClient ? "override" : "none";
+  } else if (isSmartWalletAccount) {
+    if (internalCanonicalWalletClient) {
+      walletClient = internalCanonicalWalletClient as unknown as AlfaClubWalletClient;
+      walletClientSource = "internal-embedded";
+    } else if (
+      allowExternalEoaCanonicalSigner ||
+      allowBaseAppDirectCanonicalSigner
+    ) {
+      walletClient = connectedWalletClient ?? null;
+      walletClientSource = walletClient ? "wagmi" : "none";
+    } else {
+      walletClient = null;
+      walletClientSource = "none";
+    }
+  } else {
+    walletClient = connectedWalletClient ?? null;
+    walletClientSource = walletClient ? "wagmi" : "none";
+  }
 
   const [mode, setMode] = useState<Mode>(() => {
     if (initialMode === "sell") return "sell";
@@ -750,6 +834,14 @@ export function AlfaClubLiquidity({
 
   const resolvedSignerAddress = useMemo((): Address | null => {
     if (signerAddressOverride) return getAddress(signerAddressOverride);
+    // Prefer the Privy embedded EOA when we are using the internal canonical client
+    // (standalone AlfaClub) or an override client that advertises that account.
+    if (
+      walletClientSource === "internal-embedded" &&
+      embeddedEoa.privyEmbeddedEoaAddress
+    ) {
+      return getAddress(embeddedEoa.privyEmbeddedEoaAddress);
+    }
     const fromWallet = (walletClient as { account?: { address?: string } } | null | undefined)
       ?.account?.address;
     if (typeof fromWallet === "string" && fromWallet.startsWith("0x")) {
@@ -760,20 +852,33 @@ export function AlfaClubLiquidity({
       }
     }
     return (accountContext.signerAddress as Address | null) ?? null;
-  }, [accountContext.signerAddress, signerAddressOverride, walletClient]);
+  }, [
+    accountContext.signerAddress,
+    embeddedEoa.privyEmbeddedEoaAddress,
+    signerAddressOverride,
+    walletClient,
+    walletClientSource,
+  ]);
 
   const buildTxContext = useCallback((): TxRouterContext => {
     if (!walletClient || !publicClient || !executionAddress)
       throw new Error("Wallet execution is not ready");
     if (!resolvedSignerAddress)
       throw new Error("Wallet signer address is not ready");
-    // Privy embedded override: signer EOA ≠ CSW sender. Base App override keeps
-    // signer === execution (CSW) and must retain the connected connector metadata.
-    const usingPrivyEmbeddedOverride =
-      Boolean(walletClientOverride) &&
-      Boolean(signerAddressOverride) &&
+    // Privy embedded signer metadata only when the active wallet client is the
+    // Privy override/internal client (not a wagmi external EOA fallback).
+    const overrideSigner =
+      typeof signerAddressOverride === "string" ? signerAddressOverride : null;
+    const walletIsInternalEmbedded = walletClientSource === "internal-embedded";
+    const walletIsSwapEmbeddedOverride =
+      walletClientSource === "override" &&
+      Boolean(overrideSigner) &&
+      getAddress(resolvedSignerAddress).toLowerCase() ===
+        getAddress(overrideSigner as Address).toLowerCase() &&
       getAddress(resolvedSignerAddress).toLowerCase() !==
         getAddress(executionAddress).toLowerCase();
+    const usingPrivyEmbeddedSigner =
+      walletIsInternalEmbedded || walletIsSwapEmbeddedOverride;
     return {
       chainId: base.id,
       executionMode,
@@ -783,11 +888,11 @@ export function AlfaClubLiquidity({
       canonicalAddress: accountContext.cswAddress ?? null,
       signerAddress: resolvedSignerAddress,
       executionAddress,
-      signerType: usingPrivyEmbeddedOverride ? "EOA" : accountContext.signerType,
-      connectorId: usingPrivyEmbeddedOverride
+      signerType: usingPrivyEmbeddedSigner ? "EOA" : accountContext.signerType,
+      connectorId: usingPrivyEmbeddedSigner
         ? "privy-embedded"
         : (account.connector?.id ?? null),
-      connectorName: usingPrivyEmbeddedOverride
+      connectorName: usingPrivyEmbeddedSigner
         ? "Privy Embedded EOA"
         : (account.connector?.name ?? null),
       capabilities: accountContext.capabilities,
@@ -805,7 +910,7 @@ export function AlfaClubLiquidity({
     resolvedSignerAddress,
     signerAddressOverride,
     walletClient,
-    walletClientOverride,
+    walletClientSource,
   ]);
 
   const submit = useCallback(async () => {
@@ -947,14 +1052,14 @@ export function AlfaClubLiquidity({
 
         const preparatoryCalls: TransactionRequest[] = [];
         if (canonicalEthFunding) {
-          if (!walletClient || !publicClient || !accountContext.signerAddress) {
+          if (!walletClient || !publicClient || !resolvedSignerAddress) {
             throw new Error(
               "Canonical ETH funding needs an owner signer and wallet client",
             );
           }
           const signatures = await signZoraQuotePermits({
             quote: zoraQuote,
-            signerAddress: accountContext.signerAddress,
+            signerAddress: resolvedSignerAddress,
             executionAddress,
             forceResignPermits: true,
             walletClient: walletClient as any,
@@ -1096,7 +1201,6 @@ export function AlfaClubLiquidity({
     }
   }, [
     account.chainId,
-    accountContext.signerAddress,
     adapter,
     buildTxContext,
     ethAmount,
