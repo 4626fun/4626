@@ -108,7 +108,10 @@ function NotFoundPage() {
 
 function App() {
   const location = useLocation()
-  if (getHostMode() === 'alfaclub' && resolveAlfaClubCanonicalPath(location.pathname)) {
+  // Canonical key/pool URLs must mount AlfaClubHostApp at the router root.
+  // Nesting it under path="/explore/pools" leaves only an index match that
+  // RedirectPreserve sends to /explore/keys.
+  if (resolveAlfaClubCanonicalPath(location.pathname)) {
     return <AlfaClubHostApp />
   }
 
@@ -130,10 +133,6 @@ function App() {
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
 
-        {/* Canonical AlfaClub key surfaces live on app.4626.fun. */}
-        <Route path="/keys" element={<AlfaClubHostApp />} />
-        <Route path="/explore/keys" element={<AlfaClubHostApp />} />
-        <Route path="/explore/pools" element={<AlfaClubHostApp />} />
         <Route path="/rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/explore/rooms" element={<LegacyAlfaClubRedirect />} />
         <Route path="/alfaclub" element={<LegacyAlfaClubRedirect />} />
