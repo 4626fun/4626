@@ -245,6 +245,10 @@ contract DeploymentBatcherPhase3Helper {
             if (params.ajnaKeeper != address(0)) {
                 IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
             }
+            // Always authorize the hot automation Safe as an Ajna keeper so emergency
+            // inner.moveToBuffer / buffer drains do not need a post-deploy setKeeper.
+            // params.ajnaKeeper remains the Keepr EOA (can coexist).
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(protocolAutomation, true);
 
             // Arm toll/tax at zero so later fee changes require the 24h timelock.
             IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setToll(0);

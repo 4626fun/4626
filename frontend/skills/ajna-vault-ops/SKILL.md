@@ -13,4 +13,6 @@ Inspect buffer vs bucket LP before any lend. Empty Ajna UI after Phase 3 is usua
 
 Execute only via adapter owner / protocol Safe — never raw pool lend with a skill-local key. For cutover planning, load the archive section **v1.20.0 launch expectations**.
 
+Emergency day-0: `scripts/ops/ensure-ajna-emergency-readiness.ts` (automation keeper + legacy buffer drain). Archive section **Emergency exit readiness**.
+
 Parent weights skill: `yield-strategy-management`.

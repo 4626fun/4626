@@ -48,6 +48,32 @@ CreatorOVault idle CREATOR
 3. Keeper **EOA** calling the inner vault always reverts. Keepr must execute **adapter** `moveFromBuffer` via Safe.
 4. `moveToBuffer` allows swapper **or** keeper — do not confuse with lend.
 5. After any emergency swapper handoff, **restore `setSwapper(adapter)`** before leaving the session.
+6. Protocol **automation Safe must be an Ajna keeper** (in addition to Keepr EOA). Phase 3 helper now `setKeeper(protocolAutomation, true)` at deploy; day-0 script re-asserts it.
+
+### Emergency exit readiness (bake this in)
+
+| Layer | Expected | Failure mode if missing |
+|-------|----------|-------------------------|
+| HEAD `ERC4626StrategyAdapter` | `emergencyWithdraw()` calls `_drainBucketsToBufferBestEffort()` then pulls buffer | Bucket LP stuck; `maxWithdraw==0`; vault emergency returns ~0 |
+| Adapter selectors | `drainBucketsToBuffer`, `moveToBuffer`, `moveFromBuffer` present in runtime bytecode | Must use legacy keeper `inner.moveToBuffer` then vault emergency |
+| Auth keepers | `isKeeper(protocolAutomation)==true` **and** Keepr EOA keeper | Automation cannot drain buckets without a one-off `setKeeper` |
+| Unwind ops | `ensure-ajna-emergency-readiness` runs before `emergencyWithdrawFromStrategies` | Same AKITA B2 surprise: Charm clears, Ajna debt stuck |
+
+Ops:
+
+```bash
+# Day-0 / any vault — wire keeper only (dry-run default; live needs --execute)
+pnpm -C frontend exec tsx --env-file=.env scripts/ops/ensure-ajna-emergency-readiness.ts \
+  --vault 0x... --no-drain
+pnpm -C frontend exec tsx --env-file=.env scripts/ops/ensure-ajna-emergency-readiness.ts \
+  --vault 0x... --no-drain --execute --confirm=AJNA-EMERGENCY-READY
+
+# Emergency — keeper + legacy bucket drain (no-op drain when adapter self-drains)
+pnpm -C frontend exec tsx --env-file=.env scripts/ops/ensure-ajna-emergency-readiness.ts \
+  --vault 0x... --execute --confirm=AJNA-EMERGENCY-READY
+```
+
+Unwind script (`execute-akita-b2-unwind-csw.ts`) calls this before strategies unless `--skip-ajna-buffer`. Unwind itself defaults to dry-run and requires `--execute --confirm=AKITA-B2-UNWIND`.
 
 ### Bytecode / seal gates before calling the cutover “v1.20.0”
 
@@ -56,8 +82,10 @@ Seal and verify these in the bytecode store / `DEPLOY_BYTECODE` — AKITA taught
 | Gate | Why | How to verify |
 |------|-----|----------------|
 | Adapter exposes `moveFromBuffer` | Live AKITA adapter bytecode **lacked** selector `0xd6506540`; keeper/Safe path through adapter impossible | `cast sig "moveFromBuffer(uint256,uint256)"` then check adapter runtime bytecode contains that selector |
+| Adapter exposes `drainBucketsToBuffer` / `moveToBuffer` | Without these, vault `emergencyWithdrawFromStrategies` cannot realize bucket LP in one shot | Selectors `0xc7cc300d` / `0x070b49ba` in adapter runtime bytecode |
 | Inner vault dust refund uses `balanceOf(this)` | Ajna can pull full `assets` while returning slightly lower `movedAssets` (empty-bucket dust). Refunding `assets - movedAssets` → `ERC20InsufficientBalance` | Source: `AjnaERC4626Vault.moveFromBuffer` must refund `ASSET_TOKEN.balanceOf(address(this))`, not `assets - movedAssets`. Confirm sealed bytecode matches that logic |
-| Auth admin / pendingAdmin path known | Hot automation Safe must be able to `acceptAdmin` + `setSwapper` if handoff is ever needed | Read `admin()`, `pendingAdmin()`, `swapper()` on `AjnaVaultAuth` |
+| Auth admin / pendingAdmin path known | Hot automation Safe must be able to `acceptAdmin` + `setSwapper` / `setKeeper` if handoff is ever needed | Read `admin()`, `pendingAdmin()`, `swapper()`, `isKeeper(automation)` on `AjnaVaultAuth` |
+| Phase 3 helper sets automation keeper | New sleeves must ship with `isKeeper(protocolAutomation)==true` without a manual follow-up | Source: `DeploymentBatcherPhase3Helper` Ajna branch; reseal Phase 3 helper after this change |
 | `ajna_vaults` registry row | Keeper dry_run→live needs registry config (`bufferRatioBps`, `minBucketIndex`, caps) | Row present; `automation_status` starts `dry_run` then flips `live` after inspect PASS |
 
 If the sealed adapter still lacks `moveFromBuffer`, plan an explicit **swapper-handoff** ops path (see below) — do not assume Keepr alone can lend.
@@ -66,10 +94,11 @@ If the sealed adapter still lacks `moveFromBuffer`, plan an explicit **swapper-h
 
 1. **Inspect sleeve** (read-only): vault, adapter, inner, auth, pool, `strategyDebt`, `bufferAssets`, `innerTotalAssets`, `getBuckets`, `lenderInfo(minBucket, inner)`, `swapper == adapter`, pause=false.
 2. Expect: `strategyDebt > 0` and `bufferAssets ≈ innerTotalAssets` and `lentIntoBuckets == false` until lend.
-3. **Dry-run** Keepr `POST /api/keeper/ajna/rebalance` (or ops script dry-run). Confirm prepared `move_from_buffer` amount respects buffer floor.
-4. **Execute** only after explicit operator approval: adapter path preferred; handoff path only if adapter selector missing.
-5. **Verify:** `lentIntoBuckets == true`, buffer near target floor, pool LP > 0, `swapper` still adapter, Ajna UI can show LP.
-6. Flip registry `dry_run` → `live` only after one clean verify.
+3. **Emergency readiness:** run `ensure-ajna-emergency-readiness.ts --vault … --no-drain` (acceptAdmin if needed, assert automation is keeper, report adapter selector gates).
+4. **Dry-run** Keepr `POST /api/keeper/ajna/rebalance` (or ops script dry-run). Confirm prepared `move_from_buffer` amount respects buffer floor.
+5. **Execute** only after explicit operator approval: adapter path preferred; handoff path only if adapter selector missing.
+6. **Verify:** `lentIntoBuckets == true`, buffer near target floor, pool LP > 0, `swapper` still adapter, Ajna UI can show LP.
+7. Flip registry `dry_run` → `live` only after one clean verify.
 
 ### Live AKITA reference (Base, 2026-07-28)
 
@@ -98,13 +127,7 @@ Order (sequential Safe txs — **not** one MultiSend; MultiSend hit `GS013` in p
 5. Automation Safe: `setSwapper(adapter)` — **mandatory restore**.
 6. Verify LP + swapper.
 
-Ops script (AKITA-shaped, reusable with `--adapter`):  
-`frontend/scripts/ops/execute-akita-ajna-move-from-buffer-safe.ts`
-
-```bash
-pnpm -C frontend exec tsx scripts/ops/execute-akita-ajna-move-from-buffer-safe.ts --dry-run
-pnpm -C frontend exec tsx scripts/ops/execute-akita-ajna-move-from-buffer-safe.ts --execute
-```
+No checked-in handoff script yet — run the six Safe steps above manually (or via one-off operator tooling). Prefer sealing adapter `moveFromBuffer` so Keepr/automation can lend without swapper handoff.
 
 ### Dust bug (source fix must ship in sealed v1.20.0)
 
@@ -176,7 +199,9 @@ Repo integration: hand-rolled `IAjnaPool` + viem — **no** `@ajna-finance/sdk` 
 - Runbook: `docs/_internal/operations/vault/ajna-vault-manager-p0-runbook.md`
 - Backfill: `pnpm -C frontend exec tsx scripts/ops/backfill-keepr-vault.ts`
 - Hot Safe acceptAdmin: `scripts/ops/wire-akita-hot-automation-safe.ts`
-- Buffer lend (handoff): `scripts/ops/execute-akita-ajna-move-from-buffer-safe.ts`
+- Emergency readiness / legacy bucket→buffer: `scripts/ops/ensure-ajna-emergency-readiness.ts`
+- AKITA B2 unwind (CSW): `scripts/ops/execute-akita-b2-unwind-csw.ts` (dry-run default; `--execute --confirm=AKITA-B2-UNWIND`)
+- Buffer lend (handoff): manual Safe sequence in § Swapper-handoff (no checked-in script)
 
 ## Repo map
 
