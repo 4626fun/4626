@@ -51,7 +51,9 @@ interface IAjnaPool {
 
     /**
      * @notice Remove quote tokens from a lending bucket
-     * @param amount Amount of LP tokens to burn
+     * @dev Ajna `IPoolLenderActions`: `maxAmount_` is quote-token WAD (not LP). Use
+     *      `type(uint256).max` to redeem the caller's full LP in the bucket.
+     * @param amount Maximum quote tokens to remove (WAD)
      * @param index Bucket index
      * @return removedAmount The amount of quote tokens removed
      * @return redeemedLP The amount of LP tokens burned
@@ -62,7 +64,8 @@ interface IAjnaPool {
 
     /**
      * @notice Move quote tokens between buckets
-     * @param maxAmount Maximum amount of LP to move
+     * @dev Ajna `IPoolLenderActions`: `maxAmount_` is quote-token WAD (not LP).
+     * @param maxAmount Maximum quote tokens to move (WAD)
      * @param fromIndex Source bucket index
      * @param toIndex Destination bucket index
      * @param expiry Expiration timestamp

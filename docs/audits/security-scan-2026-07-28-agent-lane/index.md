@@ -52,7 +52,7 @@ Reusable agent prompt: [COMMISSION-PROMPT.md](./COMMISSION-PROMPT.md).
 
 ## Follow-on jobs
 
-- Charm + Ajna **519** + CreatorPayout/CoinPolicy **520** — pin [`audit/oda-2026-07-28-strategies-revenue`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-strategies-revenue/contracts) @ `f09a31a`; see [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-commission-strategies-revenue.json](./oda-commission-strategies-revenue.json).
+- Charm + Ajna **519** (**complete** — [oda-519-remediation.md](./oda-519-remediation.md)) + CreatorPayout/CoinPolicy **520** — pin [`audit/oda-2026-07-28-strategies-revenue`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-strategies-revenue/contracts) @ `f09a31a`; see [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-commission-strategies-revenue.json](./oda-commission-strategies-revenue.json).
 
 - Lottery **510** + CreatorOracle **511** — see [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-commission-lottery-oracle.json](./oda-commission-lottery-oracle.json).
 - AgentOracle deferred.

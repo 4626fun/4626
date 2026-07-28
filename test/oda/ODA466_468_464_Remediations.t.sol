@@ -99,8 +99,14 @@ contract RemMockAjnaPool is IAjnaPool {
         return (0, 0, 0);
     }
 
-    function lenderInfo(uint256, address) external pure returns (uint256, uint256) {
-        return (0, 0);
+    uint256 public lenderDepositTime = 1; // default: pre-any-bankruptcy unless raised
+
+    function setLenderDepositTime(uint256 t) external {
+        lenderDepositTime = t;
+    }
+
+    function lenderInfo(uint256, address) external view returns (uint256, uint256) {
+        return (10e18, lenderDepositTime);
     }
 
     function bucketInfo(uint256)
@@ -225,10 +231,14 @@ contract ODA466_468_464_RemediationsTest is Test {
     function test_466_11_lpToAssetsReturnsZeroWhenBankrupt() public {
         RemMockERC20 quote = new RemMockERC20("Q", "Q", 18);
         RemMockAjnaPool pool = new RemMockAjnaPool(address(quote), makeAddr("collateral"));
-        pool.setBankruptcyTime(1);
-        assertEq(AjnaVaultLibrary.lpToAssets(IAjnaPool(address(pool)), 4156, 10e18), 0);
+        // ODA-519-1: only LP with depositTime <= bankruptcyTime is void.
+        pool.setBankruptcyTime(100);
+        pool.setLenderDepositTime(50); // pre-bankruptcy
+        assertEq(AjnaVaultLibrary.lpToAssets(IAjnaPool(address(pool)), 4156, 10e18, address(this)), 0);
+        pool.setLenderDepositTime(101); // post-bankruptcy LP remains valuable
+        assertEq(AjnaVaultLibrary.lpToAssets(IAjnaPool(address(pool)), 4156, 10e18, address(this)), 10e18);
         pool.setBankruptcyTime(0);
-        assertEq(AjnaVaultLibrary.lpToAssets(IAjnaPool(address(pool)), 4156, 10e18), 10e18);
+        assertEq(AjnaVaultLibrary.lpToAssets(IAjnaPool(address(pool)), 4156, 10e18, address(this)), 10e18);
     }
 
     function test_468_L3_increaseLockBurnsWhenPowerDrops() public {

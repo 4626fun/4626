@@ -117,7 +117,7 @@ Do **not** re-pay to re-check.
 
 | System | Job ID | Track | Bytecode | Status |
 |--------|--------|-------|----------|--------|
-| Charm + Ajna (+ adapter) | 519 | https://onedollaraudit.com/audit/519 | pin-ahead-of-live | commissioned (prior 466/431 context) |
+| Charm + Ajna (+ adapter) | 519 | https://onedollaraudit.com/audit/519 | pin-ahead-of-live | **complete** — remediations in [oda-519-remediation.md](./oda-519-remediation.md) |
 | CreatorPayout + CoinPolicy | 520 | https://onedollaraudit.com/audit/520 | pin-ahead-of-live | commissioned |
 
 **Spend:** $2.00 USDC. JSON: [oda-commission-strategies-revenue.json](./oda-commission-strategies-revenue.json).

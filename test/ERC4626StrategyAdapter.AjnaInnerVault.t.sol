@@ -155,12 +155,15 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         asset.approve(address(adapter), type(uint256).max);
     }
 
-    function testDepositRevertsWhenInnerVaultIsPaused() public {
+    function testDepositSoftFailsWhenInnerVaultIsPaused() public {
         auth.pause();
 
+        // ODA-519-12: inner pause must not brick outer lane deposits — assets stay idle.
         vm.prank(address(outerVault));
-        vm.expectRevert(ERC4626StrategyAdapter.InnerDepositFailed.selector);
-        adapter.deposit(100e18);
+        uint256 deposited = adapter.deposit(100e18);
+        assertEq(deposited, 100e18);
+        assertEq(asset.balanceOf(address(adapter)), 100e18);
+        assertEq(innerVault.balanceOf(address(adapter)), 0);
     }
 
     function testWithdrawReturnsOnlyAdapterIdleWhenInnerBufferIsEmpty() public {

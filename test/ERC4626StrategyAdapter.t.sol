@@ -39,6 +39,11 @@ contract ManipulableERC4626Vault is ERC4626 {
         uint256 baseAssets = super.convertToAssets(shares);
         return (baseAssets * assetsMultiplier) / 1e18;
     }
+
+    // ODA-519-11: adapter prefers previewRedeem for NAV — keep the mock consistent.
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        return convertToAssets(shares);
+    }
 }
 
 contract RevertingWithdrawERC4626Vault is ERC4626 {
@@ -181,6 +186,26 @@ contract ERC4626StrategyAdapterTest is Test {
 
         manipulable.setAssetsMultiplier(105e16); // +5%
         assertTrue(guarded.isValuationReady(), "small bounded move should remain ready");
+    }
+
+    function testSyncValuation_heartbeatDoesNotRatchetPps() public {
+        ManipulableERC4626Vault manipulable = new ManipulableERC4626Vault(IERC20(address(asset)));
+        ERC4626StrategyAdapter guarded =
+            new ERC4626StrategyAdapter(address(vault), address(manipulable), address(this));
+
+        vm.prank(address(vault));
+        asset.approve(address(guarded), type(uint256).max);
+        vm.prank(address(vault));
+        guarded.deposit(DEPOSIT_AMOUNT);
+
+        uint256 snap = guarded.lastValuationAssetsPerShare();
+        manipulable.setAssetsMultiplier(105e16); // in-band
+        vm.warp(block.timestamp + 1 hours);
+        guarded.syncValuation();
+
+        assertEq(guarded.lastValuationAssetsPerShare(), snap, "permissionless sync must not ratchet PPS");
+        assertEq(guarded.lastValuationTimestamp(), block.timestamp, "heartbeat should refresh liveness");
+        assertTrue(guarded.isValuationReady(), "in-band after heartbeat remains ready");
     }
 
     function testIsValuationReady_falseWhenConvertReverts() public {

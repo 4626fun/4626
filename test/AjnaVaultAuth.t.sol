@@ -35,27 +35,34 @@ contract AjnaVaultAuthTest is Test {
         auth.setMinBucketIndex(4_156);
     }
 
-    /// @notice ODA-423-M08: first toll/tax set is instant (deploy bootstrap).
-    function testFeeUpdate_FirstSetIsInstant() public {
-        auth.setToll(100);
-        assertEq(auth.toll(), 100);
+    /// @notice ODA-519-17: fees are armed at construction — first set is timelocked.
+    function testFeeUpdate_FirstSetIsTimelocked() public {
         assertTrue(auth.tollArmed());
-        assertEq(auth.pendingTollAt(), 0);
+        assertTrue(auth.taxArmed());
+
+        auth.setToll(100);
+        assertEq(auth.toll(), 0, "live toll unchanged until execute");
+        assertEq(auth.pendingToll(), 100);
+        assertGt(auth.pendingTollAt(), 0);
 
         auth.setTax(50);
-        assertEq(auth.tax(), 50);
-        assertTrue(auth.taxArmed());
-        assertEq(auth.pendingTaxAt(), 0);
+        assertEq(auth.tax(), 0);
+        assertEq(auth.pendingTax(), 50);
+        assertGt(auth.pendingTaxAt(), 0);
     }
 
-    /// @notice ODA-423-M08: subsequent toll changes are 24h-timelocked.
+    /// @notice ODA-423-M08 / ODA-519-17: toll changes are 24h-timelocked with expiry.
     function testFeeUpdate_TollTimelockThenExecute() public {
         auth.setToll(100);
+        uint256 executeAfter = auth.pendingTollAt();
+        vm.warp(executeAfter);
+        auth.executeTollUpdate();
+        assertEq(auth.toll(), 100);
 
         auth.setToll(200);
         assertEq(auth.toll(), 100, "live toll must not change until execute");
         assertEq(auth.pendingToll(), 200);
-        uint256 executeAfter = auth.pendingTollAt();
+        executeAfter = auth.pendingTollAt();
         assertEq(executeAfter, block.timestamp + auth.FEE_UPDATE_TIMELOCK());
 
         vm.expectRevert(abi.encodeWithSelector(AjnaVaultAuth.FeeUpdateTimelockActive.selector, executeAfter));
@@ -69,12 +76,16 @@ contract AjnaVaultAuthTest is Test {
 
     function testFeeUpdate_TaxTimelockThenExecute() public {
         auth.setTax(25);
+        uint256 executeAfter = auth.pendingTaxAt();
+        vm.warp(executeAfter + 1);
+        auth.executeTaxUpdate();
+        assertEq(auth.tax(), 25);
 
         auth.setTax(75);
         assertEq(auth.tax(), 25);
         assertEq(auth.pendingTax(), 75);
 
-        uint256 executeAfter = auth.pendingTaxAt();
+        executeAfter = auth.pendingTaxAt();
         vm.expectRevert(abi.encodeWithSelector(AjnaVaultAuth.FeeUpdateTimelockActive.selector, executeAfter));
         auth.executeTaxUpdate();
 
@@ -82,6 +93,35 @@ contract AjnaVaultAuthTest is Test {
         auth.executeTaxUpdate();
         assertEq(auth.tax(), 75);
         assertEq(auth.pendingTaxAt(), 0);
+    }
+
+    function testFeeUpdate_ExpiredQueueClears() public {
+        auth.setToll(100);
+        uint256 executeAfter = auth.pendingTollAt();
+        uint256 expiresAt = executeAfter + auth.FEE_UPDATE_EXPIRY();
+        vm.warp(expiresAt + 1);
+        vm.expectEmit(false, false, false, true);
+        emit AjnaVaultAuth.TollUpdateExpired(expiresAt);
+        auth.executeTollUpdate();
+        assertEq(auth.toll(), 0, "expired queue must not apply");
+        assertEq(auth.pendingTollAt(), 0);
+        assertEq(auth.pendingToll(), 0);
+    }
+
+    function testSwapper_FirstSetInstant_RotationTwoStep() public {
+        address s1 = address(0x1111);
+        address s2 = address(0x2222);
+        auth.setSwapper(s1);
+        assertEq(auth.swapper(), s1);
+
+        auth.setSwapper(s2);
+        assertEq(auth.swapper(), s1, "rotation must wait for accept");
+        assertEq(auth.pendingSwapper(), s2);
+
+        vm.prank(s2);
+        auth.acceptSwapper();
+        assertEq(auth.swapper(), s2);
+        assertEq(auth.pendingSwapper(), address(0));
     }
 
     function testFeeUpdate_ExecuteWithoutPendingReverts() public {

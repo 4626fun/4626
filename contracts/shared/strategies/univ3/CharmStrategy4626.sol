@@ -140,6 +140,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     error ZeroAddress();
     error SlippageExceeded(uint256 expected, uint256 actual);
     error InvalidCharmVault(address vault);
+    error InvalidSwapPool(address pool);
     error MaxSwapPercentTooHigh(uint256 maxSwapPercent);
     error InvalidCollateralRatioBps(uint256 ratioBps);
     error InvalidAjnaLimitIndex(uint256 limitIndex);
@@ -239,7 +240,28 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     }
 
     function setSwapPool(address _swapPool) external onlyOwner {
-        swapPool = IUniswapV3Pool(_swapPool);
+        // ODA-519-14: mirror setCharmVault validation — swap pool is the slippage/TWAP source.
+        if (_swapPool == address(0)) {
+            swapPool = IUniswapV3Pool(address(0));
+            return;
+        }
+        if (_swapPool.code.length == 0) revert InvalidSwapPool(_swapPool);
+        IUniswapV3Pool candidate = IUniswapV3Pool(_swapPool);
+        address t0;
+        address t1;
+        try candidate.token0() returns (address token0_) {
+            t0 = token0_;
+        } catch {
+            revert InvalidSwapPool(_swapPool);
+        }
+        try candidate.token1() returns (address token1_) {
+            t1 = token1_;
+        } catch {
+            revert InvalidSwapPool(_swapPool);
+        }
+        bool pairOk = (t0 == address(ASSET) && t1 == address(USDC)) || (t0 == address(USDC) && t1 == address(ASSET));
+        if (!pairOk) revert InvalidSwapPool(_swapPool);
+        swapPool = candidate;
     }
 
     /// @notice Set lane oracle used for valuation (ODA-466-10: EIP-170 — instant set; owner-gated).
@@ -745,9 +767,17 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
                     totalUsdc = USDC.balanceOf(address(this));
 
                     // Recalculate with new balances
-                    usdcNeeded = (totalAsset * charmUsdc) / charmAsset;
-                    finalAsset = totalAsset;
-                    finalUsdc = totalUsdc > usdcNeeded ? usdcNeeded : totalUsdc;
+                    // ODA-519-13: clamp ASSET to what the available USDC can pair with
+                    // (same proportional floor as the can't-swap branch below).
+                    if (totalUsdc == 0 || charmUsdc == 0) {
+                        finalAsset = 0;
+                        finalUsdc = 0;
+                    } else {
+                        uint256 assetUsable = (totalUsdc * charmAsset) / charmUsdc;
+                        finalAsset = assetUsable > totalAsset ? totalAsset : assetUsable;
+                        usdcNeeded = (finalAsset * charmUsdc) / charmAsset;
+                        finalUsdc = totalUsdc > usdcNeeded ? usdcNeeded : totalUsdc;
+                    }
                 } else {
                     // Can't swap enough - deposit what we can
                     uint256 assetUsable = (totalUsdc * charmAsset) / charmUsdc;
@@ -828,25 +858,33 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     function isCharmInRange() public view returns (bool inRange, int24 currentTick, int24 lower, int24 upper) {
         if (address(charmVault) == address(0)) return (false, 0, 0, 0);
 
+        // ODA-519-21: fail closed on any read failure (was fail-open); Uniswap V3 range is
+        // half-open [lower, upper); wrap slot0 in its own try so reverts are caught.
         try charmVault.pool() returns (address poolAddr) {
             IUniswapV3Pool pool = IUniswapV3Pool(poolAddr);
-            (, currentTick,,,,,) = pool.slot0();
+            try pool.slot0() returns (
+                uint160, int24 tick, uint16, uint16, uint16, uint8, bool
+            ) {
+                currentTick = tick;
+            } catch {
+                return (false, 0, 0, 0);
+            }
 
             try charmVault.baseLower() returns (int24 _lower) {
                 lower = _lower;
             } catch {
-                lower = -887200;
+                return (false, currentTick, 0, 0);
             }
 
             try charmVault.baseUpper() returns (int24 _upper) {
                 upper = _upper;
             } catch {
-                upper = 887200;
+                return (false, currentTick, lower, 0);
             }
 
-            inRange = currentTick >= lower && currentTick <= upper;
+            inRange = currentTick >= lower && currentTick < upper;
         } catch {
-            inRange = true;
+            inRange = false;
         }
     }
 
@@ -1156,7 +1194,9 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
             ajnaMinCollateralRatioBps > 10_000 ? ajnaMinCollateralRatioBps - 10_000 : 0;
         uint256 safetySteps = Math.ceilDiv(extraCollateralBps, AJNA_APPROX_BUCKET_STEP_BPS);
         if (forBorrow) {
-            return (oracleBucket > safetySteps ? oracleBucket - safetySteps : 0, true);
+            // ODA-519-20: never return unclamped sentinel 0 with ready=true (disables borrow backstop).
+            if (oracleBucket <= safetySteps) return (0, false);
+            return (_clampAjnaBucketIndex(oracleBucket - safetySteps), true);
         }
         return (_clampAjnaBucketIndex(oracleBucket + safetySteps), true);
     }
@@ -1234,6 +1274,10 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // =================================
 
     function emergencyWithdraw() external override onlyVault nonReentrant returns (uint256 withdrawn) {
+        // ODA-519-16: `withdrawn` must reflect ASSET actually transferred to the vault
+        // (never a stale pre-repay Charm amount when Ajna repay consumes the balance).
+        withdrawn = 0;
+
         if (address(charmVault) != address(0)) {
             uint256 ourShares = charmVault.balanceOf(address(this));
             bool assetIsToken0 = address(charmVault.token0()) == address(ASSET);
@@ -1244,17 +1288,14 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
                 try charmVault.withdraw(ourShares, min0, min1, address(this)) returns (
                     uint256 amount0, uint256 amount1
                 ) {
-                    uint256 assetReceived = assetIsToken0 ? amount0 : amount1;
                     uint256 usdcReceived = assetIsToken0 ? amount1 : amount0;
 
                     // ODA-423-M02: best-effort swap — do not brick the whole emergency exit
                     // when TWAP/router is unavailable; forward residual USDC below.
                     uint256 totalUsdc = USDC.balanceOf(address(this));
                     if (usdcReceived > 0 || totalUsdc > 0) {
-                        assetReceived += _swapUsdcToAssetSafe(totalUsdc);
+                        _swapUsdcToAssetSafe(totalUsdc);
                     }
-
-                    withdrawn = assetReceived;
                 } catch {}
             }
         }
