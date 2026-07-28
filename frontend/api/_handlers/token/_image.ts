@@ -68,6 +68,16 @@ function resolveRequestOrigin(hostHeader: string): string {
   return `https://${host.replace(/:\d+$/, '')}`
 }
 
+function staticShareTokenIconFsCandidates(relativePath: string): string[] {
+  const normalized = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath
+  return [
+    // Bundled next to the handler via vercel includeFiles / local checkout
+    fileURLToPath(new URL(`../../../public/${normalized}`, import.meta.url)),
+    join(process.cwd(), 'public', normalized),
+    join(process.cwd(), 'frontend', 'public', normalized),
+  ]
+}
+
 async function loadStaticShareTokenIconPng(params: {
   hostHeader: string
   relativePath: string
@@ -75,11 +85,22 @@ async function loadStaticShareTokenIconPng(params: {
   const relativePath = params.relativePath.startsWith('/')
     ? params.relativePath
     : `/${params.relativePath}`
-  const candidates = [
+
+  for (const fsPath of staticShareTokenIconFsCandidates(relativePath)) {
+    try {
+      const raw = await readFile(fsPath)
+      if (!isSafeSourceByteLength(raw) || !isLikelyImagePayload(raw, 'image/png')) continue
+      return Buffer.from(raw)
+    } catch {
+      // try next candidate
+    }
+  }
+
+  const urlCandidates = [
     `${resolveRequestOrigin(params.hostHeader)}${relativePath}`,
     `https://4626.fun${relativePath}`,
   ]
-  for (const url of candidates) {
+  for (const url of urlCandidates) {
     const fetched = await fetchBytes(url, {
       maxBytes: MAX_SOURCE_IMAGE_BYTES,
       timeoutMs: SOURCE_FETCH_TIMEOUT_MS,
@@ -92,16 +113,7 @@ async function loadStaticShareTokenIconPng(params: {
     ) {
       continue
     }
-    try {
-      return await sharp(Buffer.from(rawBytes), {
-        limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
-      })
-        .resize(512, 512, { fit: 'cover' })
-        .png()
-        .toBuffer()
-    } catch {
-      // try next candidate
-    }
+    return Buffer.from(rawBytes)
   }
   return null
 }
