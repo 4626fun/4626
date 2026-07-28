@@ -127,6 +127,8 @@ room `1659` is the seeded canary row only.
 
 #### Room 1659 canary stages (operator checklist)
 
+**Access split (2026-07-28):** GET allows FriendKey **or** creator-coin buy-quote equivalent; POST / XMTP membership require FriendKey hold or stake. Coin holders are read-only. Ops helper: `pnpm -C frontend ops:alfaclub-room1659-chat-canary` (`--enable-xmtp`, `--backfill`).
+
 Promote only after the previous stage is healthy. Mirror **new messages only**
 (no historical backfill in MVP).
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveRoomChatViewAccess } from './roomChatViewAccess.js'
+import { resolveRoomChatViewAccess, resolveRoomChatWriteAccess } from './roomChatViewAccess.js'
 
 const WALLET = '0x1111111111111111111111111111111111111111' as const
 const CSW = '0x2222222222222222222222222222222222222222' as const
@@ -17,10 +17,11 @@ describe('resolveRoomChatViewAccess', () => {
       allowed: false,
       reason: 'anonymous',
       walletAddress: null,
+      canWrite: false,
     })
   })
 
-  it('allows active membership without onchain key reads', async () => {
+  it('allows active membership without requiring FriendKey write', async () => {
     const readMembership = vi.fn(async () => ({
       roomId: '1659',
       walletAddress: WALLET,
@@ -32,7 +33,6 @@ describe('resolveRoomChatViewAccess', () => {
       graceStartedAt: null,
       failureReason: null,
     }))
-    const readWalletKeyBalance = vi.fn()
 
     await expect(
       resolveRoomChatViewAccess({
@@ -41,18 +41,21 @@ describe('resolveRoomChatViewAccess', () => {
         dependencies: {
           resolveWallets: async () => [WALLET],
           readMembership,
-          readWalletKeyBalance,
+          readPolicy: async () => null,
+          getPublicClient: async () => ({}) as never,
+          readWalletKeyBalance: async () => 0n,
+          readWalletStakedKeys: async () => 0,
         },
       }),
     ).resolves.toEqual({
       allowed: true,
       reason: 'membership',
       walletAddress: WALLET,
+      canWrite: false,
     })
-    expect(readWalletKeyBalance).not.toHaveBeenCalled()
   })
 
-  it('allows wallet-held FriendKeys', async () => {
+  it('allows wallet-held FriendKeys with write', async () => {
     const access = await resolveRoomChatViewAccess({
       roomId: '1659',
       sessionAddress: WALLET,
@@ -69,10 +72,11 @@ describe('resolveRoomChatViewAccess', () => {
       allowed: true,
       reason: 'room_key',
       walletAddress: CSW,
+      canWrite: true,
     })
   })
 
-  it('allows staked-only FriendKeys', async () => {
+  it('allows staked-only FriendKeys with write', async () => {
     const access = await resolveRoomChatViewAccess({
       roomId: '1659',
       sessionAddress: WALLET,
@@ -89,10 +93,11 @@ describe('resolveRoomChatViewAccess', () => {
       allowed: true,
       reason: 'staked_key',
       walletAddress: WALLET,
+      canWrite: true,
     })
   })
 
-  it('allows creator-coin equivalent when policy is enabled', async () => {
+  it('allows creator-coin equivalent as read-only', async () => {
     const access = await resolveRoomChatViewAccess({
       roomId: '1659',
       sessionAddress: WALLET,
@@ -132,6 +137,7 @@ describe('resolveRoomChatViewAccess', () => {
       allowed: true,
       reason: 'coin_equivalent',
       walletAddress: WALLET,
+      canWrite: false,
     })
   })
 
@@ -174,6 +180,59 @@ describe('resolveRoomChatViewAccess', () => {
     expect(access).toEqual({
       allowed: false,
       reason: 'insufficient',
+      walletAddress: WALLET,
+      canWrite: false,
+    })
+  })
+})
+
+describe('resolveRoomChatWriteAccess', () => {
+  it('allows FriendKey holders', async () => {
+    await expect(
+      resolveRoomChatWriteAccess({
+        roomId: '1659',
+        sessionAddress: WALLET,
+        dependencies: {
+          resolveWallets: async () => [WALLET],
+          readPolicy: async () => null,
+          getPublicClient: async () => ({}) as never,
+          readWalletKeyBalance: async () => 1n,
+          readWalletStakedKeys: async () => 0,
+        },
+      }),
+    ).resolves.toEqual({
+      allowed: true,
+      reason: 'room_key',
+      walletAddress: WALLET,
+    })
+  })
+
+  it('rejects coin-only wallets without FriendKey', async () => {
+    await expect(
+      resolveRoomChatWriteAccess({
+        roomId: '1659',
+        sessionAddress: WALLET,
+        dependencies: {
+          resolveWallets: async () => [WALLET],
+          readPolicy: async () => ({
+            roomId: '1659',
+            tokenId: '1659',
+            creatorCoinAddress: '0x3333333333333333333333333333333333333333',
+            poolAddress: '0x4444444444444444444444444444444444444444',
+            keyAmountRaw: '1',
+            enterThresholdBps: 10_000,
+            exitThresholdBps: 9_000,
+            graceHours: 24,
+            enabled: true,
+          }),
+          getPublicClient: async () => ({}) as never,
+          readWalletKeyBalance: async () => 0n,
+          readWalletStakedKeys: async () => 0,
+        },
+      }),
+    ).resolves.toEqual({
+      allowed: false,
+      reason: 'friendkey_required',
       walletAddress: WALLET,
     })
   })

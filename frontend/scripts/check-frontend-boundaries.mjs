@@ -52,6 +52,8 @@ const ALLOWED_API_TO_SRC = new Set([
   'src/lib/wallet/addOwnerCallShape',
   // Pure AlfaClub key-defense risk policy shared by the key-safety API.
   'src/lib/alfaclub/keyDefense',
+  // Pure hero mcap outlier scrub shared by explore UI and zora metrics API.
+  'src/lib/explore/heroMcapHistory',
 ])
 
 async function walk(dir) {

@@ -8,6 +8,52 @@ import {
   backfillActiveRoomChannelBridgeMembers,
   syncRoomChannelBridgeMembership,
 } from './roomChannelBridge.js'
+import {
+  expandFriendKeyCheckWallets,
+  resolveRoomFriendKeyAccess,
+} from './roomFriendKeyAccess.js'
+
+/**
+ * Keep XMTP membership aligned with live FriendKey hold/stake.
+ * - add when FriendKey is present (heals late key acquisition)
+ * - remove when FriendKey is confirmed absent
+ * - no-op on check_failed so RPC blips do not evict writers
+ */
+async function reconcileXmtpMembershipForFriendKey(params: {
+  roomId: string
+  walletAddress: `0x${string}`
+  tokenIdHint?: string | null
+  reasonKey?: string
+}): Promise<'added' | 'removed' | 'skipped_check_failed' | 'skipped'> {
+  const wallets = await expandFriendKeyCheckWallets(params.walletAddress)
+  const friendKey = await resolveRoomFriendKeyAccess({
+    roomId: params.roomId,
+    wallets,
+    tokenIdHint: params.tokenIdHint,
+  }).catch(() => null)
+
+  if (!friendKey || friendKey.reason === 'check_failed') {
+    return 'skipped_check_failed'
+  }
+
+  if (friendKey.allowed) {
+    const ok = await syncRoomChannelBridgeMembership({
+      roomId: params.roomId,
+      walletAddress: params.walletAddress,
+      action: 'add',
+      reasonKey: params.reasonKey ?? 'friendkey_present',
+    }).catch(() => false)
+    return ok ? 'added' : 'skipped'
+  }
+
+  const ok = await syncRoomChannelBridgeMembership({
+    roomId: params.roomId,
+    walletAddress: params.walletAddress,
+    action: 'remove',
+    reasonKey: params.reasonKey ?? 'friendkey_absent',
+  }).catch(() => false)
+  return ok ? 'removed' : 'skipped'
+}
 
 const SUDOSWAP_ERC1155_ERC20_PAIR_ABI = parseAbi([
   'function factory() view returns (address)',
@@ -506,11 +552,12 @@ export async function joinAlfaClubRoomAccess(params: {
   })
 
   if (eligibility.canEnter) {
-    await syncRoomChannelBridgeMembership({
+    await reconcileXmtpMembershipForFriendKey({
       roomId: policy.roomId,
       walletAddress: params.walletAddress,
-      action: 'add',
-    }).catch(() => {})
+      tokenIdHint: policy.tokenId,
+      reasonKey: 'join',
+    })
   }
 
   return {
@@ -584,12 +631,14 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       })
       if (!wasActive) {
         autoEntered += 1
-        await syncRoomChannelBridgeMembership({
-          roomId: policy.roomId,
-          walletAddress: membership.walletAddress,
-          action: 'add',
-        }).catch(() => {})
       }
+      // Coin-only actives stay read-only; XMTP membership tracks live FriendKey only.
+      await reconcileXmtpMembershipForFriendKey({
+        roomId: policy.roomId,
+        walletAddress: membership.walletAddress,
+        tokenIdHint: policy.tokenId,
+        reasonKey: wasActive ? 'recheck_active' : 'recheck_enter',
+      })
       continue
     }
 
@@ -601,6 +650,13 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
         creatorCoinBalanceRaw: eligibility.evidence.creatorCoinBalanceRaw,
         quoteThresholdRaw: eligibility.evidence.quoteThresholdRaw,
         failureReason: 'balance>=exit_threshold',
+      })
+      // Heal late FriendKey acquisition and strip coin-only XMTP members.
+      await reconcileXmtpMembershipForFriendKey({
+        roomId: policy.roomId,
+        walletAddress: membership.walletAddress,
+        tokenIdHint: policy.tokenId,
+        reasonKey: 'recheck_stay_active',
       })
       continue
     }
@@ -618,6 +674,13 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
         quoteThresholdRaw: eligibility.evidence.quoteThresholdRaw,
         failureReason: eligibility.reason,
       })
+      // Grace is read-only for web; drop XMTP immediately when FriendKey is gone.
+      await reconcileXmtpMembershipForFriendKey({
+        roomId: policy.roomId,
+        walletAddress: membership.walletAddress,
+        tokenIdHint: policy.tokenId,
+        reasonKey: 'recheck_grace',
+      })
       continue
     }
 
@@ -630,11 +693,13 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       failureReason: eligibility.reason,
     })
     removed += 1
-    await syncRoomChannelBridgeMembership({
+    // Coin eligibility ended, but keep XMTP if the wallet still holds FriendKey.
+    await reconcileXmtpMembershipForFriendKey({
       roomId: policy.roomId,
       walletAddress: membership.walletAddress,
-      action: 'remove',
-    }).catch(() => {})
+      tokenIdHint: policy.tokenId,
+      reasonKey: 'recheck_removed',
+    })
   }
 
   return { checked, autoEntered, removed, stale }

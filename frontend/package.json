@@ -90,6 +90,7 @@
     "ops:alfaclub-refresh-snapshot": "tsx scripts/ops/alfaclub-refresh-snapshot.ts",
     "ops:alfaclub:repair-chat-token": "tsx scripts/ops/alfaclub-repair-chat-token.ts",
     "ops:alfaclub-proxy-reliability-smoke": "tsx scripts/ops/alfaclub-proxy-reliability-smoke.ts",
+    "ops:alfaclub-room1659-chat-canary": "tsx --env-file=.env scripts/ops/enable-room1659-chat-canary.ts",
     "ops:counter-trade:normalize-optins": "tsx scripts/ops/normalize-counter-trade-room-optins.ts",
     "ops:inverse-akita:shadow-health": "tsx --env-file=.env scripts/ops/verify-inverse-akita-shadow-health.ts",
     "ops:inverse-akita:trade-journal": "tsx --env-file=.env scripts/ops/verify-inverse-akita-trade-journal.ts",

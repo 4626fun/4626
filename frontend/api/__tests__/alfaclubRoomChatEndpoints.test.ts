@@ -16,7 +16,8 @@ const {
   listAlfaClubRoomChatMessagesMock,
   readAlfaClubRoomChannelBindingMock,
   resolveAuthorizedWalletProfileMock,
-  readAlfaClubRoomAccessMembershipMock,
+  resolveRoomChatViewAccessMock,
+  resolveRoomChatWriteAccessMock,
   claimAlfaClubCrossChannelIngressMock,
   linkAlfaClubCrossChannelIngressMock,
   readAlfaClubChatBridgeFlagsMock,
@@ -44,7 +45,8 @@ const {
   listAlfaClubRoomChatMessagesMock: vi.fn(),
   readAlfaClubRoomChannelBindingMock: vi.fn(),
   resolveAuthorizedWalletProfileMock: vi.fn(),
-  readAlfaClubRoomAccessMembershipMock: vi.fn(),
+  resolveRoomChatViewAccessMock: vi.fn(),
+  resolveRoomChatWriteAccessMock: vi.fn(),
   claimAlfaClubCrossChannelIngressMock: vi.fn(),
   linkAlfaClubCrossChannelIngressMock: vi.fn(),
   readAlfaClubChatBridgeFlagsMock: vi.fn(() => ({})),
@@ -80,8 +82,9 @@ vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
 }))
 
-vi.mock('../../server/_lib/alfaclub/roomAccessPolicy.js', () => ({
-  readAlfaClubRoomAccessMembership: readAlfaClubRoomAccessMembershipMock,
+vi.mock('../../server/_lib/alfaclub/roomChatViewAccess.js', () => ({
+  resolveRoomChatViewAccess: resolveRoomChatViewAccessMock,
+  resolveRoomChatWriteAccess: resolveRoomChatWriteAccessMock,
 }))
 
 vi.mock('../../server/_lib/alfaclub/crossChannelIngress.js', () => ({
@@ -131,15 +134,21 @@ describe('AlfaClub room-chat endpoints', () => {
       createdAt: '2026-07-12T00:00:00.000Z',
       updatedAt: '2026-07-12T00:00:00.000Z',
     })
+    resolveRoomChatViewAccessMock.mockResolvedValue({
+      allowed: true,
+      reason: 'room_key',
+      walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      canWrite: true,
+    })
+    resolveRoomChatWriteAccessMock.mockResolvedValue({
+      allowed: true,
+      reason: 'room_key',
+      walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+    })
     resolveAuthorizedWalletProfileMock.mockResolvedValue({
       profileId: 42,
       canonicalSmartWalletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
       activeOwnerWalletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    })
-    readAlfaClubRoomAccessMembershipMock.mockResolvedValue({
-      roomId: '1659',
-      walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
-      status: 'active',
     })
     claimAlfaClubCrossChannelIngressMock.mockResolvedValue({
       claimed: true,
@@ -152,7 +161,7 @@ describe('AlfaClub room-chat endpoints', () => {
     })
   })
 
-  it('GET returns messages and channel flags for an authenticated session', async () => {
+  it('GET returns messages, channel flags, and chatAccess for an authenticated session', async () => {
     const req = createMockReq({ method: 'GET', query: { roomId: '1659', limit: '25' } })
     const res = createMockRes()
     await roomChatHandler(req as any, res as any)
@@ -170,6 +179,31 @@ describe('AlfaClub room-chat endpoints', () => {
       telegramEnabled: true,
       xmtpEnabled: true,
     })
+    expect(res.body?.data?.chatAccess).toMatchObject({
+      allowed: true,
+      canWrite: true,
+      reason: 'room_key',
+    })
+  })
+
+  it('GET allows coin-equivalent readers with canWrite false', async () => {
+    resolveRoomChatViewAccessMock.mockResolvedValueOnce({
+      allowed: true,
+      reason: 'coin_equivalent',
+      walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      canWrite: false,
+    })
+    const req = createMockReq({ method: 'GET', query: { roomId: '1659' } })
+    const res = createMockRes()
+    await roomChatHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.chatAccess).toMatchObject({
+      allowed: true,
+      reason: 'coin_equivalent',
+      canWrite: false,
+    })
+    expect(listAlfaClubRoomChatMessagesMock).toHaveBeenCalled()
   })
 
   it('GET rejects unauthenticated requests before reading chat history', async () => {
@@ -209,11 +243,11 @@ describe('AlfaClub room-chat endpoints', () => {
     expect(sendAlfaClubRoomTextMock).not.toHaveBeenCalled()
   })
 
-  it('POST denies when room membership is not active', async () => {
-    readAlfaClubRoomAccessMembershipMock.mockResolvedValueOnce({
-      roomId: '1659',
+  it('POST denies coin-only viewers without FriendKey', async () => {
+    resolveRoomChatWriteAccessMock.mockResolvedValueOnce({
+      allowed: false,
+      reason: 'friendkey_required',
       walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
-      status: 'pending',
     })
     readBoundedJsonObjectBodyMock.mockResolvedValueOnce({
       roomId: '1659',
@@ -224,12 +258,12 @@ describe('AlfaClub room-chat endpoints', () => {
     const res = createMockRes()
     await roomChatHandler(req as any, res as any)
     expect(res.statusCode).toBe(403)
-    expect(res.body?.error).toBe('membership_required')
+    expect(res.body?.error).toBe('friendkey_required')
     expect(claimAlfaClubCrossChannelIngressMock).not.toHaveBeenCalled()
     expect(sendAlfaClubRoomTextMock).not.toHaveBeenCalled()
   })
 
-  it('POST claims web4626 ingress, sends, and links the trusted issuer', async () => {
+  it('POST allows FriendKey holders to send', async () => {
     readBoundedJsonObjectBodyMock.mockResolvedValueOnce({
       roomId: '1659',
       text: '/help',
@@ -240,6 +274,10 @@ describe('AlfaClub room-chat endpoints', () => {
     const res = createMockRes()
     await roomChatHandler(req as any, res as any)
 
+    expect(resolveRoomChatWriteAccessMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      sessionAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
     expect(res.statusCode).toBe(200)
     expect(claimAlfaClubCrossChannelIngressMock).toHaveBeenCalledWith({
       sourceChannel: 'web4626',

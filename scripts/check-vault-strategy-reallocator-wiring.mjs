@@ -63,7 +63,7 @@ function main() {
       'batch maxPassesHit metric',
     ),
     () => assertIncludes(
-      'docs/operations/vault-strategy-reallocation.md',
+      'docs/_internal/operations/automation/vault-strategy-reallocation.md',
       'Regression gates',
       'ops runbook regression section',
     ),
@@ -73,9 +73,9 @@ function main() {
       'stale KPR README roadmap copy',
     ),
     () => assertIncludes(
-      'AGENTS.md',
+      'docs/_internal/operations/automation/vault-strategy-reallocation.md',
       'KEEPER_ACTIVE_VAULT_WORKFLOWS=...,rebalance',
-      'AGENTS keeper_jobs rebalance enablement',
+      'ops runbook keeper_jobs rebalance enablement',
     ),
   ]
 

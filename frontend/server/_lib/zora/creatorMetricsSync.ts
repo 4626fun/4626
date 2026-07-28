@@ -1467,6 +1467,7 @@ export type CreatorMetricsHotSyncResult = {
   sparklinesAttempted?: number
   sparklinesSkippedFresh?: number
   sparklinesFailed?: number
+  feeCoinsIndexed?: number
   skipped?: boolean
   error?: string
 }

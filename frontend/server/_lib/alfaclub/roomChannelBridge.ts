@@ -24,6 +24,11 @@ import {
   type AlfaClubRoomChannelBinding,
 } from './roomChannelBindings.js'
 import type { ChatBridgeMessageOrigin } from './chatBridgeMessageOrigin.js'
+import {
+  expandFriendKeyCheckWallets,
+  resolveRoomFriendKeyAccess,
+  walletHoldsOrStakesRoomFriendKey,
+} from './roomFriendKeyAccess.js'
 
 export type RoomChannelBridgeMessage = {
   roomId: string
@@ -200,17 +205,24 @@ export async function relayXmtpMessageToAlfaClubRoom(params: {
   const authority = await resolveAuthorizedWalletProfile(params.senderAddress).catch(() => null)
   const canonicalIssuer = authority?.canonicalSmartWalletAddress?.toLowerCase() ?? null
   if (!authority || !canonicalIssuer) return false
-  const db = await getDb()
-  if (!db) return false
-  const membership = await db.sql`
-    SELECT 1
-    FROM alfaclub.room_access_memberships
-    WHERE room_id = ${params.binding.roomId}
-      AND LOWER(wallet_address) = ${canonicalIssuer}
-      AND status = 'active'
-    LIMIT 1;
-  `.catch(() => null)
-  if (!membership?.rows?.[0]) return false
+
+  // Write stays FriendKey-only — coin-equivalent active membership must not ingress.
+  // Expand sender + CSW so keys held on the linked owner EOA still pass.
+  const sender = params.senderAddress.trim().toLowerCase()
+  const friendKeyWalletSet = new Set<`0x${string}`>([
+    ...(await expandFriendKeyCheckWallets(canonicalIssuer as `0x${string}`)),
+  ])
+  if (/^0x[a-f0-9]{40}$/.test(sender)) {
+    for (const wallet of await expandFriendKeyCheckWallets(sender as `0x${string}`)) {
+      friendKeyWalletSet.add(wallet)
+    }
+  }
+  const friendKey = await resolveRoomFriendKeyAccess({
+    roomId: params.binding.roomId,
+    wallets: [...friendKeyWalletSet],
+    tokenIdHint: params.binding.roomId,
+  }).catch(() => null)
+  if (!friendKey?.allowed) return false
 
   const claim = await claimAlfaClubCrossChannelIngress({
     sourceChannel: 'xmtp',
@@ -312,6 +324,15 @@ export async function backfillActiveRoomChannelBridgeMembers(params?: {
     for (const row of result?.rows ?? []) {
       const walletAddress = String(row.wallet_address ?? '').toLowerCase()
       if (!/^0x[a-f0-9]{40}$/.test(walletAddress)) {
+        skipped += 1
+        continue
+      }
+      // XMTP group membership is FriendKey-only; coin-equivalent actives are read-only.
+      const hasFriendKey = await walletHoldsOrStakesRoomFriendKey({
+        roomId: binding.roomId,
+        walletAddress: walletAddress as `0x${string}`,
+      }).catch(() => false)
+      if (!hasFriendKey) {
         skipped += 1
         continue
       }

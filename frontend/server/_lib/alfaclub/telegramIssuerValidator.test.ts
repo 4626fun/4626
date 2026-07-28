@@ -4,10 +4,12 @@ const {
   getDbMock,
   getTelegramLinkByUserIdMock,
   readProfileWalletAuthorityMock,
+  resolveRoomFriendKeyAccessMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
   readProfileWalletAuthorityMock: vi.fn(),
+  resolveRoomFriendKeyAccessMock: vi.fn(),
 }))
 
 vi.mock('../db/postgres.js', () => ({ getDb: getDbMock }))
@@ -17,17 +19,19 @@ vi.mock('../messaging/telegramTrading.js', () => ({
 vi.mock('../wallet/canonicalWalletResolver.js', () => ({
   readProfileWalletAuthority: readProfileWalletAuthorityMock,
 }))
+vi.mock('./roomFriendKeyAccess.js', () => ({
+  resolveRoomFriendKeyAccess: resolveRoomFriendKeyAccessMock,
+}))
 
 import { validateTelegramAlfaClubIssuer } from './telegramIssuerValidator.js'
 
 const canonical = `0x${'ab'.repeat(20)}` as const
+const owner = `0x${'cd'.repeat(20)}` as const
 
 describe('validateTelegramAlfaClubIssuer', () => {
-  const sql = vi.fn()
-
   beforeEach(() => {
     vi.clearAllMocks()
-    getDbMock.mockResolvedValue({ sql })
+    getDbMock.mockResolvedValue({ sql: vi.fn() })
     getTelegramLinkByUserIdMock.mockResolvedValue({
       profileId: 42,
       canonicalCswAddress: canonical,
@@ -37,17 +41,25 @@ describe('validateTelegramAlfaClubIssuer', () => {
     readProfileWalletAuthorityMock.mockResolvedValue({
       profileId: 42,
       canonicalSmartWalletAddress: canonical,
-      activeOwnerWalletAddress: `0x${'cd'.repeat(20)}`,
+      activeOwnerWalletAddress: owner,
     })
-    sql.mockResolvedValue({ rows: [{ '?column?': 1 }] })
+    resolveRoomFriendKeyAccessMock.mockResolvedValue({
+      allowed: true,
+      reason: 'room_key',
+      walletAddress: owner,
+    })
   })
 
-  it('allows an active linked profile with exact canonical CSW membership', async () => {
+  it('allows an active linked profile with FriendKey write access', async () => {
     await expect(validateTelegramAlfaClubIssuer({
       roomId: '1659',
       telegramUserId: '123',
     })).resolves.toEqual({ profileId: 42, canonicalIssuer: canonical })
-    expect(sql.mock.calls[0]?.slice(1)).toEqual(['1659', canonical])
+    expect(resolveRoomFriendKeyAccessMock).toHaveBeenCalledWith({
+      roomId: '1659',
+      wallets: [canonical, owner],
+      tokenIdHint: '1659',
+    })
   })
 
   it('denies unlinked and inactive Telegram users', async () => {
@@ -67,10 +79,10 @@ describe('validateTelegramAlfaClubIssuer', () => {
       roomId: '1659',
       telegramUserId: '123',
     })).resolves.toBeNull()
-    expect(sql).not.toHaveBeenCalled()
+    expect(resolveRoomFriendKeyAccessMock).not.toHaveBeenCalled()
   })
 
-  it('denies canonical drift, revoked links, and inactive room membership', async () => {
+  it('denies canonical drift, revoked links, and missing FriendKey', async () => {
     readProfileWalletAuthorityMock.mockResolvedValueOnce({
       profileId: 42,
       canonicalSmartWalletAddress: `0x${'ef'.repeat(20)}`,
@@ -92,7 +104,11 @@ describe('validateTelegramAlfaClubIssuer', () => {
       telegramUserId: '123',
     })).resolves.toBeNull()
 
-    sql.mockResolvedValueOnce({ rows: [] })
+    resolveRoomFriendKeyAccessMock.mockResolvedValueOnce({
+      allowed: false,
+      reason: 'insufficient',
+      walletAddress: canonical,
+    })
     await expect(validateTelegramAlfaClubIssuer({
       roomId: '1659',
       telegramUserId: '123',

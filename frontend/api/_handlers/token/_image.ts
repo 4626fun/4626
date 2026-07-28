@@ -35,7 +35,10 @@ import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../se
 import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/image/creatorTokenArtwork.js'
 import { getCompletedImageProjectForVault } from '../../../server/_lib/image/imageProjects.js'
 
-declare const process: { env: Record<string, string | undefined> }
+declare const process: {
+  env: Record<string, string | undefined>
+  cwd: () => string
+}
 
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const IPFS_GATEWAY = `${String(process.env.IPFS_GATEWAY ?? DEFAULT_IPFS_GATEWAY).trim().replace(/\/+$/, '')}/`

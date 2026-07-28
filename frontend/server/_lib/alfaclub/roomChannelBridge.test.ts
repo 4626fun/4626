@@ -5,6 +5,8 @@ const {
   getKeeprVaultByVaultAddressMock,
   lookupRoomBindingMock,
   resolveAuthorizedWalletProfileMock,
+  resolveRoomFriendKeyAccessMock,
+  walletHoldsOrStakesRoomFriendKeyMock,
   getDbMock,
   claimIngressMock,
   linkIngressMock,
@@ -14,6 +16,8 @@ const {
   getKeeprVaultByVaultAddressMock: vi.fn(),
   lookupRoomBindingMock: vi.fn(),
   resolveAuthorizedWalletProfileMock: vi.fn(),
+  resolveRoomFriendKeyAccessMock: vi.fn(),
+  walletHoldsOrStakesRoomFriendKeyMock: vi.fn(async () => true),
   getDbMock: vi.fn(),
   claimIngressMock: vi.fn(),
   linkIngressMock: vi.fn(),
@@ -44,6 +48,11 @@ vi.mock('./roomChannelBindings.js', () => ({
 vi.mock('./crossChannelIngress.js', () => ({
   claimAlfaClubCrossChannelIngress: claimIngressMock,
   linkAlfaClubCrossChannelIngress: linkIngressMock,
+}))
+vi.mock('./roomFriendKeyAccess.js', () => ({
+  resolveRoomFriendKeyAccess: resolveRoomFriendKeyAccessMock,
+  walletHoldsOrStakesRoomFriendKey: walletHoldsOrStakesRoomFriendKeyMock,
+  expandFriendKeyCheckWallets: vi.fn(async (wallet: `0x${string}`) => [wallet]),
 }))
 
 import {
@@ -112,7 +121,7 @@ describe('roomChannelBridge', () => {
     )
   })
 
-  it('denies unresolved senders and inactive memberships, then allows an active canonical issuer', async () => {
+  it('denies unresolved senders and non-FriendKey writers, then allows a FriendKey holder', async () => {
     const roomBinding = binding('101')
     const sendRoomText = vi.fn(async () => ({ lane: 'bot', messageId: 'alf-msg-1' }))
     const baseParams = {
@@ -133,11 +142,26 @@ describe('roomChannelBridge', () => {
       canonicalSmartWalletAddress: `0x${'bb'.repeat(20)}`,
       activeOwnerWalletAddress: `0x${'aa'.repeat(20)}`,
     })
-    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+    resolveRoomFriendKeyAccessMock.mockResolvedValue({
+      allowed: false,
+      reason: 'insufficient',
+      walletAddress: `0x${'bb'.repeat(20)}`,
+    })
     await expect(relayXmtpMessageToAlfaClubRoom(baseParams)).resolves.toBe(false)
 
-    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [{ '?column?': 1 }] })) })
+    resolveRoomFriendKeyAccessMock.mockResolvedValue({
+      allowed: true,
+      reason: 'room_key',
+      walletAddress: `0x${'aa'.repeat(20)}`,
+    })
     await expect(relayXmtpMessageToAlfaClubRoom(baseParams)).resolves.toBe(true)
+    expect(resolveRoomFriendKeyAccessMock).toHaveBeenCalledWith(expect.objectContaining({
+      roomId: '101',
+      wallets: expect.arrayContaining([
+        `0x${'aa'.repeat(20)}`,
+        `0x${'bb'.repeat(20)}`,
+      ]),
+    }))
     expect(claimIngressMock).toHaveBeenCalledWith(expect.objectContaining({
       sourceChannel: 'xmtp',
       sourceMessageId: 'xmtp-msg-1',

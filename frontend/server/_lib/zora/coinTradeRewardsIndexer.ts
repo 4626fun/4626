@@ -97,6 +97,19 @@ function normalizeAddress(value: unknown): string | null {
   return s
 }
 
+function toBigInt(value: unknown, fallback: bigint = 0n): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value))
+  if (typeof value === 'string' && value.trim() !== '') {
+    try {
+      return BigInt(value)
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
+
 export function rawAmountToUsd(raw: bigint, decimals: number, usdPrice: number): number {
   if (raw <= 0n || !Number.isFinite(usdPrice) || usdPrice <= 0) return 0
   const base = 10n ** BigInt(Math.max(0, Math.min(36, Math.floor(decimals))))
@@ -395,17 +408,17 @@ function aggregateRawRewards(logs: RewardLog[]): Map<string, Map<string, RawRewa
 
     if (source === 'v4') {
       const mr = args.marketRewards
-      totals.creatorRaw += BigInt(mr?.creatorPayoutAmountCurrency ?? 0n)
-      totals.platformRaw += BigInt(mr?.platformReferrerAmountCurrency ?? 0n)
-      totals.tradeRefRaw += BigInt(mr?.tradeReferrerAmountCurrency ?? 0n)
-      totals.protocolRaw += BigInt(mr?.protocolAmountCurrency ?? 0n)
-      totals.dopplerRaw += BigInt(mr?.dopplerAmountCurrency ?? 0n)
+      totals.creatorRaw += toBigInt(mr?.creatorPayoutAmountCurrency)
+      totals.platformRaw += toBigInt(mr?.platformReferrerAmountCurrency)
+      totals.tradeRefRaw += toBigInt(mr?.tradeReferrerAmountCurrency)
+      totals.protocolRaw += toBigInt(mr?.protocolAmountCurrency)
+      totals.dopplerRaw += toBigInt(mr?.dopplerAmountCurrency)
       totals.hasOnchainDoppler = true
     } else {
-      totals.creatorRaw += BigInt(args?.creatorReward ?? 0n)
-      totals.platformRaw += BigInt(args?.platformReferrerReward ?? 0n)
-      totals.tradeRefRaw += BigInt(args?.traderReferrerReward ?? 0n)
-      totals.protocolRaw += BigInt(args?.protocolReward ?? 0n)
+      totals.creatorRaw += toBigInt(args?.creatorReward)
+      totals.platformRaw += toBigInt(args?.platformReferrerReward)
+      totals.tradeRefRaw += toBigInt(args?.traderReferrerReward)
+      totals.protocolRaw += toBigInt(args?.protocolReward)
     }
   }
   return byCoin
@@ -498,7 +511,7 @@ export async function indexCreatorCoinTradeRewardsFees(
   const client = createPublicClient({
     chain: base,
     transport: http(rpcUrl, { timeout: 25_000 }),
-  })
+  }) as PublicClient
   const latest = await client.getBlockNumber()
   const blockTime = process.env.BASE_BLOCK_TIME_SECONDS
     ? BigInt(process.env.BASE_BLOCK_TIME_SECONDS)

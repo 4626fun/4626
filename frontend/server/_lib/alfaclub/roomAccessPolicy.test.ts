@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   syncRoomChannelBridgeMembershipMock,
   backfillActiveRoomChannelBridgeMembersMock,
+  resolveRoomFriendKeyAccessMock,
   getDbMock,
   ensureAlfaClubVigilanteSchemaMock,
   getKeeprBaseRpcUrlsMock,
@@ -13,6 +14,17 @@ const {
 } = vi.hoisted(() => ({
   syncRoomChannelBridgeMembershipMock: vi.fn(async () => true),
   backfillActiveRoomChannelBridgeMembersMock: vi.fn(async () => ({ rooms: 0, enqueued: 0, skipped: 0 })),
+  resolveRoomFriendKeyAccessMock: vi.fn(async () => ({
+    allowed: false,
+    reason: 'insufficient' as
+      | 'insufficient'
+      | 'check_failed'
+      | 'room_key'
+      | 'staked_key'
+      | 'no_wallet'
+      | 'anonymous',
+    walletAddress: null as `0x${string}` | null,
+  })),
   getDbMock: vi.fn(),
   ensureAlfaClubVigilanteSchemaMock: vi.fn(async () => undefined),
   getKeeprBaseRpcUrlsMock: vi.fn(() => ['http://fake-rpc.invalid']),
@@ -31,6 +43,39 @@ vi.mock('./roomChannelBridge.js', () => ({
   syncRoomChannelBridgeMembership: syncRoomChannelBridgeMembershipMock,
   backfillActiveRoomChannelBridgeMembers: backfillActiveRoomChannelBridgeMembersMock,
 }))
+
+vi.mock('./roomFriendKeyAccess.js', () => ({
+  resolveRoomFriendKeyAccess: resolveRoomFriendKeyAccessMock,
+  expandFriendKeyCheckWallets: vi.fn(async (wallet: `0x${string}`) => [wallet]),
+}))
+
+vi.mock('../wallet/canonicalWalletResolver.js', () => ({
+  resolveAuthorizedWalletProfile: vi.fn(async () => null),
+}))
+
+function mockFriendKeyAbsent(wallet: `0x${string}` = WALLET_A) {
+  resolveRoomFriendKeyAccessMock.mockResolvedValue({
+    allowed: false,
+    reason: 'insufficient',
+    walletAddress: wallet,
+  })
+}
+
+function mockFriendKeyPresent(wallet: `0x${string}` = WALLET_A) {
+  resolveRoomFriendKeyAccessMock.mockResolvedValue({
+    allowed: true,
+    reason: 'room_key',
+    walletAddress: wallet,
+  })
+}
+
+function mockFriendKeyCheckFailed(wallet: `0x${string}` = WALLET_A) {
+  resolveRoomFriendKeyAccessMock.mockResolvedValue({
+    allowed: false,
+    reason: 'check_failed',
+    walletAddress: wallet,
+  })
+}
 
 vi.mock('../db/postgres.js', () => ({
   getDb: getDbMock,
@@ -172,6 +217,8 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
   beforeEach(() => {
     syncRoomChannelBridgeMembershipMock.mockReset()
     syncRoomChannelBridgeMembershipMock.mockResolvedValue(true)
+    resolveRoomFriendKeyAccessMock.mockReset()
+    mockFriendKeyAbsent()
     ensureAlfaClubVigilanteSchemaMock.mockReset()
     ensureAlfaClubVigilanteSchemaMock.mockResolvedValue(undefined)
     getKeeprBaseRpcUrlsMock.mockReset()
@@ -204,8 +251,32 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     vi.unstubAllEnvs()
   })
 
-  it('joinAlfaClubRoomAccess syncs an XMTP group add for a wallet that meets the enter threshold', async () => {
+  it('joinAlfaClubRoomAccess does not sync XMTP for coin-only enter without FriendKey', async () => {
     eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    mockFriendKeyAbsent()
+    const fakeDb = createFakeDb({ policyRow: makePolicyRow() })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await joinAlfaClubRoomAccess({ roomId: ROOM_ID, walletAddress: WALLET_A })
+
+    expect(result.eligible).toBe(true)
+    expect(result.membership.status).toBe('active')
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'remove',
+      reasonKey: 'join',
+    })
+    expect(readContractMock).toHaveBeenCalledWith(expect.objectContaining({
+      address: POOL_ADDRESS,
+      functionName: 'getBuyNFTQuote',
+      args: [7n, 1n],
+    }))
+  })
+
+  it('joinAlfaClubRoomAccess syncs an XMTP group add only when coin enter also has FriendKey', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    mockFriendKeyPresent()
     const fakeDb = createFakeDb({ policyRow: makePolicyRow() })
     getDbMock.mockResolvedValue(fakeDb)
 
@@ -218,12 +289,20 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'add',
+      reasonKey: 'join',
     })
-    expect(readContractMock).toHaveBeenCalledWith(expect.objectContaining({
-      address: POOL_ADDRESS,
-      functionName: 'getBuyNFTQuote',
-      args: [7n, 1n],
-    }))
+  })
+
+  it('joinAlfaClubRoomAccess skips XMTP mutation when FriendKey check fails', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    mockFriendKeyCheckFailed()
+    const fakeDb = createFakeDb({ policyRow: makePolicyRow() })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await joinAlfaClubRoomAccess({ roomId: ROOM_ID, walletAddress: WALLET_A })
+
+    expect(result.eligible).toBe(true)
+    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
   it('fails closed when Sudoswap returns a non-zero buy-quote error code', async () => {
@@ -252,8 +331,9 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
-  it('recheck auto-enters a pending member once balance clears the enter threshold and syncs an add', async () => {
+  it('recheck auto-enters a pending FriendKey member and syncs an add', async () => {
     eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    mockFriendKeyPresent()
     const fakeDb = createFakeDb({
       policyRow: makePolicyRow(),
       seedMemberships: [
@@ -280,12 +360,110 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'add',
+      reasonKey: 'recheck_enter',
     })
   })
 
-  it('recheck does not re-sync a member that was already active and stays active', async () => {
+  it('recheck auto-enters coin-only members and removes them from XMTP', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 1_000n)
+    mockFriendKeyAbsent()
+    const fakeDb = createFakeDb({
+      policyRow: makePolicyRow(),
+      seedMemberships: [
+        {
+          room_id: ROOM_ID,
+          wallet_address: WALLET_A,
+          status: 'pending',
+          creator_coin_balance_raw: '500',
+          quote_threshold_raw: '1000',
+          last_checked_at: new Date(),
+          last_eligible_at: null,
+          grace_started_at: null,
+          failure_reason: 'balance<exit_threshold',
+        },
+      ],
+    })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
+
+    expect(result).toEqual({ checked: 1, autoEntered: 1, removed: 0, stale: 0 })
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'remove',
+      reasonKey: 'recheck_enter',
+    })
+  })
+
+  it('recheck heals XMTP add when an already-active member later gains FriendKey', async () => {
     // 950 is below the 1000 enter threshold but still above the 900 exit threshold.
     eligibilityState.balances.set(WALLET_A.toLowerCase(), 950n)
+    mockFriendKeyPresent()
+    const fakeDb = createFakeDb({
+      policyRow: makePolicyRow(),
+      seedMemberships: [
+        {
+          room_id: ROOM_ID,
+          wallet_address: WALLET_A,
+          status: 'active',
+          creator_coin_balance_raw: '1000',
+          quote_threshold_raw: '1000',
+          last_checked_at: new Date(),
+          last_eligible_at: new Date(),
+          grace_started_at: null,
+          failure_reason: null,
+        },
+      ],
+    })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
+
+    expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 0, stale: 0 })
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'add',
+      reasonKey: 'recheck_stay_active',
+    })
+  })
+
+  it('recheck removes XMTP membership for coin-only actives that stay coin-eligible', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 950n)
+    mockFriendKeyAbsent()
+    const fakeDb = createFakeDb({
+      policyRow: makePolicyRow(),
+      seedMemberships: [
+        {
+          room_id: ROOM_ID,
+          wallet_address: WALLET_A,
+          status: 'active',
+          creator_coin_balance_raw: '1000',
+          quote_threshold_raw: '1000',
+          last_checked_at: new Date(),
+          last_eligible_at: new Date(),
+          grace_started_at: null,
+          failure_reason: null,
+        },
+      ],
+    })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
+
+    expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 0, stale: 0 })
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'remove',
+      reasonKey: 'recheck_stay_active',
+    })
+  })
+
+  it('recheck does not remove XMTP on FriendKey RPC check_failed', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 950n)
+    mockFriendKeyCheckFailed()
     const fakeDb = createFakeDb({
       policyRow: makePolicyRow(),
       seedMemberships: [
@@ -310,8 +488,9 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
     expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
   })
 
-  it('recheck moves an active member into grace (no sync yet) once balance drops below the exit threshold', async () => {
+  it('recheck drops XMTP immediately when a member enters grace without FriendKey', async () => {
     eligibilityState.balances.set(WALLET_A.toLowerCase(), 500n)
+    mockFriendKeyAbsent()
     const fakeDb = createFakeDb({
       policyRow: makePolicyRow(),
       seedMemberships: [
@@ -334,11 +513,17 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
 
     expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 0, stale: 0 })
     expect(fakeDb.memberships.get(`${ROOM_ID}:${WALLET_A}`)?.status).toBe('grace')
-    expect(syncRoomChannelBridgeMembershipMock).not.toHaveBeenCalled()
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'remove',
+      reasonKey: 'recheck_grace',
+    })
   })
 
   it('recheck removes a member once their grace period expires and syncs a remove', async () => {
     eligibilityState.balances.set(WALLET_A.toLowerCase(), 500n)
+    mockFriendKeyAbsent()
     const graceHours = 24
     const expiredGraceStart = new Date(Date.now() - (graceHours + 1) * 60 * 60 * 1000)
     const fakeDb = createFakeDb({
@@ -368,6 +553,42 @@ describe('roomAccessPolicy membership-transition -> XMTP bridge sync', () => {
       roomId: ROOM_ID,
       walletAddress: WALLET_A,
       action: 'remove',
+      reasonKey: 'recheck_removed',
+    })
+  })
+
+  it('recheck keeps XMTP after grace expiry when FriendKey is still held', async () => {
+    eligibilityState.balances.set(WALLET_A.toLowerCase(), 500n)
+    mockFriendKeyPresent()
+    const graceHours = 24
+    const expiredGraceStart = new Date(Date.now() - (graceHours + 1) * 60 * 60 * 1000)
+    const fakeDb = createFakeDb({
+      policyRow: makePolicyRow({ grace_hours: graceHours }),
+      seedMemberships: [
+        {
+          room_id: ROOM_ID,
+          wallet_address: WALLET_A,
+          status: 'grace',
+          creator_coin_balance_raw: '500',
+          quote_threshold_raw: '1000',
+          last_checked_at: new Date(),
+          last_eligible_at: null,
+          grace_started_at: expiredGraceStart,
+          failure_reason: 'balance<exit_threshold',
+        },
+      ],
+    })
+    getDbMock.mockResolvedValue(fakeDb)
+
+    const result = await recheckAlfaClubRoomAccessMemberships({ roomId: ROOM_ID })
+
+    expect(result).toEqual({ checked: 1, autoEntered: 0, removed: 1, stale: 0 })
+    expect(fakeDb.memberships.get(`${ROOM_ID}:${WALLET_A}`)?.status).toBe('removed')
+    expect(syncRoomChannelBridgeMembershipMock).toHaveBeenCalledWith({
+      roomId: ROOM_ID,
+      walletAddress: WALLET_A,
+      action: 'add',
+      reasonKey: 'recheck_removed',
     })
   })
 })

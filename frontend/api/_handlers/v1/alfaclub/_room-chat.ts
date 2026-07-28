@@ -26,8 +26,7 @@ import {
   claimAlfaClubCrossChannelIngress,
   linkAlfaClubCrossChannelIngress,
 } from '../../../../server/_lib/alfaclub/crossChannelIngress.js'
-import { readAlfaClubRoomAccessMembership } from '../../../../server/_lib/alfaclub/roomAccessPolicy.js'
-import { resolveRoomChatViewAccess } from '../../../../server/_lib/alfaclub/roomChatViewAccess.js'
+import { resolveRoomChatViewAccess, resolveRoomChatWriteAccess } from '../../../../server/_lib/alfaclub/roomChatViewAccess.js'
 import { readAlfaClubRoomChannelBinding } from '../../../../server/_lib/alfaclub/roomChannelBindings.js'
 import { resolveAuthorizedWalletProfile } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
@@ -174,12 +173,17 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ success: false, error: 'issuer_unavailable' })
   }
 
-  const membership = await readAlfaClubRoomAccessMembership({
+  // Write stays FriendKey hold/stake only — coin-equivalent membership is read-only.
+  const writeAccess = await resolveRoomChatWriteAccess({
     roomId,
-    walletAddress: canonicalIssuer as `0x${string}`,
+    sessionAddress: requesterAddress,
   })
-  if (!membership || membership.status !== 'active') {
-    return res.status(403).json({ success: false, error: 'membership_required' })
+  if (!writeAccess.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: writeAccess.reason === 'friendkey_required' ? 'friendkey_required' : 'write_access_required',
+      writeAccess,
+    })
   }
 
   const claim = await claimAlfaClubCrossChannelIngress({
@@ -244,7 +248,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       data: {
         message,
         issuer: canonicalIssuer,
-        membershipStatus: membership.status,
+        writeAccess: {
+          allowed: true,
+          reason: writeAccess.reason,
+          walletAddress: writeAccess.walletAddress,
+        },
       },
     })
   } catch (error) {

@@ -50,7 +50,10 @@ import {
   percentAmount,
   publicKey as umiPublicKey,
 } from '@metaplex-foundation/umi';
-import { fromWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
+import {
+  fromWeb3JsKeypair,
+  toWeb3JsInstruction,
+} from '@metaplex-foundation/umi-web3js-adapters';
 import {
   createV1,
   findMetadataPda,
@@ -187,6 +190,16 @@ if (needsHandoff) {
       { commitment: 'confirmed' },
     );
     console.log('  mint authority → keeper:', sig);
+
+    // Wait until RPC observes keeper as mint authority — umi createV1 can race.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const mid = await getMint(connection, tokenMint, 'confirmed', TOKEN_2022_PROGRAM_ID);
+      if (mid.mintAuthority?.equals(keeper.publicKey)) break;
+      await new Promise((r) => setTimeout(r, 500));
+      if (attempt === 19) {
+        throw new Error('Timed out waiting for mint authority handoff to keeper');
+      }
+    }
   }
 } else {
   console.log('Step 1: skipped (keeper already mint authority)');
@@ -209,8 +222,14 @@ const createBuilder = createV1(umi, {
 if (dryRun) {
   console.log('DRY_RUN: would create metadata PDA', metadataPk.toBase58());
 } else {
-  const result = await createBuilder.sendAndConfirm(umi);
-  console.log('  metadata created:', Buffer.from(result.signature).toString('base64'));
+  // Prefer web3 send path — more reliable confirmation than umi alone on Token-2022.
+  const createTx = new Transaction().add(
+    ...createBuilder.getInstructions().map((ix) => toWeb3JsInstruction(ix)),
+  );
+  const createSig = await sendAndConfirmTransaction(connection, createTx, [keeper], {
+    commitment: 'confirmed',
+  });
+  console.log('  metadata created:', createSig);
   console.log('  metadata PDA:   ', metadataPk.toBase58());
 }
 

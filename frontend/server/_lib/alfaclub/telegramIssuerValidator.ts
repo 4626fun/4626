@@ -1,6 +1,7 @@
 import { getDb } from '../db/postgres.js'
 import { getTelegramLinkByUserId } from '../messaging/telegramTrading.js'
 import { readProfileWalletAuthority } from '../wallet/canonicalWalletResolver.js'
+import { resolveRoomFriendKeyAccess } from './roomFriendKeyAccess.js'
 
 export type ValidatedTelegramIssuer = {
   profileId: number
@@ -48,15 +49,16 @@ export async function validateTelegramAlfaClubIssuer(params: {
       return null
     }
 
-    const membership = await db.sql`
-      SELECT 1
-      FROM alfaclub.room_access_memberships
-      WHERE room_id = ${roomId}
-        AND LOWER(wallet_address) = ${profileCanonical}
-        AND status = 'active'
-      LIMIT 1;
-    `
-    if (!membership.rows?.[0]) return null
+    // Write stays FriendKey-only — coin-equivalent active membership is read-only.
+    const owner = normalizeAddress(authority.activeOwnerWalletAddress)
+    const friendKeyWallets: `0x${string}`[] = [profileCanonical]
+    if (owner && owner !== profileCanonical) friendKeyWallets.push(owner)
+    const friendKey = await resolveRoomFriendKeyAccess({
+      roomId,
+      wallets: friendKeyWallets,
+      tokenIdHint: roomId,
+    }).catch(() => null)
+    if (!friendKey?.allowed) return null
 
     return { profileId, canonicalIssuer: profileCanonical }
   } catch {

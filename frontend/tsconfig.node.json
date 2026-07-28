@@ -75,6 +75,7 @@
     "src/lib/onchain/agentTokenIntegration.ts",
     "src/lib/onchain/resolveAgentTokenIntegration.ts",
     "src/lib/uniswap/swapQuoteSanitize.ts",
+    "src/lib/explore/heroMcapHistory.ts",
     "src/lib/xmtp/xmtpInteractive.ts",
     "src/lib/xmtp/xmtpHelpers.ts",
     "src/lib/xmtp/xmtpSyncCoordinator.ts",

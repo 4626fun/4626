@@ -32,11 +32,19 @@ type RoomChatChannels = {
   rolloutStatus: string | null
 }
 
+type RoomChatAccess = {
+  allowed?: boolean
+  reason?: string
+  canWrite?: boolean
+  walletAddress?: string | null
+}
+
 type RoomChatListResponse = {
   success?: boolean
   data?: {
     messages?: RoomChatMessage[]
     channels?: RoomChatChannels
+    chatAccess?: RoomChatAccess
   }
   error?: string
 }
@@ -91,7 +99,11 @@ async function fetchRoomChatPage(params: {
   signal: AbortSignal
   beforeMessageId?: string | null
   beforeDateMs?: number | null
-}): Promise<{ messages: RoomChatMessage[]; channels: RoomChatChannels | null }> {
+}): Promise<{
+  messages: RoomChatMessage[]
+  channels: RoomChatChannels | null
+  chatAccess: RoomChatAccess | null
+}> {
   const query = new URLSearchParams({
     roomId: params.roomId,
     limit: String(PAGE_SIZE),
@@ -115,6 +127,7 @@ async function fetchRoomChatPage(params: {
   return {
     messages: payload.data.messages,
     channels: payload.data.channels ?? null,
+    chatAccess: payload.data.chatAccess ?? null,
   }
 }
 
@@ -135,6 +148,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
   const { hasSession, sessionHydrated } = useSiweAuth()
   const [messages, setMessages] = useState<RoomChatMessage[]>([])
   const [channels, setChannels] = useState<RoomChatChannels | null>(null)
+  const [canWrite, setCanWrite] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -152,6 +166,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
       setLoading(false)
       setError('Sign in to view room chat')
       setMessages([])
+      setCanWrite(false)
       return
     }
 
@@ -164,6 +179,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
         if (controller.signal.aborted) return
         setMessages(mergeMessages([], result.messages))
         setChannels(result.channels)
+        setCanWrite(result.chatAccess?.canWrite === true)
         setHasMore(result.messages.length >= PAGE_SIZE)
         shouldStickToBottomRef.current = true
       })
@@ -171,6 +187,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
         if (controller.signal.aborted) return
         setError(reason instanceof Error ? reason.message : 'Failed to load room chat')
         setMessages([])
+        setCanWrite(false)
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
@@ -213,7 +230,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
 
   const sendMessage = async () => {
     const text = draft.trim()
-    if (!text || sending || !hasSession) return
+    if (!text || sending || !hasSession || !canWrite) return
     setSending(true)
     setError(null)
     try {
@@ -232,6 +249,9 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
         error?: string
       } | null
       if (!response.ok || !payload?.success) {
+        if (payload?.error === 'friendkey_required' || payload?.error === 'write_access_required') {
+          throw new Error('FriendKey required to post — hold or stake a key for this room.')
+        }
         throw new Error(payload?.error ?? `room_chat_send_failed_${response.status}`)
       }
       setDraft('')
@@ -345,13 +365,15 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
                 </p>
               ) : null}
               <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-zinc-200">{message.text}</p>
-              <button
-                type="button"
-                onClick={() => setReplyTo(message)}
-                className="mt-2 text-[11px] text-zinc-500 transition hover:text-zinc-300"
-              >
-                Reply
-              </button>
+              {canWrite ? (
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(message)}
+                  className="mt-2 text-[11px] text-zinc-500 transition hover:text-zinc-300"
+                >
+                  Reply
+                </button>
+              ) : null}
             </article>
           ))}
         </div>
@@ -362,7 +384,12 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
               {error}
             </p>
           ) : null}
-          {replyTo ? (
+          {hasSession && !loading && !canWrite && !error ? (
+            <p className="mb-2 text-sm text-zinc-400" role="status">
+              Read-only — hold or stake a FriendKey for this room to post.
+            </p>
+          ) : null}
+          {replyTo && canWrite ? (
             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-zinc-400">
               <span className="truncate">
                 Replying to {replyTo.username || shortAddress(replyTo.senderAddress)}
@@ -391,8 +418,14 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               rows={2}
-              disabled={!hasSession || sending}
-              placeholder={hasSession ? 'Write a message…' : 'Sign in to chat'}
+              disabled={!hasSession || sending || !canWrite}
+              placeholder={
+                !hasSession
+                  ? 'Sign in to chat'
+                  : canWrite
+                    ? 'Write a message…'
+                    : 'FriendKey required to post'
+              }
               className="min-h-[2.75rem] flex-1 resize-none rounded-xl bg-black/30 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-white/[0.08] placeholder:text-zinc-600 focus:ring-sky-400/40 disabled:opacity-60"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -403,7 +436,7 @@ export function RoomChatPanel({ roomId }: { roomId: string }) {
             />
             <button
               type="submit"
-              disabled={!hasSession || sending || !draft.trim()}
+              disabled={!hasSession || sending || !canWrite || !draft.trim()}
               className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-sky-500/90 px-3 text-sm font-medium text-black transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {sending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <SendHorizontal className="size-4" aria-hidden />}
