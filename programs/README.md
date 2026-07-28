@@ -1,3 +1,7 @@
 # programs
 
-Solana programs (creator share hook and related). Source lands here in a later migration.
+Solana programs for 4626 share-mesh.
+
+| Path | Role |
+| --- | --- |
+| [`creator-share-hook/`](./creator-share-hook/) | Token-2022 Transfer Hook (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) |
