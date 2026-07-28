@@ -27,6 +27,8 @@ interface CardConfig {
   standards: string[]
   requires?: string
   to: string
+  /** Optional strike/sale price shown on the card (vault launch promo). */
+  price?: { was: string; now: string }
   /** Core / accent (light) colors — cool, on-brand. */
   core: string
   accent: string
@@ -49,6 +51,7 @@ const CARDS: CardConfig[] = [
     standards: ['ERC-20', 'ERC-4626'],
     requires: 'Requires a Zora Creator Coin',
     to: '/deploy/vault',
+    price: { was: '$999', now: '$499' },
     core: '#5588ff',
     accent: '#a8c8ff',
   },
@@ -233,12 +236,29 @@ function RequiresNote({ text, accent }: { text: string; accent: string }) {
   )
 }
 
+function PriceTag({ was, now }: { was: string; now: string }) {
+  return (
+    <div
+      className="inline-flex items-baseline gap-2 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 backdrop-blur-md"
+      aria-label={`Now ${now}, was ${was}`}
+    >
+      <span className="font-mono text-[12px] tabular-nums text-zinc-500 line-through decoration-zinc-500/80">
+        {was}
+      </span>
+      <span className="font-mono text-[13px] font-semibold tabular-nums tracking-tight text-white">{now}</span>
+    </div>
+  )
+}
+
 function CardChrome({ config }: { config: CardConfig }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-6 sm:p-7">
-      {/* top-left: token standards */}
-      <div className="transition-opacity duration-500 group-hover:opacity-70">
-        <StandardChips standards={config.standards} />
+      {/* top: standards + optional price */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="transition-opacity duration-500 group-hover:opacity-70">
+          <StandardChips standards={config.standards} />
+        </div>
+        {config.price ? <PriceTag was={config.price.was} now={config.price.now} /> : null}
       </div>
 
       {/* bottom: title + description */}
@@ -294,7 +314,11 @@ function TraceCard({ config }: { config: CardConfig }) {
         pointer.current.x = 0
         pointer.current.y = 0
       }}
-      aria-label={`${config.title} — ${config.desc}`}
+      aria-label={
+        config.price
+          ? `${config.title} — ${config.desc}. Now ${config.price.now}, was ${config.price.was}`
+          : `${config.title} — ${config.desc}`
+      }
     >
       {/* dramatic stage spotlight behind the sculpt (painted under the canvas) */}
       <div
@@ -374,8 +398,9 @@ function StaticCard({ config }: { config: CardConfig }) {
         style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.5)' }}
       />
       <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-      <div className="absolute left-6 top-6 z-10 sm:left-7 sm:top-7">
+      <div className="absolute inset-x-6 top-6 z-10 flex items-start justify-between gap-3 sm:inset-x-7 sm:top-7">
         <StandardChips standards={config.standards} />
+        {config.price ? <PriceTag was={config.price.was} now={config.price.now} /> : null}
       </div>
       <div className="relative z-10">
         <h2 className="bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-3xl font-semibold leading-none tracking-tight text-transparent sm:text-4xl">

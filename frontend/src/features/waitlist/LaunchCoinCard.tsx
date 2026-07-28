@@ -57,7 +57,12 @@ export type LaunchCoinCardProps = {
   /** The EOA owner address that will sign the UserOp */
   ownerAddress: string | null
   /** Callback when coin is successfully created */
-  onCoinCreated?: (coinAddress: string, symbol: string) => void
+  onCoinCreated?: (coinAddress: string, symbol: string, txHash?: string | null) => void
+  /**
+   * When true, skip the built-in success card so the parent page can own
+   * post-launch UX (vault handoff, referral confirmation, etc.).
+   */
+  hideSuccess?: boolean
 }
 
 function isHexSignature(value: unknown): value is Hex {
@@ -88,6 +93,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   smartWalletAddress,
   ownerAddress,
   onCoinCreated,
+  hideSuccess = false,
 }: LaunchCoinCardProps) {
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: walletClient } = useWalletClient({ chainId: base.id })
@@ -386,7 +392,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
         platformReferrer: PLATFORM_REFERRER,
       })
 
-      onCoinCreated?.(callResult.predictedCoinAddress, symbolClean)
+      onCoinCreated?.(callResult.predictedCoinAddress, symbolClean, result.transactionHash ?? null)
     } catch (err: any) {
       const msg = err?.message ?? String(err)
       logger.error('[LaunchCoin] Creation failed', err)
@@ -429,6 +435,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   // -----------------------------------------------------------------------
 
   if (step === 'done') {
+    if (hideSuccess) return null
     return (
       <motion.div {...fadeUp} className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-5 space-y-3">
         <div className="flex items-center gap-2">
@@ -468,7 +475,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
           )}
         </div>
         <div className="text-[11px] text-zinc-400 pt-1">
-          Your coin is live on Zora. Gas was on us.
+          Your coin is live on Zora. Gas was on us. Platform referrer is 4626.
         </div>
       </motion.div>
     )
@@ -634,9 +641,9 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
         </button>
       )}
 
-      {/* Fine print */}
-      <div className="text-[10px] text-zinc-700 text-center">
-        Creates a Zora Creator Coin on Base. No gas fees required.
+      {/* Fine print — platformReferrer is set in createCoinCall for 4626 trade rewards */}
+      <div className="text-[10px] leading-relaxed text-zinc-600 text-center">
+        Creates a Zora Creator Coin on Base with 4626 as platform referrer. Gas sponsored.
       </div>
     </motion.div>
   )

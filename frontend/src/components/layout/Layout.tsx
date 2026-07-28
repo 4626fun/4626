@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Activity, ArrowLeftRight, Bot, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
+import { Activity, ArrowLeftRight, Bot, Mail, MessageSquare, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
+import { requestToggleChat } from '@/lib/chat/openChat'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -43,11 +44,14 @@ type MobileNavItem = {
   path: string
   icon: any
   activePrefixes?: string[]
+  /** Non-route action handled by the mobile dock (e.g. open chat). */
+  action?: 'toggle-chat'
 }
 
 const navItems: MobileNavItem[] = [
   { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
   { path: '/explore/creators', icon: Search, label: 'Explore', activePrefixes: ['/explore'] },
+  { path: '#chat', icon: MessageSquare, label: 'Chat', action: 'toggle-chat' },
   { path: '/deploy', icon: Vault, label: 'Deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
   { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
@@ -352,7 +356,24 @@ export function LayoutFrame(props: {
           className={`${isMobileNavScrollHidden ? 'pointer-events-none' : 'pointer-events-auto'} mx-auto flex max-w-md items-stretch justify-between gap-0.5 overflow-x-auto scrollbar-hide rounded-[1.35rem] border border-white/[0.06] bg-zinc-950/55 px-1.5 py-1 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.92),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl backdrop-saturate-150`}
         >
           {items.map((item) => {
-            const { path, icon: Icon, label } = item
+            const { path, icon: Icon, label, action } = item
+            if (action === 'toggle-chat') {
+              if (!shouldEnableChat) return null
+              const isActive = isMobileChatOverlayActive
+              return (
+                <button
+                  key={path}
+                  type="button"
+                  aria-label={label}
+                  aria-pressed={isActive}
+                  className={mobileNavItemClass(isActive)}
+                  onClick={() => requestToggleChat()}
+                >
+                  <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                  <span className={mobileNavLabelClass(isActive)}>{label}</span>
+                </button>
+              )
+            }
             const isActive = isActiveLink(location, item)
             if (path === getCanonicalMarketingWaitlistPath()) {
               const content = (

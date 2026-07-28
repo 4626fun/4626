@@ -22,6 +22,7 @@ import { type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/p
 import {
   CHAT_NEW_DM_REQUEST_EVENT,
   CHAT_OPEN_REQUEST_EVENT,
+  CHAT_TOGGLE_REQUEST_EVENT,
   isChatOpenRequest,
   type ChatOpenRequest,
 } from '@/lib/chat/openChat'
@@ -270,6 +271,21 @@ function ChatWidgetInner() {
     window.addEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
     return () => window.removeEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
   }, [connect, processOpenRequest, status])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleToggleRequest = () => {
+      setBarExpanded((prev) => {
+        const next = !prev
+        if (next) maybeConnectMessaging()
+        return next
+      })
+    }
+
+    window.addEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
+    return () => window.removeEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
+  }, [maybeConnectMessaging])
 
   useEffect(() => {
     if (!pendingOpenRequest || status !== 'connected') return
@@ -551,20 +567,7 @@ function ChatWidgetInner() {
           </div>
         )}
 
-        {!showMobileBar && !activeMobileWindow && (
-          <div className="absolute bottom-20 right-4 pointer-events-auto">
-            <ChatBar
-              expanded={false}
-              variant="mobile"
-              onToggle={() => {
-                setBarExpanded(true)
-                maybeConnectMessaging()
-              }}
-              onOpenChat={handleOpenChat}
-              onNewDm={handleNewDm}
-            />
-          </div>
-        )}
+        {/* Collapsed mobile Chat FAB removed — Chat opens from the bottom nav tab. */}
       </div>
 
       <div className="fixed bottom-4 right-5 z-50 hidden items-end gap-3 pointer-events-none md:flex md:flex-row-reverse">

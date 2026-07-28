@@ -23,6 +23,27 @@ export function getZoraPlatformReferrerAddress(): Address {
   return getAddress(DEFAULT_PLATFORM_REFERRER)
 }
 
+/** Short 0x label for UI (platform referrer strip, ownership cards). */
+export function formatZoraPlatformReferrerLabel(address: Address = getZoraPlatformReferrerAddress()): string {
+  const normalized = getAddress(address)
+  return `${normalized.slice(0, 6)}…${normalized.slice(-4)}`
+}
+
+/**
+ * Vault deploy handoff after a successful coin launch.
+ * DeployVault seeds `creatorToken` from `creator` / `creatorToken` query params.
+ */
+export function buildDeployVaultFromCoinPath(coinAddress: string): string {
+  if (!isAddress(coinAddress)) {
+    throw new Error('buildDeployVaultFromCoinPath requires a valid coin address')
+  }
+  const params = new URLSearchParams({
+    creatorToken: getAddress(coinAddress),
+    from: 'coin',
+  })
+  return `/deploy/vault?${params.toString()}`
+}
+
 export function getZoraInviteUrl(): string {
   const env = normalizeHttpsUrl((import.meta.env.VITE_ZORA_INVITE_URL as string | undefined) ?? '')
   return env ?? DEFAULT_INVITE_URL
