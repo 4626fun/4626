@@ -56,16 +56,16 @@ on:
       - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
       - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
       - 'amoe/tools/ci/check_lottery_amoe_failures.py'
-      # agent-context budget
+      # agent-context budget (scripts + rule only — docs-only polls stay on Security)
       - 'AGENTS.md'
-      - 'docs/agent-context/**'
       - '.cursor/rules/agent-context-budget.mdc'
       - 'scripts/guard-agents-line-budget.mjs'
       - 'scripts/guard-tier1-line-budget.mjs'
       - 'scripts/guard-agent-context-sync.mjs'
       - 'scripts/sync-agent-context-rule.mjs'
-      # Intentionally omit this workflow file from paths — CI-only edits must not
-      # force zk/forge/pnpm jobs. Validate Guards via workflow_dispatch.
+      # Intentionally omit this workflow file and docs/agent-context/** from paths —
+      # CI-only / archive-doc edits must not force guard runners. Validate via
+      # workflow_dispatch (or touch AGENTS.md / the sync scripts).
   # No push-to-main re-run — PR path filters already gated the change.
   workflow_dispatch:
     inputs:
@@ -170,7 +170,6 @@ jobs:
               - 'amoe/tools/ci/check_lottery_amoe_failures.py'
             agent-context:
               - 'AGENTS.md'
-              - 'docs/agent-context/**'
               - '.cursor/rules/agent-context-budget.mdc'
               - 'scripts/guard-agents-line-budget.mjs'
               - 'scripts/guard-tier1-line-budget.mjs'

@@ -5,8 +5,9 @@ name: Tests
 # - Draft / Dependabot: skip entirely.
 # - Path filters do NOT include this workflow file (CI-only PRs must not force
 #   forge + frontend + kpr). Validate with workflow_dispatch.
-# - Forge: selective submodules, solc/RPC caches, PR excludes live fork suites
-#   (full suite including forks on workflow_dispatch).
+# - Forge tests: only when contracts/test/lib change. script/** and CI guard
+#   scripts use forge-build (EIP-170 + parity) without the ~20m suite.
+# - frontend/scripts/ops/** ignored — operator one-shots must not pay FE CI.
 # - Frontend vitest: workflow_dispatch only.
 
 on:
@@ -24,6 +25,7 @@ on:
       - 'skills/**'
       - 'acp-cli/**'
       - 'dgclaw-skill/**'
+      - 'frontend/scripts/ops/**'
   workflow_dispatch:
 
 concurrency:
@@ -51,6 +53,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       contracts: ${{ steps.out.outputs.contracts }}
+      forge_tooling: ${{ steps.out.outputs.forge_tooling }}
       frontend: ${{ steps.out.outputs.frontend }}
       kpr: ${{ steps.out.outputs.kpr }}
       alfaclub_fe: ${{ steps.out.outputs.alfaclub_fe }}
@@ -74,9 +77,9 @@ jobs:
         with:
           filters: |
             contracts:
+              # Full forge test suite (~20m). Keep this tight to Solidity sources.
               - 'contracts/**'
               - 'test/**'
-              - 'script/**'
               - 'alfaclub/contracts/**'
               - 'foundry.toml'
               - 'remappings.txt'
@@ -84,6 +87,9 @@ jobs:
               - 'pnpm-lock.yaml'
               - '.gitmodules'
               - 'lib/**'
+            forge_tooling:
+              # Deploy/bytecode scripts + node size gates: forge build only.
+              - 'script/**'
               - 'amoe/tools/ci/**'
               - 'scripts/check-lane-contract-parity.mjs'
               - 'scripts/check-ovault-*.mjs'
@@ -92,6 +98,10 @@ jobs:
               - 'scripts/ci-init-forge-submodules.sh'
             frontend:
               # Explicit trees (not frontend/**) so frontend/docs stays Docs Drift-only.
+              # Do NOT use dorny `!frontend/scripts/ops/**` negation here — with no
+              # positive frontend hits it falsely sets frontend=true (seen on #890),
+              # even matching unrelated paths like .github/workflows/*.yml.
+              # Ops-only PRs are excluded via workflow paths-ignore instead.
               - 'frontend/src/**'
               - 'frontend/api/**'
               - 'frontend/server/**'
@@ -126,11 +136,13 @@ jobs:
         run: |
           if [ "${{ steps.force.outputs.force_all }}" = "true" ]; then
             echo "contracts=true" >> "$GITHUB_OUTPUT"
+            echo "forge_tooling=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "kpr=true" >> "$GITHUB_OUTPUT"
             echo "alfaclub_fe=true" >> "$GITHUB_OUTPUT"
           else
             echo "contracts=${{ steps.filter.outputs.contracts }}" >> "$GITHUB_OUTPUT"
+            echo "forge_tooling=${{ steps.filter.outputs.forge_tooling }}" >> "$GITHUB_OUTPUT"
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
             echo "kpr=${{ steps.filter.outputs.kpr }}" >> "$GITHUB_OUTPUT"
             echo "alfaclub_fe=${{ steps.filter.outputs.alfaclub_fe }}" >> "$GITHUB_OUTPUT"
@@ -139,7 +151,7 @@ jobs:
   forge:
     name: Forge (contracts)
     needs: plan
-    if: needs.plan.outputs.contracts == 'true'
+    if: needs.plan.outputs.contracts == 'true' || needs.plan.outputs.forge_tooling == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -216,7 +228,8 @@ jobs:
         # deployment-batcher live-fork dir — keep that on workflow_dispatch.
         # Forge v1.7 allows only one --no-match-path; combine with brace glob.
         # Do NOT blanket-exclude `*Fork*`: AlfaClub BaseFork stays on PRs.
-        if: github.event_name == 'pull_request'
+        # Skip the suite when only script/CI tooling changed (build+gates above).
+        if: github.event_name == 'pull_request' && needs.plan.outputs.contracts == 'true'
         run: |
           forge test --no-match-path '{test/fork/**,test/vault/strategies/CreatorOVaultStrategies.Rebalance.*}'
         id: test_pr

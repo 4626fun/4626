@@ -7,7 +7,12 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
     # Gitleaks on every non-draft PR (including docs) — secrets land in markdown too.
-    # Heavy jobs remain schedule/manual.
+    # Skip pure ops/asset/CI-config noise that never carries new secret material.
+    paths-ignore:
+      - 'frontend/scripts/ops/**'
+      - 'frontend/public/assets/**'
+      - 'frontend/public/assets/screenshots/**'
+      - '.github/workflows/**'
   workflow_dispatch:
   # Heavy jobs (full-history gitleaks, pnpm audit, Semgrep, full Slither)
   # monthly + manual. Was weekly — keep allowlist telemetry cheap.
