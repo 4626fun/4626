@@ -7,8 +7,8 @@ Runbooks: [budget paths](./solana-share-mesh-budget-paths.md) and
 
 Historical snapshot verified: 2026-05-25. Re-run
 `read-akita-ovault-mesh-onchain.ts` before relying on any status below.
-The active v1.19.1 batcher is
-`0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+AKITA still references the legacy v1.19.1 batcher
+`0xa18169caf37fa0347285B16aAFC2B09eCB43F145` (new launches use v1.20.0 `0x83A9b248…`).
 
 ## Base snapshot (not the mesh wire target)
 

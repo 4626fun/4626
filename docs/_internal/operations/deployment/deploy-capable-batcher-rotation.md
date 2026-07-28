@@ -78,9 +78,9 @@ cast call 0xF9622613682a12E46b914c7498716F42E44c4d36 \
 
 Expected paired infra:
 
-- Store: `0xF9622613682a12E46b914c7498716F42E44c4d36`
+- Store (legacy v1.19.1): `0xF9622613682a12E46b914c7498716F42E44c4d36` / current v1.20.0: `0x8599CA87b28320158941C59CB3cd9a3f12083530`
 - Create2: `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2`
-- Batcher: `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`
+- Batcher (legacy v1.19.1): `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` / current v1.20.0: `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032`
 
 ### 1. Seed v1.19.1 bytecode (includes AgentRevenuePolicyController)
 
@@ -117,7 +117,7 @@ cast code 0xa18169caf37fa0347285B16aAFC2B09eCB43F145 --rpc-url $BASE_RPC_URL \
   | tr '[:upper:]' '[:lower:]' | grep -q ccda19ad && echo allowlist=YES || echo allowlist=NO
 ```
 
-If `allowlist=NO` (current v1.19.1 live batcher): **skip this step**. Do not
+If `allowlist=NO` (legacy v1.19.1 AKITA shell; current new-launch is v1.20.0): **skip this step**. Do not
 rotate `DEPLOYMENT_BATCHER` as part of auxiliary cutover. Re-run Safe approvals
 only after a separate DeploymentBatcher rotation that ships the allowlist.
 

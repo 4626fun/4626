@@ -132,7 +132,7 @@ Before finalize:
    [creator provisioning runbook](../operations/solana/solana-share-mesh-creator-provisioning.md).
 2. Seed
    `Registry4626.setRemoteOFTPeerBytes32(AKITA, 30168, 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f)`.
-3. Verify the registry peer is non-zero and the v1.19.1 batcher
+3. Verify the registry peer is non-zero and the AKITA/legacy v1.19.1 batcher
    `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` has destination + OVault
    runtime enabled.
 4. After supply arrives on Solana, create the Meteora pool against the LZ

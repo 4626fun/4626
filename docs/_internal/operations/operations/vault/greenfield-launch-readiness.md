@@ -1,6 +1,6 @@
 # Greenfield launch readiness
 
-> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.20.0 batcher `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032`.
 
 Repeatable gate for **new vault deploys** (not grandfather migrations). Policy:
 [solana-share-mesh-lottery-policy.md](../solana/solana-share-mesh-lottery-policy.md).
@@ -33,7 +33,7 @@ Run before opening deploy to creators:
 
 | Variable | Purpose |
 |----------|---------|
-| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.19.1 batcher `0xa181…F145` |
+| `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.20.0 batcher `0x83A9…8032` |
 | Batcher onchain config | Non-zero destination + enabled OVault runtime (Solana EID `30168`) |
 | Registry per-creator config | Explicit `setRemoteOFTPeerBytes32` before finalize |
 

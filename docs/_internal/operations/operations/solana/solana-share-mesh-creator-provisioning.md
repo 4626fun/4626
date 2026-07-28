@@ -1,6 +1,6 @@
 # Solana share mesh — per-creator provisioning
 
-> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **New-launch release:** v1.20.0 batcher `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` (AKITA/legacy shell remains v1.19.1 `0xa18169…`).
 
 > **Retired:** Twin wrap-token / `registerSolanaBridgeToken` and batcher-global
 > `solanaShareOftPeer` / `setSolanaShareOftPeer`. Every creator needs an explicit

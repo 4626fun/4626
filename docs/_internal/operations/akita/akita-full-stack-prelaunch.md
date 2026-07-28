@@ -1,6 +1,8 @@
 # AKITA full-stack redeploy — pre-launch checklist
 
-> **Release truth:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> **AKITA / legacy shell (not new-launch current):** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+>
+> New Creator launches use v1.20.0 batcher `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` — see [current release](../operations/operations/deployment/releases/current.md).
 
 Use this before **you** launch AKITA’s new vault stack on `https://app.4626.fun/deploy/vault`. Platform ops can finish everything here; the deploy session itself stays with the creator/operator wallet.
 

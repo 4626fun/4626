@@ -5,8 +5,8 @@
 > [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md) and
 > `frontend/scripts/ops/complete-akita-deploy-ops.ts`.
 >
-> Release truth: v1.19.4 Creator core repair on batcher
-> `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> AKITA / legacy shell: v1.19.4 Creator core repair on batcher
+> `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` (not the v1.20.0 new-launch stack).
 > The prior AKITA standard-SPL mint `5puV…XHQv`, OFT Store `G3rf…XeN`, and
 > peer `0xdf9a…cd3f` are retired for B2 and must not be reused.
 > Record the fresh Token-2022 mint, regular-OFT Store, and Store bytes32 peer

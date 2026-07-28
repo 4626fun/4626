@@ -7,7 +7,9 @@ doc_template: runbook
 
 Payable `finalizePhase2` + ShareOFT auto-bridge for greenfield vaults.
 
-**Live batcher (v1.19.1):** `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` — [current release](/operations/deployment/releases/current).
+**Current new-launch batcher (v1.20.0):** `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` — [current release](/operations/deployment/releases/current).
+
+**Legacy / AKITA shell (v1.19.1):** `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` — do not use for new launches.
 
 Policy: [share mesh lottery](/operations/solana/solana-share-mesh-lottery-policy) · Budget: [share mesh budget paths](/operations/solana/solana-share-mesh-budget-paths)
 

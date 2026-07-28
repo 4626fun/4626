@@ -1,6 +1,8 @@
 # Solana share mesh — budget & runbook
 
-> **Release truth:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
+> **New-launch release:** v1.20.0 batcher `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032`.
+>
+> **Legacy / AKITA shell:** v1.19.1 batcher `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`.
 
 > **Retired:** Twin wrap-token / batcher-global `setSolanaShareOftPeer`. Per-creator peers
 > use `Registry4626.setRemoteOFTPeerBytes32`. Batcher shell: `setSolanaDestination` +
@@ -8,7 +10,7 @@
 
 Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md). Current batcher: `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` (v1.14/v1.16/v1.19.0 batchers are historical only). The named v1.19.0 registration Safe packet is 11 operations and contains destination + OVault runtime, never adapter/global-peer operations.
+Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md). **Current new-launch batcher:** `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032`. Legacy AKITA shell `0xa18169…` and earlier batchers are historical only. The named v1.19.0 registration Safe packet is 11 operations and contains destination + OVault runtime, never adapter/global-peer operations.
 
 ## Scope
 
