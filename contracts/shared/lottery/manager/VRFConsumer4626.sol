@@ -214,6 +214,8 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     uint8 private constant IGNORE_REASON_VRF_NOT_CONFIGURED = 2;
     uint8 private constant IGNORE_REASON_INVALID_PAYLOAD = 3;
     uint8 private constant IGNORE_REASON_RATE_LIMITED = 4;
+    uint8 private constant IGNORE_REASON_UNSUPPORTED_CHAIN = 5;
+    uint8 private constant IGNORE_REASON_INVALID_PEER = 6;
 
     // ================================
     // ERRORS
@@ -366,8 +368,15 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         internal
         override
     {
-        if (!supportedChains[_origin.srcEid]) revert InvalidChain();
-        require(peers[_origin.srcEid] == _origin.sender, "Invalid peer");
+        // ODA-510-13: emit-and-return (match manager/integrator) — do not brick LZ lane.
+        if (!supportedChains[_origin.srcEid]) {
+            emit CrossChainRequestIgnored(_origin.srcEid, _origin.sender, 0, IGNORE_REASON_UNSUPPORTED_CHAIN);
+            return;
+        }
+        if (peers[_origin.srcEid] != _origin.sender) {
+            emit CrossChainRequestIgnored(_origin.srcEid, _origin.sender, 0, IGNORE_REASON_INVALID_PEER);
+            return;
+        }
 
         uint64 sequence;
         int256 reportedPrice;

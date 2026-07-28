@@ -41,10 +41,46 @@ library LotteryManager4626PricingLib {
     uint256 internal constant MAX_PRICING_AMOUNT = type(uint128).max;
 
     /**
-     * @notice Cap jackpot shares so `p * prize` tracks a fee-proxy EV bound (ODA-496-2).
+     * @notice Ticket-level fair jackpot prize in USD 1e6 (ODA-496-2 fee-proxy EV).
      * @dev `maxPrizeUSD1e6 = amountUSD * fairEvFeeBps * 1e6 / (BASIS_POINTS * winChancePPM)`.
-     *      Converted to 18-decimal shares via `priceUSD1e18`. Returns `type(uint256).max`
-     *      when the cap cannot be evaluated (caller should skip the cap).
+     *      Fail closed to 0 when inputs are missing — never disable the EV bound.
+     */
+    function fairMaxJackpotPrizeUSD(uint256 amountUSD1e6, uint256 winChancePPM, uint256 fairEvFeeBps)
+        external
+        pure
+        returns (uint256 maxPrizeUSD1e6)
+    {
+        if (amountUSD1e6 == 0 || winChancePPM == 0 || fairEvFeeBps == 0) {
+            return 0;
+        }
+        return FullMath.mulDiv(amountUSD1e6, fairEvFeeBps * 1_000_000, BASIS_POINTS * winChancePPM);
+    }
+
+    /**
+     * @notice Convert a USD 1e6 prize budget into 18-decimal shares at `priceUSD1e18`.
+     */
+    function sharesForPrizeUSD(uint256 prizeUSD1e6, uint256 priceUSD1e18)
+        external
+        pure
+        returns (uint256 shares)
+    {
+        if (prizeUSD1e6 == 0 || priceUSD1e18 == 0) return 0;
+        // shares = prizeUSD1e18 * 1e18 / price; prizeUSD1e18 = prizeUSD1e6 * 1e12
+        return FullMath.mulDiv(prizeUSD1e6, 1e30, priceUSD1e18);
+    }
+
+    /**
+     * @notice Convert 18-decimal shares into a USD 1e6 notional at `priceUSD1e18`.
+     */
+    function prizeUSDForShares(uint256 shares, uint256 priceUSD1e18) external pure returns (uint256 prizeUSD1e6) {
+        if (shares == 0 || priceUSD1e18 == 0) return 0;
+        return FullMath.mulDiv(shares, priceUSD1e18, 1e30);
+    }
+
+    /**
+     * @notice Cap jackpot shares so `p * prize` tracks a fee-proxy EV bound (ODA-496-2).
+     * @dev Composes `fairMaxJackpotPrizeUSD` + `sharesForPrizeUSD`. Returns 0 when the
+     *      cap cannot be evaluated (fail closed — never disable the EV bound).
      */
     function fairMaxJackpotShares(
         uint256 amountUSD1e6,
@@ -56,10 +92,8 @@ library LotteryManager4626PricingLib {
         if (amountUSD1e6 == 0 || winChancePPM == 0 || fairEvFeeBps == 0 || priceUSD1e18 == 0) {
             return 0;
         }
-        // prizeUSD1e6 = amount * feeBps * 1e6 / (BPS * p)
         uint256 maxPrizeUSD1e6 =
             FullMath.mulDiv(amountUSD1e6, fairEvFeeBps * 1_000_000, BASIS_POINTS * winChancePPM);
-        // shares (1e18) = prizeUSD1e18 * 1e18 / priceUSD1e18, prizeUSD1e18 = prizeUSD1e6 * 1e12
         return FullMath.mulDiv(maxPrizeUSD1e6, 1e30, priceUSD1e18);
     }
 

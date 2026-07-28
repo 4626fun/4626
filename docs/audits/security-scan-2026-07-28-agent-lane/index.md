@@ -35,3 +35,5 @@
 Reusable agent prompt: [COMMISSION-PROMPT.md](./COMMISSION-PROMPT.md).
 
 **Live Base today:** v1.19.3 bytecode epoch + v1.19.4 Creator-core repair on v1.19.1 greenfield infra addresses. The public pin (`0c47be2`) is source-ahead of that seal for several creator/share contracts — see prompt for bytecode-match guidance.
+
+- ODA-510 lottery remediations: [oda-510-remediation.md](./oda-510-remediation.md)

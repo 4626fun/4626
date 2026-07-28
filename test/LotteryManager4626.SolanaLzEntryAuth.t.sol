@@ -227,7 +227,8 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         assertEq(integrator.requestCount(), 1);
     }
 
-    function test_solanaSourceEventConsumedEvenWhenVrfSkipped() public {
+    /// @notice ODA-510-5: transient sponsorship skips must NOT burn the V3 digest.
+    function test_solanaSourceEventRetryableAfterTransientVrfSkip() public {
         bytes32 sourceEventId = keccak256("event-skip");
         bytes memory payload = _v3Payload(sourceEventId);
 
@@ -236,10 +237,10 @@ contract LotteryManager4626SolanaLzEntryAuthTest is Test {
         lotteryManager.exposedLzReceive(_origin(solanaPeer), payload);
         assertEq(integrator.requestCount(), 0, "sponsorship skip must not create VRF request");
 
-        // Even after fees become free, the same digest must not create an entry.
+        // After fees become free, the same digest may create an entry (redelivery/retry).
         integrator.setNativeFee(0);
         lotteryManager.exposedLzReceive(_origin(solanaPeer), payload);
-        assertEq(integrator.requestCount(), 0, "digest must remain consumed after VRF skip");
+        assertEq(integrator.requestCount(), 1, "digest must stay open after transient VRF skip");
     }
 
     // --- ODA-426-F2: forwarder lane peer re-check + V3 replay ---
