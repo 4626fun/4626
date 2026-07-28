@@ -15,7 +15,7 @@ const siteConfigPath = path.join(frontendRoot, 'shared/site-config.json')
 
 const siteConfig = JSON.parse(await fs.readFile(siteConfigPath, 'utf8'))
 const version = Number(siteConfig.brandAssetVersion ?? 3)
-const baseAppId = '695a49dc4d3a403912ed8ca5'
+const baseAppId = '69e12d9e5dd1d12bc976cdd7'
 const baseAppIconPath = siteConfig.assets?.baseAppIcon ?? '/assets/base-app-icon-1024.png'
 const miniappSplashPath = siteConfig.assets?.miniappSplash ?? '/assets/base-miniapp-icon-200.png'
 const miniappTileUrl = `https://4626.fun${baseAppIconPath}?v=${version}`

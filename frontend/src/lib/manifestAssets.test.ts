@@ -164,7 +164,7 @@ describe('public manifest assets', () => {
     expect(immersiveHtml).not.toContain('apple-touch-icon')
     expect(immersiveHtml).not.toContain('rel="mask-icon"')
     expect(immersiveHtml).not.toContain('app-tab-icon-32.png?v=9')
-    expect(immersiveHtml).toContain('<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />')
+    expect(immersiveHtml).toContain('<meta name="base:app_id" content="69e12d9e5dd1d12bc976cdd7" />')
     expect(immersiveHtml).toContain(`"imageUrl":"${MINIAPP_TILE_IMAGE_URL}"`)
     expect(immersiveHtml).not.toContain('"imageUrl":"https://4626.fun/assets/og-image.png')
   })

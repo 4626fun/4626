@@ -5,7 +5,7 @@ Base App shows two different icon surfaces:
 1. **Domain bar while browsing** — usually fetches `/favicon.ico` (no `?v=`) and may still hit legacy paths such as `/app-icon.png`.
 2. **Launcher tile / project chrome** — after the April 2026 Base migration, icon metadata for registered projects lives on [base.dev](https://base.dev) and may **not** auto-refresh when the website favicon changes.
 
-4626 project id: `695a49dc4d3a403912ed8ca5`.
+4626 project id: `69e12d9e5dd1d12bc976cdd7`.
 
 ## What changed in v17
 
@@ -33,7 +33,7 @@ curl -s https://4626.fun/.well-known/farcaster.json | jq '.miniapp.iconUrl, .min
 
 ## Manual step (often required)
 
-After April 2026, Base App treats apps as **standard web apps** and reads launcher/domain metadata from the **[base.dev](https://base.dev) project** (`695a49dc4d3a403912ed8ca5`). Website HTML/manifest fixes alone may not change the domain-bar icon until base.dev and the Base App client cache are refreshed.
+After April 2026, Base App treats apps as **standard web apps** and reads launcher/domain metadata from the **[base.dev](https://base.dev) project** (`69e12d9e5dd1d12bc976cdd7`). Website HTML/manifest fixes alone may not change the domain-bar icon until base.dev and the Base App client cache are refreshed.
 
 1. Open the 4626 project on [base.dev](https://base.dev).
 2. Re-upload the app icon using `frontend/public/assets/logo-mark-opaque-1024.png` (white **4** on black rounded tile — not `og-image.png` or `logo-mark-blue.svg`).
@@ -71,7 +71,7 @@ Historical note: the first Base miniapp shell (removed ~Jan 2026) used a Pinata 
 <link rel="icon" href="https://tomato-abundant-urial-204.mypinata.cloud/ipfs/bafybeigzyatm2pgrkqbnskyvflnagtqli6rgh7wv7t2znaywkm2pixmkxy" />
 ```
 
-If [base.dev](https://base.dev) project `695a49dc4d3a403912ed8ca5` still references that CID or an old blue-squircle upload, domain-bar flicker can persist until the project icon is replaced with `logo-mark-opaque-1024.png`.
+If [base.dev](https://base.dev) project `69e12d9e5dd1d12bc976cdd7` still references that CID or an old blue-squircle upload, domain-bar flicker can persist until the project icon is replaced with `logo-mark-opaque-1024.png`.
 
 Current Pinata usage in-repo:
 

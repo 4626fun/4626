@@ -60,7 +60,7 @@ const BASE_HTML_SHELL_CONFIG = {
   telegramLinkTitle: SHARED_SITE_META.telegramLinkTitle,
   telegramLinkDescription: SHARED_SITE_META.telegramLinkDescription,
   telegramLinkUrl: 'https://4626.fun/telegram/link',
-  baseAppId: '695a49dc4d3a403912ed8ca5',
+  baseAppId: '69e12d9e5dd1d12bc976cdd7',
   talentappProjectVerification:
     '4b7b5b97d054b1a85c4d9635e53e928824fe96da81482cdecc54993bbe539de3df58eba944a698e62a7e6d5bad8b974254b2770354f4f3521c083c74a74af0da',
   // Virtuals Protocol agent website verification (InverseAKITA /app.4626.fun/arena/introduction)

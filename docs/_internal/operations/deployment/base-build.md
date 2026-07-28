@@ -16,7 +16,7 @@ Do not register `https://4626.fun` as the Base Build app URL. The marketing host
 Base Build verification is tied to the homepage HTML returned by the app URL. The app homepage must expose the app ID in the document head:
 
 ```html
-<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
+<meta name="base:app_id" content="69e12d9e5dd1d12bc976cdd7" />
 ```
 
 The same homepage should also identify itself as the app origin:
@@ -49,7 +49,7 @@ Expected head markers:
 ```html
 <link rel="canonical" href="https://app.4626.fun/" />
 <meta property="og:url" content="https://app.4626.fun/" />
-<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
+<meta name="base:app_id" content="69e12d9e5dd1d12bc976cdd7" />
 ```
 
 ## Troubleshooting

@@ -236,7 +236,7 @@ For Base Build registration and ownership verification:
 
 - Use **App URL** `https://app.4626.fun`
 - Do not use `https://4626.fun` for Base Build; that host is the marketing origin
-- The app homepage advertises ownership via `<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />`
+- The app homepage advertises ownership via `<meta name="base:app_id" content="69e12d9e5dd1d12bc976cdd7" />`
 - Production verification should confirm the live app homepage returns app-origin metadata, not marketing-origin metadata
 
 - **Setup**
