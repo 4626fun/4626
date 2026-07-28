@@ -14,6 +14,7 @@ alwaysApply: true
 - **Copy:** waitlist ≠ whitelist; never Base/Coinbase sub-accounts; identity order Zora → Basename → ENS → 0x; avoid "scrape"/"crawl" in user copy.
 - **Credentials:** `ALFACLUB_API_KEY` only bot token; scoped env reads (no `railway variables --json`); HF Router is Cursor-only — never production OpenAI/Hermit lanes.
 - **Infra:** no Vercel PR previews (`main` only); hard cutover when user says continue/fix all; lane-neutral naming when no live vaults; arms ≠ strategies (legs = Charm/Ajna).
+- **Share-mesh LZ:** before Pipe A / share bridge, `pnpm -C frontend ops:verify-share-mesh-lz` exit 0 — template `[15, 32]` (never Base default 10 vs Solana inbound 15); load `oft-chain-config`.
 - **UI/docs:** shadcn brand palette on waitlist; no /swap IA redesign; token icon targeted refinements only; public docs exclude `docs/_internal/`.
 - **Learning:** append to `docs/agent-context/` not AGENTS.md; Tier 1 cap 80 lines in preferences-active.md.
 - **Search:** built-in codebase Grep is unreliable here — use shell `rg` scoped to `frontend/src`, `frontend/server`, or `contracts/` (never unscoped over repo root).

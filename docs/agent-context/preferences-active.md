@@ -39,6 +39,7 @@ Always-on cross-cutting operator preferences. For domain depth, load matching ar
 - **No Vercel PR previews** — `main` production only; canceled Preview rows from `vercel-ignore.sh` are intentional.
 - User may prefer **hard cutover** over staged coexistence when saying "continue" / "fix all" on cutover work.
 - Lane-neutral contract naming over deployment compatibility when **no live vaults** — regenerate manifests, re-seed bytecode store.
+- **Share-mesh LZ:** before Pipe A / share bridge, `pnpm -C frontend ops:verify-share-mesh-lz` must exit 0 — template `[15, 32]` confirmations (never Base default 10 vs Solana inbound 15). Detail: `oft-chain-config` archive/skill.
 - **Vault taxonomy:** legs = yield strategies (Charm, Ajna); arms = ShareOFT mesh (CCA, LP) — never call arms "strategies".
 
 ## UI & docs (active constraints)

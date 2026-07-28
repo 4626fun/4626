@@ -87,6 +87,19 @@ pnpm hardhat lz:oft:solana:debug --eid 30168 --dst-eids 30184 --action peers
 # Expect: optionalDVNThreshold: 3, five optional DVNs, requiredDVNCount: 255 (none required)
 ```
 
+**Required confirmation gate (prevents Pipe A BLOCKED):** template pathway must be **`[15, 32]`**. After wire, run:
+
+```bash
+pnpm -C frontend ops:verify-share-mesh-lz \
+  --share-oft 0xBaseShareOFT \
+  --oft-store <OFT_STORE> \
+  --mint <TOKEN2022_MINT> \
+  --dest <SOLANA_DEST_WALLET> \
+  # pass --mint and --dest together (no defaults); ATA fail-closed unless --skip-dest-ata
+```
+
+Exit 0 required before finalize / Pipe A. Compatible-but-wrong values (e.g. both sides at 10) still fail this gate — restore `[15, 32]`.
+
 **Hyperliquid:** when enabled, uncomment Base↔Hype (and optional Solana↔Hype) rows in the template — use **`MAINNET_HYPE_INTERSECT_SIX` (6-of-6)**, not the nine-name pool. See budget doc ULN section.
 
 **Devnet:** arbsep ↔ solana-testnet uses **2-of-3**; mainnet uses Solana's supported **3-of-5** ceiling.

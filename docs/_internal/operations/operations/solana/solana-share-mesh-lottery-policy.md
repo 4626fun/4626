@@ -15,6 +15,7 @@ Related: [budget paths](../../solana/solana-share-mesh-budget-paths.md) (costs +
 | 5 | **Solana lottery relay is default-off.** The replacement finalized-inbox + LayerZero OApp workers exist, but a pool or hook deployment does not enable them; every production gate must pass first. |
 | 6 | **Share symbol = `■<TICKER>`**, name = `{Creator} Share Token` — all creators, Base deploy UI + Solana LZ deploy (`frontend/src/lib/tokens/tokenSymbols.ts`). |
 | 7 | **LZ ULN = 3-of-5 optional DVNs** on mainnet Base ↔ Solana — never single-DVN `1/1`. Solana pathways support at most five DVNs. Current shared active pool: LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom; threshold **3**. Devnet rehearsal uses **2-of-3**. Re-verify metadata immediately before wiring. |
+| 7a | **LZ confirmations = `[15, 32]`** Base→Solana / Solana→Base. Gate with `pnpm -C frontend ops:verify-share-mesh-lz` before Pipe A. Outbound < inbound → BLOCKED (Base burn, Solana supply 0). |
 
 ## Two lanes (do not conflate)
 

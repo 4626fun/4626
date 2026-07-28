@@ -101,3 +101,13 @@ Return a structured result:
 - Actions taken (if any): tx hashes, functions called, and the new peer/endpoints
 - Verification: post-state reads confirming peers/mappings
 - Follow-ups: missing reverse-peers, required off-chain config, or rollout steps
+
+## B2 confirmation gate (2026-07-28)
+
+- **Failure class:** Base→Solana Pipe A can burn ShareOFT while Solana mint stays 0 if LayerZero marks the message **BLOCKED** because source **outbound confirmations < destination inbound**.
+- **Template policy:** `docs/_internal/operations/templates/layerzero-share-mesh.config.ts` uses **`[15, 32]`** (Base→Solana, Solana→Base). Never ship Base→Solana on library default **10** while Solana inbound is **15**.
+- **Hard rules before any share bridge / Pipe A:**
+  1. Wire **both** sides explicitly (`lz:oft:solana:init-config` + `lz:oapp:wire`) — do not inherit confirmations.
+  2. Run `pnpm -C frontend ops:verify-share-mesh-lz --share-oft … --oft-store …` (exit 0 required).
+  3. Destination Token-2022 ATA must exist; TransferHook must not brick executor `lzReceive` (temp disable only for recovery, then re-enable).
+- **DVN:** still **3-of-5** optional on mainnet Base ↔ Solana — unchanged.

@@ -106,6 +106,10 @@ export default async function () {
       baseShareOft,
       solanaOftStore,
       BASE_SOLANA_DVN,
+      // HARD: Base→Solana outbound MUST be ≥ Solana inbound. Default Base send ULN is 10;
+      // if Solana receive is 15 and Base stays on 10, LZ marks messages BLOCKED (Base burn,
+      // Solana mint supply 0). Never lower this to paper over defaults — wire both sides to 15.
+      // Gate: pnpm -C frontend ops:verify-share-mesh-lz
       [15, 32], // [evm→solana confirmations, solana→evm confirmations]
       [SOLANA_ENFORCED_OPTIONS, EVM_ENFORCED_OPTIONS],
     ],

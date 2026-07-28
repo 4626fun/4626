@@ -55,6 +55,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | PROTOCOL vs CANONICAL, XMTP inbox | `wallet-identity.md` |
 | Deploy-session owner delegation, ERC-8004, Privy agent wallet | `wallet-csw-lifecycle.md` |
 | Solana hook upgrade, KPR, Vercel deploy | `infra-ops-core.md` |
+| Share-mesh LZ wire / Pipe A blocked messages | `oft-chain-config.md` + `ops:verify-share-mesh-lz` |
 | Supabase migration, feature flags | `infra-ops-ops.md` |
 | Tribe.run, sponsor badge, `4626fun/4626` public repo | `tribe-run.md` |
 
@@ -129,7 +130,7 @@ Use these for 4626 work; ignore the 90+ global plugin skills unless the task exp
 | `vault-deployment` | Creator vault lifecycle (path-scoped) |
 | `swap-integration` | **4626 thin skill** — txRouter/paymaster; not generic Uniswap |
 | `creator-profile-enrichment` | Creator metadata pipelines |
-| `oft-chain-config` | LayerZero ShareOFT peers |
+| `oft-chain-config` | LayerZero ShareOFT peers + ULN `[15,32]` gate before Pipe A |
 | `lottery-vrf-ops` | Jackpot / VRF operations |
 | `yield-strategy-management` | Vault strategy config |
 | `ajna-vault-ops` | Nested Ajna sleeve / buffer lend / v1.20.0 expectations |
