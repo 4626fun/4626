@@ -42,37 +42,6 @@ export function Deploy() {
             <Suspense fallback={<ChoiceFallback />}>
               <DeployChoiceCards />
             </Suspense>
-
-            <p className="font-mono text-[11px] leading-relaxed text-zinc-600">
-              3D card interaction adapted from{' '}
-              <a
-                href="https://experiments.thisiswhitespace.com/trace-cards"
-                target="_blank"
-                rel="noreferrer"
-                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
-              >
-                Trace Cards 3D
-              </a>{' '}
-              by{' '}
-              <a
-                href="https://x.com/kaolti/status/2059421425438441583"
-                target="_blank"
-                rel="noreferrer"
-                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
-              >
-                @kaolti
-              </a>{' '}
-              — built from the{' '}
-              <a
-                href="https://9394465493527.gumroad.com/l/ejmqn"
-                target="_blank"
-                rel="noreferrer"
-                className="text-zinc-500 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-brand-primary"
-              >
-                licensed Cursor transcript
-              </a>{' '}
-              we purchased.
-            </p>
           </div>
         </div>
       </section>

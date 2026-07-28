@@ -86,7 +86,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="app-meta-value text-zinc-500/90 sm:flex-1">
           {isLoading ? (
-            <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
+            <div data-screenshot-hide="true">
+              <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
+            </div>
           ) : (
             <>
               {statusLine}

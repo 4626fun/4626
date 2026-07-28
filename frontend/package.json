@@ -58,6 +58,7 @@
     "guard:typedoc-warnings": "node scripts/check-typedoc-warnings.mjs",
     "guard:sc-hygiene": "node scripts/check-sc-hygiene.mjs",
     "capture:app-screens": "node scripts/capture-app-screenshots.mjs",
+    "capture:featured-screens": "node scripts/capture-featured-screenshots.mjs",
     "docs": "pnpm guard:typedoc-breadth && pnpm guard:typedoc-warnings",
     "test": "vitest run",
     "test:watch": "vitest",

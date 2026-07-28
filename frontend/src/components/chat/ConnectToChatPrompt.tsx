@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { MessageSquare } from 'lucide-react'
 import { CHAT_OPEN_REQUEST_EVENT, CHAT_TOGGLE_REQUEST_EVENT } from '@/lib/chat/openChat'
 import { useSafeLogin } from '@/lib/privy/safeHooks'
 
@@ -42,21 +41,17 @@ export function ConnectToChatPrompt(props: { onActivate?: (() => void) | null })
     }
   }, [handleConnect])
 
+  // Mobile entry is the bottom-nav Chat tab (`requestToggleChat`). Keep this
+  // component mounted for event handling + desktop-less activation paths.
   return (
-    <>
-      <div className="fixed inset-0 z-50 pointer-events-none md:hidden">
-        <div className="absolute bottom-20 left-4 pointer-events-auto">
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-zinc-900/90 border border-white/10 px-3 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-60"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            {busy ? '…' : 'Chat'}
-          </button>
-        </div>
-      </div>
-    </>
+    <button
+      type="button"
+      onClick={handleConnect}
+      disabled={busy}
+      className="sr-only"
+      aria-label={busy ? 'Connecting chat' : 'Open chat'}
+    >
+      {busy ? 'Connecting chat' : 'Open chat'}
+    </button>
   )
 }
