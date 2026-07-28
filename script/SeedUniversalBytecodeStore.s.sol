@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
+import {CreatorOracle} from "@4626/creator/oracles/CreatorOracle.sol";
+import {CreatorOracleQuoteLib} from "@4626/creator/oracles/CreatorOracleQuoteLib.sol";
 
 /**
  * @dev Seed UniversalBytecodeStoreV2 with v1.16.1 creation codes (CCALaunchArm + share-mesh lane).
@@ -14,6 +16,11 @@ import "forge-std/Script.sol";
  *   PRIVATE_KEY (required)
  *   UNIVERSAL_BYTECODE_STORE (optional; defaults to live Base v2 store)
  *   SEED_OFFSET / SEED_LIMIT (optional batch window over the ordered list below)
+ *
+ * @dev After the CreatorOracleQuoteLib EIP-170 split, CreatorOracle artifacts carry
+ *      `__$…$__` placeholders. `vm.getCode` on that JSON reverts; forge script linking
+ *      (`type(CreatorOracle).creationCode`) must be used. QuoteLib must also exist at
+ *      EIP-2470 + create2_library_salt 0 before any linked CreatorOracle is used on-chain.
  */
 interface IUniversalBytecodeStoreSeed {
     function store(bytes calldata creationCode) external returns (bytes32 codeId, address pointer);
@@ -23,10 +30,29 @@ interface IUniversalBytecodeStoreSeed {
 contract SeedUniversalBytecodeStore is Script {
     // Live Base mainnet UniversalBytecodeStoreV2 (see test/current-release-target-guard.sh).
     address constant DEFAULT_BYTECODE_STORE = 0xF9622613682a12E46b914c7498716F42E44c4d36;
+    address constant EIP2470 = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {
         if (limit == 0) return true;
         return index >= offset && index < offset + limit;
+    }
+
+
+    /// @dev Foundry links CreatorOracle to CREATE2(EIP-2470, salt 0, QuoteLib initcode).
+    ///      Storing lib bytecode in UniversalBytecodeStore does not place it at that address.
+    function _ensureCreatorOracleQuoteLib() internal returns (address lib) {
+        bytes memory initCode = type(CreatorOracleQuoteLib).creationCode;
+        lib = address(
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), EIP2470, bytes32(0), keccak256(initCode)))))
+        );
+        if (lib.code.length == 0) {
+            (bool ok,) = EIP2470.call(abi.encodePacked(bytes32(0), initCode));
+            require(ok, "CreatorOracleQuoteLib CREATE2 failed");
+            require(lib.code.length > 0, "CreatorOracleQuoteLib missing after CREATE2");
+            console2.log("Deployed CreatorOracleQuoteLib:", lib);
+        } else {
+            console2.log("CreatorOracleQuoteLib already at:", lib);
+        }
     }
 
     function run() external {
@@ -95,12 +121,13 @@ contract SeedUniversalBytecodeStore is Script {
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             // Deploy on-chain via EIP-2470 salt 0 before any linked CreatorOracle is used.
-            _storeIfMissing(
-                store, vm.getCode("CreatorOracleQuoteLib.sol:CreatorOracleQuoteLib"), "CreatorOracleQuoteLib"
-            );
+            // Store seeding alone does not place the lib at Foundry's CREATE2 library address.
+            _ensureCreatorOracleQuoteLib();
+            _storeIfMissing(store, type(CreatorOracleQuoteLib).creationCode, "CreatorOracleQuoteLib");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle");
+            // Linked script creationCode — not vm.getCode(artifact), which reverts on placeholders.
+            _storeIfMissing(store, type(CreatorOracle).creationCode, "CreatorOracle");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(store, vm.getCode("out/AgentOracle.sol/AgentOracle.json"), "AgentOracle");

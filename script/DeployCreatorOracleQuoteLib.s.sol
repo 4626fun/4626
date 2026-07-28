@@ -12,6 +12,9 @@ import {CreatorOracleQuoteLib} from "@4626/creator/oracles/CreatorOracleQuoteLib
  * Run:
  *   forge script script/DeployCreatorOracleQuoteLib.s.sol:DeployCreatorOracleQuoteLib \
  *     --rpc-url $BASE_RPC_URL --broadcast
+ *
+ * @dev Mirrors LotteryManager4626PricingLib ensure pattern: predict address, deploy if
+ *      empty, verify extcodesize. Do not treat UniversalBytecodeStore seeding as install.
  */
 contract DeployCreatorOracleQuoteLib is Script {
     address constant EIP2470 = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
@@ -19,9 +22,8 @@ contract DeployCreatorOracleQuoteLib is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         bytes memory initCode = type(CreatorOracleQuoteLib).creationCode;
-        bytes32 initHash = keccak256(initCode);
         address predicted = address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), EIP2470, bytes32(0), initHash))))
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), EIP2470, bytes32(0), keccak256(initCode)))))
         );
 
         console2.log("Predicted CreatorOracleQuoteLib:", predicted);
@@ -31,11 +33,10 @@ contract DeployCreatorOracleQuoteLib is Script {
         }
 
         vm.startBroadcast(pk);
-        (bool ok, bytes memory ret) = EIP2470.call(abi.encodePacked(bytes32(0), initCode));
+        (bool ok,) = EIP2470.call(abi.encodePacked(bytes32(0), initCode));
         require(ok, "EIP-2470 deploy failed");
-        address deployed = address(uint160(bytes20(ret)));
-        require(deployed == predicted, "address mismatch");
-        console2.log("Deployed CreatorOracleQuoteLib:", deployed);
+        require(predicted.code.length > 0, "CreatorOracleQuoteLib missing after CREATE2");
+        console2.log("Deployed CreatorOracleQuoteLib:", predicted);
         vm.stopBroadcast();
     }
 }

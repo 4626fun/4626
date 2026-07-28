@@ -16,7 +16,7 @@ import { useAccount } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { BASE_XMTP_AGENTS, type BaseXmtpAgent, type BaseXmtpAgentBadgeTone } from '@/lib/chat/baseXmtpAgents'
-import { CHAT_TOGGLE_REQUEST_EVENT, requestNewDm, requestOpenChat } from '@/lib/chat/openChat'
+import { CHAT_TOGGLE_REQUEST_EVENT, requestNewDm, requestOpenChat, setChatUnreadTotal } from '@/lib/chat/openChat'
 import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
@@ -761,6 +761,11 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
   useEffect(() => {
     onExpandedChange?.(expanded)
   }, [expanded, onExpandedChange])
+
+  useEffect(() => {
+    const total = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0)
+    setChatUnreadTotal(total)
+  }, [conversations])
 
   useEffect(() => {
     return () => onExpandedChange?.(false)

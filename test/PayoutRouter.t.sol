@@ -503,6 +503,65 @@ contract PayoutRouterTest is Test {
         router.convertAndQueue(address(usdc), 1e18, 1);
     }
 
+    function test_ODA520_H1_uncappedKeeperCanConvertAndQueueWithoutSpendCap() public {
+        // Production treasury setup never calls setKeeperExternalSpendCap; harvest keepers
+        // must still be able to convertAndQueue (V3 + creator-coin direct).
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+
+        creatorCoin.mint(address(router), 10e18);
+        vm.prank(keeper);
+        (uint256 creatorOut, uint256 creatorQueued) = router.convertAndQueue(address(creatorCoin), 10e18, 0);
+        assertEq(creatorOut, 10e18);
+        assertEq(creatorQueued, 10e18);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 5e18);
+
+        vm.prank(keeper);
+        (uint256 tokenOut, uint256 sharesQueued) = router.convertAndQueue(address(usdc), 5e18, 1);
+        assertEq(tokenOut, 5e18);
+        assertEq(sharesQueued, 5_000e18);
+    }
+
+    function test_ODA520_H1_externalVenueStillRequiresConfiguredSpendCap() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        router.setExternalSwapTargetApproval(address(externalTarget), true);
+        router.setExternalSwapSpenderApproval(address(externalTarget), true);
+
+        usdc.mint(address(router), 10e18);
+        shareOft.mint(address(externalTarget), 100e18);
+
+        bytes memory callData = abi.encodeWithSelector(
+            MockExternalSwapTarget.swapExactIn.selector,
+            address(usdc),
+            address(shareOft),
+            10e18,
+            11e18,
+            address(router)
+        );
+        PayoutRouter.ExternalSwapParams memory params = PayoutRouter.ExternalSwapParams({
+            tokenIn: address(usdc),
+            amountIn: 10e18,
+            minOut: 10e18,
+            spender: address(externalTarget),
+            swapTarget: address(externalTarget),
+            swapCallData: callData
+        });
+
+        vm.prank(keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PayoutRouter.KeeperExternalSpendCapExceeded.selector, address(usdc), 10e18, 0, 0, 0
+            )
+        );
+        router.convertViaExternalAndQueue(params);
+    }
+
     function test_ODA520_H2_swapRouterBlockedFromExternalAllowlist() public {
         vm.expectRevert(
             abi.encodeWithSelector(PayoutRouter.InvalidExternalSwapAddress.selector, address(swapRouter))
@@ -580,14 +639,11 @@ contract PayoutRouterTest is Test {
         router.convertAndQueue(address(usdc), 10e18, 1);
         uint256 spentAt = block.timestamp;
 
-        // Old fixed-boundary bug: fill near window end, then refill one second later.
-        // Idle-gated anchor slides to the spend time, so a wall-clock window end is not enough.
         vm.warp(spentAt + window - 1);
         vm.prank(keeper);
         vm.expectRevert();
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // Full idle window since the spend clears the ledger.
         vm.warp(spentAt + window);
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
@@ -608,7 +664,6 @@ contract PayoutRouterTest is Test {
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // Leaky-bucket would refill ~half cap here; idle-gated must still revert.
         vm.warp(block.timestamp + window / 2);
         vm.prank(keeper);
         vm.expectRevert();
@@ -630,7 +685,6 @@ contract PayoutRouterTest is Test {
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // Idle window clears accrual on the next consume; reconfigure must not resurrect it.
         vm.warp(block.timestamp + window);
         router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
 
@@ -652,8 +706,6 @@ contract PayoutRouterTest is Test {
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // Without re-anchor, shortening to 1 hour could idle-clear immediately if the
-        // prior windowStart was old. Re-anchor must keep accrued spend blocked.
         router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 hours);
         vm.prank(keeper);
         vm.expectRevert();

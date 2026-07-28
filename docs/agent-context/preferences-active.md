@@ -36,7 +36,7 @@ Always-on cross-cutting operator preferences. For domain depth, load matching ar
 
 ## Deploy & infra posture
 
-- **No Vercel PR previews** — `main` production only; canceled Preview rows from `vercel-ignore.sh` are intentional.
+- **No Vercel PR previews** — `main` production only. Project must keep API `previewDeploymentsDisabled: true` (vercel.json `git.deploymentEnabled` alone did not stop queue creation). `vercel-ignore.sh` canceled rows are intentional skips.
 - User may prefer **hard cutover** over staged coexistence when saying "continue" / "fix all" on cutover work.
 - Lane-neutral contract naming over deployment compatibility when **no live vaults** — regenerate manifests, re-seed bytecode store.
 - **Share-mesh LZ:** before Pipe A / share bridge, `pnpm -C frontend ops:verify-share-mesh-lz` must exit 0 — template `[15, 32]` confirmations (never Base default 10 vs Solana inbound 15). Detail: `oft-chain-config` archive/skill.

@@ -44,7 +44,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=942b97e6535f" />
+    <link rel="stylesheet" href="styles.css?v=scroll-polish-1" />
 
     <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
          module sources stay 'self' under the production CSP. The import
@@ -300,6 +300,9 @@
               <p class="mkt-lede">
                 The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
               </p>
+              <div class="mkt-scrollstory__dots" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </div>
             </header>
 
             <div class="mkt-scrollstory__stage">
@@ -1282,10 +1285,10 @@
         // Map of scroll-progress (0..1, where 0 = section top hits viewport top,
         // 1 = section bottom hits viewport bottom) to reveal step.
         const stops = [
-          { p: 0.05, step: 1 },  // eyebrow + first phrase
-          { p: 0.32, step: 2 },  // second phrase
-          { p: 0.55, step: 3 },  // caption
-          { p: 0.78, step: 4 },  // scroll hint
+          { p: 0.04, step: 1 },  // eyebrow + first phrase
+          { p: 0.28, step: 2 },  // second phrase
+          { p: 0.52, step: 3 },  // caption
+          { p: 0.74, step: 4 },  // scroll hint
         ];
         let raf = null;
         function update() {
@@ -1309,15 +1312,11 @@
       })();
     </script>
 
-    <!-- How it works scroll-story: steps accumulate as user scrolls through #lifecycle -->
+    <!-- How it works scroll-story: one active step at a time (keynote pacing) -->
     <script>
       (function () {
         const section = document.querySelector('.mkt-scrollstory');
         if (!section) return;
-
-        const track = section.querySelector('.mkt-scrollstory__track');
-        const stage = section.querySelector('.mkt-scrollstory__stage');
-        const steps = Array.from(section.querySelectorAll('.mkt-step[data-story-step]'));
 
         const storyClasses = ['is-story-1', 'is-story-2', 'is-story-3', 'is-story-4', 'is-story-done'];
 
@@ -1326,58 +1325,17 @@
           return;
         }
 
-        const mobileMq = matchMedia('(max-width: 720px)');
-        function isMobileView() {
-          return mobileMq.matches;
-        }
-        function getStops() {
-          return isMobileView()
-            ? [
-                { p: 0.06, step: 1 },
-                { p: 0.28, step: 2 },
-                { p: 0.50, step: 3 },
-                { p: 0.72, step: 4 },
-                { p: 0.88, done: true },
-              ]
-            : [
-                { p: 0, step: 1 },
-                { p: 0.28, step: 2 },
-                { p: 0.50, step: 3 },
-                { p: 0.72, step: 4 },
-                { p: 0.88, done: true },
-              ];
-        }
+        // Evenly spaced stops — matches the single-step CSS reveal.
+        // Progress 0 when section top hits viewport top; 1 when bottom exits.
+        const stops = [
+          { p: 0.02, step: 1 },
+          { p: 0.26, step: 2 },
+          { p: 0.50, step: 3 },
+          { p: 0.72, step: 4 },
+          { p: 0.90, done: true },
+        ];
 
         let raf = null;
-        let lastActiveStep = -1;
-
-        function measureOffset(activeStep) {
-          if (!track || !stage || activeStep < 1 || isMobileView()) {
-            section.style.setProperty('--story-offset', '0px');
-            section.style.setProperty('--story-rail-height', '72px');
-            return;
-          }
-
-          const gap = parseFloat(getComputedStyle(track).gap) || 16;
-          let heightThroughActive = 0;
-          for (let i = 0; i < activeStep; i++) {
-            const el = steps[i];
-            if (el) heightThroughActive += el.offsetHeight + (i > 0 ? gap : 0);
-          }
-
-          const stageHeight = stage.clientHeight;
-          const targetBottom = stageHeight * 0.78;
-          let offset = 0;
-          if (heightThroughActive > targetBottom) {
-            offset = -(heightThroughActive - targetBottom);
-          }
-          if (heightThroughActive > stageHeight) {
-            offset = Math.min(offset, -(heightThroughActive - stageHeight));
-          }
-
-          section.style.setProperty('--story-offset', offset + 'px');
-          section.style.setProperty('--story-rail-height', Math.max(72, heightThroughActive - 32) + 'px');
-        }
 
         function update() {
           raf = null;
@@ -1390,7 +1348,7 @@
           let activeStep = 0;
           let done = false;
 
-          getStops().forEach(({ p, step, done: isDone }) => {
+          stops.forEach(({ p, step, done: isDone }) => {
             if (step && progress >= p) activeStep = step;
             if (isDone && progress >= p) done = true;
           });
@@ -1399,14 +1357,8 @@
           if (activeStep >= 1) section.classList.add('is-story-' + activeStep);
           if (done) section.classList.add('is-story-done');
 
-          if (activeStep !== lastActiveStep) {
-            lastActiveStep = activeStep;
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => measureOffset(activeStep));
-            });
-          } else if (activeStep > 0) {
-            measureOffset(activeStep);
-          }
+          // Clear any leftover offset from the previous cumulative stack impl
+          section.style.setProperty('--story-offset', '0px');
         }
 
         function onScroll() {
@@ -1414,14 +1366,7 @@
         }
 
         window.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', () => {
-          lastActiveStep = -1;
-          onScroll();
-        }, { passive: true });
-        mobileMq.addEventListener('change', () => {
-          lastActiveStep = -1;
-          onScroll();
-        });
+        window.addEventListener('resize', onScroll, { passive: true });
         update();
       })();
     </script>
@@ -1458,11 +1403,14 @@
         }
 
         function fadeTo(target, ms) {
-          const start = audio.volume;
+          const start = Math.max(0, Math.min(1, Number(audio.volume) || 0));
+          const end = Math.max(0, Math.min(1, target));
           const t0 = performance.now();
           function step(t) {
             const k = Math.min(1, (t - t0) / ms);
-            audio.volume = start + (target - start) * k;
+            const next = start + (end - start) * k;
+            // Clamp — browsers throw if volume leaves [0, 1]
+            audio.volume = Math.max(0, Math.min(1, next));
             if (k < 1) requestAnimationFrame(step);
           }
           requestAnimationFrame(step);

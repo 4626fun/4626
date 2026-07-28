@@ -3,6 +3,10 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { isAlreadyLoggedInAuthError, runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
+  clearStoredWaitlistReferralCode,
+  readStoredWaitlistReferralCode,
+} from '@/lib/auth/waitlistEntry'
+import {
   assertPrivySessionMarkerCookie,
   clearPrivySessionMarkerCookie,
   isLocalDevPrivySessionMarkerMode,
@@ -102,6 +106,10 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
   if (!token) {
     throw new Error('Missing Privy auth token.')
   }
+  // `/r/:code` and `?ref=` persist into sessionStorage; bootstrap is the only
+  // join path that can write `referred_by_*`. Omitting this silently drops
+  // invite attribution (and referral passthrough points) for every join.
+  const referralCode = readStoredWaitlistReferralCode()
   const response = await apiFetch('/api/waitlist/bootstrap', {
     method: 'POST',
     headers: {
@@ -109,7 +117,7 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify(referralCode ? { referralCode } : {}),
   })
 
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
@@ -134,6 +142,13 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
   if (!response.ok || !payload?.success || !payload.data) {
     throw new Error(payload?.error || 'Could not finish waitlist signup.')
   }
+
+  // Keep the code on requiresPrivyAuth / hard failure so a retry can still
+  // attribute. Clear only after a completed join bootstrap.
+  if (!payload.data.requiresPrivyAuth && referralCode) {
+    clearStoredWaitlistReferralCode()
+  }
+
   return payload.data
 }
 

@@ -19,7 +19,22 @@ vi.mock('@/lib/privy/accessToken', () => ({
   readPrivyAccessTokenWithRetries: vi.fn(),
 }))
 
+vi.mock('@/lib/auth/waitlistEntry', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/auth/waitlistEntry')>(
+    '@/lib/auth/waitlistEntry',
+  )
+  return {
+    ...actual,
+    readStoredWaitlistReferralCode: vi.fn(() => null),
+    clearStoredWaitlistReferralCode: vi.fn(),
+  }
+})
+
 import { apiFetch } from '@/lib/api/apiBase'
+import {
+  clearStoredWaitlistReferralCode,
+  readStoredWaitlistReferralCode,
+} from '@/lib/auth/waitlistEntry'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
@@ -42,6 +57,7 @@ describe('waitlistPrivySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetWaitlistReturningWalletSignInForTests()
+    vi.mocked(readStoredWaitlistReferralCode).mockReturnValue(null)
     vi.mocked(readPrivyAccessTokenWithRetries).mockResolvedValue('privy-token')
     vi.mocked(bridgePrivySession).mockResolvedValue({
       ok: true,
@@ -69,6 +85,38 @@ describe('waitlistPrivySession', () => {
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
     expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
     expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/auth/me')).toBe(false)
+  })
+
+  it('sends stored referral code on waitlist bootstrap and clears it after join', async () => {
+    vi.mocked(readStoredWaitlistReferralCode).mockReturnValue('GOLDCRS9')
+
+    await establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy })
+
+    const bootstrapCall = vi
+      .mocked(apiFetch)
+      .mock.calls.find(([path]) => path === '/api/waitlist/bootstrap')
+    expect(bootstrapCall).toBeTruthy()
+    const init = bootstrapCall?.[1] as RequestInit
+    expect(JSON.parse(String(init.body))).toEqual({ referralCode: 'GOLDCRS9' })
+    expect(clearStoredWaitlistReferralCode).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps stored referral code when bootstrap still requires Privy auth', async () => {
+    vi.mocked(readStoredWaitlistReferralCode).mockReturnValue('GOLDCRS9')
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === '/api/waitlist/bootstrap') {
+        return {
+          ok: true,
+          json: async () => ({ success: true, data: { requiresPrivyAuth: true } }),
+        } as Response
+      }
+      return { ok: false, json: async () => null } as Response
+    })
+
+    await expect(establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy })).rejects.toThrow(
+      /No account found for this wallet/i,
+    )
+    expect(clearStoredWaitlistReferralCode).not.toHaveBeenCalled()
   })
 
   it('establishWaitlistSessionAfterPrivyAuth never starts client wallet creation', async () => {

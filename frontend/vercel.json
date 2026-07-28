@@ -83,6 +83,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/v1/lottery/amoe/daily-quest-reminder-cron",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/v1/zora-csw/scan-cron",
       "schedule": "*/15 * * * *"
     },

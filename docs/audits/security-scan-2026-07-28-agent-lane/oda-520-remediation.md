@@ -8,12 +8,12 @@
 
 | Sev | Item | Fix |
 |-----|------|-----|
-| High | Keeper spend cap only on external venue | `_consumeKeeperExternalSpend` now runs at the start of `_convertAndQueue` (V3 + direct deposit) |
+| High | Keeper spend cap only on external venue | `_consumeKeeperExternalSpend(..., requireConfigured=false)` on `_convertAndQueue`; external venue stays fail-closed. Deploy/treasury setup seeds per-token caps before `setKeeper`. |
 | High | `swapRouter` omitted from external-swap blocklist | Block `swapRouter`, `weth`, `protocolRewards` in `_requireSafeExternalSwapAddress` |
 | High/Med | Standing max `swapRouter` allowance | `setSwapPath` no longer approves; `_convertAndQueue` uses per-call approve/reset (also closes M4 self-revoke DoS) |
 | Medium | External `spender=swapRouter` zeros V3 allowance | Eliminated by removing standing allowance (above) |
 | Low | Residual `shareOFT` permanently stuck | `sweepShareOFT()` queues balance into burn stream |
-| Low | Cap window 2× burst + reconfigure reset | Idle-gated spend window; `setKeeperExternalSpendCap` preserves accrued spend |
+| Low | Cap window 2× burst + reconfigure reset | Idle-gated spend window; `setKeeperExternalSpendCap` preserves accrued spend / idle-clears before re-anchor |
 | Low | Controller ownership handoff had no delay | `OWNERSHIP_TRANSFER_DELAY = 1 days` before `acceptCreatorCoinOwnership` |
 
 ## Leads closed in the same pass

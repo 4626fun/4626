@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Activity, ArrowLeftRight, Bot, Mail, MessageSquare, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
-import { requestToggleChat } from '@/lib/chat/openChat'
+import { requestToggleChat, subscribeChatUnreadTotal } from '@/lib/chat/openChat'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -161,6 +161,7 @@ export function LayoutFrame(props: {
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
+  const [chatUnreadTotal, setChatUnreadTotalState] = useState(0)
   const [hideMobileNavForBaseApp] = useState(() => isBaseAppInAppContext())
   const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
   const showWaitlistFocusedShell = isWaitlistSurface
@@ -190,6 +191,13 @@ export function LayoutFrame(props: {
     window.addEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
   }, [])
+
+  useEffect(() => {
+    if (!shouldEnableChat) return
+    return subscribeChatUnreadTotal(setChatUnreadTotalState)
+  }, [shouldEnableChat])
+
+  const visibleChatUnread = shouldEnableChat ? chatUnreadTotal : 0
 
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
   const hideMobileNav =
@@ -364,12 +372,19 @@ export function LayoutFrame(props: {
                 <button
                   key={path}
                   type="button"
-                  aria-label={label}
+                  aria-label={visibleChatUnread > 0 ? `${label}, ${visibleChatUnread} unread` : label}
                   aria-pressed={isActive}
-                  className={mobileNavItemClass(isActive)}
+                  className={`${mobileNavItemClass(isActive)} relative`}
                   onClick={() => requestToggleChat()}
                 >
-                  <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                  <span className="relative inline-flex">
+                    <Icon aria-hidden="true" className={mobileNavIconClass(isActive)} />
+                    {visibleChatUnread > 0 ? (
+                      <span className="absolute -right-2 -top-1 z-10 min-w-[1.05rem] rounded-full bg-red-500 px-1 py-px text-center text-[9px] font-semibold leading-tight text-white">
+                        {visibleChatUnread > 99 ? '99+' : visibleChatUnread}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className={mobileNavLabelClass(isActive)}>{label}</span>
                 </button>
               )

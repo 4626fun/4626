@@ -487,9 +487,11 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (tokenIn == address(0)) revert ZeroAddress();
         if (amountIn == 0) revert ZeroAmount();
 
-        // FIX ODA-520-H1 — keeper spend cap must apply to the V3 / direct-deposit venue,
-        // not only `convertViaExternalAndQueue`. Owner remains exempt.
-        _consumeKeeperExternalSpend(tokenIn, amountIn);
+        // FIX ODA-520-H1 — when a spend cap is configured, enforce it on the V3 /
+        // direct-deposit venue too. Unset caps are a no-op here so harvest keepers stay
+        // operational; external venue remains fail-closed. Deploy/treasury setup seeds
+        // caps so production keepers are still bounded when configured.
+        _consumeKeeperExternalSpend(tokenIn, amountIn, false);
 
         if (tokenIn == address(creatorCoin)) {
             // Direct deposit: minOut is unused (no swap).
@@ -544,7 +546,8 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (amountIn == 0 || minOut == 0) revert ZeroAmount();
         if (!approvedExternalSwapTargets[swapTarget]) revert ExternalSwapTargetNotApproved(swapTarget);
         if (!approvedExternalSwapSpenders[spender]) revert ExternalSwapSpenderNotApproved(spender);
-        _consumeKeeperExternalSpend(tokenIn, amountIn);
+        // External venue (arbitrary calldata) remains fail-closed without a configured cap.
+        _consumeKeeperExternalSpend(tokenIn, amountIn, true);
 
         IERC20 inToken = IERC20(tokenIn);
         uint256 tokenInBefore = inToken.balanceOf(address(this));
@@ -586,15 +589,20 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     ///      `windowStart` to `block.timestamp`. That blocks:
     ///      (1) the old fixed-boundary 2× burst (spend at windowEnd-1 and again at windowEnd), and
     ///      (2) leaky-bucket mid-window refill that could approach 2× cap inside one nominal window.
-    ///      `windowResetsAt` is when the current accrual would idle-clear if no further spends occur.
-    function _consumeKeeperExternalSpend(address tokenIn, uint256 amountIn) internal {
+    /// @param requireConfigured When true (external venue), an unset cap/window reverts.
+    ///        When false (V3 / direct-deposit), an unset cap is a no-op so keepers can
+    ///        harvest without mandatory spend-cap wiring.
+    function _consumeKeeperExternalSpend(address tokenIn, uint256 amountIn, bool requireConfigured) internal {
         if (msg.sender != keeper || keeper == address(0)) return;
 
         KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
         uint256 cap = spendCap.cap;
         uint64 window = spendCap.window;
         if (cap == 0 || window == 0) {
-            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, 0, cap, 0);
+            if (requireConfigured) {
+                revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, 0, cap, 0);
+            }
+            return;
         }
 
         uint256 windowStart = spendCap.windowStart;
