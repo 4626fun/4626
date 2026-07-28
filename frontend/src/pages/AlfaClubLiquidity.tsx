@@ -147,6 +147,8 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   configReady: boolean;
   requestedMarketMatches: boolean;
   executionAddress: Address | null;
+  /** Blocks submit while another swap settlement lock is active (embedded /swap). */
+  submissionBlockedReason?: string | null;
   /** When false, sender is known but the signing wallet client is not ready. */
   walletClientReady?: boolean;
   loading: boolean;
@@ -161,6 +163,7 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   /** When buyWithEth: Zora ETH→AKITA quote request failed. */
   ethFundingQuoteFailed?: boolean;
 }): string | null {
+  if (params.submissionBlockedReason) return params.submissionBlockedReason;
   if (!params.configReady)
     return "Official Sudoswap market deployment is not configured";
   if (!params.requestedMarketMatches)
@@ -288,6 +291,8 @@ type AlfaClubLiquidityProps = {
   onPrimaryAction?: () => void;
   forcePrimaryActionEnabled?: boolean;
   primaryActionHint?: string | null;
+  /** When set, disables key-trade submit (e.g. unresolved /swap settlement). */
+  submissionBlockedReason?: string | null;
 };
 
 export function AlfaClubLiquidity({
@@ -305,6 +310,7 @@ export function AlfaClubLiquidity({
   onPrimaryAction,
   forcePrimaryActionEnabled,
   primaryActionHint = null,
+  submissionBlockedReason = null,
 }: AlfaClubLiquidityProps = {}) {
   const queryClient = useQueryClient();
   const account = useAccount();
@@ -1104,6 +1110,10 @@ export function AlfaClubLiquidity({
   ]);
 
   const submit = useCallback(async () => {
+    if (submissionBlockedReason) {
+      toast.error(submissionBlockedReason);
+      return;
+    }
     if (
       !publicClient ||
       !executionAddress ||
@@ -1415,6 +1425,7 @@ export function AlfaClubLiquidity({
     slippageBps,
     slippageInput,
     resolvedSignerAddress,
+    submissionBlockedReason,
     switchChainAsync,
     walletClient,
   ]);
@@ -1423,6 +1434,7 @@ export function AlfaClubLiquidity({
     configReady,
     requestedMarketMatches,
     executionAddress,
+    submissionBlockedReason,
     walletClientReady: Boolean(walletClient),
     loading: marketQuery.isLoading || (Boolean(keyAmount) && quoteQuery.isFetching && !quoteQuery.data),
     snapshot,

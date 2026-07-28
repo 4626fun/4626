@@ -25,6 +25,7 @@ import { shouldStartAutoQuote, useSwapExecution } from '@/hooks/useSwapExecution
 import {
   classifySwapCompletionReceipt,
   isSwapExecutionLocked,
+  shouldClearSwapCompletionForExecutionAddressChange,
   shouldResetSwapFormAfterCompletionDismiss,
   type SwapCompletionSettlement,
 } from '@/lib/swap/swapCompletionDismiss'
@@ -117,6 +118,7 @@ function KeySwapSurface(props: {
   onPrimaryAction?: () => void
   forcePrimaryActionEnabled?: boolean
   primaryActionHint?: string | null
+  submissionBlockedReason?: string | null
 }) {
   const sellingKey = props.selection.side === 'input'
   const key = props.selection.key
@@ -138,6 +140,7 @@ function KeySwapSurface(props: {
       onPrimaryAction={props.onPrimaryAction}
       forcePrimaryActionEnabled={props.forcePrimaryActionEnabled}
       primaryActionHint={props.primaryActionHint}
+      submissionBlockedReason={props.submissionBlockedReason}
       embedded
     />
   )
@@ -946,6 +949,11 @@ export function Swap() {
     swapCompletion != null && swapCompletionSettlement === 'confirmed'
   const swapExecutionLocked =
     swapCompletion != null && isSwapExecutionLocked(swapCompletionSettlement)
+  const swapExecutionLockMessage = swapExecutionLocked
+    ? swapCompletionSettlement === 'delayed'
+      ? 'Previous swap confirmation is delayed. Dismiss that notice before starting another swap.'
+      : 'Previous swap is still confirming. Wait for settlement before starting another swap.'
+    : null
   // Receipt / balance confirmation must follow the submitted chain, not the editable form chain.
   const settlementChainId = (swapCompletion?.chainId ?? swapChainId) as SupportedChainId
   const settlementPublicClient = usePublicClient({ chainId: settlementChainId })
@@ -1169,9 +1177,16 @@ export function Swap() {
     [persistRecentToken, registerTokenForIdentity, resetTradeState, setTokenIn, setTokenOut, tokenSelectorSide],
   )
 
-  // Reset when execution address changes (different wallet → drop prior completion lock)
+  // Preserve completion through transient A→null→A disconnects; clear only on a real account switch.
+  const lastExecutionAddressRef = useRef<string | null>(null)
   useEffect(() => {
-    resetTradeState({ clearCompletion: true })
+    resetTradeState({
+      clearCompletion: shouldClearSwapCompletionForExecutionAddressChange({
+        previousExecutionAddress: lastExecutionAddressRef.current,
+        nextExecutionAddress: executionAddress,
+      }),
+    })
+    if (executionAddress) lastExecutionAddressRef.current = executionAddress
   }, [executionAddress, resetTradeState])
 
   // Sync busy into a ref so the auto-quote timer can check it without becoming
@@ -1329,6 +1344,7 @@ export function Swap() {
                                     ? swapExecutionChrome.swapSenderLabel
                                     : null
                         }
+                        submissionBlockedReason={swapExecutionLockMessage}
                       />
                     ) : <SwapCard
                       tokenInDisplay={tokenInDisplay}

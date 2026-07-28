@@ -50,6 +50,20 @@ export function shouldClearSwapCompletionOnTradeReset(options?: {
   return Boolean(options?.clearCompletion)
 }
 
+
+/**
+ * Preserve a completion through transient disconnects. Only a resolved switch
+ * from one execution account to another makes the old account's lock irrelevant.
+ */
+export function shouldClearSwapCompletionForExecutionAddressChange(input: {
+  previousExecutionAddress: string | null | undefined
+  nextExecutionAddress: string | null | undefined
+}): boolean {
+  const previous = input.previousExecutionAddress?.trim().toLowerCase()
+  const next = input.nextExecutionAddress?.trim().toLowerCase()
+  return Boolean(previous && next && previous !== next)
+}
+
 export function shouldResetSwapFormAfterCompletionDismiss(input: {
   swapCompletionConfirmed: boolean
   amountInUnits: string

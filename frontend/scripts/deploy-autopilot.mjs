@@ -5,6 +5,10 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { shouldResumeDeploySession } from './shouldResumeDeploySession.mjs'
+import {
+  evaluateOwnerInstallResumeAttempt,
+  shouldKeepRetryingOwnerInstallResume,
+} from './ownerInstallResumePolicy.mjs'
 
 import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
 import { base } from 'viem/chains'
@@ -386,22 +390,52 @@ async function main() {
     if (started.json.data.nextAction === 'wait_for_owner_install' && waitOwnerInstall) {
       console.log('waiting for owner install (addOwnerAddress)...')
       pushAuditEvent('wait_for_owner_install_started')
+      const maxResumeAttempts = 8
       while (Date.now() < deadline) {
         const installed = await isOwnerInstalled({ client, smartWallet, ownerAddress: sessionSigner, maxScan: 256 })
         if (installed) {
           console.log('owner installed; triggering continue')
           pushAuditEvent('owner_install_detected')
-          const continued = await apiPost({
-            origin,
-            path: 'deploy/v2/session/resume',
-            headers,
-            body: { sessionId },
-          })
-          console.log(`continue status=${continued.status}`)
-          pushAuditEvent('continue_after_owner_install', {
-            status: continued.status,
-            ok: continued.ok,
-          })
+          let resumeAttempts = 0
+          let resumeOk = false
+          while (Date.now() < deadline) {
+            resumeAttempts += 1
+            const continued = await apiPost({
+              origin,
+              path: 'deploy/v2/session/resume',
+              headers,
+              body: { sessionId },
+            })
+            const decision = evaluateOwnerInstallResumeAttempt(continued)
+            console.log(
+              `continue status=${continued.status} decision=${decision} attempt=${resumeAttempts}`,
+            )
+            pushAuditEvent('continue_after_owner_install', {
+              status: continued.status,
+              ok: continued.ok,
+              decision,
+              attempt: resumeAttempts,
+            })
+            if (decision === 'ok') {
+              resumeOk = true
+              break
+            }
+            if (
+              !shouldKeepRetryingOwnerInstallResume({
+                decision,
+                attempts: resumeAttempts,
+                maxAttempts: maxResumeAttempts,
+              })
+            ) {
+              throw new Error(
+                `resume after owner install failed (${continued.status}): ${JSON.stringify(continued.json)}`,
+              )
+            }
+            await sleep(pollMs)
+          }
+          if (!resumeOk) {
+            throw new Error('timeout waiting for resume after owner install')
+          }
           break
         }
         await sleep(pollMs)

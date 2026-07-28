@@ -179,6 +179,16 @@ describe("AlfaClub official Sudoswap market readiness", () => {
   });
 
 
+  it("blocks the embedded key trade while another swap is unsettled", () => {
+    const settlementMessage =
+      "Previous swap is still confirming. Wait for settlement before starting another swap.";
+    expect(
+      getAlfaClubLiquidityDisabledReason(
+        ready({ submissionBlockedReason: settlementMessage }),
+      ),
+    ).toBe(settlementMessage);
+  });
+
   it("requires a signing wallet client before submit", () => {
     expect(
       getAlfaClubLiquidityDisabledReason(ready({ walletClientReady: false })),

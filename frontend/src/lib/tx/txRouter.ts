@@ -553,7 +553,10 @@ async function waitForCallsStatus(params: {
         params: [params.id],
       })
     } catch {
-      return { txHash: null }
+      // A transient wallet/provider error does not make the submitted bundle terminal.
+      // Keep polling so callers only receive a hashless result after the bounded timeout.
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+      continue
     }
     const statusCode = Number(result?.status)
     const receipts = Array.isArray(result?.receipts) ? result.receipts : []
