@@ -7,6 +7,15 @@ import {
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
 import { readShareBridgeOftWiringStatus } from '@/lib/deploy/shareBridgeOftWiring'
+import {
+  formatBaseShareMeshUlnGateFailure,
+  readAndAssessBaseShareMeshUln,
+  type BaseShareMeshUlnGateResult,
+} from '@/lib/deploy/shareMeshLzBaseUlnGate'
+import {
+  EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS,
+  EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS,
+} from '@/lib/deploy/shareMeshLzPathwayPolicy'
 
 type ShareBridgeFinalizeWiringPanelProps = {
   enabled: boolean
@@ -28,6 +37,10 @@ function toneClass(ok: boolean | null): string {
   return 'text-zinc-500'
 }
 
+function ulnSummary(uln: BaseShareMeshUlnGateResult): string {
+  return `send=${uln.baseSend.confirmations} (need ${EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS}) · recv=${uln.baseReceive.confirmations} (need ${EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS})`
+}
+
 export function ShareBridgeFinalizeWiringPanel({
   enabled,
   publicClient,
@@ -44,6 +57,7 @@ export function ShareBridgeFinalizeWiringPanel({
       'shareBridgeFinalizeWiring',
       batcherAddress,
       finalizeCallData,
+      finalizeParams?.shareOFT,
       quoteAllowed,
     ],
     enabled: Boolean(enabled && quoteAllowed && publicClient && batcherAddress && finalizeCallData),
@@ -63,7 +77,28 @@ export function ShareBridgeFinalizeWiringPanel({
         batcherAddress: batcherAddress as Address,
         finalizeCallData: finalizeCallData as Hex,
       })
-      return { kind: 'ok' as const, status, quote: 'code' in quote ? null : quote }
+
+      let uln: BaseShareMeshUlnGateResult | null = null
+      let ulnError: string | null = null
+      if (status.bridgeRequired && finalizeParams?.shareOFT) {
+        try {
+          uln = await readAndAssessBaseShareMeshUln({
+            publicClient: publicClient as any,
+            shareOft: finalizeParams.shareOFT,
+            solanaEid: status.solanaEid,
+          })
+        } catch (error) {
+          ulnError = error instanceof Error ? error.message : String(error)
+        }
+      }
+
+      return {
+        kind: 'ok' as const,
+        status,
+        quote: 'code' in quote ? null : quote,
+        uln,
+        ulnError,
+      }
     },
   })
 
@@ -125,9 +160,11 @@ export function ShareBridgeFinalizeWiringPanel({
     )
   }
 
-  const { status, quote } = wiringQuery.data
+  const { status, quote, uln, ulnError } = wiringQuery.data
+  const ulnReady = !status.bridgeRequired || (uln?.ok === true && !ulnError)
   const ready =
-    !status.bridgeRequired || (status.registryPeerConfigured && quote !== null)
+    !status.bridgeRequired ||
+    (status.registryPeerConfigured && quote !== null && ulnReady)
 
   return (
     <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 space-y-2">
@@ -154,7 +191,23 @@ export function ShareBridgeFinalizeWiringPanel({
           LZ native fee:{' '}
           {quote ? `${formatEther(quote.nativeFee)} ETH` : 'unavailable'}
         </div>
+        {status.bridgeRequired ? (
+          <div className={toneClass(ulnReady)}>
+            Base ULN pathway: {ulnError ? 'read failed' : uln ? (uln.ok ? 'ok' : 'not ready') : 'unchecked'}
+            {uln ? ` · ${ulnSummary(uln)}` : null}
+          </div>
+        ) : null}
       </div>
+      {status.bridgeRequired && uln && !uln.ok ? (
+        <div className="text-[10px] text-amber-300/90 space-y-1">
+          <p>{formatBaseShareMeshUlnGateFailure(uln)}</p>
+        </div>
+      ) : null}
+      {status.bridgeRequired && ulnError ? (
+        <div className="text-[10px] text-amber-300/90 space-y-1">
+          <p>Base ULN read failed: {ulnError}</p>
+        </div>
+      ) : null}
       {!ready ? (
         <div className="text-[10px] text-amber-300/90 space-y-1">
           <p>
