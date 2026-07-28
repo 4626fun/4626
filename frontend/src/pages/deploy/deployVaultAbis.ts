@@ -270,6 +270,29 @@ export const PAYOUT_ROUTER_ADMIN_ABI = [
   },
   {
     type: 'function',
+    name: 'setKeeperExternalSpendCap',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'cap', type: 'uint256' },
+      { name: 'windowSeconds', type: 'uint64' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'keeperExternalSpendCaps',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenIn', type: 'address' }],
+    outputs: [
+      { name: 'cap', type: 'uint256' },
+      { name: 'window', type: 'uint64' },
+      { name: 'windowStart', type: 'uint64' },
+      { name: 'spentInWindow', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'setExternalSwapTargetApproval',
     stateMutability: 'nonpayable',
     inputs: [

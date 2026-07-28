@@ -165,11 +165,106 @@ export function resolvePayoutRouterExternalSwapApprovals(): PayoutRouterExternal
     'PAYOUT_ROUTER_APPROVED_EXTERNAL_SWAP_SPENDERS',
   ])
 
-  const defaultTargets = [BASE_SWAP_ROUTER_CURRENT]
-  const defaultSpenders = [BASE_PERMIT2, BASE_SWAP_ROUTER_CURRENT]
+  // ODA-520-H2: the canonical Uniswap `swapRouter` is blocked on-chain as an
+  // external target/spender. Default to Permit2-only; set aggregator addresses
+  // via env when an external venue is intentionally enabled.
+  const defaultTargets: Address[] = []
+  const defaultSpenders = [BASE_PERMIT2]
+
+  const filterBlocked = (addrs: Address[]) =>
+    addrs.filter((addr) => addr.toLowerCase() !== BASE_SWAP_ROUTER_CURRENT.toLowerCase())
 
   return {
-    targets: targets.length > 0 ? targets : defaultTargets,
-    spenders: spenders.length > 0 ? spenders : defaultSpenders,
+    targets: filterBlocked(targets.length > 0 ? targets : defaultTargets),
+    spenders: filterBlocked(spenders.length > 0 ? spenders : defaultSpenders),
   }
+}
+
+const DEFAULT_KEEPER_SPEND_WINDOW_SECONDS = 86_400
+const DEFAULT_KEEPER_SPEND_CAP_WETH = 50n * 10n ** 18n
+const DEFAULT_KEEPER_SPEND_CAP_USDC = 250_000n * 10n ** 6n
+const DEFAULT_KEEPER_SPEND_CAP_ZORA = 10_000_000n * 10n ** 18n
+const DEFAULT_KEEPER_SPEND_CAP_CREATOR = 1_000_000n * 10n ** 18n
+const DEFAULT_KEEPER_SPEND_CAP_FALLBACK = 1_000_000n * 10n ** 18n
+
+function parseUintEnv(key: string, fallback: bigint, env: Record<string, string | undefined>): bigint {
+  const raw = String(env[key] ?? '').trim()
+  if (!raw) return fallback
+  try {
+    const value = BigInt(raw)
+    return value > 0n ? value : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function parseWindowSecondsEnv(env: Record<string, string | undefined>): number {
+  const raw = String(env.PAYOUT_ROUTER_KEEPER_SPEND_WINDOW_SECONDS ?? '').trim()
+  if (!raw) return DEFAULT_KEEPER_SPEND_WINDOW_SECONDS
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return DEFAULT_KEEPER_SPEND_WINDOW_SECONDS
+  const value = Math.floor(parsed)
+  if (value <= 0 || value > 30 * 86_400) return DEFAULT_KEEPER_SPEND_WINDOW_SECONDS
+  return value
+}
+
+export type PayoutRouterKeeperSpendCap = {
+  tokenIn: Address
+  cap: bigint
+  windowSeconds: number
+  label: string
+}
+
+/**
+ * ODA-520-H1: keeper conversions (V3 + direct deposit) fail closed when no cap is set.
+ * Resolve per-token daily caps for creator coin + configured harvest path tokens so
+ * treasury/deploy setup can call `setKeeperExternalSpendCap` before `setKeeper`.
+ */
+export function resolvePayoutRouterKeeperSpendCaps(params: {
+  creatorToken: Address
+  pathTokens?: Array<{ tokenIn: Address; label?: string }>
+  weth?: Address | null
+  usdc?: Address | null
+  zora?: Address | null
+  env?: Record<string, string | undefined>
+}): PayoutRouterKeeperSpendCap[] {
+  const env = params.env ?? process.env
+  const windowSeconds = parseWindowSecondsEnv(env)
+  const creatorToken = getAddress(params.creatorToken)
+  const weth = normalizeAddress(params.weth)
+  const usdc = normalizeAddress(params.usdc)
+  const zora = normalizeAddress(params.zora)
+
+  const out: PayoutRouterKeeperSpendCap[] = []
+  const seen = new Set<string>()
+  const add = (tokenIn: Address, label: string, cap: bigint) => {
+    const key = tokenIn.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ tokenIn, cap, windowSeconds, label })
+  }
+
+  add(creatorToken, 'CREATOR', parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_CREATOR', DEFAULT_KEEPER_SPEND_CAP_CREATOR, env))
+
+  for (const entry of params.pathTokens ?? []) {
+    const tokenIn = getAddress(entry.tokenIn)
+    const label = String(entry.label ?? 'PATH').toUpperCase()
+    let cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_DEFAULT', DEFAULT_KEEPER_SPEND_CAP_FALLBACK, env)
+    if (weth && tokenIn.toLowerCase() === weth.toLowerCase()) {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_WETH', DEFAULT_KEEPER_SPEND_CAP_WETH, env)
+    } else if (usdc && tokenIn.toLowerCase() === usdc.toLowerCase()) {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_USDC', DEFAULT_KEEPER_SPEND_CAP_USDC, env)
+    } else if (zora && tokenIn.toLowerCase() === zora.toLowerCase()) {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_ZORA', DEFAULT_KEEPER_SPEND_CAP_ZORA, env)
+    } else if (label === 'WETH') {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_WETH', DEFAULT_KEEPER_SPEND_CAP_WETH, env)
+    } else if (label === 'USDC') {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_USDC', DEFAULT_KEEPER_SPEND_CAP_USDC, env)
+    } else if (label === 'ZORA') {
+      cap = parseUintEnv('PAYOUT_ROUTER_KEEPER_SPEND_CAP_ZORA', DEFAULT_KEEPER_SPEND_CAP_ZORA, env)
+    }
+    add(tokenIn, label, cap)
+  }
+
+  return out
 }

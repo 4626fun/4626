@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   isDbConfigured: vi.fn(() => true),
   ensureCreatorMetricsSchema: vi.fn(async () => undefined),
   ensureKeeprSchema: vi.fn(async () => undefined),
-  sql: vi.fn(async () => ({ rows: [] })),
+  sql: vi.fn(async (..._args: unknown[]) => ({ rows: [] as Record<string, unknown>[] })),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -41,9 +41,11 @@ import exploreVaultsHandler from '../_handlers/v1/explore/_vaults.ts'
 
 function lastSqlText(): string {
   expect(mocks.sql).toHaveBeenCalled()
-  const [strings] = mocks.sql.mock.calls[mocks.sql.mock.calls.length - 1] ?? []
+  const lastCall = mocks.sql.mock.calls.at(-1)
+  expect(lastCall).toBeTruthy()
+  const strings = lastCall?.[0]
   expect(Array.isArray(strings)).toBe(true)
-  return (strings as TemplateStringsArray).join(' ')
+  return (strings as unknown as TemplateStringsArray).join(' ')
 }
 
 describe('v1 explore vaults route registration', () => {

@@ -307,8 +307,16 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (spendCap.windowStart == 0) {
             spendCap.windowStart = uint64(block.timestamp);
             spendCap.spentInWindow = 0;
-        } else if (spendCap.spentInWindow > 0) {
-            spendCap.windowStart = uint64(block.timestamp);
+        } else {
+            // Apply idle-clear under current params before changing them. Otherwise a
+            // reconfigure after the idle window elapsed would re-anchor and resurrect
+            // stale `spentInWindow` against the new window.
+            if (spendCap.window > 0 && block.timestamp >= uint256(spendCap.windowStart) + uint256(spendCap.window)) {
+                spendCap.spentInWindow = 0;
+            }
+            if (spendCap.spentInWindow > 0) {
+                spendCap.windowStart = uint64(block.timestamp);
+            }
         }
         spendCap.cap = cap;
         spendCap.window = windowSeconds;

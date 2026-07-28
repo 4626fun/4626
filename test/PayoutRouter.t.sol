@@ -615,6 +615,29 @@ contract PayoutRouterTest is Test {
         router.convertAndQueue(address(usdc), 5e18, 1);
     }
 
+    function test_ODA520_L5_reconfigureAfterIdleDoesNotResurrectSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        uint64 window = 1 days;
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        // Idle window clears accrual on the next consume; reconfigure must not resurrect it.
+        vm.warp(block.timestamp + window);
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+    }
+
     function test_ODA520_L5_shorteningWindowDoesNotRefundSpend() public {
         address keeper = makeAddr("keeper");
         router.setKeeper(keeper);
