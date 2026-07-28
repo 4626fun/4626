@@ -3,12 +3,18 @@ import { getAddress } from "viem";
 
 import {
   getAlfaClubLiquidityDisabledReason,
+  isAlfaClubBaseAppDirectReady,
   parseSlippageBps,
   resolveAlfaClubSmartWalletClientPreference,
   type AlfaClubSudoswapSnapshot,
 } from "./AlfaClubLiquidity";
 
 const SENDER = getAddress("0x3000000000000000000000000000000000000003");
+const OTHER_SMART_WALLET = getAddress(
+  "0x4000000000000000000000000000000000000004",
+);
+const COINBASE_CONNECTOR = { id: "coinbaseWalletSDK", name: "Coinbase Wallet" };
+
 
 function snapshot(
   overrides: Partial<AlfaClubSudoswapSnapshot> = {},
@@ -67,6 +73,47 @@ function ready(overrides: Record<string, unknown> = {}) {
 }
 
 describe("AlfaClub SMART_WALLET client preference", () => {
+
+  it("requires both connected account surfaces to match the profile CSW", () => {
+    expect(
+      isAlfaClubBaseAppDirectReady({
+        connectedAddress: SENDER,
+        connectedWalletClientAddress: SENDER,
+        profileCanonicalCswAddress: SENDER,
+        connector: COINBASE_CONNECTOR,
+      }),
+    ).toBe(true);
+
+    expect(
+      isAlfaClubBaseAppDirectReady({
+        connectedAddress: OTHER_SMART_WALLET,
+        connectedWalletClientAddress: OTHER_SMART_WALLET,
+        profileCanonicalCswAddress: SENDER,
+        connector: COINBASE_CONNECTOR,
+      }),
+    ).toBe(false);
+
+    expect(
+      isAlfaClubBaseAppDirectReady({
+        connectedAddress: SENDER,
+        connectedWalletClientAddress: OTHER_SMART_WALLET,
+        profileCanonicalCswAddress: SENDER,
+        connector: COINBASE_CONNECTOR,
+      }),
+    ).toBe(false);
+  });
+
+  it("fails closed while the profile CSW is unavailable", () => {
+    expect(
+      isAlfaClubBaseAppDirectReady({
+        connectedAddress: SENDER,
+        connectedWalletClientAddress: SENDER,
+        profileCanonicalCswAddress: null,
+        connector: COINBASE_CONNECTOR,
+      }),
+    ).toBe(false);
+  });
+
   it("prefers Base App CSW-direct over a hydrated Privy embedded client", () => {
     expect(
       resolveAlfaClubSmartWalletClientPreference({
