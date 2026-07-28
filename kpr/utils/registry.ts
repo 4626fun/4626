@@ -30,8 +30,8 @@ interface RegistryVerificationResult {
 
 /// Registry4626 — canonical protocol registry (4626 suffix naming).
 /// Env: REGISTRY_4626 (preferred) or REGISTRY for deploy handoff scripts.
-/// Default matches docs/reference/addresses.md + frontend BASE_DEFAULTS (v1.19.1).
-const DEFAULT_REGISTRY_4626 = '0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2' as const;
+/// Default matches docs/reference/addresses.md + frontend BASE_DEFAULTS (v1.20.0).
+const DEFAULT_REGISTRY_4626 = '0xF60a1490C4129f2b6ae540734D3C2C8C6111824e' as const;
 const REGISTRY_4626_ABI = [
   {
     type: 'function',

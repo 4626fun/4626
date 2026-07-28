@@ -1,7 +1,8 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
+import { BASE_DEFAULTS } from '../../../src/config/contracts.defaults.js'
 
-/** Base mainnet Registry4626 — see docs/reference/addresses.md (v1.20.0-greenfield) */
-export const BASE_MAINNET_REGISTRY_4626 = '0xF60a1490C4129f2b6ae540734D3C2C8C6111824e' as const
+/** Base mainnet Registry4626 — see docs/reference/addresses.md (current greenfield). */
+export const BASE_MAINNET_REGISTRY_4626 = BASE_DEFAULTS.registry
 
 const REGISTRY_4626_ABI = [
   {
