@@ -89,12 +89,13 @@ artifact_path() {
       ;;
     CreatorOracleQuoteLib)
       # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; prefer unversioned then newest.
+      # Use version sort (`sort -V`): lex sort prefers 0.8.9 over 0.8.34 and wrong CREATE2 links.
       local dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
       if [[ -f "$dir/CreatorOracleQuoteLib.json" ]]; then
         printf "%s/CreatorOracleQuoteLib.json" "$dir"
       else
         local newest
-        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort | tail -1 || true)"
+        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort -V | tail -1 || true)"
         if [[ -z "$newest" ]]; then
           printf "%s/CreatorOracleQuoteLib.json" "$dir"
         else

@@ -64,6 +64,27 @@ def _load_bytecode_record(artifact_path: Path) -> dict:
     return {"bytecode": bytecode_obj, "artifact": full}
 
 
+def _versioned_artifact_sort_key(path: Path, lib_name: str) -> tuple:
+    """Sort key for `<Lib>.<solcVersion>[.<profile>].json` (numeric semver, not lex).
+
+    Lexicographic sort wrongly prefers `0.8.9` over `0.8.34`. Different solc builds of
+    the same library can yield different CREATE2 addresses — picking the wrong artifact
+    silently links consumers to an empty/wrong library address.
+    """
+    name = path.name
+    prefix = f"{lib_name}."
+    if not name.startswith(prefix) or not name.endswith(".json"):
+        return ()
+    mid = name[len(prefix) : -len(".json")]
+    key: list = []
+    for part in mid.split("."):
+        if part.isdigit():
+            key.append((0, int(part)))
+        else:
+            key.append((1, part))
+    return tuple(key)
+
+
 def _resolve_library_artifact(root: Path, source_path: str, lib_name: str) -> Path:
     """Map solc linkReference path → Foundry out/<file>/<Contract>.json."""
     # source_path like contracts/shared/lottery/manager/LotteryManager4626PricingLib.sol
@@ -74,12 +95,11 @@ def _resolve_library_artifact(root: Path, source_path: str, lib_name: str) -> Pa
         return candidate
 
     # Multi-solc / profile builds emit `<Contract>.<solcVersion>[.<profile>].json`
-    # without a bare `<Contract>.json` (e.g. CreatorOracleQuoteLib.0.8.34.json).
+    # without a bare `<Contract>.json` (e.g. CreatorOracleQuoteLib.0.8.35.json).
     if out_dir.is_dir():
         versioned = sorted(
-            p
-            for p in out_dir.glob(f"{lib_name}.*.json")
-            if p.is_file()
+            (p for p in out_dir.glob(f"{lib_name}.*.json") if p.is_file()),
+            key=lambda p: _versioned_artifact_sort_key(p, lib_name),
         )
         if versioned:
             return versioned[-1]
@@ -88,13 +108,17 @@ def _resolve_library_artifact(root: Path, source_path: str, lib_name: str) -> Pa
     matches = list((root / "out").rglob(f"{lib_name}.json"))
     if not matches:
         matches = sorted(
-            p
-            for p in (root / "out").rglob(f"{lib_name}.*.json")
-            if p.is_file() and p.name.startswith(f"{lib_name}.")
+            (
+                p
+                for p in (root / "out").rglob(f"{lib_name}.*.json")
+                if p.is_file() and p.name.startswith(f"{lib_name}.")
+            ),
+            key=lambda p: _versioned_artifact_sort_key(p, lib_name),
         )
     if len(matches) == 1:
         return matches[0]
     if matches:
+        # Prefer exact file stem match
         for m in matches:
             if m.parent.name == file_name:
                 return m
