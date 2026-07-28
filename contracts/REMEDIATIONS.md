@@ -26,3 +26,10 @@ Synced from private `main` `ab8d8c7fa69` (2026-07-28).
 - Live Base addresses are unchanged by publishing this pin; source for review, not a redeploy announcement.
 
 Historical July 22 (`423e0e3`), July 23 (`413f060`), and July 28 agent-lane (`0c47be2`) pins remain immutable.
+
+## 2026-07-28 strategies + creator revenue sync
+
+- Refreshed `CharmStrategy4626`, Ajna sleeve (`AjnaERC4626Vault`/`Auth`/`Buffer`/`Library`), `ERC4626StrategyAdapter` from private `d82efbad6d2`.
+- Added strategy interfaces (`IStrategy`, `IStrategyValuation`, `IAjnaPool`) + UniV3/TickMath deps.
+- Added `CreatorPayoutRouter` + `CreatorCoinPolicyController` (absent on agent-lane/oracles pins).
+- Bytecode vs live v1.20.0 seal: pin-ahead-of-live / DIFF for all of the above — source pin review, not live identity claim.
