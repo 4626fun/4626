@@ -1,6 +1,38 @@
 export const CHAT_OPEN_REQUEST_EVENT = '4626:chat-open-request'
 export const CHAT_TOGGLE_REQUEST_EVENT = '4626:chat-toggle-request'
 export const CHAT_NEW_DM_REQUEST_EVENT = '4626:chat-new-dm-request'
+export const CHAT_UNREAD_CHANGE_EVENT = '4626:chat-unread-change'
+
+type ChatUnreadListener = (count: number) => void
+
+let chatUnreadTotal = 0
+const chatUnreadListeners = new Set<ChatUnreadListener>()
+
+export function getChatUnreadTotal(): number {
+  return chatUnreadTotal
+}
+
+export function setChatUnreadTotal(count: number): void {
+  const next = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+  if (next === chatUnreadTotal) return
+  chatUnreadTotal = next
+  for (const listener of chatUnreadListeners) {
+    listener(chatUnreadTotal)
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<number>(CHAT_UNREAD_CHANGE_EVENT, { detail: chatUnreadTotal }),
+    )
+  }
+}
+
+export function subscribeChatUnreadTotal(listener: ChatUnreadListener): () => void {
+  chatUnreadListeners.add(listener)
+  listener(chatUnreadTotal)
+  return () => {
+    chatUnreadListeners.delete(listener)
+  }
+}
 
 export type ChatOpenRequest =
   | {
