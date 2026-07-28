@@ -80,6 +80,16 @@ function stripPathSuffix(name) {
   return idx === -1 ? name : name.slice(0, idx).trim()
 }
 
+/**
+ * Multi-solc builds (auto_detect_solc + exact-pinned import graphs) emit
+ * "<Contract>.<solcVersion>" artifact variants. The allowlist is per contract,
+ * not per toolchain, so normalize the suffix away before lookup. Contract
+ * identifiers cannot contain dots, so this only ever strips foundry's suffix.
+ */
+function allowlistKey(base) {
+  return base.replace(/\.0\.\d+\.\d+$/, '')
+}
+
 function main() {
   const args = parseArgs(process.argv)
   let text
@@ -132,7 +142,7 @@ function main() {
     const base = stripPathSuffix(name)
     if (runtime <= EIP170) continue
 
-    const maxAllowed = ALLOWLIST[base]
+    const maxAllowed = ALLOWLIST[allowlistKey(base)]
     if (maxAllowed === undefined) {
       hardFails.push(`${base}: runtime ${runtime} B > EIP-170 ${EIP170} B (not allowlisted)`)
       continue
