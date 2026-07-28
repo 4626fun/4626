@@ -80,8 +80,10 @@ Note in briefs: **#788 / ODA-480-[3] agent withdraw-cooldown parity**.
 | # | Title | When |
 |---|-------|------|
 | D | Creator vs Agent lane parity | Budget remains; focus intentional divergences |
-| E | Charm + Ajna | Only if live Charm sleeve / Ajna codeId drifted (`tmp/check-head-vs-live.py`) |
+| E | Charm + Ajna | **Commissioned job 519** on pin `audit/oda-2026-07-28-strategies-revenue` — do not re-pay |
 | F | CreatorGauge + ve4626/bribes | Only if material source drift vs 467/468 |
+
+**Also commissioned (2026-07-28):** CreatorPayoutRouter + CreatorCoinPolicyController — job **520** (same strategies-revenue pin).
 
 **P2 — skip by default:** re-pay Batcher / Registry / Lottery / Creator vault/ShareOFT if 494–498 still match live seal.
 

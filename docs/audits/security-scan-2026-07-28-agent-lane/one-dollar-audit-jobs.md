@@ -71,7 +71,9 @@ Creator + Agent paid canaries remain outstanding (`docs/reference/addresses.md`)
 
 ## Skipped (by design)
 
-- P1 D/E/F (parity / Charm+Ajna / CreatorGauge+ve) — not commissioned
+- P1 D (Creator↔Agent parity) / F (CreatorGauge+ve) — not commissioned
+- P1 E Charm+Ajna — commissioned as **519** (see below)
+- CreatorPayout + CoinPolicy — commissioned as **520** (see below)
 - P2 re-audit of Batcher/Registry/Lottery/Creator vault/ShareOFT (494–498) — not re-paid
 
 ## Poll cheat-sheet
@@ -104,3 +106,25 @@ for id in 510 511; do
   echo -n "$id "; curl -sL "https://www.onedollaraudit.com/api/jobs/$id" | jq -r .status
 done
 ```
+
+## Follow-on — Charm/Ajna + Creator revenue (2026-07-28)
+
+Paid from `0xB05Cf01231cF2fF99499682E64D3780d57c80FdD` via x402 ($1 USDC each).
+Pin: [`audit/oda-2026-07-28-strategies-revenue`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-strategies-revenue/contracts) (`f09a31a`).
+Live stack: v1.20.0 greenfield Registry `0xF60a1490C4129f2b6ae540734D3C2C8C6111824e` — per-creator CREATE2; implementation-only.
+Bytecode: pin-ahead-of-live vs v1.20.0 seal for all in-scope contracts.
+Do **not** re-pay to re-check.
+
+| System | Job ID | Track | Bytecode | Status |
+|--------|--------|-------|----------|--------|
+| Charm + Ajna (+ adapter) | 519 | https://onedollaraudit.com/audit/519 | pin-ahead-of-live | commissioned (prior 466/431 context) |
+| CreatorPayout + CoinPolicy | 520 | https://onedollaraudit.com/audit/520 | pin-ahead-of-live | commissioned |
+
+**Spend:** $2.00 USDC. JSON: [oda-commission-strategies-revenue.json](./oda-commission-strategies-revenue.json).
+
+```bash
+for id in 519 520; do
+  echo -n "$id "; curl -sL "https://www.onedollaraudit.com/api/jobs/$id" | jq -r .status
+done
+```
+

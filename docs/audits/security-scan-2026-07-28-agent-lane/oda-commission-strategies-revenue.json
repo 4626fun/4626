@@ -1,0 +1,67 @@
+{
+  "commissionedAt": "2026-07-28T15:19:22Z",
+  "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "amountUsdcEach": 1,
+  "spendUsdc": 2.0,
+  "publicRepo": "4626fun/4626",
+  "publicTag": "audit/oda-2026-07-28-strategies-revenue",
+  "publicSha": "f09a31ad09fbe6e0c7833bce7b61b8743a2b6293",
+  "publicPinUrl": "https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-strategies-revenue/contracts",
+  "liveStackLabel": "v1.20.0 greenfield infra (Registry 0xF60a1490\u2026); strategies/revenue are per-creator CREATE2 \u2014 implementation-only source review",
+  "context": "P1 while agent-lane 508/509 still in_progress. Synced Ajna refresh + CreatorPayout/CoinPolicy (+ strategy interfaces) onto public pin. Do not re-pay 466/431. Do not re-pay to poll.",
+  "bytecodeCheckNote": "forge inspect creation bytecode keccak vs deployments/base/v1.20.0-bytecode-manifest.json codeId \u2014 all DIFF / pin-ahead-of-live.",
+  "jobs": [
+    {
+      "id": "charm_ajna",
+      "title": "Charm + Ajna (+ ERC4626StrategyAdapter)",
+      "ok": true,
+      "jobId": 519,
+      "jobUrl": "https://onedollaraudit.com/audit/519",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/519",
+      "estimatedCompletionSeconds": 3600,
+      "files": [
+        "contracts/shared/strategies/univ3/CharmStrategy4626.sol",
+        "contracts/shared/strategies/ajna/AjnaERC4626Vault.sol",
+        "contracts/shared/strategies/ajna/AjnaVaultAuth.sol",
+        "contracts/shared/strategies/ajna/AjnaVaultBuffer.sol",
+        "contracts/shared/strategies/ajna/AjnaVaultLibrary.sol",
+        "contracts/shared/strategies/ERC4626StrategyAdapter.sol",
+        "contracts/shared/interfaces/strategies/IStrategy.sol",
+        "contracts/shared/interfaces/strategies/IStrategyValuation.sol",
+        "contracts/shared/interfaces/external/IAjnaPool.sol"
+      ],
+      "liveAddresses": {
+        "note": "Per-vault CREATE2 at launch \u2014 implementation-only",
+        "Registry4626": "0xF60a1490C4129f2b6ae540734D3C2C8C6111824e"
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "priorJobsContextOnly": [
+        466,
+        431
+      ],
+      "knownResiduals": [
+        "Charm sandwich DESIGN residual"
+      ]
+    },
+    {
+      "id": "creator_revenue",
+      "title": "CreatorPayoutRouter + CreatorCoinPolicyController",
+      "ok": true,
+      "jobId": 520,
+      "jobUrl": "https://onedollaraudit.com/audit/520",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/520",
+      "estimatedCompletionSeconds": 3600,
+      "files": [
+        "contracts/creator/revenue/CreatorPayoutRouter.sol",
+        "contracts/creator/revenue/CreatorCoinPolicyController.sol"
+      ],
+      "liveAddresses": {
+        "note": "Per-creator CREATE2 at launch \u2014 implementation-only",
+        "Registry4626": "0xF60a1490C4129f2b6ae540734D3C2C8C6111824e"
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "priorJobsContextOnly": []
+    }
+  ],
+  "note": "Do not re-pay to re-check. No broadcast/redeploy."
+}
