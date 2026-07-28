@@ -623,7 +623,33 @@ contract PayoutRouterTest is Test {
         router.convertAndQueue(address(usdc), 1e18, 1);
     }
 
-    function test_ODA520_L5_decayingWindowPreventsBoundaryDoubleSpend() public {
+    function test_ODA520_L5_idleWindowPreventsBoundaryDoubleSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        uint64 window = 1 days;
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+        uint256 spentAt = block.timestamp;
+
+        vm.warp(spentAt + window - 1);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        vm.warp(spentAt + window);
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+    }
+
+    function test_ODA520_L5_idleWindowBlocksHalfWindowRefill() public {
         address keeper = makeAddr("keeper");
         router.setKeeper(keeper);
         uint64 window = 1 days;
@@ -638,17 +664,57 @@ contract PayoutRouterTest is Test {
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
 
-        // One second before a hard-boundary reset would have fired under the old logic,
-        // decaying window still has nearly-full accrued spend — no 2× burst.
-        vm.warp(block.timestamp + window - 1);
+        vm.warp(block.timestamp + window / 2);
         vm.prank(keeper);
         vm.expectRevert();
-        router.convertAndQueue(address(usdc), 10e18, 1);
+        router.convertAndQueue(address(usdc), 5e18, 1);
+    }
 
-        // After a full window of decay, the full cap is available again.
-        vm.warp(block.timestamp + 1);
+    function test_ODA520_L5_reconfigureAfterIdleDoesNotResurrectSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        uint64 window = 1 days;
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
         vm.prank(keeper);
         router.convertAndQueue(address(usdc), 10e18, 1);
+
+        vm.warp(block.timestamp + window);
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+    }
+
+    function test_ODA520_L5_shorteningWindowDoesNotRefundSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 days);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 hours);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 1e18, 1);
+
+        vm.warp(block.timestamp + 1 hours - 1);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 1e18, 1);
     }
 
     function test_ODA520_setSwapPathRejectsMalformedHopLength() public {

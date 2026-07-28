@@ -3880,6 +3880,57 @@ function DeployVaultBatcher({
         return out
       })()
 
+      // ODA-520-H1: keeper conversions fail closed without caps — configure before setKeeper.
+      const payoutRouterSetKeeperSpendCapCalls: Array<{ target: Address; value: bigint; data: Hex }> =
+        senderCanAdminPayoutRouter && expectedPayoutRouter && creatorToken
+          ? await (async () => {
+              const windowSeconds = 86_400n
+              const desired: Array<{ tokenIn: Address; cap: bigint }> = [
+                { tokenIn: getAddress(creatorToken as Address), cap: 1_000_000n * 10n ** 18n },
+              ]
+              const seen = new Set(desired.map((e) => e.tokenIn.toLowerCase()))
+              for (const { tokenIn, label } of payoutRouterDesiredSwapPaths) {
+                const key = tokenIn.toLowerCase()
+                if (seen.has(key)) continue
+                seen.add(key)
+                let cap = 1_000_000n * 10n ** 18n
+                if (key === weth.toLowerCase() || label === 'WETH') cap = 50n * 10n ** 18n
+                else if (key === usdc.toLowerCase() || label === 'USDC') cap = 250_000n * 10n ** 6n
+                else if (
+                  (payoutRouterZoraToken && key === payoutRouterZoraToken.toLowerCase()) ||
+                  label === 'ZORA'
+                ) {
+                  cap = 10_000_000n * 10n ** 18n
+                }
+                desired.push({ tokenIn, cap })
+              }
+              const out: Array<{ target: Address; value: bigint; data: Hex }> = []
+              for (const entry of desired) {
+                try {
+                  const raw = (await publicClient.readContract({
+                    address: expectedPayoutRouter,
+                    abi: PAYOUT_ROUTER_ADMIN_ABI,
+                    functionName: 'keeperExternalSpendCaps',
+                    args: [entry.tokenIn],
+                  })) as readonly [bigint, bigint, bigint, bigint]
+                  if (BigInt(raw[0] ?? 0n) === entry.cap && BigInt(raw[1] ?? 0n) === windowSeconds) continue
+                } catch {
+                  // Router may not expose the getter on older bytecode; still attempt set.
+                }
+                out.push({
+                  target: expectedPayoutRouter,
+                  value: 0n,
+                  data: encodeFunctionData({
+                    abi: PAYOUT_ROUTER_ADMIN_ABI,
+                    functionName: 'setKeeperExternalSpendCap',
+                    args: [entry.tokenIn, entry.cap, Number(windowSeconds)],
+                  }),
+                })
+              }
+              return out
+            })()
+          : []
+
       const payoutRouterSetKeeperCall =
         senderCanAdminPayoutRouter &&
         payoutRouterKeeperAddress &&
@@ -5127,6 +5178,9 @@ function DeployVaultBatcher({
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
         if (!payoutRouterQueuerAlreadyAuthorized) phase2Calls.push(vaultAuthorizeBurnStreamQueuerCall)
+        if (payoutRouterSetKeeperSpendCapCalls.length > 0) {
+          phase2Calls.push(...payoutRouterSetKeeperSpendCapCalls)
+        }
         if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
         if (payoutRouterSetExternalSwapTargetApprovalCalls.length > 0) {
           phase2Calls.push(...payoutRouterSetExternalSwapTargetApprovalCalls)

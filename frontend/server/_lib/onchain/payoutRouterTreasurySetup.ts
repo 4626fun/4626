@@ -2,7 +2,10 @@ import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } fro
 import {
   resolvePayoutRouterExternalSwapApprovals,
   resolvePayoutRouterKeeperAddress,
+  resolvePayoutRouterKeeperSpendCaps,
+  resolvePayoutRouterZoraToken,
 } from './payoutRouterRuntime.js'
+import { resolveDefaultUsdcToken, resolveDefaultWethToken } from './payoutRouterHarvestTokens.js'
 import { resolvePayoutRouterSwapPaths } from './payoutRouterSwapPaths.js'
 import {
   executeBatchViaProtocolTreasurySafe,
@@ -119,6 +122,29 @@ const PAYOUT_ROUTER_ADMIN_ABI = [
     stateMutability: 'nonpayable',
     inputs: [{ name: 'keeper', type: 'address' }],
     outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setKeeperExternalSpendCap',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'cap', type: 'uint256' },
+      { name: 'windowSeconds', type: 'uint64' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'keeperExternalSpendCaps',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenIn', type: 'address' }],
+    outputs: [
+      { name: 'cap', type: 'uint256' },
+      { name: 'window', type: 'uint64' },
+      { name: 'windowStart', type: 'uint64' },
+      { name: 'spentInWindow', type: 'uint256' },
+    ],
   },
   {
     type: 'function',
@@ -295,6 +321,47 @@ export async function buildPayoutRouterTreasurySetupPlan(params: {
       calls,
       skipReason: 'owner_not_protocol_treasury',
     }
+  }
+
+  // ODA-520-H1: configure per-token keeper spend caps before enabling the keeper.
+  const spendCaps = resolvePayoutRouterKeeperSpendCaps({
+    creatorToken,
+    pathTokens: swapPaths.map(({ tokenIn, label }) => ({ tokenIn, label })),
+    weth: resolveDefaultWethToken(),
+    usdc: resolveDefaultUsdcToken(),
+    zora: resolvePayoutRouterZoraToken(),
+  })
+  for (const entry of spendCaps) {
+    let currentCap = 0n
+    let currentWindow = 0n
+    try {
+      const raw = (await params.publicClient.readContract({
+        address: payoutRouter,
+        abi: PAYOUT_ROUTER_ADMIN_ABI,
+        functionName: 'keeperExternalSpendCaps',
+        args: [entry.tokenIn],
+      })) as { cap?: bigint; window?: bigint } | readonly [bigint, bigint, bigint, bigint]
+      if (Array.isArray(raw)) {
+        currentCap = BigInt(raw[0] ?? 0n)
+        currentWindow = BigInt(raw[1] ?? 0n)
+      } else {
+        currentCap = BigInt(raw?.cap ?? 0n)
+        currentWindow = BigInt(raw?.window ?? 0n)
+      }
+    } catch {
+      currentCap = 0n
+      currentWindow = 0n
+    }
+    if (currentCap === entry.cap && currentWindow === BigInt(entry.windowSeconds)) continue
+    calls.push({
+      to: payoutRouter,
+      label: `setKeeperExternalSpendCap:${entry.label}`,
+      data: encodeFunctionData({
+        abi: PAYOUT_ROUTER_ADMIN_ABI,
+        functionName: 'setKeeperExternalSpendCap',
+        args: [entry.tokenIn, entry.cap, entry.windowSeconds],
+      }),
+    })
   }
 
   if (desiredKeeper && currentKeeper.toLowerCase() !== desiredKeeper.toLowerCase()) {

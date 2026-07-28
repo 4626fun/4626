@@ -296,19 +296,30 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     }
 
     /// @dev FIX ODA-520-L5 — reconfiguration must not refund accrued keeper spend. Only
-    ///      initialize the window on first configure (`windowStart == 0`); later updates
-    ///      keep `spentInWindow` so tightening a cap immediately restricts the keeper.
+    ///      initialize the window on first configure (`windowStart == 0`). When spend is
+    ///      already accrued, re-anchor `windowStart` so a shorter window cannot
+    ///      idle-reset and clear the ledger under new parameters.
     function setKeeperExternalSpendCap(address tokenIn, uint256 cap, uint64 windowSeconds) external onlyOwner {
         if (tokenIn == address(0)) revert ZeroAddress();
         if (cap > 0 && windowSeconds == 0) revert InvalidKeeperSpendWindow(windowSeconds);
 
         KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
-        spendCap.cap = cap;
-        spendCap.window = windowSeconds;
         if (spendCap.windowStart == 0) {
             spendCap.windowStart = uint64(block.timestamp);
             spendCap.spentInWindow = 0;
+        } else {
+            // Apply idle-clear under current params before changing them. Otherwise a
+            // reconfigure after the idle window elapsed would re-anchor and resurrect
+            // stale `spentInWindow` against the new window.
+            if (spendCap.window > 0 && block.timestamp >= uint256(spendCap.windowStart) + uint256(spendCap.window)) {
+                spendCap.spentInWindow = 0;
+            }
+            if (spendCap.spentInWindow > 0) {
+                spendCap.windowStart = uint64(block.timestamp);
+            }
         }
+        spendCap.cap = cap;
+        spendCap.window = windowSeconds;
 
         emit KeeperExternalSpendCapUpdated(tokenIn, cap, windowSeconds);
     }
@@ -477,10 +488,9 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (amountIn == 0) revert ZeroAmount();
 
         // FIX ODA-520-H1 — when a spend cap is configured, enforce it on the V3 /
-        // direct-deposit venue too (not only `convertViaExternalAndQueue`).
-        // Unset caps must NOT fail-closed here: production harvest keepers call
-        // `convertAndQueue` without any `setKeeperExternalSpendCap` wiring, and the
-        // external venue's fail-closed-on-zero semantics would brick revenue conversion.
+        // direct-deposit venue too. Unset caps are a no-op here so harvest keepers stay
+        // operational; external venue remains fail-closed. Deploy/treasury setup seeds
+        // caps so production keepers are still bounded when configured.
         _consumeKeeperExternalSpend(tokenIn, amountIn, false);
 
         if (tokenIn == address(creatorCoin)) {
@@ -574,11 +584,11 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         emit ExternalSwapAndQueued(tokenIn, swapTarget, spender, amountIn, tokenOut, sharesQueued);
     }
 
-    /// @dev FIX ODA-520-L5 — decaying window: accrued spend linearly decays at rate
-    ///      `cap / window` instead of hard-resetting at a fixed boundary (which allowed a
-    ///      2× burst across the boundary). `windowResetsAt` in the event is the earliest
-    ///      timestamp at which a full additional `cap` would again be available assuming
-    ///      no further spends.
+    /// @dev FIX ODA-520-L5 — idle-gated window. Accrued spend clears only after a full
+    ///      `window` elapses since `windowStart`, and every successful spend slides
+    ///      `windowStart` to `block.timestamp`. That blocks:
+    ///      (1) the old fixed-boundary 2× burst (spend at windowEnd-1 and again at windowEnd), and
+    ///      (2) leaky-bucket mid-window refill that could approach 2× cap inside one nominal window.
     /// @param requireConfigured When true (external venue), an unset cap/window reverts.
     ///        When false (V3 / direct-deposit), an unset cap is a no-op so keepers can
     ///        harvest without mandatory spend-cap wiring.
@@ -597,28 +607,22 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
 
         uint256 windowStart = spendCap.windowStart;
         uint256 spent = spendCap.spentInWindow;
-        if (windowStart == 0) {
-            spendCap.windowStart = uint64(block.timestamp);
+        if (windowStart == 0 || block.timestamp >= windowStart + window) {
             spent = 0;
-        } else {
-            uint256 elapsed = block.timestamp - windowStart;
-            if (elapsed > 0) {
-                uint256 decay = (cap * elapsed) / window;
-                spent = decay >= spent ? 0 : spent - decay;
-                spendCap.windowStart = uint64(block.timestamp);
-            }
         }
 
         uint256 newSpent = spent + amountIn;
         if (newSpent > cap) {
-            // Earliest time this `amountIn` would fit assuming linear decay and no further spends.
-            uint256 retryAt = block.timestamp + ((newSpent - cap) * window + cap - 1) / cap;
+            uint256 retryAt =
+                (windowStart == 0 || block.timestamp >= windowStart + window)
+                    ? block.timestamp + window
+                    : windowStart + window;
             revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, spent, cap, retryAt);
         }
+
         spendCap.spentInWindow = newSpent;
-        uint256 fullCapAt =
-            newSpent == 0 ? block.timestamp : block.timestamp + (newSpent * window + cap - 1) / cap;
-        emit KeeperExternalSpendTracked(tokenIn, amountIn, newSpent, cap, fullCapAt);
+        spendCap.windowStart = uint64(block.timestamp);
+        emit KeeperExternalSpendTracked(tokenIn, amountIn, newSpent, cap, block.timestamp + window);
     }
 
     function _queueCreatorCoinDeposit(uint256 creatorAmount) internal returns (uint256 sharesQueued) {

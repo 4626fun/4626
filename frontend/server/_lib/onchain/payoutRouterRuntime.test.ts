@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import {
+  resolvePayoutRouterExternalSwapApprovals,
   resolvePayoutRouterKeeperAddress,
   resolvePayoutRouterKeeperPrivateKey,
+  resolvePayoutRouterKeeperSpendCaps,
 } from './payoutRouterRuntime.js'
 
 const TEST_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'
@@ -55,6 +57,32 @@ describe('resolvePayoutRouterKeeperAddress', () => {
     process.env.KPR_PRIVATE_KEY = TEST_PK
     process.env.PAYOUT_ROUTER_KEEPER = OTHER_ADDRESS
     expect(resolvePayoutRouterKeeperAddress()?.toLowerCase()).toBe(OTHER_ADDRESS.toLowerCase())
+  })
+})
+
+describe('resolvePayoutRouterExternalSwapApprovals', () => {
+  it('does not default-approve the canonical Uniswap swapRouter (ODA-520-H2)', () => {
+    const approvals = resolvePayoutRouterExternalSwapApprovals()
+    expect(approvals.targets).toEqual([])
+    expect(approvals.spenders.map((a) => a.toLowerCase())).toEqual([
+      '0x000000000022d473030f116ddee9f6b43ac78ba3',
+    ])
+  })
+})
+
+describe('resolvePayoutRouterKeeperSpendCaps', () => {
+  it('includes creator + path tokens with positive caps before keeper enablement', () => {
+    const creator = '0x1111111111111111111111111111111111111111' as const
+    const weth = '0x4200000000000000000000000000000000000006' as const
+    const caps = resolvePayoutRouterKeeperSpendCaps({
+      creatorToken: creator,
+      pathTokens: [{ tokenIn: weth, label: 'WETH' }],
+      weth,
+      env: {},
+    })
+    expect(caps.some((c) => c.tokenIn.toLowerCase() === creator.toLowerCase() && c.cap > 0n)).toBe(true)
+    expect(caps.some((c) => c.tokenIn.toLowerCase() === weth.toLowerCase() && c.cap > 0n)).toBe(true)
+    expect(caps.every((c) => c.windowSeconds === 86_400)).toBe(true)
   })
 })
 
