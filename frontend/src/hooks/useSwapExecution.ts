@@ -51,7 +51,13 @@ import {
 import { refreshWalletClientSession } from '@/lib/wallet/refreshWalletClientSession'
 import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
-import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
+import {
+  areEquivalentSwapTokens,
+  BASE_CHAIN_ID,
+  getNestedAmountOut,
+  NATIVE_TOKEN_ADDRESS,
+  type TokenDisplay,
+} from '@/lib/uniswap/swapUtils'
 import { isAllowedCanonicalSigner, isCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
 import type { components } from '@/lib/uniswap/generated/tradeApi'
 import {
@@ -111,6 +117,11 @@ export type SwapCompletion = {
   amountInUnits: string
   estimatedOut: string
   completedAt: number
+  /** Chain the swap was submitted on — receipt polling must stay bound to this. */
+  chainId: number
+  /** Frozen sell/buy identities so form edits cannot relabel the notice. */
+  tokenIn: TokenDisplay
+  tokenOut: TokenDisplay
   /** Set when UserOp / receipt confirmation polling timed out without a terminal outcome. */
   confirmationTimedOut?: boolean
 }
@@ -787,6 +798,9 @@ export function useSwapExecution(params: {
   expectedSessionAddress?: string | null
   tokenIn: string
   tokenOut: string
+  /** Display snapshot used when a completion notice is created. */
+  tokenInDisplay: TokenDisplay
+  tokenOutDisplay: TokenDisplay
   amountInUnits: string
   parsedSlippage: number
   slippageAuto?: boolean
@@ -2838,6 +2852,19 @@ export function useSwapExecution(params: {
         amountInUnits: params.amountInUnits,
         estimatedOut,
         completedAt: Date.now(),
+        chainId: Number(params.chainId ?? BASE_CHAIN_ID),
+        tokenIn: {
+          symbol: params.tokenInDisplay.symbol,
+          name: params.tokenInDisplay.name,
+          logoUrl: params.tokenInDisplay.logoUrl,
+          logoUrls: params.tokenInDisplay.logoUrls,
+        },
+        tokenOut: {
+          symbol: params.tokenOutDisplay.symbol,
+          name: params.tokenOutDisplay.name,
+          logoUrl: params.tokenOutDisplay.logoUrl,
+          logoUrls: params.tokenOutDisplay.logoUrls,
+        },
       })
       const activityWallet =
         params.executionAddress ?? params.canonicalAddress ?? params.address ?? null
@@ -2932,6 +2959,9 @@ export function useSwapExecution(params: {
     params.amountInUnits,
     params.tokenIn,
     params.tokenOut,
+    params.tokenInDisplay,
+    params.tokenOutDisplay,
+    params.chainId,
     params.ensureCanonicalSession,
     params.hasSession,
     params.signerAddress,

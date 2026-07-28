@@ -828,6 +828,8 @@ export function Swap() {
     expectedSessionAddress: executionMode === 'canonical' ? (privyEmbeddedEoaAddress ?? executionSignerAddress) : executionSignerAddress,
     tokenIn,
     tokenOut,
+    tokenInDisplay,
+    tokenOutDisplay,
     amountInUnits,
     parsedSlippage,
     slippageAuto,
@@ -944,6 +946,9 @@ export function Swap() {
     swapCompletion != null && swapCompletionSettlement === 'confirmed'
   const swapExecutionLocked =
     swapCompletion != null && isSwapExecutionLocked(swapCompletionSettlement)
+  // Receipt / balance confirmation must follow the submitted chain, not the editable form chain.
+  const settlementChainId = (swapCompletion?.chainId ?? swapChainId) as SupportedChainId
+  const settlementPublicClient = usePublicClient({ chainId: settlementChainId })
   const handleClearSwapCompletion = useCallback(() => {
     const canResetCompletedTrade = shouldResetSwapFormAfterCompletionDismiss({
       swapCompletionConfirmed,
@@ -989,10 +994,10 @@ export function Swap() {
     void tokenOutBalanceQuery.refetch()
     void tokenInBalanceQuery.refetch()
 
-    if (!publicClient || balanceConfirmationTxHashRef.current === txHash) return
+    if (!settlementPublicClient || balanceConfirmationTxHashRef.current === txHash) return
     balanceConfirmationTxHashRef.current = txHash
     let cancelled = false
-    void publicClient
+    void settlementPublicClient
       .waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
       .catch(() => null)
       .then(() => {
@@ -1004,19 +1009,25 @@ export function Swap() {
     return () => {
       cancelled = true
     }
-  }, [publicClient, queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
+  }, [
+    queryClient,
+    settlementPublicClient,
+    swapCompletion?.txHash,
+    tokenInBalanceQuery,
+    tokenOutBalanceQuery,
+  ])
 
   // Classify the receipt before arming dismissal. viem resolves reverted receipts,
   // and a successful cancellation replacement is not a successful swap.
   useEffect(() => {
     const txHash = swapCompletion?.txHash
-    if (!txHash || !isHex(txHash) || !publicClient) return
+    if (!txHash || !isHex(txHash) || !settlementPublicClient) return
     const completedAt = swapCompletion.completedAt
     if (swapCompletionReceipt?.completedAt === completedAt) return
 
     let active = true
     let replacementReason: string | null = null
-    void publicClient
+    void settlementPublicClient
       .waitForTransactionReceipt({
         hash: txHash,
         timeout: 60_000,
@@ -1047,8 +1058,8 @@ export function Swap() {
     }
   }, [
     markSwapCompletionConfirmationTimedOut,
-    publicClient,
     setStatus,
+    settlementPublicClient,
     swapCompletion?.completedAt,
     swapCompletion?.txHash,
     swapCompletionReceipt?.completedAt,

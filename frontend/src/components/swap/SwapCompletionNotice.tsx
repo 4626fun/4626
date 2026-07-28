@@ -46,7 +46,10 @@ function formatSwapAmount(rawAmount: string): string {
 }
 
 export function SwapCompletionNotice(props: SwapCompletionNoticeProps) {
-  const { completion, tokenIn, tokenOut, settlement, onDismiss } = props
+  const { completion, settlement, onDismiss } = props
+  // Prefer identities frozen at submit time so later form edits cannot relabel the trade.
+  const tokenIn = completion.tokenIn ?? props.tokenIn
+  const tokenOut = completion.tokenOut ?? props.tokenOut
   const [open, setOpen] = useState(true)
   const explorerHash = completion.txHash ?? completion.userOpHash ?? null
   const shortHash = explorerHash
