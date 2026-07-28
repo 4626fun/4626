@@ -7,6 +7,8 @@ import {
   encodeMinimalNativeEthFundingExecute,
   encodeMinimalWethFundingExecute,
   encodeNativeEthFundingWithPermit2Pull,
+  encodeWethFundingViaRouterThenSweep,
+  encodeWethFundingWithDivertedV3Recipient,
   encodeWethFundingWithV4SettlePull,
 } from './zoraFundingExecuteFixtures'
 
@@ -169,6 +171,41 @@ describe('assertZoraFundingExecute', () => {
         mode: 'wethPermit2',
       }),
     ).toThrow(/execution wallet/i)
+  })
+
+  it('rejects V3 creator delivery to a third party even when SWEEP targets the sender', () => {
+    const data = encodeWethFundingWithDivertedV3Recipient({
+      inputAmount: 1_000_000_000_000_000n,
+      amountOutMinimum: 250n,
+      v3Recipient: OTHER,
+    })
+    expect(() =>
+      assertZoraFundingExecute({
+        data,
+        sender: SENDER,
+        creatorCoin: CREATOR,
+        inputAmount: 1_000_000_000_000_000n,
+        mode: 'wethPermit2',
+        minOutputAmount: 200n,
+      }),
+    ).toThrow(/V3 recipient must be the execution wallet or router/i)
+  })
+
+  it('accepts V3 delivery to the router followed by SWEEP to the sender', () => {
+    const data = encodeWethFundingViaRouterThenSweep({
+      inputAmount: 1_000_000_000_000_000n,
+      amountOutMinimum: 250n,
+    })
+    expect(
+      assertZoraFundingExecute({
+        data,
+        sender: SENDER,
+        creatorCoin: CREATOR,
+        inputAmount: 1_000_000_000_000_000n,
+        mode: 'wethPermit2',
+        minOutputAmount: 200n,
+      }).amountOutMinimum,
+    ).toBe(250n)
   })
 
   it('accepts native ETH wrap funding', () => {

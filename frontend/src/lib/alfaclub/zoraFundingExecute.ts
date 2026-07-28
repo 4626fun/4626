@@ -317,9 +317,20 @@ export function assertZoraFundingExecute(
       if (payerIsUser) {
         throw new Error('ETH funding must not pull V3 input from the user')
       }
+      // Creator output (or any V3 output) must stay on the router / execution wallet.
+      // A third-party V3 recipient plus SWEEP(creator, sender, amountMin=0) previously
+      // satisfied delivery checks while sending the swap proceeds to an attacker.
+      const v3Recipient = getAddress(recipient)
+      if (
+        !isSenderRecipient(v3Recipient, sender) &&
+        v3Recipient !== ADDRESS_THIS &&
+        v3Recipient !== ZORA_BASE_UNIVERSAL_ROUTER
+      ) {
+        throw new Error('ETH funding V3 recipient must be the execution wallet or router')
+      }
       if (pathEnd === creatorCoin) {
         amountOutMinimum = amountOutMinimum > amountOutMin ? amountOutMinimum : amountOutMin
-        if (isSenderRecipient(getAddress(recipient), sender)) {
+        if (isSenderRecipient(v3Recipient, sender)) {
           creatorDeliveredToSender = true
         }
       }

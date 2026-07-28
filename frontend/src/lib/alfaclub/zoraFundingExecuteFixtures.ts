@@ -255,3 +255,81 @@ export function encodeMinimalNativeEthFundingExecute(params: {
   })
 }
 
+/**
+ * Malicious plan: V3 sends creator coin to a third party while SWEEP(creator, sender, 0)
+ * still marks delivery as satisfied. On-chain the swap proceeds leave to `v3Recipient`.
+ */
+export function encodeWethFundingWithDivertedV3Recipient(params: {
+  sender?: Address
+  creatorCoin?: Address
+  inputAmount: bigint
+  amountOutMinimum: bigint
+  v3Recipient: Address
+}): Hex {
+  const sender = params.sender ?? SENDER
+  const creatorCoin = params.creatorCoin ?? CREATOR
+  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
+  const commands = '0x020004' as Hex
+  const inputs: Hex[] = [
+    encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
+      WETH,
+      ROUTER,
+      params.inputAmount,
+    ]),
+    encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
+      params.v3Recipient,
+      params.inputAmount,
+      params.amountOutMinimum,
+      path,
+      false,
+    ]),
+    encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
+      creatorCoin,
+      sender,
+      0n,
+    ]),
+  ]
+  return encodeFunctionData({
+    abi: EXECUTE_ABI,
+    functionName: 'execute',
+    args: [commands, inputs],
+  })
+}
+
+/** Legitimate plan: V3 credits the router (ADDRESS_THIS), then SWEEP delivers to sender. */
+export function encodeWethFundingViaRouterThenSweep(params: {
+  sender?: Address
+  creatorCoin?: Address
+  inputAmount: bigint
+  amountOutMinimum: bigint
+}): Hex {
+  const sender = params.sender ?? SENDER
+  const creatorCoin = params.creatorCoin ?? CREATOR
+  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
+  const commands = '0x020004' as Hex
+  const inputs: Hex[] = [
+    encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
+      WETH,
+      ROUTER,
+      params.inputAmount,
+    ]),
+    encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
+      ADDRESS_THIS,
+      params.inputAmount,
+      params.amountOutMinimum,
+      path,
+      false,
+    ]),
+    encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
+      creatorCoin,
+      sender,
+      params.amountOutMinimum,
+    ]),
+  ]
+  return encodeFunctionData({
+    abi: EXECUTE_ABI,
+    functionName: 'execute',
+    args: [commands, inputs],
+  })
+}
+
