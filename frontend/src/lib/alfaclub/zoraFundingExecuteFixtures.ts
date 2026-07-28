@@ -24,6 +24,8 @@ export function encodeMinimalWethFundingExecute(params: {
   amountOutMinimum: bigint
   recipient?: Address
   transferToken?: Address
+  /** Test-only: real funding plans must keep this false after Permit2 transfer. */
+  payerIsUser?: boolean
 }): Hex {
   const sender = params.sender ?? SENDER
   const creatorCoin = params.creatorCoin ?? CREATOR
@@ -42,13 +44,99 @@ export function encodeMinimalWethFundingExecute(params: {
       params.inputAmount,
       params.amountOutMinimum,
       path,
-      true,
+      // Consume WETH already pulled onto the router via Permit2 — never re-pull from user.
+      params.payerIsUser ?? false,
     ]),
     encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
       creatorCoin,
       recipient,
       0n,
     ]),
+  ]
+  return encodeFunctionData({
+    abi: EXECUTE_ABI,
+    functionName: 'execute',
+    args: [commands, inputs],
+  })
+}
+
+/** Malicious V4 plan: valid WETH→creator delivery plus SETTLE(token, amount, payerIsUser). */
+export function encodeWethFundingWithV4SettlePull(params: {
+  sender?: Address
+  creatorCoin?: Address
+  inputAmount: bigint
+  amountOutMinimum: bigint
+  settleToken: Address
+  settleAmount: bigint
+  settlePayerIsUser: boolean
+}): Hex {
+  const sender = params.sender ?? SENDER
+  const creatorCoin = params.creatorCoin ?? CREATOR
+  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
+  const v4Actions = encodePacked(
+    ['uint8', 'uint8', 'uint8'],
+    [0x06, 0x0b, 0x0e], // SWAP_EXACT_IN_SINGLE, SETTLE, TAKE
+  )
+  const zeroForOne = WETH.toLowerCase() < creatorCoin.toLowerCase()
+  const v4Params: Hex[] = [
+    encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            {
+              name: 'poolKey',
+              type: 'tuple',
+              components: [
+                { name: 'currency0', type: 'address' },
+                { name: 'currency1', type: 'address' },
+                { name: 'fee', type: 'uint24' },
+                { name: 'tickSpacing', type: 'int24' },
+                { name: 'hooks', type: 'address' },
+              ],
+            },
+            { name: 'zeroForOne', type: 'bool' },
+            { name: 'amountIn', type: 'uint128' },
+            { name: 'amountOutMinimum', type: 'uint128' },
+            { name: 'hookData', type: 'bytes' },
+          ],
+        },
+      ],
+      [
+        {
+          poolKey: {
+            currency0: zeroForOne ? WETH : creatorCoin,
+            currency1: zeroForOne ? creatorCoin : WETH,
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: '0x0000000000000000000000000000000000000000',
+          },
+          zeroForOne,
+          amountIn: params.inputAmount,
+          amountOutMinimum: params.amountOutMinimum,
+          hookData: '0x',
+        },
+      ],
+    ),
+    encodeAbiParameters(parseAbiParameters('address,uint256,bool'), [
+      params.settleToken,
+      params.settleAmount,
+      params.settlePayerIsUser,
+    ]),
+    encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
+      creatorCoin,
+      sender,
+      params.amountOutMinimum,
+    ]),
+  ]
+  const commands = '0x0210' as Hex // PERMIT2_TRANSFER_FROM + V4_SWAP
+  const inputs: Hex[] = [
+    encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
+      WETH,
+      ROUTER,
+      params.inputAmount,
+    ]),
+    encodeAbiParameters(parseAbiParameters('bytes,bytes[]'), [v4Actions, v4Params]),
   ]
   return encodeFunctionData({
     abi: EXECUTE_ABI,

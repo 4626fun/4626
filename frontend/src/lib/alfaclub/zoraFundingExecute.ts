@@ -42,21 +42,31 @@ const ALLOWED_FUNDING_COMMANDS = new Set<number>([
   CMD_V4_SWAP,
 ])
 
+// Must match Uniswap v4-periphery Actions.sol (TAKE=0x0e, not the pre-SETTLE_PAIR layout).
 const V4_ACTION_SWAP_EXACT_IN_SINGLE = 0x06
 const V4_ACTION_SWAP_EXACT_IN = 0x07
 const V4_ACTION_SETTLE = 0x0b
-const V4_ACTION_SETTLE_ALL = 0x0c
-const V4_ACTION_TAKE = 0x0d
-const V4_ACTION_TAKE_ALL = 0x0e
+const V4_ACTION_TAKE = 0x0e
+const V4_ACTION_TAKE_ALL = 0x0f
 
 const ALLOWED_V4_ACTIONS = new Set<number>([
   V4_ACTION_SWAP_EXACT_IN_SINGLE,
   V4_ACTION_SWAP_EXACT_IN,
   V4_ACTION_SETTLE,
-  V4_ACTION_SETTLE_ALL,
   V4_ACTION_TAKE,
   V4_ACTION_TAKE_ALL,
 ])
+
+/** v4 ActionConstants.OPEN_DELTA — spend the open credit rather than a literal zero. */
+const V4_OPEN_DELTA = 0n
+
+const V4_SETTLE_PARAMS = parseAbiParameters(
+  'address currency, uint256 amount, bool payerIsUser',
+)
+const V4_TAKE_PARAMS = parseAbiParameters(
+  'address currency, address recipient, uint256 amount',
+)
+const V4_TAKE_ALL_PARAMS = parseAbiParameters('address currency, uint256 minAmount')
 
 const V3_SWAP_PARAMS = parseAbiParameters(
   'address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser',
@@ -152,6 +162,23 @@ function readPackedPathToken(path: Hex, byteOffset: number): Address {
 function normalizeAmountIn(amountIn: bigint, expected: bigint): void {
   if (amountIn === UR_CONTRACT_BALANCE || amountIn === expected) return
   throw new Error('ETH funding swap input amount does not match the deposited WETH')
+}
+
+function normalizeV4AmountIn(amountIn: bigint, expected: bigint): void {
+  if (
+    amountIn === V4_OPEN_DELTA ||
+    amountIn === UR_CONTRACT_BALANCE ||
+    amountIn === expected
+  ) {
+    return
+  }
+  throw new Error('ETH funding V4 swap input amount does not match the deposited WETH')
+}
+
+function assertFundingWethCurrency(currency: Address, label: string): void {
+  if (currency !== BASE_WETH_TOKEN) {
+    throw new Error(`ETH funding ${label} must use WETH`)
+  }
 }
 
 /**
@@ -268,8 +295,10 @@ export function assertZoraFundingExecute(
       }
       v3PathStartsWithWeth = true
       normalizeAmountIn(amountIn, params.inputAmount)
-      if (payerIsUser && params.mode === 'nativeEth') {
-        throw new Error('Native ETH funding must not pull V3 input from the user')
+      // WRAP_ETH / Permit2 already fund the router. payerIsUser would pull a second
+      // inputAmount from the wallet (extra WETH beyond the reviewed deposit).
+      if (payerIsUser) {
+        throw new Error('ETH funding must not pull V3 input from the user')
       }
       if (pathEnd === creatorCoin) {
         amountOutMinimum = amountOutMinimum > amountOutMin ? amountOutMinimum : amountOutMin
@@ -299,6 +328,8 @@ export function assertZoraFundingExecute(
           if (!exactIn.path.length) {
             throw new Error('ETH funding V4 exact-in path is empty')
           }
+          assertFundingWethCurrency(getAddress(exactIn.currencyIn), 'V4 exact-in')
+          normalizeV4AmountIn(BigInt(exactIn.amountIn), params.inputAmount)
           const outToken = getAddress(
             exactIn.path[exactIn.path.length - 1]!.intermediateCurrency,
           )
@@ -315,9 +346,14 @@ export function assertZoraFundingExecute(
 
         if (action === V4_ACTION_SWAP_EXACT_IN_SINGLE) {
           const [exactIn] = decodeAbiParameters(V4_EXACT_INPUT_SINGLE_PARAMS, actionInput)
+          const tokenIn = getAddress(
+            exactIn.zeroForOne ? exactIn.poolKey.currency0 : exactIn.poolKey.currency1,
+          )
           const tokenOut = getAddress(
             exactIn.zeroForOne ? exactIn.poolKey.currency1 : exactIn.poolKey.currency0,
           )
+          assertFundingWethCurrency(tokenIn, 'V4 single-hop')
+          normalizeV4AmountIn(BigInt(exactIn.amountIn), params.inputAmount)
           if (tokenOut !== creatorCoin) {
             throw new Error('ETH funding V4 single-hop output must be the creator coin')
           }
@@ -329,18 +365,56 @@ export function assertZoraFundingExecute(
           continue
         }
 
-        if (action === V4_ACTION_TAKE) {
-          const [currency, recipient] = decodeAbiParameters(
-            parseAbiParameters('address currency, address recipient, uint256 amount'),
+        if (action === V4_ACTION_SETTLE) {
+          const [currencyRaw, amount, payerIsUser] = decodeAbiParameters(
+            V4_SETTLE_PARAMS,
             actionInput,
           )
+          assertFundingWethCurrency(getAddress(currencyRaw), 'V4 SETTLE')
+          if (payerIsUser) {
+            throw new Error('ETH funding V4 SETTLE must not pull WETH from the user')
+          }
           if (
-            getAddress(currency) === creatorCoin &&
-            isSenderRecipient(getAddress(recipient), sender)
+            amount !== params.inputAmount &&
+            amount !== UR_CONTRACT_BALANCE &&
+            amount !== V4_OPEN_DELTA
           ) {
+            throw new Error('ETH funding V4 SETTLE amount does not match the funded WETH')
+          }
+          continue
+        }
+
+        if (action === V4_ACTION_TAKE) {
+          const [currencyRaw, recipientRaw] = decodeAbiParameters(V4_TAKE_PARAMS, actionInput)
+          const currency = getAddress(currencyRaw)
+          const recipient = getAddress(recipientRaw)
+          if (currency !== creatorCoin && currency !== BASE_WETH_TOKEN) {
+            throw new Error('ETH funding V4 TAKE token is not allowed')
+          }
+          if (!isSenderRecipient(recipient, sender)) {
+            throw new Error('ETH funding V4 TAKE recipient must be the execution wallet')
+          }
+          if (currency === creatorCoin) {
             creatorDeliveredToSender = true
           }
+          continue
         }
+
+        if (action === V4_ACTION_TAKE_ALL) {
+          const [currencyRaw, minAmount] = decodeAbiParameters(V4_TAKE_ALL_PARAMS, actionInput)
+          const currency = getAddress(currencyRaw)
+          if (currency !== creatorCoin && currency !== BASE_WETH_TOKEN) {
+            throw new Error('ETH funding V4 TAKE_ALL token is not allowed')
+          }
+          // TAKE_ALL always credits msgSender in V4Router.
+          if (currency === creatorCoin) {
+            creatorDeliveredToSender = true
+            if (minAmount > amountOutMinimum) amountOutMinimum = minAmount
+          }
+          continue
+        }
+
+        throw new Error('ETH funding V4 action is not allowed')
       }
       continue
     }
