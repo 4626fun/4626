@@ -128,3 +128,20 @@ for id in 519 520; do
 done
 ```
 
+
+## Status poll (2026-07-28 17:07 UTC)
+
+| Job | System | Status | Stage | Note |
+|-----|--------|--------|-------|------|
+| 508 | AgentGaugeController | in_progress | audit-pass-1-ethskills | ~7h in pass-1 — pin predates AgentOracle #877 |
+| 509 | AgentOVault + Core | in_progress | audit-pass-1-ethskills | ~7h in pass-1 (replaced declined 506) |
+| 519 | Charm + Ajna | in_progress | accepted | Left queue; accepted |
+| 520 | CreatorPayout + CoinPolicy | in_progress | accepted | Accepted; awaiting ethskills |
+
+Do **not** re-pay. Re-check with:
+
+```bash
+for id in 508 509 519 520; do
+  echo -n "$id "; curl -sL "https://www.onedollaraudit.com/api/jobs/$id" | jq -r .status
+done
+```
