@@ -47,7 +47,64 @@ const SOURCE_FETCH_TIMEOUT_MS = 8_000
 const TOKEN_IMAGE_IP_RATE_LIMIT = { windowMs: 60_000, maxRequests: 180 } as const
 const TOKEN_IMAGE_IP_ADDRESS_RATE_LIMIT = { windowMs: 60_000, maxRequests: 60 } as const
 
+/**
+ * Final (already composed) ShareOFT icons served as-is — skips the premium
+ * compositor when a curated asset is the source of truth.
+ * Paths are site-root public URLs on the 4626 deployment.
+ */
+const STATIC_SHARE_TOKEN_ICON_BY_ADDRESS: Readonly<Record<string, string>> = {
+  // Akita Share Token (■AKITA) — curated breakout icon with correct AKITA label
+  '0x44710150a469de368abc82f05e6217086be84626': '/tokens/akita-share-token.png',
+}
+
 ensureFontconfig()
+
+function resolveRequestOrigin(hostHeader: string): string {
+  const host = hostHeader.trim().toLowerCase()
+  if (!host) return 'https://4626.fun'
+  if (host.includes('localhost') || host.includes('127.0.0.1')) {
+    return `http://${host}`
+  }
+  return `https://${host.replace(/:\d+$/, '')}`
+}
+
+async function loadStaticShareTokenIconPng(params: {
+  hostHeader: string
+  relativePath: string
+}): Promise<Buffer | null> {
+  const relativePath = params.relativePath.startsWith('/')
+    ? params.relativePath
+    : `/${params.relativePath}`
+  const candidates = [
+    `${resolveRequestOrigin(params.hostHeader)}${relativePath}`,
+    `https://4626.fun${relativePath}`,
+  ]
+  for (const url of candidates) {
+    const fetched = await fetchBytes(url, {
+      maxBytes: MAX_SOURCE_IMAGE_BYTES,
+      timeoutMs: SOURCE_FETCH_TIMEOUT_MS,
+      requireImageContentType: true,
+    }).catch(() => null)
+    const rawBytes = fetched?.bytes
+    if (
+      !isSafeSourceByteLength(rawBytes) ||
+      !isLikelyImagePayload(rawBytes, fetched?.contentType ?? null)
+    ) {
+      continue
+    }
+    try {
+      return await sharp(Buffer.from(rawBytes), {
+        limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
+      })
+        .resize(512, 512, { fit: 'cover' })
+        .png()
+        .toBuffer()
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
+}
 
 function isSafeSourceByteLength(bytes: Uint8Array | null | undefined): bytes is Uint8Array {
   return !!bytes && bytes.length > 0 && bytes.length <= MAX_SOURCE_IMAGE_BYTES
@@ -322,6 +379,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : presetRaw === 'pixel' ? 'pixel'
     : presetRaw === 'standard' ? 'standard'
     : undefined
+
+  const staticIconPath = STATIC_SHARE_TOKEN_ICON_BY_ADDRESS[addressLc]
+  if (staticIconPath && !preferRawSourceImage && requestedTokenKind !== 'creator') {
+    try {
+      const staticPng = await loadStaticShareTokenIconPng({
+        hostHeader: host,
+        relativePath: staticIconPath,
+      })
+      if (staticPng) {
+        const bounded = await sharp(staticPng, {
+          limitInputPixels: MAX_SOURCE_IMAGE_PIXELS,
+        })
+          .resize(size, size, { fit: 'cover' })
+          .png()
+          .toBuffer()
+        res.setHeader(
+          'Cache-Control',
+          isLocalPreview ? 'no-store' : 'public, s-maxage=86400, stale-while-revalidate=172800',
+        )
+        if (format === 'svg') {
+          const b64 = bounded.toString('base64')
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="data:image/png;base64,${b64}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`
+          res.setHeader('Content-Type', 'image/svg+xml')
+          return res.status(200).send(svg)
+        }
+        res.setHeader('Content-Type', 'image/png')
+        return res.status(200).send(bounded)
+      }
+    } catch (error) {
+      console.warn('[token/image] static share icon serve failed; falling back to renderer:', error)
+    }
+  }
 
   try {
     const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
