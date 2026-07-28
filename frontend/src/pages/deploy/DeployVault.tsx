@@ -3923,7 +3923,7 @@ function DeployVaultBatcher({
                   data: encodeFunctionData({
                     abi: PAYOUT_ROUTER_ADMIN_ABI,
                     functionName: 'setKeeperExternalSpendCap',
-                    args: [entry.tokenIn, entry.cap, Number(windowSeconds)],
+                    args: [entry.tokenIn, entry.cap, windowSeconds],
                   }),
                 })
               }

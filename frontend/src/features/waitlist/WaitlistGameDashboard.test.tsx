@@ -94,6 +94,8 @@ describe('WaitlistGameDashboard', () => {
           },
           meOutsideTop: true,
           loading: false,
+          statsUnavailable: false,
+          inviteUnavailable: false,
         }}
         tasks={{
           twitterLinked: false,

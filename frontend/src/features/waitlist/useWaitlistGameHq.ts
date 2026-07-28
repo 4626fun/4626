@@ -33,7 +33,7 @@ async function fetchMiniLeaderboard(): Promise<LeaderboardPage> {
 }
 
 export type WaitlistGameHqData = {
-  points: number
+  points: number | null
   rank: number | null
   referrals: number | null
   referralCode: string | null
@@ -43,6 +43,9 @@ export type WaitlistGameHqData = {
   me: LeaderboardEntry | null
   meOutsideTop: boolean
   loading: boolean
+  /** True when leaderboard + points sources both failed (or points auth missing and no score). */
+  statsUnavailable: boolean
+  inviteUnavailable: boolean
 }
 
 export function useWaitlistGameHq(input: {
@@ -75,10 +78,16 @@ export function useWaitlistGameHq(input: {
     const me = leaderboardQuery.data?.me ?? null
     const topRows = leaderboardQuery.data?.leaderboard ?? []
     const tray = trayPointsQuery.data
-    const pointsDisplay = resolvePublicPointsDisplay({
-      score: accountMe?.score ?? null,
-      positionTotal: tray?.points.total ?? me?.pointsTotal ?? null,
-    })
+    const hasScore = accountMe?.score != null
+    const hasTrayTotal = typeof tray?.points.total === 'number'
+    const hasMeTotal = typeof me?.pointsTotal === 'number'
+    const pointsKnown = hasScore || hasTrayTotal || hasMeTotal
+    const pointsDisplay = pointsKnown
+      ? resolvePublicPointsDisplay({
+          score: accountMe?.score ?? null,
+          positionTotal: tray?.points.total ?? me?.pointsTotal ?? null,
+        }).points
+      : null
     const rank = tray?.rank.total ?? me?.rank ?? null
     const referrals =
       typeof tray?.points.invite === 'number'
@@ -100,9 +109,16 @@ export function useWaitlistGameHq(input: {
     const meOutsideTop = Boolean(
       me && !topRows.some((row) => row.signupId === me.signupId),
     )
+    const loading = leaderboardQuery.isLoading || trayPointsQuery.isLoading
+    const leaderboardSettled = !leaderboardQuery.isLoading && !leaderboardQuery.isFetching
+    const inviteUnavailable = leaderboardSettled && !referralCode
+    const statsUnavailable =
+      !loading &&
+      !pointsKnown &&
+      (leaderboardQuery.isError || trayPointsQuery.isError || !getPrivyAccessToken)
 
     return {
-      points: pointsDisplay.points,
+      points: pointsDisplay,
       rank,
       referrals,
       referralCode,
@@ -111,13 +127,19 @@ export function useWaitlistGameHq(input: {
       topRows,
       me,
       meOutsideTop,
-      loading: leaderboardQuery.isLoading || trayPointsQuery.isLoading,
+      loading,
+      statsUnavailable,
+      inviteUnavailable,
     }
   }, [
     accountMe?.score,
+    getPrivyAccessToken,
     leaderboardQuery.data,
+    leaderboardQuery.isError,
+    leaderboardQuery.isFetching,
     leaderboardQuery.isLoading,
     trayPointsQuery.data,
+    trayPointsQuery.isError,
     trayPointsQuery.isLoading,
   ])
 }

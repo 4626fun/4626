@@ -18,7 +18,7 @@ import {
   useSpring,
   useTransform,
 } from 'framer-motion'
-import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { InputOTP, type InputOTPStatus } from '@/components/ui/InputOTP'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -265,98 +265,6 @@ function useStepDirection(stepIndex: number | null): number {
     setPrevious(stepIndex)
   }
   return direction
-}
-
-type LinkingStepStatus = 'upcoming' | 'current' | 'done' | 'skipped'
-
-type LinkingProgressStep = {
-  key: string
-  label: string
-  status: LinkingStepStatus
-}
-
-// Small step tracker for the post-join "earn points" wizard (X → Wallet →
-// Zora). Without it, one optional panel silently replaces the last with no
-// sense of how many steps remain — this gives an at-a-glance read on
-// progress. Purely decorative dots backed by a single accessible progress
-// summary for screen readers. `compact` drops the text labels and tightens
-// sizing so it can sit inline as part of the "Your points" card header
-// instead of taking its own full row.
-function WaitlistLinkingProgress({
-  steps,
-  compact = false,
-}: {
-  steps: LinkingProgressStep[]
-  compact?: boolean
-}) {
-  const currentIndex = steps.findIndex((step) => step.status === 'current')
-  const activeIndex = currentIndex >= 0 ? currentIndex : steps.length
-  const currentLabel = currentIndex >= 0 ? steps[currentIndex]?.label : 'Done'
-  const stepNumber = Math.min(activeIndex + 1, steps.length)
-
-  return (
-    <div
-      role="progressbar"
-      aria-valuemin={1}
-      aria-valuemax={steps.length}
-      aria-valuenow={stepNumber}
-      aria-valuetext={`Step ${stepNumber} of ${steps.length}: ${currentLabel}`}
-      className={cn('flex items-center justify-center', compact ? 'gap-0' : 'mb-4')}
-    >
-      {steps.map((step, index) => (
-        <div key={step.key} className="flex items-center" aria-hidden="true">
-          <div className={cn('flex flex-col items-center', compact ? 'gap-0' : 'gap-1.5')}>
-            <span
-              className={cn(
-                'flex items-center justify-center rounded-full border transition-colors duration-300',
-                compact ? 'size-3.5' : 'size-5',
-                step.status === 'done' && 'border-transparent bg-[rgb(var(--brand-primary))] text-white',
-                step.status === 'current' &&
-                  'border-[rgb(var(--brand-primary))] bg-[rgb(var(--brand-primary)/0.16)]',
-                step.status === 'skipped' && 'border-dashed border-zinc-600',
-                step.status === 'upcoming' && 'border-zinc-700',
-              )}
-            >
-              {step.status === 'done' ? (
-                <Check className={compact ? 'size-2' : 'size-3'} aria-hidden="true" />
-              ) : (
-                <span
-                  className={cn(
-                    'rounded-full',
-                    compact ? 'size-1' : 'size-1.5',
-                    step.status === 'current' && 'animate-pulse bg-[rgb(var(--brand-primary))]',
-                    step.status === 'skipped' && 'bg-zinc-600',
-                    step.status === 'upcoming' && 'bg-zinc-700',
-                  )}
-                />
-              )}
-            </span>
-            {compact ? null : (
-              <span
-                className={cn(
-                  'text-[9px] font-medium uppercase tracking-[0.1em] transition-colors duration-300',
-                  step.status === 'current' ? 'text-zinc-300' : 'text-zinc-600',
-                )}
-              >
-                {step.label}
-              </span>
-            )}
-          </div>
-          {index < steps.length - 1 ? (
-            <span
-              className={cn(
-                'h-px transition-colors duration-300',
-                compact ? 'w-3' : 'mb-4 w-5',
-                step.status === 'done' || step.status === 'skipped'
-                  ? 'bg-[rgb(var(--brand-primary)/0.4)]'
-                  : 'bg-white/10',
-              )}
-            />
-          ) : null}
-        </div>
-      ))}
-    </div>
-  )
 }
 
 /** Upper bound on how many real member avatars we ever display in the
@@ -1618,18 +1526,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             </>
           )}
         </div>
-        {joinedSessionAddress && !appAccepted ? (
-          <Link
-            to="/leaderboard"
-            className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
-          >
-            See leaderboard
-            <ArrowRight
-              className="size-3 transition group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </Link>
-        ) : null}
       </div>
     )
   }
@@ -1682,41 +1578,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
           ? 2
           : 3
   const linkingDirection = useStepDirection(linkingStepIndex)
-  const linkingSteps: LinkingProgressStep[] = [
-    {
-      key: 'x',
-      label: 'X',
-      status: twitterLinked
-        ? 'done'
-        : activeStepKey === 'x-link' || activeStepKey === 'x-engagement'
-          ? 'current'
-          : xSkippedWithoutLink
-            ? 'skipped'
-            : 'upcoming',
-    },
-    {
-      key: 'wallet',
-      label: 'Wallet',
-      status: walletIdentityLinked
-        ? 'done'
-        : activeStepKey === 'wallet'
-          ? 'current'
-          : showWalletSkippedReminder
-            ? 'skipped'
-            : 'upcoming',
-    },
-    {
-      key: 'zora',
-      label: 'Zora',
-      status: zoraLinked
-        ? 'done'
-        : activeStepKey === 'zora'
-          ? 'current'
-          : showZoraSkippedReminder
-            ? 'skipped'
-            : 'upcoming',
-    },
-  ]
 
   // Spring physics (rather than a fixed-duration ease curve) so step swaps
   // feel like they have real weight/momentum instead of a mechanical slide.
@@ -2294,155 +2155,13 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 twitterEditBusy={twitterBusy}
                 twitterError={twitterError}
               />
-
-              <AnimatePresence initial={false}>
-                {linkingWizardInProgress ? (
-                  <motion.div
-                    key="linking-progress"
-                    variants={reminderVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                    className="pt-2"
-                  >
-                    <WaitlistLinkingProgress steps={linkingSteps} compact />
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-
-              <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
-                {activeStepKey === 'x-link' ? (
-                  <motion.div
-                    key="x-link"
-                    custom={linkingDirection}
-                    variants={stepVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                    className="mt-3"
-                  >
-                    <WaitlistTwitterLinkPanel
-                      busy={twitterBusy}
-                      onConnect={() => {
-                        setTwitterError(null)
-                        void handleLinkTwitter()
-                      }}
-                      onSkip={handleSkipXPhase}
-                    />
-                  </motion.div>
-                ) : activeStepKey === 'x-engagement' ? (
-                  <motion.div
-                    key="x-engagement"
-                    custom={linkingDirection}
-                    variants={stepVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                    className="mt-3"
-                  >
-                    <WaitlistTwitterEngagementSteps
-                      getAccessToken={getPrivyAccessToken}
-                      onProgressVerified={handleEngagementProgressVerified}
-                      onSkip={handleSkipXPhase}
-                    />
-                  </motion.div>
-                ) : activeStepKey === 'wallet' ? (
-                  <motion.div
-                    key="wallet"
-                    custom={linkingDirection}
-                    variants={stepVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                    className="mt-3"
-                  >
-                    <WaitlistWalletConnectPanel
-                      busy={walletBusy}
-                      onConnect={() => {
-                        setWalletError(null)
-                        void handleLinkWallet()
-                      }}
-                      onSkip={handleSkipWallet}
-                    />
-                  </motion.div>
-                ) : activeStepKey === 'zora' ? (
-                  <motion.div
-                    key="zora"
-                    custom={linkingDirection}
-                    variants={stepVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                    className="mt-3"
-                  >
-                    <WaitlistZoraConnectPanel
-                      busy={zoraBusy}
-                      onConnect={() => {
-                        setZoraError(null)
-                        void handleLinkZora()
-                      }}
-                      onSkip={handleSkipZora}
-                    />
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-
-              <AnimatePresence initial={false}>
-                {xSkippedWithoutLink ? (
-                  <motion.div
-                    key="reminder-x"
-                    variants={reminderVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                  >
-                    <SkippedStepReminder
-                      label="X"
-                      points={PROVIDER_POINTS.twitter ?? 0}
-                      onLinkNow={handleUndoSkipX}
-                    />
-                  </motion.div>
-                ) : null}
-                {showWalletSkippedReminder ? (
-                  <motion.div
-                    key="reminder-wallet"
-                    variants={reminderVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                  >
-                    <SkippedStepReminder
-                      label="Wallet"
-                      points={PROVIDER_POINTS.external_eoa ?? 0}
-                      onLinkNow={handleUndoSkipWallet}
-                    />
-                  </motion.div>
-                ) : null}
-                {showZoraSkippedReminder ? (
-                  <motion.div
-                    key="reminder-zora"
-                    variants={reminderVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={stepTransition}
-                  >
-                    <SkippedStepReminder
-                      label="Zora"
-                      points={PROVIDER_POINTS.zora_cross_app ?? 0}
-                      onLinkNow={handleUndoSkipZora}
-                    />
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-
+              {/* Climb tasks (Link X / wallet / Zora) live on the game HQ — avoid
+                  double-mounting the same panels when the tray auto-opens. */}
+              {linkingWizardInProgress ? (
+                <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+                  Finish climb tasks on the waitlist page to earn points.
+                </p>
+              ) : null}
               {unlinkedProviderError ? (
                 <p className="mt-3 text-center text-[11px] leading-relaxed text-rose-300/90">
                   {unlinkedProviderError}

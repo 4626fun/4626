@@ -46,16 +46,35 @@ export function WaitlistStatsRow({
   rank,
   referrals,
   loading = false,
+  unavailable = false,
 }: {
-  points: number
+  points: number | null
   rank: number | null
-  /** Invite contribution points (existing economy); labeled Referrals in HQ. */
+  /** Invite contribution points (existing economy); labeled Invite pts in HQ. */
   referrals: number | null
   loading?: boolean
+  unavailable?: boolean
 }) {
+  if (unavailable && !loading) {
+    return (
+      <div
+        className="rounded-xl bg-white/[0.03] px-4 py-3 text-center text-sm text-zinc-500 ring-1 ring-white/[0.06]"
+        data-testid="waitlist-stats-row"
+        aria-label="Your waitlist stats"
+      >
+        Points unavailable right now. Try refreshing.
+      </div>
+    )
+  }
+
   return (
     <div className="flex w-full gap-2" data-testid="waitlist-stats-row" aria-label="Your waitlist stats">
-      <StatCard label="Points" value={formatWholeNumber(points)} emphasize loading={loading} />
+      <StatCard
+        label="Points"
+        value={points != null ? formatWholeNumber(points) : '—'}
+        emphasize
+        loading={loading}
+      />
       <StatCard
         label="Rank"
         value={rank != null && rank > 0 ? `#${formatWholeNumber(rank)}` : '—'}

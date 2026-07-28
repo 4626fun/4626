@@ -345,21 +345,23 @@ export async function buildPayoutRouterTreasurySetupPlan(params: {
         currentCap = BigInt(raw[0] ?? 0n)
         currentWindow = BigInt(raw[1] ?? 0n)
       } else {
-        currentCap = BigInt(raw?.cap ?? 0n)
-        currentWindow = BigInt(raw?.window ?? 0n)
+        const named = raw as { cap?: bigint; window?: bigint }
+        currentCap = BigInt(named.cap ?? 0n)
+        currentWindow = BigInt(named.window ?? 0n)
       }
     } catch {
       currentCap = 0n
       currentWindow = 0n
     }
-    if (currentCap === entry.cap && currentWindow === BigInt(entry.windowSeconds)) continue
+    const desiredWindow = BigInt(entry.windowSeconds)
+    if (currentCap === entry.cap && currentWindow === desiredWindow) continue
     calls.push({
       to: payoutRouter,
       label: `setKeeperExternalSpendCap:${entry.label}`,
       data: encodeFunctionData({
         abi: PAYOUT_ROUTER_ADMIN_ABI,
         functionName: 'setKeeperExternalSpendCap',
-        args: [entry.tokenIn, entry.cap, entry.windowSeconds],
+        args: [entry.tokenIn, entry.cap, desiredWindow],
       }),
     })
   }

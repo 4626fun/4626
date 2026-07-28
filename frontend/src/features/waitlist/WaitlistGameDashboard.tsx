@@ -83,7 +83,8 @@ export function WaitlistGameDashboard(props: WaitlistGameDashboardProps) {
           points={hq.points}
           rank={hq.rank}
           referrals={hq.referrals}
-          loading={hq.loading && hq.points === 0}
+          loading={hq.loading && hq.points == null}
+          unavailable={hq.statsUnavailable}
         />
       </motion.div>
 
@@ -92,6 +93,8 @@ export function WaitlistGameDashboard(props: WaitlistGameDashboardProps) {
           inviteUrl={hq.inviteUrl}
           displayPath={hq.inviteDisplayPath}
           referralCode={hq.referralCode}
+          loading={hq.loading}
+          unavailable={hq.inviteUnavailable}
         />
       </motion.div>
 

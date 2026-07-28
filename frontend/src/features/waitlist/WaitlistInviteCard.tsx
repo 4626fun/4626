@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 
 import { toast } from '@/components/ui/Toast'
@@ -9,12 +9,23 @@ export function WaitlistInviteCard({
   inviteUrl,
   displayPath,
   referralCode,
+  loading = false,
+  unavailable = false,
 }: {
   inviteUrl: string | null
   displayPath: string | null
   referralCode: string | null
+  loading?: boolean
+  unavailable?: boolean
 }) {
   const [copied, setCopied] = useState(false)
+  const copiedTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
+    }
+  }, [])
 
   const handleCopy = useCallback(async () => {
     if (!inviteUrl) return
@@ -22,13 +33,14 @@ export function WaitlistInviteCard({
       await navigator.clipboard.writeText(inviteUrl)
       setCopied(true)
       toast.success('Referral link copied')
-      window.setTimeout(() => setCopied(false), 1600)
+      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = window.setTimeout(() => setCopied(false), 1600)
     } catch {
       toast.error('Copy failed')
     }
   }, [inviteUrl])
 
-  if (!inviteUrl || !referralCode) {
+  if (loading && !referralCode) {
     return (
       <div
         className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]"
@@ -37,7 +49,23 @@ export function WaitlistInviteCard({
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
           Your invite link
         </p>
-        <p className="mt-2 text-sm text-zinc-400">Generating your referral link…</p>
+        <p className="mt-2 text-sm text-zinc-400">Loading your referral link…</p>
+      </div>
+    )
+  }
+
+  if (unavailable || !inviteUrl || !referralCode) {
+    return (
+      <div
+        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]"
+        data-testid="waitlist-invite-card"
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          Your invite link
+        </p>
+        <p className="mt-2 text-sm text-zinc-400">
+          Referral link unavailable right now. Refresh or open the full leaderboard.
+        </p>
       </div>
     )
   }
