@@ -505,9 +505,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
 
         // Include user dust so normalization never destroys value.
-        // ODA-507 Info: only fold dust when mint recipient is the accounting user —
-        // otherwise depositFor could mint a beneficiary's dust to the operator.
-        uint256 priorDust = (accountingUser == mintTo) ? userDustShares[accountingUser] : 0;
+        // Only fold existing dust into the mint when the mint recipient is the
+        // accounting user — otherwise depositFor could mint a beneficiary's dust
+        // to the operator. When mintTo differs, preserve the beneficiary ledger and
+        // accumulate the wrap remainder so prior dust is not wiped / totals desynced.
+        uint256 existingDust = userDustShares[accountingUser];
+        uint256 priorDust = (accountingUser == mintTo) ? existingDust : 0;
         uint256 normalizedInput = vaultSharesAfterFee + priorDust;
 
         // NORMALIZE: Divide by 1000 to get share token amount
@@ -516,8 +519,13 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (shareOFTOut == 0) revert AmountTooSmallToNormalize();
 
         uint256 newDust = normalizedInput - (shareOFTOut * NORMALIZATION_FACTOR);
-        userDustShares[accountingUser] = newDust;
-        totalUserDustShares = totalUserDustShares - priorDust + newDust;
+        if (accountingUser == mintTo) {
+            userDustShares[accountingUser] = newDust;
+            totalUserDustShares = totalUserDustShares - priorDust + newDust;
+        } else {
+            userDustShares[accountingUser] = existingDust + newDust;
+            totalUserDustShares += newDust;
+        }
 
         // Track locked shares (minus fee)
         totalLocked += vaultSharesAfterFee;

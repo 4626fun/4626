@@ -157,6 +157,46 @@ contract ODA507AgentShareWrapperParityTest is Test {
         assertTrue(wrapper.isBalanced());
     }
 
+    function test_ODA507_depositFor_preservesExistingBeneficiaryDust() public {
+        address alice = makeAddr("alice");
+        address composer = makeAddr("composer");
+
+        MockAgentTokenForODA507 token = new MockAgentTokenForODA507();
+        MockAgentVaultForODA507 vault = new MockAgentVaultForODA507(address(token));
+        MockShareOFTPlain shareOFT = new MockShareOFTPlain();
+        AgentOVaultWrapper wrapper = new AgentOVaultWrapper(address(token), address(vault), address(this));
+        wrapper.setShareOFT(address(shareOFT));
+        wrapper.setBeneficiaryOperator(composer, true);
+
+        token.mint(alice, 1_500);
+        vm.prank(alice);
+        token.approve(address(wrapper), type(uint256).max);
+        vm.prank(alice);
+        wrapper.deposit(1_500, 0);
+        assertEq(wrapper.userDustShares(alice), 500);
+        assertEq(wrapper.totalUserDustShares(), 500);
+        assertTrue(wrapper.isBalanced());
+
+        token.mint(composer, 2_001);
+        vm.prank(composer);
+        token.approve(address(wrapper), type(uint256).max);
+
+        vm.prank(composer);
+        uint256 out = wrapper.depositFor(1_000, 0, alice);
+        assertEq(out, 1);
+        assertEq(shareOFT.balanceOf(composer), 1);
+        assertEq(wrapper.userDustShares(alice), 500, "prior beneficiary dust must remain");
+        assertEq(wrapper.totalUserDustShares(), 500, "dust total must stay in sync");
+        assertTrue(wrapper.isBalanced());
+
+        vm.prank(composer);
+        uint256 out2 = wrapper.depositFor(1_001, 0, alice);
+        assertEq(out2, 1);
+        assertEq(wrapper.userDustShares(alice), 501);
+        assertEq(wrapper.totalUserDustShares(), 501);
+        assertTrue(wrapper.isBalanced());
+    }
+
     function test_ODA507_1_hotDustDoesNotFreezeEstablishedCooledBalance() public {
         address alice = makeAddr("alice");
         address bob = makeAddr("bob");

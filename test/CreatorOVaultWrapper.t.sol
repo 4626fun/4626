@@ -209,6 +209,38 @@ contract CreatorOVaultWrapperTest is Test {
         assertEq(shareOFT.balanceOf(alice), 1);
     }
 
+    /// depositFor must not wipe pre-existing beneficiary dust / desync totals.
+    function test_depositFor_preservesExistingBeneficiaryDust() public {
+        wrapper.setBeneficiaryOperator(composer, true);
+
+        vm.prank(alice);
+        wrapper.wrap(1_500);
+        assertEq(wrapper.userDustShares(alice), 500);
+        assertEq(wrapper.totalUserDustShares(), 500);
+        assertTrue(wrapper.isBalanced());
+
+        creatorCoin.mint(composer, 1_000);
+        vm.prank(composer);
+        creatorCoin.approve(address(wrapper), type(uint256).max);
+
+        vm.prank(composer);
+        uint256 out = wrapper.depositFor(1_000, 0, alice);
+        assertEq(out, 1);
+        assertEq(shareOFT.balanceOf(composer), 1);
+        assertEq(wrapper.userDustShares(alice), 500, "prior beneficiary dust must remain");
+        assertEq(wrapper.totalUserDustShares(), 500, "dust total must stay in sync");
+        assertTrue(wrapper.isBalanced());
+
+        // Remainder from a later depositFor accumulates onto the beneficiary ledger.
+        creatorCoin.mint(composer, 1_001);
+        vm.prank(composer);
+        uint256 out2 = wrapper.depositFor(1_001, 0, alice);
+        assertEq(out2, 1);
+        assertEq(wrapper.userDustShares(alice), 501);
+        assertEq(wrapper.totalUserDustShares(), 501);
+        assertTrue(wrapper.isBalanced());
+    }
+
     /// ODA-498-3: operators must not siphon beneficiary dust via withdrawFor.
     function test_withdrawFor_doesNotSiphonBeneficiaryDust() public {
         wrapper.setBeneficiaryOperator(composer, true);
