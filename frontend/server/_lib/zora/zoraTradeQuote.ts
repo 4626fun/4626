@@ -50,9 +50,16 @@ export function getZoraPlatformReferrerAddress(): Address | undefined {
   return undefined
 }
 
+const NATIVE_TOKEN_ALIASES = new Set([
+  NATIVE_TOKEN_ADDRESS,
+  // Legacy truncated sentinel mistakenly shipped in client eth funding helpers.
+  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+  '0x0000000000000000000000000000000000000000',
+])
+
 export function toZoraTradeCurrency(tokenAddress: string): ZoraTradeCurrency {
   const normalized = tokenAddress.trim().toLowerCase()
-  if (normalized === NATIVE_TOKEN_ADDRESS) return { type: 'eth' }
+  if (NATIVE_TOKEN_ALIASES.has(normalized)) return { type: 'eth' }
   if (!isAddress(tokenAddress)) {
     throw new Error('Invalid token address for Zora trade quote')
   }

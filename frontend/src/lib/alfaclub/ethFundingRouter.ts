@@ -22,7 +22,7 @@ export const ROOM_1659_ZORA_TOKEN = getAddress(
 
 /** Native ETH alias accepted by the server-side Zora trade quote adapter. */
 export const ZORA_NATIVE_ETH_TOKEN =
-  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const
+  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const
 
 /** Zora's Base Universal Router, returned as the target of executable quotes. */
 export const ZORA_BASE_UNIVERSAL_ROUTER = getAddress(

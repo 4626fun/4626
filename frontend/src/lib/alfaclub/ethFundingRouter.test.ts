@@ -5,6 +5,7 @@ import { ALFACLUB_UNIVERSAL_ROUTER_ABI } from './contracts'
 import {
   buildAlfaClubEthFundingCalls,
   ZORA_BASE_UNIVERSAL_ROUTER,
+  ZORA_NATIVE_ETH_TOKEN,
 } from './ethFundingRouter'
 import {
   encodeMinimalNativeEthFundingExecute,
@@ -204,3 +205,14 @@ describe('buildAlfaClubEthFundingCalls', () => {
       }),
     ).toThrow(/guaranteed output does not cover/i)
   })
+
+
+describe('ZORA_NATIVE_ETH_TOKEN', () => {
+  it('is a full 20-byte native ETH sentinel accepted by viem', () => {
+    expect(ZORA_NATIVE_ETH_TOKEN.toLowerCase()).toBe(
+      '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    )
+    expect(ZORA_NATIVE_ETH_TOKEN).toHaveLength(42)
+    expect(() => getAddress(ZORA_NATIVE_ETH_TOKEN)).not.toThrow()
+  })
+})
