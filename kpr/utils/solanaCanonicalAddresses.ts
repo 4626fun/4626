@@ -1,13 +1,14 @@
 /** Canonical mainnet addresses for Solana keeper workflows (current release target). */
 
 export const CANONICAL_LOTTERY_MANAGER =
-  '0xB45E68a5867935a5734E4185977F81c528006650' as const;
+  '0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b' as const;
 
 const DEPRECATED_LOTTERY_MANAGERS = new Set([
   '0x3f7afd93824ab25f73bdca59afdab560f865b0c3',
   '0x5c0115589d7f4930a0dc93417ae409f44186f4e7',
   '0xbe87ad917be7f6a9ae1f9c9dd0a7ec7550f3f8c1',
   '0xb68f359e01626ec5d15c624037311c70dacaba43',
+  '0xb45e68a5867935a5734e4185977f81c528006650',
 ]);
 
 function normalizeAddress(value: string | undefined | null): string {

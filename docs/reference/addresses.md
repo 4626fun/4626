@@ -5,9 +5,9 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.19.3 bytecode epoch with the v1.19.4 Creator-core repair** (v1.19.1 greenfield stack).
+Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.20.0** greenfield stack (hard cutover; no dual-epoch launch lane).
 
-v1.19.3 deploy bytecode is live on the v1.19.1 greenfield stack, with the v1.19.4 Creator-core repair wired into the active Phase 1 module. The stack has hardened Phase 2, a fully seeded bytecode store, and active Chainlink VRF on manager `0xB45E68a5…`. v1.19.2 remains a historical bytecode seal. Creator + Agent paid canaries remain outstanding. Prior epochs (v1.19.0 partial, 2026-07-08 cutover, abandoned v1.17.0) are superseded — see Deprecated infrastructure below.
+v1.20.0 greenfield infra is live with a fully seeded bytecode store (includes Ajna dust-refund + Phase 3 automation-keeper seal). Prior v1.19.x addresses remain onchain for already-deployed vaults but are **not** supported launch or ops targets. Creator + Agent paid canaries on the new stack remain outstanding.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
@@ -21,64 +21,48 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 | Contract                          | Address                                                                     |
 | --------------------------------- | --------------------------------------------------------------------------- |
-| Registry4626                      | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2`                                |
-| RegistryBootstrap4626             | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB`                                |
-| OVaultFactory4626                 | `0xCAb65a066A4D52DD29ffB418B319819176b89610`                                |
-| VaultActivationBatcher            | `0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA`                                |
-| LotteryManager4626                | `0xB45E68a5867935a5734E4185977F81c528006650`                                |
-| VRFConsumer4626                   | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670`                                |
-| UniversalBytecodeStoreV2          | `0xF9622613682a12E46b914c7498716F42E44c4d36`                                |
-| UniversalCreate2DeployerFromStore | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2`                                |
-| CreatorOVaultCoreModule           | `0x0513cf245EF2Cf54534416211F7B890405bF76D1`                                |
-| AgentOVaultCoreModule             | `0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE`                                |
-| CreatorOVaultStrategiesModule     | `0x6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849`                                |
-| CreatorOVaultAdminModule          | `0xD5c887cd16DBb3A9095eB9635ECf57b77D1d9B37`                                |
-| DeploymentBatcher                 | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145`                                |
-| DeploymentBatcherPhase1Module     | `0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3`                                |
-| DeploymentBatcherPhase2Module     | `0x1217bA070DBf64303117939301788925030295d1`                                |
-| DeploymentBatcherPhase3Helper     | `0xC54Fb8d8232a8a654E512b3bDf761c8Eb2783B74`                                |
-| DeploymentBatcherShareMeshHelper  | `0x73b6efB7196CdFa6c095Dc196559c88818Cd3211`                                |
-| DeploymentBatcherUtilsHelper      | `0x8833225A423f4B1BB071702CB68d71fA4af434f2`                                |
-| VaultAuxiliaryDeployBatcher       | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` (hardened v1.19.1; authorized) |
+| Registry4626                      | `0xF60a1490C4129f2b6ae540734D3C2C8C6111824e`                                |
+| OVaultFactory4626                 | `0x29AB55092F4009aa3F3603f32b11A6B02e6F0eb5`                                |
+| VaultActivationBatcher            | `0x37A9136dcD3e3245E4E992a1302dfEBD3d8673B3`                                |
+| LotteryManager4626                | `0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b`                                |
+| VRFConsumer4626                   | `0x56E2453Bf8Cf2C3FC33E7D18Edc2310297f2a251`                                |
+| UniversalBytecodeStoreV2          | `0x8599CA87b28320158941C59CB3cd9a3f12083530`                                |
+| UniversalCreate2DeployerFromStore | `0xdffB25505F5050E15B3602296330Ef352127d1Ef`                                |
+| CreatorOVaultCoreModule           | `0xD6B862783Fd362ccF0d39d86E6384D8770e78833`                                |
+| AgentOVaultCoreModule             | `0xD6B862783Fd362ccF0d39d86E6384D8770e78833`                                |
+| CreatorOVaultStrategiesModule     | `0x968b8233053B64A93a4Cde044fFf4f43ea6D3c60`                                |
+| CreatorOVaultAdminModule          | `0x5bC4d71dB82081fCCF3647F1C094BEB202C0DB50`                                |
+| DeploymentBatcher                 | `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032`                                |
+| DeploymentBatcherPhase1Module     | `0x416FA15e40caA51C20d1795db946c6806C946aC5`                                |
+| DeploymentBatcherPhase2Module     | `0xf1334BE96B3530BBF17506DED98E50D917A45B41`                                |
+| DeploymentBatcherPhase3Helper     | `0x3Ed642288cd03846e9dA956cF95812d3125dD274`                                |
+| DeploymentBatcherShareMeshHelper  | `0x1BCd4768180671Aa435C845239e05Afc81a496cA`                                |
+| DeploymentBatcherUtilsHelper      | `0x99712E96f11670113f66b9356890a2209359C37d`                                |
+| VaultAuxiliaryDeployBatcher       | `0x15eE1D03a5556C28E5079E68763F8231ad68dAdD` (hardened; CREATE2-authorized) |
 
 Notes:
 
-- **v1.19.3** remains the current shared/global + per-creator bytecode/CREATE2
-  namespace. Infra addresses match the v1.19.1 greenfield deploy.
-- Live `DeploymentBatcherPhase1Module` is the v1.19.4 Creator-core repair
-  `0x8C1C6C10…`, binding Creator core `0x0513cf24…` while retaining the v1.19.3
-  Agent, strategies, admin, store, and Phase 2 dependencies. Safe swap:
-  [`0x0c5f5b3c…`](https://basescan.org/tx/0x0c5f5b3c0bee4e252bce04b7e1729ebc6ce887b6b32fe56b383780b0f0135ece).
-- Live `DeploymentBatcherPhase2Module` is `0x1217bA07…` (current hardened source).
-  Safe swap: [`0x95cc671f…`](https://basescan.org/tx/0x95cc671fc6854cc47425c501f63e8e59471e3340913a60a99ad64ab01dd77fbf).
-  Shell `deployPhase2Core` selectors unchanged (`0xf9344d88` / `0x6004df9c`).
-  Prior module `0xC3Af8F49…` superseded; earlier modules retired.
-- Chainlink VRF is active on `VRFConsumer4626`: the consumer is registered on
-  subscription `478638396…980789`, configured with the Base key hash, 500,000
-  callback gas, and 3 confirmations. Activation transactions:
-  [`0x0725bbb1…`](https://basescan.org/tx/0x0725bbb14a89fe614143b26c0bc4924b126eed2ebe39dcf935c590d73a40e481),
-  [`0x7b676249…`](https://basescan.org/tx/0x7b676249ec3fe6fb939a384e40d4c6faf126ad3b71e7610d65955ac532307d0f).
-- Hardened aux helper `0xaA9229c1…408e` is live and CREATE2-authorized on the
-  new store/deployer/batcher stack.
-- Prior v1.18.0 stack (registry `0xDb8570…`, batcher `0x02D7…`, aux `0xde93…`)
-  is deprecated for **new vault launches**; see Deprecated infrastructure below.
-- `RegistryBootstrap4626` is an authorized factory on Registry4626 for ad hoc /
-  single-tx token registration + first-time field binds (vault, wrapper, shareOFT,
-  oracle, gauge, optional Solana mesh). Owner: `0xB05Cf0…FdD`. Deploy tx:
-  [`0xe93ca34b…`](https://basescan.org/tx/0xe93ca34bfe68b5a9b21d19520bb260f8a219de51cf81dfc5cca89f67d9be3553);
-  authorize tx:
-  [`0xd1d838dc…`](https://basescan.org/tx/0xd1d838dcb95b48b6eb19dce8147c3e4faa3145cf36512b8aab3eb463cb42d153)
-  (2026-07-12). Bribes factory left unset until ve■4626 canary.
-- `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- **New vault launches** use active module immutables. The shell
-  `lotteryManager()` getter is historical/non-authoritative after the Phase2
-  hot-swap.
-- Pre-v1.18.0 batchers (including `0xA9024e…` v1.16.1) are deprecated for **new vault launches**.
+- **v1.20.0** is the current shared/global + per-creator bytecode/CREATE2
+  namespace. Handoff: `tmp/base-v1.20.0-handoff.env`. Manifest:
+  `deployments/base/v1.20.0-bytecode-manifest.json`.
+- Phase1 immutables bind creator + agent core to the same module address
+  `0xD6B86278…` on this epoch.
+- Batcher helpers + Phase1 are wired; CREATE2 authorizes the batcher and aux
+  helper. Bytecode store is seeded and verified against the v1.20.0 manifest.
+- Hardened aux helper `0x15eE1D03…` is pinned to the v1.20.0 store/create2/batcher.
+- Prior v1.19.x / v1.18.0 stacks are deprecated for **new vault launches**; see
+  Deprecated infrastructure below.
+- `DeploymentBatcher` deploys as a slim shell; helpers and
+  `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe
+  (`wireDeploymentHelpers` + `setPhase1Module`).
+- **New vault launches** use active module immutables. Live AKITA vaults on the
+  prior stack are **not** upgraded by this cutover.
 
 ### Deprecated infrastructure
 
 | Epoch / label                    | Representative addresses                                                                     | Notes                                                                            |
 | -------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| v1.19.1 / v1.19.3 greenfield     | Registry `0x1365e9…`, batcher `0xa18169…`, store `0xF96226…`, CREATE2 `0xe2a8aA…`, aux `0xaA9229…` | Superseded by v1.20.0; existing vaults (incl. AKITA) may still reference       |
 | v1.18.0 greenfield               | Registry `0xDb8570…`, batcher `0x02D7…`, store `0xfa3e…`, CREATE2 `0x54660E…`, aux `0xde93…` | Superseded by v1.19.1 greenfield; existing vaults may still reference            |
 | v1.16.1-share-mesh               | Registry `0x1eb9A3…`, batcher `0xA9024e…`, store `0x7D1029…`                                 | Superseded by v1.18.0; existing vaults may still reference                       |
 | v1.17.0 orphan                   | Registry `0x5646B5…`, batcher `0xa4090F…`                                                    | Partial broadcast — never wired for production                                   |
@@ -102,10 +86,12 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 
 | Contract / role                                   | Address                                      | Notes                                                                                                                                                                         |
 | ------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` | **Live v1.19.1 router** wired to manager `0xB45E68a5…`.                                                                                                                       |
+| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` | **Live v1.20.0 router** wired to manager `0x0fC6f30a…`.                                                                                                                       |
+| `LotteryAmoeRouter` (v3, v1.19.1)                 | `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` | Deprecated — do not point Vercel here after v1.20.0 greenfield cutover.                                                                                                       |
 | `LotteryAmoeRouter` (v3, v1.18.0)                 | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` | Deprecated — do not point Vercel here after v1.19.1 greenfield cutover.                                                                                                       |
 | `LotteryAmoeRouter` (v3, legacy v1.16.1)          | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | Deprecated — do not point Vercel here after v1.18.0 cutover.                                                                                                                  |
-| `LotteryManager4626` (v1.19.1 greenfield)         | `0xB45E68a5867935a5734E4185977F81c528006650` | Canonical manager on Registry4626 `0x1365e9…`.                                                                                                                                |
+| `LotteryManager4626` (v1.20.0 greenfield)         | `0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b` | Canonical manager on Registry4626 `0xF60a1490…`.                                                                                                                              |
+| `LotteryManager4626` (v1.19.1 greenfield)         | `0xB45E68a5867935a5734E4185977F81c528006650` | Superseded by v1.20.0; existing vaults may still reference.                                                                                                                   |
 | `LotteryManager4626` (v1.18.0 remediation)        | `0xB68F359e01626Ec5d15C624037311C70DacAba43` | Superseded 2026-07-15; `isActive=false` on deprecated registry.                                                                                                               |
 | `LotteryManager4626` (v1.18.0 prior)              | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` | Superseded 2026-07-11; `isActive=false`.                                                                                                                                      |
 | `LotteryManager4626` (v1.16.1)                    | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Deprecated manager on prior registry stack.                                                                                                                                   |
@@ -117,36 +103,35 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 **Post-cutover verification (production):**
 
 1. Verify `LOTTERY_AMOE_ROUTER` resolves to
-   `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` in production and that the
+   `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` in production and that the
    deployed app reports the same router.
-2. Verify the router points to manager `0xB45E68a5867935a5734E4185977F81c528006650`,
+2. Verify the router points to manager `0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b`,
    that the manager authorizes the router, and that publishers resolve to
    protocol CSW (`0x793c…`).
 3. Verify allowlist and points-ledger Merkle roots are present for the active
    epoch. Roots are **one-shot per epoch** on each router address.
 4. Confirm signed AMOE messages embed
-   `Lottery Manager: 0xB45E68a5867935a5734E4185977F81c528006650`
+   `Lottery Manager: 0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b`
    (nonce API reads live `LOTTERY_MANAGER` env).
 
-## Environment for v1.19.3 launches
+## Environment for v1.20.0 launches
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
 | Server env                                                   | Client (Vite) env                      | Current value                                |
 | ------------------------------------------------------------ | -------------------------------------- | -------------------------------------------- |
-| `REGISTRY_4626`                                              | `VITE_REGISTRY`                        | `0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2` |
-| `REGISTRY_BOOTSTRAP_4626`                                    | —                                      | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
-| `OVAULT_FACTORY`                                             | `VITE_FACTORY`                         | `0xCAb65a066A4D52DD29ffB418B319819176b89610` |
-| `VAULT_ACTIVATION_BATCHER`                                   | `VITE_VAULT_ACTIVATION_BATCHER`        | `0x6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA` |
-| `LOTTERY_MANAGER`                                            | `VITE_LOTTERY_MANAGER`                 | `0xB45E68a5867935a5734E4185977F81c528006650` |
-| `VRF_CONSUMER`                                               | `VITE_VRF_CONSUMER`                    | `0x98fb5e0af3120B32E2E03400B6E51d0bde433670` |
-| `UNIVERSAL_BYTECODE_STORE`                                   | `VITE_UNIVERSAL_BYTECODE_STORE`        | `0xF9622613682a12E46b914c7498716F42E44c4d36` |
-| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER`      | `0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2` |
-| `DEPLOYMENT_BATCHER`                                         | `VITE_DEPLOYMENT_BATCHER`              | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| `DEPLOYMENT_BATCHER_AUTO_HANDOFF`                            | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0xa18169caf37fa0347285B16aAFC2B09eCB43F145` |
-| `VAULT_AUXILIARY_DEPLOY_BATCHER`                             | `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER`  | `0xaA9229c1649a7eC6DA85a76097E0910B24F9408e` |
-| `LOTTERY_AMOE_ROUTER`                                        | —                                      | `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` |
-| —                                                            | `VITE_DEPLOYMENT_VERSION`              | `v1.19.3`                                    |
+| `REGISTRY_4626`                                              | `VITE_REGISTRY`                        | `0xF60a1490C4129f2b6ae540734D3C2C8C6111824e` |
+| `OVAULT_FACTORY`                                             | `VITE_FACTORY`                         | `0x29AB55092F4009aa3F3603f32b11A6B02e6F0eb5` |
+| `VAULT_ACTIVATION_BATCHER`                                   | `VITE_VAULT_ACTIVATION_BATCHER`        | `0x37A9136dcD3e3245E4E992a1302dfEBD3d8673B3` |
+| `LOTTERY_MANAGER`                                            | `VITE_LOTTERY_MANAGER`                 | `0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b` |
+| `VRF_CONSUMER`                                               | `VITE_VRF_CONSUMER`                    | `0x56E2453Bf8Cf2C3FC33E7D18Edc2310297f2a251` |
+| `UNIVERSAL_BYTECODE_STORE`                                   | `VITE_UNIVERSAL_BYTECODE_STORE`        | `0x8599CA87b28320158941C59CB3cd9a3f12083530` |
+| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER`      | `0xdffB25505F5050E15B3602296330Ef352127d1Ef` |
+| `DEPLOYMENT_BATCHER`                                         | `VITE_DEPLOYMENT_BATCHER`              | `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` |
+| `DEPLOYMENT_BATCHER_AUTO_HANDOFF`                            | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` |
+| `VAULT_AUXILIARY_DEPLOY_BATCHER`                             | `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER`  | `0x15eE1D03a5556C28E5079E68763F8231ad68dAdD` |
+| `LOTTERY_AMOE_ROUTER`                                        | —                                      | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` |
+| —                                                            | `VITE_DEPLOYMENT_VERSION`              | `v1.20.0`                                    |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
@@ -193,7 +178,7 @@ ve■4626 / gauge voting / bribes / streams / surface registry are **not** on th
 **Runbook:** [rewards-ecosystem-canary-2026-07.md](../operations/rewards-ecosystem-canary-2026-07.md).  
 **Lottery posture:** leave LM `boostManager` / `vaultGaugeVoting` at `0x0` until lottery Phase 3 ([lottery-canary-checklist](../operations/lottery-canary-checklist-2026-07.md)).
 
-Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.19.3-bytecode-manifest.json` before traffic cutover.
+Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.20.0-bytecode-manifest.json` before traffic cutover.
 
 ### Per-Creator Deployments
 

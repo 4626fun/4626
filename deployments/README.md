@@ -2,6 +2,8 @@
 
 This directory tracks committed deployment artifacts and ABI snapshots used by tooling and operational docs.
 
+**Canonical Base release:** `v1.20.0` — manifest `deployments/base/v1.20.0-bytecode-manifest.json`, store `0x8599CA87b28320158941C59CB3cd9a3f12083530`.
+
 ## V1 greenfield posture
 
 Treat **`deployments/base/contracts/**` as the V1 interface registry**:

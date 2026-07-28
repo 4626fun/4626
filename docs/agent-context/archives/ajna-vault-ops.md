@@ -75,20 +75,24 @@ pnpm -C frontend exec tsx --env-file=.env scripts/ops/ensure-ajna-emergency-read
 
 Unwind script (`execute-akita-b2-unwind-csw.ts`) calls this before strategies unless `--skip-ajna-buffer`. Unwind itself defaults to dry-run and requires `--execute --confirm=AKITA-B2-UNWIND`.
 
-### Bytecode / seal gates before calling the cutover “v1.20.0”
+### Bytecode / seal gates (v1.20.0 — sealed 2026-07-28)
 
-Seal and verify these in the bytecode store / `DEPLOY_BYTECODE` — AKITA taught us live code can lag source:
+Store `0x8599CA87b28320158941C59CB3cd9a3f12083530` + manifest
+`deployments/base/v1.20.0-bytecode-manifest.json` are seeded and verified.
+Live AKITA still runs **pre-seal** creation bytecode until a new vault is
+launched on v1.20.0.
 
-| Gate | Why | How to verify |
-|------|-----|----------------|
-| Adapter exposes `moveFromBuffer` | Live AKITA adapter bytecode **lacked** selector `0xd6506540`; keeper/Safe path through adapter impossible | `cast sig "moveFromBuffer(uint256,uint256)"` then check adapter runtime bytecode contains that selector |
-| Adapter exposes `drainBucketsToBuffer` / `moveToBuffer` | Without these, vault `emergencyWithdrawFromStrategies` cannot realize bucket LP in one shot | Selectors `0xc7cc300d` / `0x070b49ba` in adapter runtime bytecode |
-| Inner vault dust refund uses `balanceOf(this)` | Ajna can pull full `assets` while returning slightly lower `movedAssets` (empty-bucket dust). Refunding `assets - movedAssets` → `ERC20InsufficientBalance` | Source: `AjnaERC4626Vault.moveFromBuffer` must refund `ASSET_TOKEN.balanceOf(address(this))`, not `assets - movedAssets`. Confirm sealed bytecode matches that logic |
-| Auth admin / pendingAdmin path known | Hot automation Safe must be able to `acceptAdmin` + `setSwapper` / `setKeeper` if handoff is ever needed | Read `admin()`, `pendingAdmin()`, `swapper()`, `isKeeper(automation)` on `AjnaVaultAuth` |
-| Phase 3 helper sets automation keeper | New sleeves must ship with `isKeeper(protocolAutomation)==true` without a manual follow-up | Source: `DeploymentBatcherPhase3Helper` Ajna branch; reseal Phase 3 helper after this change |
-| `ajna_vaults` registry row | Keeper dry_run→live needs registry config (`bufferRatioBps`, `minBucketIndex`, caps) | Row present; `automation_status` starts `dry_run` then flips `live` after inspect PASS |
+| Gate | Sealed codeId / note | How to verify |
+|------|----------------------|----------------|
+| Adapter exposes `moveFromBuffer` | `ERC4626StrategyAdapter` `0xaafda3de…48ca83` | Selector `0xd6506540` in sealed creation bytecode / new-deploy runtime |
+| Adapter exposes `drainBucketsToBuffer` / `moveToBuffer` | Same adapter codeId | Selectors `0xc7cc300d` / `0x070b49ba` |
+| Inner vault dust refund uses `balanceOf(this)` | `AjnaERC4626Vault` `0x7fef77a5…02262c` (≠ v1.19.3 `0xfb600532…`) | Source refunds `ASSET_TOKEN.balanceOf(address(this))`; store seed verified |
+| Auth admin / pendingAdmin path known | `AjnaVaultAuth` `0x3fa4c424…3d5b39` | Read `admin()`, `pendingAdmin()`, `swapper()`, `isKeeper(automation)` |
+| Phase 3 helper sets automation keeper | `DeploymentBatcherPhase3Helper` `0xb72aec95…bd0033` @ helper `0x3Ed64228…` | New sleeves: `isKeeper(protocolAutomation)==true` without manual follow-up |
+| `ajna_vaults` registry row | Ops | Row present; `automation_status` starts `dry_run` then flips `live` after inspect PASS |
 
-If the sealed adapter still lacks `moveFromBuffer`, plan an explicit **swapper-handoff** ops path (see below) — do not assume Keepr alone can lend.
+Swapper-handoff remains emergency-only for **legacy** sleeves (e.g. live AKITA)
+whose adapter lacks `moveFromBuffer`.
 
 ### Post-deploy day-0 checklist (every new vault)
 
@@ -129,12 +133,12 @@ Order (sequential Safe txs — **not** one MultiSend; MultiSend hit `GS013` in p
 
 No checked-in handoff script yet — run the six Safe steps above manually (or via one-off operator tooling). Prefer sealing adapter `moveFromBuffer` so Keepr/automation can lend without swapper handoff.
 
-### Dust bug (source fix must ship in sealed v1.20.0)
+### Dust bug (sealed in v1.20.0; live AKITA still old)
 
 In `AjnaERC4626Vault.moveFromBuffer`, after `addQuoteToken`:
 
 - **Broken (live AKITA bytecode):** `_bufferDeposit(assets - movedAssets)` when `assets > movedAssets`.
-- **Fixed in source (must reseal for v1.20.0):** refund whatever token balance remains on the vault:
+- **Fixed + sealed (v1.20.0 codeId `0x7fef77a5…`):** refund whatever token balance remains on the vault:
 
 ```solidity
 uint256 remaining = ASSET_TOKEN.balanceOf(address(this));
@@ -143,7 +147,7 @@ if (remaining > 0) {
 }
 ```
 
-Until that is sealed everywhere, keep the dust-prefund workaround for any vault on the old bytecode.
+Keep the dust-prefund workaround for any vault still on pre-v1.20.0 bytecode.
 
 ### What not to expect / not to do
 

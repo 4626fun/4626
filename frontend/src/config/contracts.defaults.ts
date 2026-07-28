@@ -53,9 +53,13 @@ export const PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
 export const PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "02D7abC547F8B1e7E2D7a919D8D1005918361750",
 );
-/** v1.19.3 bytecode epoch with the v1.19.4 creator-core repair on the v1.19.1 greenfield infrastructure. */
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
+/** v1.19.1/v1.19.3 greenfield shell (superseded by v1.20.0 greenfield). */
+export const PRE_V1193_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
   "a18169caf37fa0347285B16aAFC2B09eCB43F145",
+);
+/** v1.20.0 greenfield infrastructure + sealed deploy bytecode. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr(
+  "83A9b2481E3e6d3a8fA12F6eB072253AAc518032",
 );
 /** Retired v1.19.1 greenfield Phase1Module (agentVaultCoreModule == creator core). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V1191_HANDOFF = addr(
@@ -65,13 +69,13 @@ export const SPLIT_PHASE1_PHASE1_MODULE_V1191_HANDOFF = addr(
 export const SPLIT_PHASE1_PHASE1_MODULE_V1191_STORE_POINTER = addr(
   "0d12951A5e35ce064D7Add3A57bE0CC8Ad39e08b",
 );
-/**
- * v1.19.4 Phase1Module on the v1.19.1 batcher. It retains the v1.19.3
- * deploy-bytecode store and shared modules, while binding the repaired Creator
- * core for new creator-vault launches.
- */
-export const SPLIT_PHASE1_PHASE1_MODULE = addr(
+/** Retired v1.19.4 Phase1Module on the v1.19.1 batcher. */
+export const SPLIT_PHASE1_PHASE1_MODULE_V1194 = addr(
   "8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3",
+);
+/** Live Phase1Module on v1.20.0 batcher `0x83A9b248…`. */
+export const SPLIT_PHASE1_PHASE1_MODULE = addr(
+  "416FA15e40caA51C20d1795db946c6806C946aC5",
 );
 /** Pre-v1.14.0 Phase1Module (v1.13.0 greenfield; grandfathered vaults only). */
 export const PRE_V1140_SPLIT_PHASE1_PHASE1_MODULE = addr(
@@ -89,37 +93,36 @@ export const SPLIT_PHASE1_PHASE2_MODULE_V1191_HANDOFF = addr(
 export const SPLIT_PHASE1_PHASE2_MODULE_PRE_PENDING_HASH = addr(
   "3089678d53522Aa9cE56AF1a34cb32aDBCc690Ba",
 );
-/**
- * Live Phase2Module on v1.19.1 batcher `0xa18169…` (2026-07-17+).
- * F4 via module `setPendingInitCodeHashes` (shell ABI unchanged) + F7/F8.
- * Intermediate pending-hash Safe swap: `0x8ec89e0944d654d01eac945b154fd9303b0f858b7e743eed30c38a47933ad3c8`.
- * Current live module Safe swap (addresses.md): `0x95cc671fc6854cc47425c501f63e8e59471e3340913a60a99ad64ab01dd77fbf`.
- */
-export const SPLIT_PHASE1_PHASE2_MODULE = addr(
+/** Retired Phase2Module on v1.19.1 batcher `0xa18169…`. */
+export const SPLIT_PHASE1_PHASE2_MODULE_V1191 = addr(
   "1217bA070DBf64303117939301788925030295d1",
 );
+/** Live Phase2Module on v1.20.0 batcher `0x83A9b248…`. */
+export const SPLIT_PHASE1_PHASE2_MODULE = addr(
+  "f1334BE96B3530BBF17506DED98E50D917A45B41",
+);
 export const SPLIT_PHASE1_PHASE3_HELPER = addr(
-  "C54Fb8d8232a8a654E512b3bDf761c8Eb2783B74",
+  "3Ed642288cd03846e9dA956cF95812d3125dD274",
 );
 export const SPLIT_PHASE1_SHARE_MESH_HELPER = addr(
-  "73b6efB7196CdFa6c095Dc196559c88818Cd3211",
+  "1BCd4768180671Aa435C845239e05Afc81a496cA",
 );
 /** @deprecated Use SPLIT_PHASE1_SHARE_MESH_HELPER */
 export const SPLIT_PHASE1_UNIV4_HELPER = SPLIT_PHASE1_SHARE_MESH_HELPER;
 export const SPLIT_PHASE1_UTILS_HELPER = addr(
-  "8833225A423f4B1BB071702CB68d71fA4af434f2",
+  "99712E96f11670113f66b9356890a2209359C37d",
 );
 export const OVAULT_FACTORY4626 = addr(
-  "CAb65a066A4D52DD29ffB418B319819176b89610",
+  "29AB55092F4009aa3F3603f32b11A6B02e6F0eb5",
 );
 export const OVAULT_CORE_MODULE = addr(
-  "0513cf245EF2Cf54534416211F7B890405bF76D1",
+  "D6B862783Fd362ccF0d39d86E6384D8770e78833",
 );
 export const OVAULT_STRATEGIES_MODULE = addr(
-  "6481675Fe2aed61b2D0392Ddd2E67EFCE04c3849",
+  "968b8233053B64A93a4Cde044fFf4f43ea6D3c60",
 );
 export const OVAULT_ADMIN_MODULE = addr(
-  "D5c887cd16DBb3A9095eB9635ECf57b77D1d9B37",
+  "5bC4d71dB82081fCCF3647F1C094BEB202C0DB50",
 );
 
 const DEPRECATED_DEPLOYMENT_BATCHERS = new Set<string>([
@@ -134,6 +137,7 @@ const DEPRECATED_DEPLOYMENT_BATCHERS = new Set<string>([
   PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1180_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1193_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ]);
 
 export function isDeprecatedDeploymentBatcherAddress(
@@ -192,10 +196,10 @@ export function normalizeDeploymentBatcherAddress(
 }
 
 export const BASE_DEFAULTS = {
-  // Shared infrastructure — v1.19.1 greenfield cutover addresses.
-  registry: addr("1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2"),
-  lotteryManager: addr("B45E68a5867935a5734E4185977F81c528006650"),
-  vrfConsumer: addr("98fb5e0af3120B32E2E03400B6E51d0bde433670"),
+  // Shared infrastructure — v1.20.0 greenfield cutover addresses.
+  registry: addr("F60a1490C4129f2b6ae540734D3C2C8C6111824e"),
+  lotteryManager: addr("0fC6f30adFD9e82097895Bb166536FdFD8EaC97b"),
+  vrfConsumer: addr("56E2453Bf8Cf2C3FC33E7D18Edc2310297f2a251"),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // CreatorPayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
@@ -209,15 +213,15 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `deploymentBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr("F9622613682a12E46b914c7498716F42E44c4d36"),
-  /** Paired with `universalBytecodeStore` on live split batcher `0xa18169…`. */
+  universalBytecodeStore: addr("8599CA87b28320158941C59CB3cd9a3f12083530"),
+  /** Paired with `universalBytecodeStore` on live split batcher `0x83A9b248…`. */
   universalCreate2DeployerFromStore: addr(
-    "e2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2",
+    "dffB25505F5050E15B3602296330Ef352127d1Ef",
   ),
-  vaultAuxiliaryDeployBatcher: addr("aA9229c1649a7eC6DA85a76097E0910B24F9408e"),
+  vaultAuxiliaryDeployBatcher: addr("15eE1D03a5556C28E5079E68763F8231ad68dAdD"),
 
   // AA helpers
-  vaultActivationBatcher: addr("6552C6AF7a76646E938C0FBf549c5ec9a22c5bcA"),
+  vaultActivationBatcher: addr("37A9136dcD3e3245E4E992a1302dfEBD3d8673B3"),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
   // sessions. It exposes both core/finalize split selectors, compatible
   // CreatorOVault modules, and enabled OVault
