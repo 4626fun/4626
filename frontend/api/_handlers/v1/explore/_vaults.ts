@@ -202,6 +202,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           OR (${time} = '1d' AND COALESCE(v.updated_at, v.created_at) >= NOW() - INTERVAL '1 day')
           OR (${time} = '1w' AND COALESCE(v.updated_at, v.created_at) >= NOW() - INTERVAL '7 days')
         )
+        -- Hide AlfaClub room-channel synthetic Keepr placeholders (e.g. 0x…1659).
+        AND NOT EXISTS (
+          SELECT 1
+          FROM alfaclub.room_channel_bindings AS b
+          WHERE b.synthetic_keepr_vault_address IS NOT NULL
+            AND LOWER(b.synthetic_keepr_vault_address) = LOWER(v.vault_address)
+        )
+        AND COALESCE(v.group_id, '') NOT LIKE 'pending-bootstrap:alfaclub-room:%'
       ORDER BY
         CASE WHEN ${sort} = 'marketCap' THEN COALESCE(cc.market_cap_usd, 0) END DESC NULLS LAST,
         CASE WHEN ${sort} = 'volume' THEN COALESCE(cc.volume_24h_usd, 0) END DESC NULLS LAST,
