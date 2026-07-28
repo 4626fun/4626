@@ -25,30 +25,23 @@ This monorepo is the public face of the 4626 product. Package directories:
 
 Source migration into this repository is staged. Production hosting (Vercel, Railway, Supabase) remains on the existing private working tree until cutover.
 
-## Virtuals ACP (public adapter slice)
+## Public contracts pin (ODA / research)
 
-Payment-gated Virtuals ACP jobs for counter-trade signals, research, and backtests live under:
+Auditor-facing Solidity lives under [`contracts/`](contracts/) on **`main`**.
 
-- [`frontend/server/agents/eliza/plugins/virtuals/`](frontend/server/agents/eliza/plugins/virtuals/) — payment gate, tool quotas, observe-only defaults, readiness, colocated tests
-- [`frontend/scripts/agent/virtuals-acp-doctor.ts`](frontend/scripts/agent/virtuals-acp-doctor.ts) — redacted readiness doctor
-
-**Offering focus:** paid counter-trade signals on Virtuals ACP (inverse bias), observe-only until funded. Live AlfaClub/Hermit execution is a separate ops lane and is not required to review this slice.
-
-From a full frontend workspace (after dependencies are installed):
-
-```bash
-pnpm -C frontend exec vitest run server/agents/eliza/plugins/virtuals
-```
-
-Env var **names** only for the doctor (never commit values): `VIRTUALS_ACP_ENABLED`, `VIRTUALS_ACP_WALLET_ADDRESS`, `VIRTUALS_ACP_WALLET_ID`, `VIRTUALS_ACP_SIGNER_PRIVATE_KEY`, `VIRTUALS_API_KEY`. Default posture is observe-only (`VIRTUALS_ACP_AUTO_LLM=0`).
+Private `wenakita/4626` remains the build/deploy source of truth. Publishing here ≠ Base redeploy.
 
 ## Sponsors
 
 Solana sponsor market for this open repo ([Tribe.run](https://www.tribe.run)) — not the Base protocol token (`$4626`) and not vault shares.
 
-When live: name **4626fun**, symbol **4626FUN**. Holding at least 10,000 tokens counts as a sponsor.
+Name **4626fun**, symbol **4626FUN**. Holding at least 10,000 tokens counts as a sponsor.
 
-<!-- Tribe.run sponsor badge will appear here after token launch -->
+<!-- hypertribe:sponsors:start -->
+[![4626 Sponsors](https://api.tribe.run/tokens/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8/sponsors.svg)](https://tribe.run/token/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8)
+
+Become a sponsor on [Tribe.run](https://tribe.run/token/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8).
+<!-- hypertribe:sponsors:end -->
 
 ## License
 
@@ -57,11 +50,3 @@ When live: name **4626fun**, symbol **4626FUN**. Holding at least 10,000 tokens 
 ## Security
 
 See [SECURITY.md](SECURITY.md). Report vulnerabilities to **hello@4626.fun**.
-
-<!-- hypertribe:sponsors:start -->
-## Sponsors
-
-[![4626 Sponsors](https://api.tribe.run/tokens/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8/sponsors.svg)](https://tribe.run/token/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8)
-
-Become a sponsor on [Tribe.run](https://tribe.run/token/9U22WPWvtnrAge4EKphWcJF1vCNBi83MsXN6n1jc53P8).
-<!-- hypertribe:sponsors:end -->
