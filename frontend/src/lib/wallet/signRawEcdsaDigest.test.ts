@@ -12,9 +12,29 @@ describe('signRawEcdsaDigest', () => {
     expect(isRawEcdsaDigest('0x1234')).toBe(false)
   })
 
-  it('prefers authorized secp256k1 path when wired', async () => {
+  it('prefers provider request before authorized Wallet API', async () => {
+    const request = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'secp256k1_sign') return SIG
+      throw new Error('unexpected method')
+    })
+    const signSecp256k1Digest = vi.fn(async () => {
+      throw new Error('authorized path should not be called when provider works')
+    })
+
+    const out = await signRawEcdsaDigest({
+      digest: DIGEST,
+      signerAddress: SIGNER,
+      walletClient: { request, signSecp256k1Digest },
+    })
+
+    expect(out).toBe(SIG)
+    expect(request).toHaveBeenCalledWith({ method: 'secp256k1_sign', params: [DIGEST] })
+    expect(signSecp256k1Digest).not.toHaveBeenCalled()
+  })
+
+  it('falls back to authorized secp256k1 path when provider request fails', async () => {
     const request = vi.fn(async () => {
-      throw new Error('provider should not be called')
+      throw new Error('provider unavailable')
     })
     const signSecp256k1Digest = vi.fn(async () => SIG)
 
@@ -25,8 +45,8 @@ describe('signRawEcdsaDigest', () => {
     })
 
     expect(out).toBe(SIG)
+    expect(request).toHaveBeenCalled()
     expect(signSecp256k1Digest).toHaveBeenCalledWith(DIGEST)
-    expect(request).not.toHaveBeenCalled()
   })
 
   it('prefers secp256k1_sign over personal_sign', async () => {

@@ -196,13 +196,42 @@ function createEmbeddedSignerWalletClient({
         return ''
       }
 
-      // Authorized Wallet API digests do not need the embedded iframe provider.
-      if (
+      // Prefer the Privy SDK iframe/provider path for digests. That path builds
+      // authorization signatures against the client's configured API base
+      // (privy.4626.fun) and completes wallets/authenticate. Our hand-rolled
+      // Wallet API lane is a fallback when the provider channel is unavailable.
+      const hashCandidate = extractDigest()
+      const isDigestSign =
         (args?.method === 'secp256k1_sign' || args?.method === 'eth_sign') &&
-        typeof signSecp256k1Digest === 'function'
-      ) {
-        const hashCandidate = extractDigest()
-        if (isRawEcdsaDigest(hashCandidate)) {
+        Boolean(hashCandidate) &&
+        isRawEcdsaDigest(hashCandidate)
+
+      if (isDigestSign) {
+        try {
+          const provider = await getProvider()
+          if (provider?.request) {
+            await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
+            try {
+              const rawSig = await provider.request({
+                method: 'secp256k1_sign',
+                params: [hashCandidate],
+              })
+              return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+            } catch (providerErr) {
+              console.warn(
+                '[swap] Privy provider secp256k1_sign failed; trying authorized Wallet API',
+                providerErr,
+              )
+            }
+          }
+        } catch (providerAcquireErr) {
+          console.warn(
+            '[swap] Privy embedded provider unavailable for digest sign; trying authorized Wallet API',
+            providerAcquireErr,
+          )
+        }
+
+        if (typeof signSecp256k1Digest === 'function') {
           return signSecp256k1Digest(hashCandidate as `0x${string}`)
         }
       }
@@ -211,12 +240,12 @@ function createEmbeddedSignerWalletClient({
       if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
       await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
       if (args?.method === 'eth_sign') {
-        const hashCandidate = extractDigest()
-        if (hashCandidate && isRawEcdsaDigest(hashCandidate)) {
+        const digest = extractDigest()
+        if (digest && isRawEcdsaDigest(digest)) {
           try {
             const rawSig = await provider.request({
               method: 'secp256k1_sign',
-              params: [hashCandidate],
+              params: [digest],
             })
             return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
           } catch {
@@ -242,20 +271,31 @@ function createEmbeddedSignerWalletClient({
             // Re-resolve the provider per request so retries after a session
             // refresh do not reuse a stale provider channel.
             request: async (requestArgs: any) => {
-              if (
-                requestArgs?.method === 'secp256k1_sign' &&
-                typeof signSecp256k1Digest === 'function'
-              ) {
-                const params = Array.isArray(requestArgs.params) ? requestArgs.params : []
-                const hash =
-                  typeof params[0] === 'string'
-                    ? params[0]
-                    : typeof requestArgs.params?.hash === 'string'
-                      ? String(requestArgs.params.hash)
-                      : ''
-                if (isRawEcdsaDigest(hash)) return signSecp256k1Digest(hash as `0x${string}`)
-              }
+              const params = Array.isArray(requestArgs.params) ? requestArgs.params : []
+              const hash =
+                typeof params[0] === 'string'
+                  ? params[0]
+                  : requestArgs.params &&
+                      typeof requestArgs.params === 'object' &&
+                      typeof (requestArgs.params as { hash?: unknown }).hash === 'string'
+                    ? String((requestArgs.params as { hash: string }).hash)
+                    : ''
               const liveProvider = await getProvider()
+              if (requestArgs?.method === 'secp256k1_sign' && isRawEcdsaDigest(hash)) {
+                if (liveProvider?.request) {
+                  try {
+                    return await liveProvider.request(requestArgs as any)
+                  } catch (providerErr) {
+                    console.warn(
+                      '[swap] nested provider secp256k1_sign failed; trying authorized Wallet API',
+                      providerErr,
+                    )
+                  }
+                }
+                if (typeof signSecp256k1Digest === 'function') {
+                  return signSecp256k1Digest(hash as `0x${string}`)
+                }
+              }
               if (!liveProvider?.request) {
                 throw new Error('Privy embedded EOA provider not available')
               }

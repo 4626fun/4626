@@ -34,17 +34,12 @@ function isPrivyProxyHost(host: string): boolean {
 }
 
 function resolvePrivyWalletRpcBaseUrl(): string {
+  // Match `@privy-io/js-sdk-core` PrivyInternal.getPath: when custom_api_url /
+  // VITE_PRIVY_API_URL is the first-party proxy, sign + fetch against that host
+  // first. auth.privy.io is only a 401 fallback (see postAuthorizedWalletRpc).
   const resolved = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
-  // Wallet RPC auth-signature verification can fail behind first-party proxy hosts
-  // when upstream verification canonicalizes against auth.privy.io URL forms.
-  // Keep session/bootstrap traffic on custom domains, but pin this signing lane
-  // to the canonical Privy origin whenever we're on the 4626 proxy host family.
   try {
-    const parsed = new URL(resolved)
-    if (isPrivyProxyHost(parsed.hostname.toLowerCase())) {
-      return 'https://auth.privy.io'
-    }
-    return parsed.origin
+    return new URL(resolved).origin
   } catch {
     return 'https://auth.privy.io'
   }
@@ -170,23 +165,35 @@ async function postAuthorizedWalletRpc(params: {
     body: JSON.stringify(params.body),
   })
 
-  // Bearer/cookie verification can fail at auth.privy.io when the session was
-  // issued through the first-party proxy (server-cookie mode). Retry on the
-  // proxy host with a freshly signed payload bound to that request URL —
-  // Privy requires the signed `url` to match the HTTP request target.
+  // If the primary host (usually the first-party proxy matching the SDK) 401s,
+  // retry against auth.privy.io with a freshly signed payload for that URL.
   if (response.status === 401) {
-    const proxyBase = resolvePrivyProxyBaseUrl()
-    if (proxyBase && !rpcAuthorizationUrl.startsWith(proxyBase)) {
-      const proxyUrl = `${proxyBase}${walletRpcPath(params.walletId)}`
+    const canonicalUrl = `https://auth.privy.io${walletRpcPath(params.walletId)}`
+    if (rpcAuthorizationUrl !== canonicalUrl) {
       console.warn(
-        `[privy-authorized-rpc] ${params.context} got 401 at canonical origin, retrying via first-party proxy`,
+        `[privy-authorized-rpc] ${params.context} got 401 at ${new URL(rpcAuthorizationUrl).host}, retrying via auth.privy.io`,
       )
-      response = await fetch(proxyUrl, {
+      response = await fetch(canonicalUrl, {
         method: 'POST',
         credentials: 'include',
-        headers: await signAndBuildHeaders(proxyUrl),
+        headers: await signAndBuildHeaders(canonicalUrl),
         body: JSON.stringify(params.body),
       })
+    } else {
+      // Primary was already auth.privy.io — try the proxy if configured.
+      const proxyBase = resolvePrivyProxyBaseUrl()
+      if (proxyBase) {
+        const proxyUrl = `${proxyBase}${walletRpcPath(params.walletId)}`
+        console.warn(
+          `[privy-authorized-rpc] ${params.context} got 401 at canonical origin, retrying via first-party proxy`,
+        )
+        response = await fetch(proxyUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: await signAndBuildHeaders(proxyUrl),
+          body: JSON.stringify(params.body),
+        })
+      }
     }
   }
 

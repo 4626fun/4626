@@ -111,7 +111,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     vi.restoreAllMocks()
   })
 
-  it('sends privy-authorization-signature on wallet RPC via canonical Privy origin', async () => {
+  it('sends privy-authorization-signature on wallet RPC via configured Privy API origin', async () => {
     vi.stubEnv('VITE_PRIVY_APP_ID', 'cltestappid000000000000000')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
 
@@ -136,7 +136,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
       expect.objectContaining({
         version: 1,
         method: 'POST',
-        url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+        url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
         body: {
           chain_type: 'ethereum',
           method: 'secp256k1_sign',
@@ -150,7 +150,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     )
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -230,7 +230,7 @@ describe('privyAuthorizedWalletPersonalSign', () => {
       expect.objectContaining({
         version: 1,
         method: 'POST',
-        url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+        url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
         body: {
           chain_type: 'ethereum',
           method: 'personal_sign',
@@ -239,7 +239,7 @@ describe('privyAuthorizedWalletPersonalSign', () => {
       }),
     )
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -277,7 +277,7 @@ describe('privyAuthorizedWalletPersonalSign', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         headers: expect.objectContaining({
           'privy-client-id': 'client_waitlist_123',
@@ -304,10 +304,10 @@ describe('privyAuthorizedWalletPersonalSign', () => {
     expect(generateAuthorizationSignature).not.toHaveBeenCalled()
   })
 
-  it('retries via the first-party proxy host when the canonical origin returns 401', async () => {
+  it('retries via auth.privy.io when the configured first-party proxy returns 401', async () => {
     const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith('https://auth.privy.io/')) {
+      if (url.startsWith('https://privy.4626.fun/')) {
         return {
           ok: false,
           status: 401,
@@ -333,24 +333,24 @@ describe('privyAuthorizedWalletPersonalSign', () => {
     })
 
     expect(out).toBe(SIG)
-    // Re-sign for the proxy URL — Privy requires the signed url to match the request target.
+    // Re-sign for auth.privy.io — Privy requires the signed url to match the request target.
     expect(generateAuthorizationSignature).toHaveBeenCalledTimes(2)
     expect(generateAuthorizationSignature).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc` }),
+      expect.objectContaining({ url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc` }),
     )
     expect(generateAuthorizationSignature).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc` }),
+      expect.objectContaining({ url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc` }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({ method: 'POST', credentials: 'include' }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({ method: 'POST', credentials: 'include' }),
     )
     warnSpy.mockRestore()
@@ -447,7 +447,7 @@ describe('privyAuthorizedWalletSignTypedData', () => {
 
     expect(out).toBe(SIG)
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',

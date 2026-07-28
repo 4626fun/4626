@@ -105,6 +105,27 @@ export async function signRawEcdsaDigest(params: {
 
     const runRawSigningAttemptSet = async () => {
       const failures: Array<{ method: string; message: string }> = []
+      // Prefer walletClient.request (Privy SDK iframe / provider) before the
+      // hand-rolled authorized Wallet API. request() may itself fall back to
+      // signSecp256k1Digest when the provider channel is down.
+      if (typeof request === 'function') {
+        for (const attempt of requestAttempts) {
+          try {
+            const rawSig = await request({
+              method: attempt.method,
+              params: attempt.params,
+            })
+            return {
+              signature: ensureSignatureHex(rawSig, `${label}.${attempt.suffix}`),
+              failures,
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error ?? 'unknown_error')
+            failures.push({ method: attempt.method, message })
+            // Continue trying the next raw-signing shape.
+          }
+        }
+      }
       if (typeof signSecp256k1Digest === 'function') {
         try {
           return {
@@ -114,25 +135,6 @@ export async function signRawEcdsaDigest(params: {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error ?? 'unknown_error')
           failures.push({ method: 'privy_authorized_secp256k1_sign', message })
-        }
-      }
-      if (typeof request !== 'function') {
-        return { signature: null as Hex | null, failures }
-      }
-      for (const attempt of requestAttempts) {
-        try {
-          const rawSig = await request({
-            method: attempt.method,
-            params: attempt.params,
-          })
-          return {
-            signature: ensureSignatureHex(rawSig, `${label}.${attempt.suffix}`),
-            failures,
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error ?? 'unknown_error')
-          failures.push({ method: attempt.method, message })
-          // Continue trying the next raw-signing shape.
         }
       }
       return { signature: null as Hex | null, failures }
