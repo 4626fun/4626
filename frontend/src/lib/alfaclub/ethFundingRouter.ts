@@ -40,6 +40,8 @@ export type AlfaClubEthFundingCallsParams = {
   fundingSwap: TransactionRequest
   /** WETH.deposit and WETH.approve(Permit2), used by canonical sponsored wallets. */
   preparatoryCalls?: TransactionRequest[]
+  /** ETH amount reviewed by the user and requested from the quote API. */
+  expectedFundingInputAmount: bigint
   fundingOutputAmount: bigint
   sender: Address
   router: Address
@@ -91,6 +93,9 @@ export function buildAlfaClubEthFundingCalls(
     fundingMode === 'wethPermit2'
       ? BigInt(String(preparatoryCalls[0]?.value ?? '0'))
       : BigInt(String(funding.value ?? '0'))
+  if (fundingInputAmount !== params.expectedFundingInputAmount) {
+    throw new Error('ETH funding quote input does not match the requested amount')
+  }
   if (params.fundingOutputAmount < params.buyLimit) {
     throw new Error('ETH funding quote does not cover the Sudoswap buy limit')
   }

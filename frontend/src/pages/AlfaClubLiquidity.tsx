@@ -1325,6 +1325,7 @@ export function AlfaClubLiquidity({
         calls = buildAlfaClubEthFundingCalls({
           fundingSwap,
           preparatoryCalls,
+          expectedFundingInputAmount: ethAmount,
           fundingOutputAmount,
           sender: executionAddress,
           router,

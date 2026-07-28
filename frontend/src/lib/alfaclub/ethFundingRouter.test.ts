@@ -35,6 +35,7 @@ describe('buildAlfaClubEthFundingCalls', () => {
         value: '1000000000000000',
         chainId: 8453,
       },
+      expectedFundingInputAmount: 1000000000000000n,
       fundingOutputAmount: 250n,
       sender: SENDER,
       router: ROUTER,
@@ -80,6 +81,7 @@ describe('buildAlfaClubEthFundingCalls', () => {
           value: '1',
           chainId: 8453,
         },
+        expectedFundingInputAmount: 1n,
         fundingOutputAmount: 199n,
         sender: SENDER,
         router: ROUTER,
@@ -129,6 +131,7 @@ describe('buildAlfaClubEthFundingCalls', () => {
         value: '0',
         chainId: 8453,
       },
+      expectedFundingInputAmount: 1000000000000000n,
       fundingOutputAmount: 250n,
       sender: SENDER,
       router: ROUTER,
@@ -160,6 +163,7 @@ describe('buildAlfaClubEthFundingCalls', () => {
           value: '1',
           chainId: 8453,
         },
+        expectedFundingInputAmount: 1n,
         fundingOutputAmount: 200n,
         sender: SENDER,
         router: ROUTER,
@@ -173,6 +177,37 @@ describe('buildAlfaClubEthFundingCalls', () => {
         deadline: 1_900_000_000n,
       }),
     ).toThrow(/approved Zora router/i)
+  })
+
+  it('rejects a native quote that spends more ETH than requested', () => {
+    expect(() =>
+      buildAlfaClubEthFundingCalls({
+        fundingSwap: {
+          to: ZORA_BASE_UNIVERSAL_ROUTER,
+          from: SENDER,
+          data: encodeMinimalNativeEthFundingExecute({
+            sender: SENDER,
+            creatorCoin: AKITA,
+            inputAmount: 1000000000000000n,
+            amountOutMinimum: 250n,
+          }),
+          value: '1000000000000000',
+          chainId: 8453,
+        },
+        expectedFundingInputAmount: 10000000000000n,
+        fundingOutputAmount: 250n,
+        sender: SENDER,
+        router: ROUTER,
+        adapter: ADAPTER,
+        permit2: PERMIT2,
+        friendKey: FRIEND_KEY,
+        creatorCoin: AKITA,
+        pair: PAIR,
+        keyAmount: 1n,
+        buyLimit: 200n,
+        deadline: 1_900_000_000n,
+      }),
+    ).toThrow(/input does not match the requested amount/i)
   })
 })
 
@@ -191,6 +226,7 @@ describe('buildAlfaClubEthFundingCalls', () => {
           value: '1',
           chainId: 8453,
         },
+        expectedFundingInputAmount: 1n,
         fundingOutputAmount: 250n,
         sender: SENDER,
         router: ROUTER,
