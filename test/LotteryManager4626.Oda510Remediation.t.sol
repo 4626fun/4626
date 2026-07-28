@@ -228,4 +228,23 @@ contract LotteryManager4626Oda510RemediationTest is Test {
         manager.exposedPayoutWithEv(token, winner, 1e6, 4, 6900);
         assertEq(gauge.totalPaid(), 0);
     }
+
+    /// @notice Multi-vault must also fail closed when payable vaults are unpriced.
+    /// AMOE-only / stale cold-lane oracles previously skipped every vault and finalized at 0.
+    function test_oda510_3_multiVaultUnpricedReserveRevertsForRetry() public {
+        Oda510MockOracle oracle2 = new Oda510MockOracle();
+        Oda510MockGauge gauge2 = new Oda510MockGauge();
+        address token2 = address(0xC02);
+        registry.addLane(token2, address(oracle2), address(gauge2));
+
+        _enableMultiVault();
+        // Non-positive prices → no lastAcceptedPrice and cold-lane fallback stays 0.
+        oracle.set(0, block.timestamp);
+        oracle2.set(0, block.timestamp);
+
+        vm.expectRevert(LotteryManager4626AdminModule.FairEvCapUnavailable.selector);
+        manager.exposedPayoutWithEv(token, winner, 1e6, 4, 6900);
+        assertEq(gauge.totalPaid() + gauge2.totalPaid(), 0, "unpriced basket must not finalize a drain");
+    }
+
 }

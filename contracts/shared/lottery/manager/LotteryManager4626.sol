@@ -2731,8 +2731,11 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         if (rewardShares == 0) return (0, 0);
 
         // ODA-510-1: ticket-level fair-EV budget shared across the basket (not per-vault).
+        // Missing/stale price must bubble (same as single-vault): silent skip would finalize a
+        // recorded win at 0 when every payable vault in the cursor window is unpriced
+        // (e.g. AMOE-only lanes with stale cold-lane oracles).
         uint256 priceUSD1e18 = _fairCapPriceUSD1e18(token);
-        if (priceUSD1e18 == 0) return (0, 0);
+        if (priceUSD1e18 == 0) revert FairEvCapUnavailable();
         uint256 maxRewardShares =
             LotteryManager4626PricingLib.sharesForPrizeUSD(remainingPrizeUSD1e6, priceUSD1e18);
         if (maxRewardShares == 0) return (0, 0);
