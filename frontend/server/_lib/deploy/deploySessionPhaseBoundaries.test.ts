@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { encodeFunctionData } from 'viem'
 
+import {
+  SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2,
+} from '../../../src/lib/deploy/finalizeShareBridgeFee.ts'
 import { assertDeploySessionPhaseBoundaries } from './deploySessionPhaseBoundaries.ts'
 
 const BATCHER_ABI = [
@@ -28,6 +31,50 @@ const BATCHER_ABI = [
           { name: 'auctionSteps', type: 'bytes' },
         ],
       },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase2WithPermit2',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+      {
+        name: 'permit',
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      },
+      { name: 'signature', type: 'bytes' },
     ],
     outputs: [],
   },
@@ -146,6 +193,39 @@ function finalizeData(): `0x${string}` {
   })
 }
 
+function finalizeWithPermit2Data(): `0x${string}` {
+  return encodeFunctionData({
+    abi: BATCHER_ABI,
+    functionName: 'finalizePhase2WithPermit2',
+    args: [
+      {
+        creatorToken: '0x0000000000000000000000000000000000000003',
+        owner: '0x0000000000000000000000000000000000000002',
+        vault: '0x0000000000000000000000000000000000000101',
+        wrapper: '0x0000000000000000000000000000000000000102',
+        shareOFT: '0x0000000000000000000000000000000000000103',
+        gaugeController: '0x0000000000000000000000000000000000000104',
+        ccaLaunchArm: '0x0000000000000000000000000000000000000105',
+        oracle: '0x0000000000000000000000000000000000000106',
+        version: 'vtest',
+        depositAmount: 50_000_000n * 10n ** 18n,
+        requiredRaise: 1n,
+        floorPriceQ96: 1n,
+        auctionSteps: '0x',
+      },
+      {
+        permitted: {
+          token: '0x0000000000000000000000000000000000000003',
+          amount: 50_000_000n * 10n ** 18n,
+        },
+        nonce: 1n,
+        deadline: 1_900_000_000n,
+      },
+      '0x',
+    ],
+  })
+}
+
 function deployPhase3Data(): `0x${string}` {
   return encodeFunctionData({
     abi: BATCHER_ABI,
@@ -224,6 +304,33 @@ describe('assertDeploySessionPhaseBoundaries', () => {
         hasPhase4: true,
       }),
     ).not.toThrow()
+  })
+
+  it('accepts current finalizePhase2WithPermit2 (0x8e782ae1) as phase2 finalize', () => {
+    const data = finalizeWithPermit2Data()
+    expect(data.slice(0, 10).toLowerCase()).toBe(SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
+    expect(() =>
+      assertDeploySessionPhaseBoundaries({
+        phase2FinalizeCalls: [{ data }],
+        phase3Calls: [],
+        phase4Calls: [],
+        hasPhase3: false,
+        hasPhase4: false,
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects current finalizePhase2WithPermit2 inside phase2 pre-finalize', () => {
+    expect(() =>
+      assertDeploySessionPhaseBoundaries({
+        phase2PreFinalizeCalls: [{ data: finalizeWithPermit2Data() }],
+        phase2FinalizeCalls: [{ data: finalizeData() }],
+        phase3Calls: [],
+        phase4Calls: [],
+        hasPhase3: false,
+        hasPhase4: false,
+      }),
+    ).toThrow(/phase2_pre_finalize_boundary_violation:finalize:0x8e782ae1/)
   })
 
   it('rejects deployPhase3Strategies inside phase2 finalize', () => {

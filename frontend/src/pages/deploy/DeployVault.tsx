@@ -99,6 +99,7 @@ import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBa
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
 import {
   attachFinalizeShareBridgeValueToCalls,
+  isFinalizePhase2CallSelector,
   parseCallValue,
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
@@ -5233,9 +5234,19 @@ function DeployVaultBatcher({
           for (const c of calls) {
             const to = getAddress(c.target).toLowerCase()
             if (!allow.has(to)) throw new Error(`Unsafe call target blocked: ${to}`)
-            if (c.value !== 0n) throw new Error('Unsafe call value blocked (non-zero ETH value)')
             const d = String(c.data ?? '')
             if (!d.startsWith('0x')) throw new Error('Unsafe call data blocked (missing 0x prefix)')
+            if (c.value !== 0n) {
+              // Share-mesh finalizePhase2 is payable (LZ native fee). Allow only that
+              // batcher selector family; server/paymaster still bound the amount.
+              const selector = d.slice(0, 10).toLowerCase()
+              const isBatcherFinalize =
+                to === getAddress(batcherAddress).toLowerCase() &&
+                isFinalizePhase2CallSelector(selector)
+              if (!isBatcherFinalize) {
+                throw new Error('Unsafe call value blocked (non-zero ETH value)')
+              }
+            }
           }
         }
 

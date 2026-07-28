@@ -1,12 +1,9 @@
 import type { Hex } from 'viem'
 
+import { isFinalizePhase2CallSelector } from '../../../src/lib/deploy/finalizeShareBridgeFee.js'
+
 export type DeploySessionPhaseCall = { data: Hex }
 
-const SELECTOR_FINALIZE_PHASE2 = new Set([
-  '0xbd4583fb',
-  '0xab56c176',
-  '0xcafc9348',
-])
 const PHASE2_PRE_FINALIZE_SELECTORS = new Set([
   '0x4689260b', // whitelistPayoutRouterOnWrapper(address,address)
   '0x8522016e', // setPayoutRouterShareOftNoFees(address,address)
@@ -55,7 +52,7 @@ export function assertDeploySessionPhaseBoundaries(params: {
   const phase2PreFinalizeCalls = params.phase2PreFinalizeCalls ?? []
   for (const call of phase2PreFinalizeCalls) {
     const selector = readSelector(call.data)
-    if (SELECTOR_FINALIZE_PHASE2.has(selector)) {
+    if (isFinalizePhase2CallSelector(selector)) {
       throw new Error(`phase2_pre_finalize_boundary_violation:finalize:${selector}`)
     }
     if (!PHASE2_PRE_FINALIZE_SELECTORS.has(selector)) {
@@ -66,7 +63,7 @@ export function assertDeploySessionPhaseBoundaries(params: {
 
   for (const call of params.phase2FinalizeCalls) {
     const selector = readSelector(call.data)
-    if (!SELECTOR_FINALIZE_PHASE2.has(selector)) {
+    if (!isFinalizePhase2CallSelector(selector)) {
       throw new Error(`phase2_finalize_boundary_violation:${selector}`)
     }
   }

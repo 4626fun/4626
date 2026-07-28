@@ -17,7 +17,10 @@ import {
 import { base } from 'viem/chains'
 
 import { isShareOftSaltOverrideDisabledBatcher } from '../../../../../src/config/contracts.defaults.js'
-import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import {
+  attachFinalizeShareBridgeValueToCalls,
+  isFinalizePhase2CallSelector,
+} from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import {
   CREATOR_OVAULT_MODULE_STORAGE_V2,
   CREATOR_OVAULT_MODULE_STORAGE_V3,
@@ -2699,11 +2702,7 @@ export async function validateDeploySessionRequest(params: {
       if (params.requireCalls) {
         const finalizeBridgeCall = phase2FinalizeCalls.find((call) => {
           const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
-          return (
-            data.startsWith('0xbd4583fb') ||
-            data.startsWith('0xab56c176') ||
-            data.startsWith('0xcafc9348')
-          )
+          return data.length >= 10 && isFinalizePhase2CallSelector(data.slice(0, 10))
         })
         if (finalizeBridgeCall?.to && isAddress(finalizeBridgeCall.to)) {
           await assertShareBridgeOftWiringForFinalize({
