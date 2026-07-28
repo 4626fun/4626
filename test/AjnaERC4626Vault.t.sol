@@ -146,8 +146,21 @@ contract AjnaERC4626VaultTest is Test {
         asset.approve(address(vault), type(uint256).max);
     }
 
+    function _setToll(uint256 bps) internal {
+        auth.setToll(bps);
+        vm.warp(auth.pendingTollAt());
+        auth.executeTollUpdate();
+    }
+
+    function _setTax(uint256 bps) internal {
+        auth.setTax(bps);
+        vm.warp(auth.pendingTaxAt());
+        auth.executeTaxUpdate();
+    }
+
+
     function testDepositCollectsTollAndMintsNetShares() public {
-        auth.setToll(100);
+        _setToll(100);
 
         vm.prank(user);
         uint256 shares = vault.deposit(100e18, user);
@@ -167,7 +180,7 @@ contract AjnaERC4626VaultTest is Test {
     }
 
     function testMintCollectsTollAndMintsRequestedShares() public {
-        auth.setToll(100);
+        _setToll(100);
 
         vm.prank(user);
         uint256 assetsIn = vault.mint(99e18, user);
@@ -183,7 +196,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setTax(100);
+        _setTax(100);
 
         vm.prank(user);
         uint256 assetsOut = vault.redeem(100e18, user, user);
@@ -256,16 +269,17 @@ contract AjnaERC4626VaultTest is Test {
 
         auth.pause();
 
+        // ODA-519-5: pause blocks entries only — exits remain available.
         vm.prank(user);
-        vm.expectRevert();
         vault.redeem(10e18, user, user);
+        assertEq(vault.balanceOf(user), 0);
     }
 
     function testMaxWithdrawRoundsDownNetAssetsWhenTaxIsSet() public {
         vm.prank(user);
         vault.deposit(101, user);
 
-        auth.setTax(100);
+        _setTax(100);
 
         assertEq(vault.maxWithdraw(user), 99);
     }
@@ -274,7 +288,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(101, user);
 
-        auth.setTax(100);
+        _setTax(100);
 
         assertEq(vault.previewRedeem(101), 99);
     }
@@ -310,7 +324,7 @@ contract AjnaERC4626VaultTest is Test {
         vault.moveFromBuffer(4_156, 10e18);
     }
 
-    function testMoveToBufferRespectsPauseGuardForKeeper() public {
+    function testMoveToBufferAllowedWhilePausedForKeeper() public {
         vm.prank(user);
         vault.deposit(100e18, user);
 
@@ -319,9 +333,11 @@ contract AjnaERC4626VaultTest is Test {
         vault.moveFromBuffer(4_156, 10e18);
         auth.pause();
 
+        // ODA-519-5: emergency drain / exit liquidity must work while paused.
         vm.prank(keeper);
-        vm.expectRevert(AjnaERC4626Vault.VaultPaused.selector);
-        vault.moveToBuffer(4_156, 1e18);
+        (uint256 pulled,) = vault.moveToBuffer(4_156, 1e18);
+        assertEq(pulled, 1e18);
+        assertEq(vault.bucketLp(4_156), 9e18);
     }
 
     function testMoveFromBufferRefundsActualBalanceWhenPoolKeepsDust() public {

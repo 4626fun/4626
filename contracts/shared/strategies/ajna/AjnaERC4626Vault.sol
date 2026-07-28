@@ -87,7 +87,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         uint256 bucketCount = _buckets.length;
         for (uint256 i = 0; i < bucketCount; i++) {
             uint256 bucketIndex = _buckets[i];
-            assets += AjnaVaultLibrary.lpToAssets(AJNA_POOL, bucketIndex, bucketLp[bucketIndex]);
+            assets += AjnaVaultLibrary.lpToAssets(AJNA_POOL, bucketIndex, bucketLp[bucketIndex], address(this));
         }
     }
 
@@ -174,8 +174,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     /// Probe `erc4626DeviationFlags()` (bit 0) or `hasConservativeMaxWithdraw()` to detect
     /// this deviation without parsing NatSpec. See also `isPartialWithdrawVault()`.
     function maxWithdraw(address owner) public view override returns (uint256) {
-        if (AUTH.paused()) return 0;
-
+        // ODA-519-5: pause must not brick exits / emergency drain (entries stay paused).
         uint256 grossAssetsByShares = super.maxWithdraw(owner);
         uint256 grossAssetsFromBuffer = Math.min(grossAssetsByShares, bufferAssets());
         return _netFromGross(grossAssetsFromBuffer, AUTH.tax());
@@ -185,8 +184,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     /// @dev FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies. Probe
     ///      `erc4626DeviationFlags()` (bit 1) or `hasConservativeMaxWithdraw()` to detect.
     function maxRedeem(address owner) public view override returns (uint256) {
-        if (AUTH.paused()) return 0;
-
+        // ODA-519-5: pause must not brick exits / emergency drain (entries stay paused).
         uint256 grossAssetsByShares = super.maxWithdraw(owner);
         uint256 buffer = bufferAssets();
         uint256 grossAssetsFromBuffer = Math.min(grossAssetsByShares, buffer);
@@ -279,7 +277,6 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         public
         override
         onlyAdapterAuthorized
-        notPaused
         nonReentrant
         returns (uint256 shares)
     {
@@ -306,7 +303,6 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         public
         override
         onlyAdapterAuthorized
-        notPaused
         nonReentrant
         returns (uint256 assetsOut)
     {
@@ -366,12 +362,17 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
         external
         onlySwapperOrKeeper
-        notPaused
         nonReentrant
         returns (uint256 pulledAssets, uint256 burnedBucketLp)
     {
-        burnedBucketLp = AjnaVaultLibrary.burnableLp(bucketLp[fromIndex], bucketLpAmount);
-        (pulledAssets, burnedBucketLp) = AJNA_POOL.removeQuoteToken(burnedBucketLp, fromIndex);
+        // ODA-519-5: allow drain while paused (entries remain gated).
+        uint256 requestedLp = AjnaVaultLibrary.burnableLp(bucketLp[fromIndex], bucketLpAmount);
+        // ODA-519-3: Ajna `removeQuoteToken` takes quote-token WAD, not LP.
+        uint256 maxQuote = requestedLp == bucketLp[fromIndex]
+            ? type(uint256).max
+            : AjnaVaultLibrary.lpToAssets(AJNA_POOL, fromIndex, requestedLp, address(this));
+        if (maxQuote == 0) maxQuote = type(uint256).max;
+        (pulledAssets, burnedBucketLp) = AJNA_POOL.removeQuoteToken(maxQuote, fromIndex);
 
         bucketLp[fromIndex] -= burnedBucketLp;
         _untrackBucketIfEmpty(fromIndex);
@@ -391,15 +392,22 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         AjnaVaultLibrary.validateBucketIndex(toIndex, AUTH.minBucketIndex());
 
         uint256 trackedLp = AjnaVaultLibrary.burnableLp(bucketLp[fromIndex], bucketLpAmount);
-        (fromBucketLp, toBucketLp,) = AJNA_POOL.moveQuoteToken(trackedLp, fromIndex, toIndex, block.timestamp + 1 hours);
+        // ODA-519-3: Ajna `moveQuoteToken` takes quote-token WAD, not LP.
+        uint256 maxQuote = trackedLp == bucketLp[fromIndex]
+            ? type(uint256).max
+            : AjnaVaultLibrary.lpToAssets(AJNA_POOL, fromIndex, trackedLp, address(this));
+        if (maxQuote == 0) maxQuote = type(uint256).max;
+        (fromBucketLp, toBucketLp,) =
+            AJNA_POOL.moveQuoteToken(maxQuote, fromIndex, toIndex, block.timestamp + 1 hours);
 
         bucketLp[fromIndex] -= fromBucketLp;
+        // ODA-519-19: free the source slot before tracking destination at MAX_BUCKETS.
+        _untrackBucketIfEmpty(fromIndex);
         bucketLp[toIndex] += toBucketLp;
         // ODA-466 low: only track destination when move minted LP (mirror moveFromBuffer).
         if (toBucketLp > 0) {
             _trackBucket(toIndex);
         }
-        _untrackBucketIfEmpty(fromIndex);
 
         emit BucketMoved(fromIndex, toIndex, fromBucketLp, toBucketLp);
     }
@@ -409,7 +417,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     }
 
     function bucketAssets(uint256 bucketIndex) public view returns (uint256) {
-        return AjnaVaultLibrary.lpToAssets(AJNA_POOL, bucketIndex, bucketLp[bucketIndex]);
+        return AjnaVaultLibrary.lpToAssets(AJNA_POOL, bucketIndex, bucketLp[bucketIndex], address(this));
     }
 
     function getBuckets() external view returns (uint256[] memory) {

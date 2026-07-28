@@ -39,6 +39,11 @@ contract ManipulableERC4626Vault is ERC4626 {
         uint256 baseAssets = super.convertToAssets(shares);
         return (baseAssets * assetsMultiplier) / 1e18;
     }
+
+    // ODA-519-11: adapter prefers previewRedeem for NAV — keep the mock consistent.
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        return convertToAssets(shares);
+    }
 }
 
 contract RevertingWithdrawERC4626Vault is ERC4626 {
