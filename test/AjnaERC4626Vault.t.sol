@@ -21,6 +21,9 @@ contract MockERC20 is ERC20 {
 contract MockAjnaPool is IAjnaPool {
     IERC20 public immutable quoteToken;
     address public immutable collateralToken;
+    /// @dev When > 0, pull full `amount` but report `amount - dustAmount` as addedAmount
+    ///      (Ajna empty-bucket dust behavior that previously broke vault refunds).
+    uint256 public dustAmount;
 
     mapping(uint256 => mapping(address => uint256)) public lenderLpBalance;
     mapping(uint256 => uint256) public bucketLpTotal;
@@ -31,12 +34,17 @@ contract MockAjnaPool is IAjnaPool {
         collateralToken = collateral_;
     }
 
+    function setDustAmount(uint256 dustAmount_) external {
+        dustAmount = dustAmount_;
+    }
+
     function addQuoteToken(uint256 amount, uint256 index, uint256) external returns (uint256 bucketLP, uint256 addedAmount) {
         quoteToken.transferFrom(msg.sender, address(this), amount);
-        lenderLpBalance[index][msg.sender] += amount;
-        bucketLpTotal[index] += amount;
-        bucketDeposits[index] += amount;
-        return (amount, amount);
+        uint256 credited = amount > dustAmount ? amount - dustAmount : 0;
+        lenderLpBalance[index][msg.sender] += credited;
+        bucketLpTotal[index] += credited;
+        bucketDeposits[index] += credited;
+        return (credited, credited);
     }
 
     function drawDebt(address, uint256, uint256, uint256) external {}
@@ -314,5 +322,26 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(keeper);
         vm.expectRevert(AjnaERC4626Vault.VaultPaused.selector);
         vault.moveToBuffer(4_156, 1e18);
+    }
+
+    function testMoveFromBufferRefundsActualBalanceWhenPoolKeepsDust() public {
+        // Reproduce AKITA live failure mode: pool pulls full assets but returns
+        // slightly lower movedAssets. Refunding assets-movedAssets under-funds.
+        pool.setDustAmount(7);
+
+        vm.prank(user);
+        vault.deposit(100e18, user);
+
+        uint256 bufferBefore = vault.bufferAssets();
+        vm.prank(user);
+        (uint256 moved, uint256 lp) = vault.moveFromBuffer(4_156, 90e18);
+
+        assertEq(moved, 90e18 - 7);
+        assertEq(lp, 90e18 - 7);
+        // Dust stayed in the pool; vault must not attempt a phantom refund.
+        assertEq(asset.balanceOf(address(vault)), 0);
+        // Buffer kept the unmoved floor (10e18) — no double-deposit / revert.
+        assertEq(vault.bufferAssets(), bufferBefore - 90e18);
+        assertEq(vault.bucketLp(4_156), 90e18 - 7);
     }
 }

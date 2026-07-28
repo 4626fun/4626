@@ -344,11 +344,15 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
         AjnaVaultLibrary.ensureBufferRatio(totalAssets(), currentBufferAssets, assets, AUTH.bufferRatio());
 
+        // Ajna may pull the full `assets` while returning a slightly lower `movedAssets`
+        // (empty-bucket dust). Refund whatever token balance actually remains — never
+        // `assets - movedAssets`, which under-funds when the pool kept the dust.
         BUFFER.withdrawToVault(assets);
         (mintedBucketLp, movedAssets) = AJNA_POOL.addQuoteToken(assets, toIndex, block.timestamp + 1 hours);
 
-        if (assets > movedAssets) {
-            _bufferDeposit(assets - movedAssets);
+        uint256 remaining = ASSET_TOKEN.balanceOf(address(this));
+        if (remaining > 0) {
+            _bufferDeposit(remaining);
         }
 
         if (mintedBucketLp > 0) {

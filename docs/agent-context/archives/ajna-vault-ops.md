@@ -133,8 +133,8 @@ No checked-in handoff script yet — run the six Safe steps above manually (or v
 
 In `AjnaERC4626Vault.moveFromBuffer`, after `addQuoteToken`:
 
-- **Broken (live AKITA):** `_bufferDeposit(assets - movedAssets)` when `assets > movedAssets`.
-- **Required:** refund whatever token balance remains on the vault:
+- **Broken (live AKITA bytecode):** `_bufferDeposit(assets - movedAssets)` when `assets > movedAssets`.
+- **Fixed in source (must reseal for v1.20.0):** refund whatever token balance remains on the vault:
 
 ```solidity
 uint256 remaining = ASSET_TOKEN.balanceOf(address(this));
