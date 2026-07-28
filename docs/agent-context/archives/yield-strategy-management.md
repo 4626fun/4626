@@ -39,9 +39,10 @@ Key ideas:
 - Vault: `contracts/vault/CreatorOVault.sol`
 - Strategy interface: `contracts/shared/interfaces/IStrategy.sol`
 - Base strategy pattern: `contracts/vault/strategies/BaseCreatorStrategy.sol`
-- Ajna strategy adapter: `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
+- Ajna nested sleeve: `contracts/shared/strategies/ajna/` + `contracts/shared/strategies/ERC4626StrategyAdapter.sol`
 - Strategy deploy tooling:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
+- Ajna sleeve ops + **v1.20.0 launch expectations** (buffer vs pool LP, dust, Safe handoff): [`ajna-vault-ops.md`](./ajna-vault-ops.md)
 - Allocation notes: `docs/primitives/market/vault.md`
 - Architecture: `docs/overview/architecture.md`
 

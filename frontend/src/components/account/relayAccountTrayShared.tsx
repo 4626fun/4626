@@ -63,7 +63,7 @@ export function RelayTrayPrimaryTabs(props: {
                 : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
             }`}
           >
-            {value === 'identity' ? 'Wallets' : value === 'portfolio' ? 'Portfolio' : 'Points'}
+            {value === 'identity' ? 'Wallets' : value === 'portfolio' ? 'Portfolio' : 'Free Entry'}
           </button>
         ))}
       </div>
@@ -121,46 +121,45 @@ type RelayAccountTrayFooterProps = {
   signOutDisabled?: boolean
   helpHref?: string
   accountsHref: string
-  settingsHref: string
+  /**
+   * @deprecated Settings and Accounts both opened `/accounts` — drop Settings.
+   * Kept optional so older callers still typecheck.
+   */
+  settingsHref?: string
   /** Use client-side router links when the tray lives inside the app shell. */
   linkMode?: 'router' | 'anchor'
 }
 
 export function RelayAccountTrayFooter(props: RelayAccountTrayFooterProps) {
   const helpHref = props.helpHref ?? `${getMarketingBaseUrl()}/faq`
-  const rowClassName = 'block w-full py-3 px-4 transition-colors hover:bg-white/4'
-  const labelClassName = 'label block text-zinc-300'
+  // One compact row: Help | Account | Sign out — saves vertical space on mobile
+  // and removes the duplicate Accounts/Settings pair that both went to /accounts.
+  const cellClassName =
+    'flex min-h-11 flex-1 items-center justify-center px-2 py-2.5 text-center transition-colors hover:bg-white/4 disabled:opacity-60'
+  const labelClassName = 'label text-[11px] text-zinc-300'
+  // Help is marketing FAQ (often absolute). Always use <a> so React Router
+  // does not treat an absolute URL as an in-app path.
+  const helpIsExternal = /^https?:\/\//i.test(helpHref)
 
-  const HelpRow =
-    props.linkMode === 'router' ? (
-      <Link to={helpHref} onClick={props.onClose} className={rowClassName}>
+  const HelpCell =
+    props.linkMode === 'router' && !helpIsExternal ? (
+      <Link to={helpHref} onClick={props.onClose} className={cellClassName}>
         <span className={labelClassName}>Help</span>
       </Link>
     ) : (
-      <a href={helpHref} onClick={props.onClose} className={rowClassName}>
+      <a href={helpHref} onClick={props.onClose} className={cellClassName}>
         <span className={labelClassName}>Help</span>
       </a>
     )
 
-  const AccountsRow =
+  const AccountCell =
     props.linkMode === 'router' ? (
-      <Link to={props.accountsHref} onClick={props.onClose} className={rowClassName}>
-        <span className={labelClassName}>Accounts</span>
+      <Link to={props.accountsHref} onClick={props.onClose} className={cellClassName}>
+        <span className={labelClassName}>Account</span>
       </Link>
     ) : (
-      <a href={props.accountsHref} onClick={props.onClose} className={rowClassName}>
-        <span className={labelClassName}>Accounts</span>
-      </a>
-    )
-
-  const SettingsRow =
-    props.linkMode === 'router' ? (
-      <Link to={props.settingsHref} onClick={props.onClose} className={rowClassName}>
-        <span className={labelClassName}>Settings</span>
-      </Link>
-    ) : (
-      <a href={props.settingsHref} onClick={props.onClose} className={rowClassName}>
-        <span className={labelClassName}>Settings</span>
+      <a href={props.accountsHref} onClick={props.onClose} className={cellClassName}>
+        <span className={labelClassName}>Account</span>
       </a>
     )
 
@@ -168,17 +167,19 @@ export function RelayAccountTrayFooter(props: RelayAccountTrayFooterProps) {
     <>
       <div className="mt-auto" />
       <div className="border-t border-white/8 bg-black/20">
-        {HelpRow}
-        {AccountsRow}
-        {SettingsRow}
-        <button
-          type="button"
-          onClick={() => void props.onSignOut()}
-          disabled={props.signOutBusy === true || props.signOutDisabled === true}
-          className="block w-full py-3 px-4 text-left transition-colors hover:bg-white/4 disabled:opacity-60"
-        >
-          <span className={labelClassName}>{props.signOutBusy ? 'Signing out…' : 'Sign out'}</span>
-        </button>
+        <div className="grid grid-cols-3 divide-x divide-white/8">
+          {HelpCell}
+          {AccountCell}
+          <button
+            type="button"
+            onClick={() => void props.onSignOut()}
+            disabled={props.signOutBusy === true || props.signOutDisabled === true}
+            className={cellClassName}
+            aria-label={props.signOutBusy ? 'Signing out' : 'Sign out'}
+          >
+            <span className={labelClassName}>{props.signOutBusy ? '…' : 'Sign out'}</span>
+          </button>
+        </div>
       </div>
     </>
   )

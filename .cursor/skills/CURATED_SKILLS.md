@@ -4,7 +4,7 @@ Project skills are **thin pointers** — full runbooks live in `docs/agent-conte
 
 Prune globals: `bash scripts/prune-cursor-skills.sh`
 
-## Active (9)
+## Active (10)
 
 | Skill | Archive / notes |
 |-------|-----------------|
@@ -15,6 +15,7 @@ Prune globals: `bash scripts/prune-cursor-skills.sh`
 | oft-chain-config | `archives/oft-chain-config.md` |
 | lottery-vrf-ops | `archives/lottery-vrf-ops.md` |
 | yield-strategy-management | `archives/yield-strategy-management.md` |
+| ajna-vault-ops | `archives/ajna-vault-ops.md` (v1.20.0 sleeve launch expectations) |
 | zora-cli | slash-only |
 | modern-python | slash-only |
 

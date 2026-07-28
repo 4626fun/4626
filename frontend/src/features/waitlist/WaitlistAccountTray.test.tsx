@@ -157,13 +157,24 @@ describe('WaitlistAccountTray', () => {
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
     expect(screen.getByRole('button', { name: /^wallets$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^portfolio$/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^points$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^free entry$/i })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
     // Sign out lives in the shared footer (not duplicated in the wallets list).
     expect(screen.getByRole('button', { name: /^sign out$/i })).toBeTruthy()
     expect(screen.getByRole('link', { name: /^help$/i })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /^accounts$/i })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /^settings$/i })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^account$/i })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /^settings$/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^accounts$/i })).toBeNull()
+  })
+
+  it('does not mount wagmi AMOE entry on Free Entry; deep-links to the app', () => {
+    renderTray()
+    fireEvent.click(screen.getByLabelText('Open account menu'))
+    fireEvent.click(screen.getByRole('button', { name: /^free entry$/i }))
+
+    expect(screen.getByRole('link', { name: /enter free in the app/i })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^official rules$/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^enter free$/i })).toBeNull()
   })
 
   it('does not flash smart-wallet needs-setup while account profile is still null', () => {

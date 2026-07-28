@@ -294,7 +294,9 @@ export function AmoeEntryCard(props: {
       }
     } catch (error: unknown) {
       setErrorMessage(toErrorMessage(error, 'Unable to load points'))
-      setJackpotUsd(null)
+      if (jackpotUsdOverride === undefined) {
+        setJackpotUsd(null)
+      }
     } finally {
       setLoadingCredits(false)
     }
@@ -312,6 +314,20 @@ export function AmoeEntryCard(props: {
   useEffect(() => {
     void refreshCredits()
   }, [refreshCredits])
+
+  useEffect(() => {
+    if (!isTray) return
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      void refreshCredits()
+    }
+    window.addEventListener('focus', refreshIfVisible)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    return () => {
+      window.removeEventListener('focus', refreshIfVisible)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
+  }, [isTray, refreshCredits])
 
   useEffect(() => {
     if (jackpotUsdOverride !== undefined) {
@@ -579,7 +595,7 @@ export function AmoeEntryCard(props: {
     <div
       className={
         isTray
-          ? 'relative overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03] p-3'
+          ? 'relative'
           : 'relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgb(var(--brand-primary)/0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6'
       }
     >
@@ -589,70 +605,94 @@ export function AmoeEntryCard(props: {
           <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
         </>
       ) : null}
-      <div className={`relative ${isTray ? 'space-y-2.5' : 'space-y-3.5'}`}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="label">{isTray ? 'Lottery' : 'Free jackpot entry'}</p>
-            <h3 className={`font-medium text-zinc-100 mt-1 ${isTray ? 'text-sm' : 'text-lg'}`}>Enter free</h3>
-            {isTray && jackpotUsdDisplay ? (
-              <p className="mt-1 text-xs text-zinc-400">
-                For <span className="font-semibold text-brand-accent tabular-nums">{jackpotUsdDisplay}</span>
-              </p>
-            ) : null}
-          </div>
-          {!isTray ? <Gift className="w-5 h-5 text-brand-primary" /> : null}
-        </div>
-
+      <div className={`relative ${isTray ? 'space-y-3' : 'space-y-3.5'}`}>
         {!isTray ? (
-          <p className="text-sm leading-5 text-zinc-500">
-            Use your points for a free jackpot entry — no purchase required.
-          </p>
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="label">Free jackpot entry</p>
+                <h3 className="text-lg font-medium text-zinc-100 mt-1">Enter free</h3>
+              </div>
+              <Gift className="w-5 h-5 text-brand-primary" />
+            </div>
+            <p className="text-sm leading-5 text-zinc-500">
+              Use your points for a free jackpot entry — no purchase required.
+            </p>
+          </>
         ) : null}
-        <div className={`rounded-2xl bg-black/18 shadow-inner shadow-black/25 ${isTray ? 'p-2.5' : 'p-3'}`}>
-          <p
-            className={`font-semibold uppercase leading-5 tracking-wide text-zinc-200 ${
-              isTray ? 'text-[10px]' : 'text-[11px]'
-            }`}
-          >
-            No purchase necessary. A purchase will not improve your chances of winning.
-          </p>
-          <div
-            className={`mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-zinc-500 ${
-              isTray ? 'text-[10px]' : 'text-[11px]'
-            }`}
-          >
-            {!isTray ? <span>Free and paid entries use the same winner selection.</span> : null}
-            <a
-              href={officialRulesUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-brand-accent hover:text-brand-primary"
-            >
-              Official Rules <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+
+        {isTray ? (
+          <div className="space-y-1 text-[11px] leading-4 text-zinc-500">
+            <p>
+              No purchase necessary. A purchase will not improve your chances of winning. Free and paid
+              entries use the same winner selection.{' '}
+              <a
+                href={officialRulesUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-accent hover:text-brand-primary"
+              >
+                Official Rules
+              </a>
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="rounded-2xl bg-black/18 p-3 shadow-inner shadow-black/25">
+            <p className="text-[11px] font-semibold uppercase leading-5 tracking-wide text-zinc-200">
+              No purchase necessary. A purchase will not improve your chances of winning.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
+              <span>Free and paid entries use the same winner selection.</span>
+              <a
+                href={officialRulesUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-brand-accent hover:text-brand-primary"
+              >
+                Official Rules <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        )}
 
         <div
-          className={`space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)] ${
-            isTray ? 'p-2.5' : 'p-3'
-          }`}
+          className={
+            isTray
+              ? 'space-y-2'
+              : 'space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)]'
+          }
         >
-          <div className="flex items-start justify-between gap-3 text-xs">
-            <div>
-              <div className="text-zinc-500">Your points</div>
-              <div className="mt-0.5 text-lg font-semibold text-zinc-100">
-                {credits.toLocaleString()}
+          {!isTray ? (
+            <div className="flex items-start justify-between gap-3 text-xs">
+              <div>
+                <div className="text-zinc-500">Your points</div>
+                <div className="mt-0.5 text-lg font-semibold text-zinc-100">
+                  {credits.toLocaleString()}
+                </div>
               </div>
+              {jackpotUsdDisplay ? (
+                <div className="text-right">
+                  <div className="text-zinc-500">Current jackpot</div>
+                  <div className="mt-0.5 text-sm font-medium text-zinc-100">{jackpotUsdDisplay}</div>
+                </div>
+              ) : null}
             </div>
-            {!isTray && jackpotUsdDisplay ? (
-              <div className="text-right">
-                <div className="text-zinc-500">Current jackpot</div>
-                <div className="mt-0.5 text-sm font-medium text-zinc-100">{jackpotUsdDisplay}</div>
-              </div>
-            ) : null}
-          </div>
-          {!hasEnoughForFloor && !hasPendingEntry ? (
+          ) : (
+            <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
+              <span>
+                Eligible for entry:{' '}
+                <span className="font-medium tabular-nums text-zinc-100">{credits.toLocaleString()}</span>
+              </span>
+              {hasEnoughForFloor || hasPendingEntry ? (
+                <span>
+                  Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
+                </span>
+              ) : (
+                <span>Need {missingCredits.toLocaleString()} more</span>
+              )}
+            </div>
+          )}
+          {!isTray && !hasEnoughForFloor && !hasPendingEntry ? (
             <div className="space-y-2 text-xs">
               <div>
                 <div className="font-medium text-zinc-100">Not enough points yet</div>
@@ -662,14 +702,15 @@ export function AmoeEntryCard(props: {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : null}
+          {!isTray && (hasEnoughForFloor || hasPendingEntry) ? (
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span>{hasPendingEntry ? 'Finish your free entry.' : 'Ready to enter.'}</span>
               <span>
                 Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
               </span>
             </div>
-          )}
+          ) : null}
           {(hasEnoughForFloor || hasPendingEntry) && showAmountAdjust && !hasPendingEntry ? (
             <>
               <label htmlFor="amoe-points-slider" className="text-xs font-medium text-zinc-300">
@@ -711,7 +752,11 @@ export function AmoeEntryCard(props: {
               type="button"
               onClick={() => void handleEnterForFree()}
               disabled={!canEnter || (hasPendingEntry && !isPendingAmoeEntryReady(pendingEntry!))}
-              className="h-11 w-full rounded-xl bg-brand-primary px-3 text-sm font-semibold text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className={`w-full bg-brand-primary px-3 font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 ${
+                isTray
+                  ? 'h-10 rounded-lg text-sm'
+                  : 'h-11 rounded-xl text-sm shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'
+              }`}
             >
               {entryBusy ? (
                 <span className="inline-flex items-center justify-center gap-1.5">
@@ -721,7 +766,7 @@ export function AmoeEntryCard(props: {
                 isPendingAmoeEntryReady(pendingEntry!) ? (
                   'Finish free entry'
                 ) : (
-                  `Come back after ${new Date(pendingEntry!.eligibleSubmitAfterUnixSec * 1000).toLocaleString()}`
+                  `Come back after ${new Date((pendingEntry!.eligibleSubmitAfterUnixSec + 15 * 60) * 1000).toLocaleString()}`
                 )
               ) : (
                 'Enter free'
@@ -753,12 +798,16 @@ export function AmoeEntryCard(props: {
             ) : null}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid grid-cols-2 ${isTray ? 'gap-1.5' : 'gap-2'}`}>
             <button
               type="button"
               onClick={() => openXPost()}
               disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
-              className="col-span-2 h-9 rounded-xl bg-brand-primary px-3 text-xs font-medium text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className={`col-span-2 bg-brand-primary px-3 text-xs font-medium text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 ${
+                isTray
+                  ? 'h-9 rounded-lg'
+                  : 'h-9 rounded-xl shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'
+              }`}
             >
               {checkinBusy ? (
                 <span className="inline-flex items-center justify-center gap-1.5">
@@ -776,7 +825,9 @@ export function AmoeEntryCard(props: {
               onChange={(event) => setTweetProofUrl(event.target.value)}
               placeholder="Paste posted tweet URL"
               disabled={checkinBusy || entryBusy}
-              className="col-span-2 h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`col-span-2 h-9 border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                isTray ? 'rounded-lg' : 'rounded-xl'
+              }`}
               aria-label="Tweet URL proof"
             />
             <button
@@ -788,7 +839,9 @@ export function AmoeEntryCard(props: {
                 entryBusy ||
                 tweetProofUrl.trim().length === 0
               }
-              className="col-span-2 h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className={`col-span-2 h-9 border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 ${
+                isTray ? 'rounded-lg' : 'rounded-xl'
+              }`}
             >
               {checkinBusy
                 ? 'Verifying tweet…'
@@ -798,7 +851,11 @@ export function AmoeEntryCard(props: {
               type="button"
               onClick={() => void handleXmtpCheckin()}
               disabled={(!walletAddress && !protocolEntryMode) || entryBusy || checkinBusy}
-              className="col-span-2 h-9 rounded-xl bg-brand-primary px-3 text-xs font-medium text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className={`col-span-2 h-9 bg-brand-primary px-3 text-xs font-medium text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 ${
+                isTray
+                  ? 'rounded-lg'
+                  : 'rounded-xl shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'
+              }`}
             >
               <span className="inline-flex items-center justify-center gap-1.5">
                 <MessageCircle className="h-3.5 w-3.5" /> Earn via chat
@@ -807,6 +864,19 @@ export function AmoeEntryCard(props: {
             <div className="col-span-2 text-[11px] text-zinc-500">
               X reward needs tweet verification. Chat reward unlocks after a real DM send.
             </div>
+            <button
+              type="button"
+              onClick={() => void refreshCredits()}
+              disabled={
+                (!walletAddress && !protocolEntryMode) ||
+                loadingCredits ||
+                checkinBusy ||
+                entryBusy
+              }
+              className="col-span-2 text-left text-[11px] font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+            >
+              {loadingCredits ? 'Refreshing…' : 'Refresh balance'}
+            </button>
           </div>
         )}
 

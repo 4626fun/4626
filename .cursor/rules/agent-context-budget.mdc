@@ -35,6 +35,7 @@ Use [docs/agent-context/INDEX.md](docs/agent-context/INDEX.md). Do **not** load 
 | Deploy cutover / bytecode | `archives/deploy-cutovers.md` → core / vault / prefs |
 | Vault deploy runbook | `archives/vault-deployment-ops.md` |
 | Deploy-session operator | `archives/deploy-vault-operator.md` |
+| Ajna sleeve / v1.20.0 buffer→LP | `archives/ajna-vault-ops.md` |
 | Lottery / VRF ops | `archives/lottery-vrf-ops.md` |
 | AlfaClub / Hermit | `archives/alfaclub-ops.md` → core / ops / prefs |
 | Protocol vs operator CSW | `archives/wallet-identity.md` |

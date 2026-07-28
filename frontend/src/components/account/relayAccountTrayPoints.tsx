@@ -111,6 +111,13 @@ export function RelayTrayPointsModule(props: {
   signupId: number
   /** Canonical CSW (preferred) or connected wallet for free jackpot entry. */
   walletAddress?: string | null
+  /**
+   * Marketing `/waitlist` has no WagmiProvider — mounting AmoeEntryCard there
+   * crashes. Use `deep-link` to show jackpot + app CTA instead.
+   */
+  freeEntryMode?: 'full' | 'deep-link'
+  /** App origin for deep-link CTA (required when freeEntryMode is deep-link). */
+  freeEntryAppHref?: string
 }) {
   const [pointsTab, setPointsTab] = useState<PointsTrayTab>('overview')
   const totalRank = props.position?.rank.total ?? null
@@ -131,16 +138,21 @@ export function RelayTrayPointsModule(props: {
     refetchOnWindowFocus: true,
   })
   const jackpotUsdDisplay = formatJackpotUsdDisplay(jackpotQuery.data ?? null)
+  const freeEntryMode = props.freeEntryMode ?? 'full'
+  const officialRulesUrl = (
+    import.meta.env.VITE_AMOE_OFFICIAL_RULES_URL ?? 'https://4626.fun/terms#lottery-amoe-official-rules'
+  ).trim()
+  const freeEntryAppHref = props.freeEntryAppHref ?? '/accounts'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-2 pb-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Total points</div>
           {props.pointsLoading ? (
-            <div className="mt-2 text-[11px] text-zinc-500">Loading points…</div>
+            <div className="mt-2 text-[11px] text-zinc-500">Loading…</div>
           ) : (
-            <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
+            <div className="mt-1.5 text-[28px] font-semibold leading-none tracking-tight text-white tabular-nums">
               {canonicalTotal.toLocaleString()}
             </div>
           )}
@@ -150,7 +162,7 @@ export function RelayTrayPointsModule(props: {
           {jackpotQuery.isLoading ? (
             <div className="mt-2 text-[11px] text-zinc-500">Loading…</div>
           ) : jackpotUsdDisplay ? (
-            <div className="mt-2 text-[22px] font-semibold leading-none tracking-tight text-brand-accent tabular-nums">
+            <div className="mt-1.5 text-[20px] font-semibold leading-none tracking-tight text-brand-accent tabular-nums">
               {jackpotUsdDisplay}
             </div>
           ) : (
@@ -158,107 +170,125 @@ export function RelayTrayPointsModule(props: {
           )}
         </div>
       </div>
-      {props.pointsLoading ? null : (
-        <>
 
-          <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
-            {POINTS_TRAY_TABS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setPointsTab(id)}
-                className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
-                  pointsTab === id
-                    ? 'bg-white/[0.08] text-white'
-                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
-                }`}
+      <div className="mt-3 flex items-center gap-1">
+        {POINTS_TRAY_TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setPointsTab(id)}
+            className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+              pointsTab === id
+                ? 'bg-white/[0.08] text-white'
+                : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {pointsTab === 'overview' ? (
+        <div className="mt-3 space-y-5">
+          {freeEntryMode === 'full' ? (
+            <AmoeEntryCard
+              walletAddress={amoeWallet}
+              creatorCoin={null}
+              variant="tray"
+              jackpotUsdOverride={jackpotQuery.isFetched ? (jackpotQuery.data ?? null) : undefined}
+            />
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[11px] leading-4 text-zinc-500">
+                No purchase necessary. A purchase will not improve your chances of winning. Free and
+                paid entries use the same winner selection.{' '}
+                <a
+                  href={officialRulesUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-accent hover:text-brand-primary"
+                >
+                  Official Rules
+                </a>
+              </p>
+              <a
+                href={freeEntryAppHref}
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
               >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {pointsTab === 'overview' ? (
-            <div className="mt-3 space-y-3">
-              <div>
-                <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Free jackpot entry</div>
-                <AmoeEntryCard
-                  walletAddress={amoeWallet}
-                  creatorCoin={null}
-                  variant="tray"
-                  jackpotUsdOverride={jackpotQuery.isFetched ? (jackpotQuery.data ?? null) : undefined}
-                />
-              </div>
-              {props.position ? (
-                <div>
-                  <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Category breakdown</div>
-                  {breakdownRows.length === 0 ? (
-                    <div className="text-[11px] text-zinc-400">No point awards yet.</div>
-                  ) : (
-                    <div className="divide-y divide-white/6">
-                      {breakdownRows.map((item) => (
-                        <div key={item.label} className="flex items-center justify-between py-2.5">
-                          <span className="text-[12px] text-zinc-300">{item.label}</span>
-                          <span className="text-[12px] tabular-nums text-zinc-200">
-                            {item.value.toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between py-2.5">
-                        <span className="text-[12px] font-medium text-zinc-200">Total</span>
-                        <span className="text-[12px] font-medium tabular-nums text-white">
-                          {canonicalTotal.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-[11px] text-zinc-400">
-                  {!props.hasAccountProfile
-                    ? 'Verify your email on the waitlist to create your 4626 profile and earn points.'
-                    : !props.leaderboardEligible
-                      ? 'Complete email verification to appear on the leaderboard and see rank.'
-                      : 'Point breakdown is not available yet.'}
-                </div>
-              )}
+                Enter free in the app
+              </a>
             </div>
-          ) : pointsTab === 'history' ? (
-            <div className="mt-3 flex min-h-0 flex-1 flex-col">
-              <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">What you earned</div>
-              {props.activityLoading ? (
-                <div className="text-[11px] text-zinc-500">Loading point history…</div>
-              ) : props.activityAuthRequired ? (
-                <div className="text-[11px] text-zinc-400">
-                  Sign in with email (Privy) to load point history, then reopen the tray.
-                </div>
-              ) : props.activityError ? (
-                <div className="text-[11px] text-zinc-400">Could not load history. Try again in a moment.</div>
-              ) : activityRows.length === 0 ? (
-                <div className="text-[11px] text-zinc-400">
-                  No point awards yet. Link accounts, invite friends, complete tasks, or check in on social to earn
-                  points.
-                </div>
+          )}
+          {props.pointsLoading ? (
+            <div className="text-[11px] text-zinc-500">Loading breakdown…</div>
+          ) : props.position ? (
+            <div>
+              <div className="pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Breakdown</div>
+              {breakdownRows.length === 0 ? (
+                <div className="text-[11px] text-zinc-400">No point awards yet.</div>
               ) : (
-                <div className="min-h-0 flex-1 divide-y divide-white/6">
-                  {activityRows.map((row) => (
-                    <RelayTrayPointsHistoryRow key={row.id} row={row} />
+                <div className="divide-y divide-white/6">
+                  {breakdownRows.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between py-2">
+                      <span className="text-[12px] text-zinc-300">{item.label}</span>
+                      <span className="text-[12px] tabular-nums text-zinc-200">
+                        {item.value.toLocaleString()}
+                      </span>
+                    </div>
                   ))}
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[12px] font-medium text-zinc-200">Total</span>
+                    <span className="text-[12px] font-medium tabular-nums text-white">
+                      {canonicalTotal.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
           ) : (
-            <RelayTrayPointsLeaderboardPanel
-              signupId={props.signupId}
-              totalRank={totalRank}
-              inviteRank={inviteRank}
-              totalCount={totalCount}
-              leaderboardEligible={props.leaderboardEligible}
-              hasAccountProfile={props.hasAccountProfile}
-              active={pointsTab === 'leaderboard'}
-            />
+            <div className="text-[11px] text-zinc-400">
+              {!props.hasAccountProfile
+                ? 'Verify your email on the waitlist to create your 4626 profile and earn points.'
+                : !props.leaderboardEligible
+                  ? 'Complete email verification to appear on the leaderboard and see rank.'
+                  : 'Point breakdown is not available yet.'}
+            </div>
           )}
-        </>
+        </div>
+      ) : pointsTab === 'history' ? (
+        <div className="mt-3 flex min-h-0 flex-1 flex-col">
+          <div className="pb-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">What you earned</div>
+          {props.activityLoading ? (
+            <div className="text-[11px] text-zinc-500">Loading point history…</div>
+          ) : props.activityAuthRequired ? (
+            <div className="text-[11px] text-zinc-400">
+              Sign in with email (Privy) to load point history, then reopen the tray.
+            </div>
+          ) : props.activityError ? (
+            <div className="text-[11px] text-zinc-400">Could not load history. Try again in a moment.</div>
+          ) : activityRows.length === 0 ? (
+            <div className="text-[11px] text-zinc-400">
+              No point awards yet. Link accounts, invite friends, complete tasks, or check in on social to earn
+              points.
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 divide-y divide-white/6">
+              {activityRows.map((row) => (
+                <RelayTrayPointsHistoryRow key={row.id} row={row} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <RelayTrayPointsLeaderboardPanel
+          signupId={props.signupId}
+          totalRank={totalRank}
+          inviteRank={inviteRank}
+          totalCount={totalCount}
+          leaderboardEligible={props.leaderboardEligible}
+          hasAccountProfile={props.hasAccountProfile}
+          active={pointsTab === 'leaderboard'}
+        />
       )}
     </div>
   )

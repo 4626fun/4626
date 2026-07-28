@@ -162,12 +162,13 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
             leaderboardEligible={trayAccountPointsQuery.data?.leaderboardEligible ?? false}
             hasAccountProfile={(trayAccountPointsQuery.data?.signupId ?? 0) > 0}
             signupId={trayAccountPointsQuery.data?.signupId ?? 0}
+            freeEntryMode="deep-link"
+            freeEntryAppHref={`${APP_ORIGIN}/accounts`}
           />
         }
         footer={{
           linkMode: 'anchor',
           accountsHref: `${APP_ORIGIN}/accounts`,
-          settingsHref: `${APP_ORIGIN}/accounts`,
           onSignOut: props.onSignOut,
           signOutBusy: props.signOutBusy,
           signOutDisabled: props.signOutDisabled,

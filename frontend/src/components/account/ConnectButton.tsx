@@ -581,7 +581,6 @@ export function ConnectButton({
       footer={{
         linkMode: 'router',
         accountsHref: '/accounts',
-        settingsHref: '/accounts',
         onSignOut: () => {
           void auth.signOut()
           setShowMenu(false)

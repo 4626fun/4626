@@ -21,6 +21,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | [deploy-cutovers.md](./archives/deploy-cutovers.md) | [core](./archives/deploy-cutovers-core.md) · [vault](./archives/deploy-cutovers-vault.md) · [prefs](./archives/deploy-cutovers-prefs.md) | Cutover scripts, DeployVault, bytecode store |
 | [vault-deployment-ops.md](./archives/vault-deployment-ops.md) | — | Foundry/AA/batcher deploy runbook |
 | [deploy-vault-operator.md](./archives/deploy-vault-operator.md) | — | Deploy-session autopilot |
+| [ajna-vault-ops.md](./archives/ajna-vault-ops.md) | — | Nested Ajna sleeve + **v1.20.0 launch expectations** (buffer vs LP, dust, Safe handoff) |
 | [lottery-vrf-ops.md](./archives/lottery-vrf-ops.md) | — | VRF hub, integrator, lottery manager |
 | [swap-execution.md](./archives/swap-execution.md) | — | `/swap`, paymaster, txRouter |
 | [alfaclub-ops.md](./archives/alfaclub-ops.md) | [core](./archives/alfaclub-ops-core.md) · [ops](./archives/alfaclub-ops-ops.md) · [prefs](./archives/alfaclub-ops-prefs.md) | Hermit, `/h`, room 1659, counter-trade |
@@ -43,6 +44,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | DeployVault, strategy features, Phase 3 | `deploy-cutovers-vault.md` |
 | DeploymentBatcher / Foundry deploy paths | `vault-deployment-ops.md` |
 | Deploy-session autopilot / continue | `deploy-vault-operator.md` |
+| Ajna buffer empty pool, moveFromBuffer, v1.20.0 sleeve launch | `ajna-vault-ops.md` |
 | VRF, lottery randomness, integrator | `lottery-vrf-ops.md` |
 | AA25, paymaster, txRouter, canonical4337 | `swap-execution.md` |
 | EIP-8130, native AA, Base Cobalt, EntryPoint migration | [docs/_internal/eip-8130-native-aa-readiness.md](../_internal/eip-8130-native-aa-readiness.md) |
@@ -128,6 +130,7 @@ Use these for 4626 work; ignore the 90+ global plugin skills unless the task exp
 | `oft-chain-config` | LayerZero ShareOFT peers |
 | `lottery-vrf-ops` | Jackpot / VRF operations |
 | `yield-strategy-management` | Vault strategy config |
+| `ajna-vault-ops` | Nested Ajna sleeve / buffer lend / v1.20.0 expectations |
 | `zora-cli` | Zora CLI — slash-only |
 | `modern-python` | Python tooling — slash-only |
 
