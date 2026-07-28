@@ -63,42 +63,22 @@ interface IWrapperCooldownHook {
 }
 
 /**
- * @title CreatorShareOFT
+ * @title AgentShareOFT
  * @author 0xakita.eth
- * @notice LayerZero OFT receipt token for CreatorOVault — hub-centric buy fee, lottery, and omnichain mesh
+ * @notice LayerZero OFT receipt token for the agent lane (AgentOVault) — hub-centric buy fee, lottery, omnichain mesh.
  *
- * @dev ARCHITECTURE:
- *      Per-creator ShareOFT (e.g., ■AKITA). One deployment per chain via CREATE2; `isHub` selects lane behavior.
+ * @dev Uses ◆/◇ symbols.
+ *      Per-agent deployment via CREATE2. `isHub` selects behavior.
  *
- *      HUB MODE (Base):
- *      - SwapOnly → user transfers incur buy fee (default 6.9% via `buyFeeBps`)
- *      - Fees → local `tradeFeeCollector` (CreatorGaugeController.receiveFees())
- *      - If receiveFees reverts, fees accumulate in `pendingFees`; retry via flushPendingFeesToGauge()
- *      - Lottery → local LotteryManager4626.processSwapLottery()
- *      - Full vault / wrapper / gauge stack; vault mints/burns via minter role
- *      - Remote lottery entries arrive at this OFT LZ peer and forward to LotteryManager
+ *      HUB (Base): fees to AgentGaugeController, lottery integration, full stack.
+ *      REMOTE: fee flush to hub, lottery entries, winner callbacks.
  *
- *      REMOTE MODE (Arbitrum, Robinhood mesh, etc.):
- *      - Same buy-fee detection; fees accumulate in `pendingFees`
- *      - Permissionless `flushFees()` is called directly on the spoke by Keepr or an operator
- *      - Lottery: buy queues `pendingLotteryEntries`; buyer submits via submitPendingLotteryEntry() + native LZ fee
- *      - Winner callbacks received from hub LotteryManager peer; emitted as LotteryWinnerNotification
- *      - No local vault, wrapper, or gauge; protocol treasury may wire LZ peers off-Base
+ * @dev Fee plane: buys on SwapOnly → non-SwapOnly.
+ *      Split: 69% ◆ jackpot, 21.39% ◆ voters, 9.61% ◇ burn.
  *
- * @dev FEE MECHANISM (native OFT plane):
- *      - Register DEX pools/routers as SwapOnly; NoFees for vault, wrapper, and gauge
- *      - Buys only: SwapOnly → non-SwapOnly (sells are not taxed on this plane)
- *      - Hub: OFT → tradeFeeCollector → split (69% ■ lottery, 21.39% ■ voters, 9.61% ▢ burn)
- *      - creatorTreasury ongoing lane is 0% by default (`creatorShareBps = 0` on gauge)
- *      - Remote: pendingFees → OFT send to hubGaugeReceiver through direct spoke `flushFees`
- *      - Optional sell plane: Base Uniswap V4 SimpleSellTaxHook when owner explicitly configures hook tax
- *
- * @dev INTEGRATION NOTES:
- *      - Wrapper cooldown propagation on ShareOFT transfers (setWrapper)
- *      - ILotteryBeneficiary resolver gated by isLotteryResolver allowlist
- *      - Builds on Zora Creator Coins; each vault deploys its own ShareOFT mesh token
+ * @dev Integrates with shared wrapper cooldowns, ILotteryBeneficiary, V4 hook for sell tax (optional).
  */
-contract CreatorShareOFT is OFT, ReentrancyGuard {
+contract AgentShareOFT is OFT, ReentrancyGuard {
     using OFTMsgCodec for bytes;
     using OFTMsgCodec for bytes32;
 
@@ -147,8 +127,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Associated vault (hub-only, address(0) on remote chains)
     address public vault;
 
-    /// @notice Vault-share units per 1 ShareOFT (must match CreatorOVaultWrapper.NORMALIZATION_FACTOR).
-    /// @dev Used by the H-06 mint-backing check: wrapper must hold ≥ totalSupply * this many vault shares.
+    /// @notice Vault-share units per 1 ShareOFT (must match AgentOVaultWrapper.NORMALIZATION_FACTOR).
     uint256 public constant VAULT_SHARE_NORMALIZATION = 1000;
 
     /// @notice All fees go here on hub chain (address(0) on remote chains)
@@ -297,6 +276,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     );
 
     /// @notice Emitted on remote chain when the hub notifies of a lottery win
+    /// @dev `creatorCoin` here is the lane token (AgentToken for this contract; CreatorCoin for CreatorShareOFT).
     event LotteryWinnerNotification(
         address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid, uint32 indexed sourceHubEid
     );
@@ -313,9 +293,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     error OnlyVaultOrMinter();
     error ZeroAddress();
-    /// @notice Mint would leave local ShareOFT supply unbacked by vault shares held by the wrapper.
     error UnbackedShareMint(uint256 wrapperVaultShares, uint256 requiredVaultShares);
-    /// @notice Clearing wrapper while supply remains would disable the mint-backing invariant.
     error WrapperRequiredWhileSupplyExists();
     error FeeTooHigh();
     error NotMinter();
@@ -335,7 +313,6 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @dev Base mainnet chain id — hub lane.
     uint256 internal constant BASE_CHAIN_ID = 8453;
 
-    /// @dev Protocol treasury Safe; may wire remote ShareOFT lanes when hub batcher owner cannot exist off-Base.
     /// @notice Off-Base peer-wiring co-authority (ODA-428-F5: settable/revocable).
     address public remoteProtocolWireAuthority = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
@@ -370,7 +347,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /**
      * @notice Deploy chain-specific share token
      * @param _name Token name (e.g., "AKITA Shares")
-     * @param _symbol Token symbol (e.g., "■AKITA")
+     * @param _symbol Token symbol (e.g., "◆AKITA")
      * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _owner Owner address
      *
@@ -409,7 +386,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @notice Set the vault that can mint/burn shares (hub-only)
-     * @param _vault CreatorOVault address
+     * @param _vault AgentOVault address
      */
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
@@ -448,14 +425,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice FIX: M-08 — register the CreatorOVaultWrapper so its per-user wrapper
+     * @notice FIX: M-08 — register the AgentOVaultWrapper so its per-user wrapper
      *         cooldown (`lastWrapperDepositBlock`) is propagated on ShareOFT transfers.
      *         Passing address(0) disables the hook. Exempts the wrapper from fees since
      *         wrap/unwrap should not be treated as a fee-bearing trade.
      */
     function setWrapper(address _wrapper) external onlyOwner {
-        // H-06: do not allow clearing the wrapper while ShareOFT still circulates locally —
-        // that would disable the mint-backing invariant for later minter mints.
+        // H-06: do not allow clearing the wrapper while ShareOFT still circulates locally.
         if (wrapper != address(0) && _wrapper == address(0) && totalSupply() > 0) {
             revert WrapperRequiredWhileSupplyExists();
         }
@@ -474,10 +450,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice Mint shares (vault/minter only — owner is not a free minter)
      * @param _to Recipient
      * @param _amount Amount to mint
-     * @dev H-06: owner must use `setMinter` (production minter is the wrapper). When
-     *      both `vault` and `wrapper` are configured, post-mint local supply must be
-     *      backed by vault shares held by the wrapper (`VAULT_SHARE_NORMALIZATION` ▢ per ■).
-     *      LayerZero `_credit` paths are unaffected (cross-chain credit is not this mint).
+     * @dev H-06: see CreatorShareOFT.mint for backing invariant.
      */
     function mint(address _to, uint256 _amount) external {
         if (msg.sender != vault && !isMinter[msg.sender]) {
@@ -488,8 +461,6 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         emit SharesMinted(_to, _amount);
     }
 
-    /// @dev Hub wrap invariant: wrapper vault-share balance ≥ local ShareOFT supply × 1000.
-    ///      Skipped when wrapper/vault unset (bootstrap, remote OFT without local wrap).
     function _assertMintBacking() internal view {
         if (wrapper == address(0) || vault == address(0)) return;
         uint256 supply = totalSupply();
@@ -508,15 +479,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function burn(address _from, uint256 _amount) external onlyVaultOrMinter {
         // FIX: H-3 — require allowance when a minter burns from an arbitrary address;
-        // the vault is trusted and exempt (it burns as part of normal
-        // deposit/withdraw/unwrap accounting), but minters must have approval.
-        //
-        // FIX: L-1 (docs/audits/CreatorOVault_aristotle) — `owner()` used to share the
-        // vault's exemption, letting the owner key burn ANY holder's shares with no
-        // allowance and no on-chain trace of consent. `owner()` now goes through the
-        // same `_spendAllowance` path as any other minter; a holder's balance can only
-        // be burned by the vault itself or by an address the holder has approved.
-        if (msg.sender != vault) {
+        // vault and owner are trusted and exempt, but minters must have approval
+        if (msg.sender != vault && msg.sender != owner()) {
             _spendAllowance(_from, msg.sender, _amount);
         }
         _burn(_from, _amount);
@@ -571,13 +535,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @dev Process buy with fees. Follows CEI pattern.
      *
      * @notice FEE FLOW:
-     *         1. Fee is collected in OFT tokens (■AKITA)
+     *         1. Fee is collected in OFT tokens (◆AKITA)
      *         2. Hub: sent to tradeFeeCollector via receiveFees(); on revert → pendingFees + flushPendingFeesToGauge()
      *            Remote: accumulated in pendingFees, bridged via flushFees()
-     *         3. GaugeController on Base routes the burn slice through unwrap → ▢ burn; lottery and voter slices stay as ■:
-     *            - 69% ■ jackpotCustodian reserve (LotteryManager payout authority)
-     *            - 21.39% ■ voter rewards via ve4626VoterRewardsDistributor
-     *            - 9.61% ▢ burned → PPS accrual for all vault holders
+     *         3. GaugeController on Base routes the burn slice through unwrap → ◇ burn; lottery and voter slices stay as ◆:
+     *            - 69% ◆ jackpotCustodian reserve (LotteryManager payout authority)
+     *            - 21.39% ◆ voter rewards via ve4626VoterRewardsDistributor
+     *            - 9.61% ◇ burned → PPS accrual for all vault holders
      */
     function _processBuy(address from, address to, uint256 amount) internal nonReentrant returns (bool) {
         // Cache storage reads
@@ -629,7 +593,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (_wrapper == address(0)) return;
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
-
+        if (value == 0) return;
         try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to, value) {
             // ok
         } catch (bytes memory revertData) {
@@ -736,13 +700,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         require(_sendParam.dstEid == hubEid, "Invalid dstEid");
         require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
         require(_sendParam.amountLD == amount, "Amount mismatch");
-        // ODA-498-2: permissionless callers must not inject lzCompose payloads.
-        require(_sendParam.composeMsg.length == 0, "No compose allowed");
 
         // Execute OFT send with the contract as the debited sender.
         // Calling `this.send` makes msg.sender == address(this) in OFTCore._send,
-        // so `_debit` burns from the accumulated `pendingFees` balance rather than
-        // from the external caller's wallet.
+        // so `_debit` burns from this contract's accumulated pending fees.
         this.send{value: msg.value}(_sendParam, _fee, payable(msg.sender));
 
         emit FeesFlushed(amount, hubGaugeReceiver, hubEid);
@@ -923,7 +884,6 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         uint256 entryId
     ) internal view returns (bytes memory payload, bytes memory options, MessagingFee memory fee) {
         // ODA-481-[2] / LM forwarder: V3 224-byte payload with non-zero replay id.
-        // Bind uniqueness to (chain, oft, entryId, buyer, amount) so retries cannot collide.
         bytes32 sourceEventId =
             keccak256(abi.encode(block.chainid, address(this), entryId, buyer, amount, buyerCurrentShareBalance));
         payload = abi.encode(
@@ -932,7 +892,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
             address(this), // tokenIn (this ShareOFT)
             amount,
             uint32(block.chainid), // sourceChainId metadata (callback routing uses _origin.srcEid on hub)
-            buyerCurrentShareBalance, // coverage input on the hub lottery manager
+            buyerCurrentShareBalance,
             sourceEventId
         );
 
@@ -998,8 +958,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // LAYERZERO FEE PAYMENT
     // ================================
 
-    /// @dev Allow buyer-funded lottery submits to overpay; return full `msg.value` so the
-    ///      LZ endpoint can refund excess to `_refundAddress` (ODA-428-F2).
+    /// @dev Allow buyer-funded lottery submits to overpay; LZ endpoint refunds excess to `_refundAddress`.
+    /// @dev Return full `msg.value` so LZ can refund excess (ODA-428-F2 parity).
     function _payNative(uint256 _nativeFee) internal virtual override returns (uint256 nativeFee) {
         if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
         return msg.value;
@@ -1026,6 +986,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // FIX: AUDIT-2026-07-01-H06 — remote lottery entries arrive at the hub ShareOFT peer;
         // forward to the hub LotteryManager with the original LZ origin preserved.
         if (isHub && _isRemoteLotteryEntryMessage(_message)) {
+            if (peers[_origin.srcEid] == bytes32(0) || _origin.sender != peers[_origin.srcEid]) {
+                revert InvalidCallback();
+            }
             address mgr = address(uint160(uint256(hubLotteryPeer)));
             if (mgr == address(0)) revert HubNotConfigured();
             ILotteryManager4626(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
@@ -1053,15 +1016,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     function _isWinnerCallbackMessage(Origin calldata _origin, bytes calldata _message) internal view returns (bool) {
-        // Authentication: accept callback messages from either:
-        // - the configured hub lottery manager peer (legacy wiring), or
-        // - the configured OFT hub peer for this EID (forwarded callback wiring).
-        // This keeps winner callbacks routable when the lane uses a single OFT peer.
-        bytes32 managerPeer = hubLotteryPeer;
-        bytes32 oftPeer = peers[hubEid];
-        bool fromAllowedPeer = (managerPeer != bytes32(0) && _origin.sender == managerPeer)
-            || (oftPeer != bytes32(0) && _origin.sender == oftPeer);
-        if (!fromAllowedPeer) return false;
+        // Authentication: must be the configured hub LotteryManager peer.
+        // NOTE: Long-term, consider routing winner callbacks through a dedicated OApp receiver (separate from the OFT)
+        // so custom messages and token-transfer payloads never share the same entrypoint.
+        bytes32 expectedSender = hubLotteryPeer;
+        if (expectedSender == bytes32(0) || _origin.sender != expectedSender) return false;
 
         // FIX: M-7 — tighten callback detection: standard OFT SEND is ~40 bytes,
         // but SEND_AND_CALL with specific compose lengths could be exactly 128 bytes.
@@ -1096,38 +1055,31 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         return true;
     }
 
-    /// @dev ODA-481-[2]: only accept V3 ABI lottery-entry payloads (224 bytes).
-    ///      Reject packed OFT wire formats that can collide on length + low-16 msgType alone
-    ///      (e.g. SEND_AND_CALL with crafted sendTo / compose padding). Mirror the winner-callback
-    ///      structural checks: ABI address/uint32 padding + non-zero sourceEventId.
+    /// @dev ODA-481-[2]: V3 ABI-only (224 bytes) with structural padding + non-zero replay id.
     function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
         if (message.length != 224) return false;
-
         uint256 word0;
         uint256 word1;
         uint256 word2;
+        uint256 word3;
         uint256 word4;
         uint256 word6;
         assembly {
             word0 := calldataload(message.offset)
             word1 := calldataload(add(message.offset, 0x20))
             word2 := calldataload(add(message.offset, 0x40))
+            word3 := calldataload(add(message.offset, 0x60))
             word4 := calldataload(add(message.offset, 0x80))
             word6 := calldataload(add(message.offset, 0xc0))
         }
-
-        // word0: ABI uint16 msgType
         if (word0 >> 16 != 0) return false;
         if (uint16(word0) != MSG_TYPE_LOTTERY_ENTRY) return false;
-        // word1/word2: ABI addresses (buyer, tokenIn)
-        if (word1 >> 160 != 0) return false;
-        if (word2 >> 160 != 0) return false;
+        if (word1 >> 160 != 0) return false; // buyer
+        if (word2 >> 160 != 0) return false; // tokenIn
         if (uint160(word1) == 0 || uint160(word2) == 0) return false;
-        // word4: ABI uint32 sourceChainId
-        if (word4 >> 32 != 0) return false;
-        // word6: V3 replay id (required by LotteryManager forwarder)
-        if (word6 == 0) return false;
-
+        if (word3 == 0) return false; // amount
+        if (word4 >> 32 != 0) return false; // sourceChainId uint32
+        if (word6 == 0) return false; // sourceEventId
         return true;
     }
 
@@ -1136,13 +1088,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      Emits LotteryWinnerNotification on the user's chain
      */
     function _handleWinnerCallback(Origin calldata _origin, bytes calldata _message) internal {
-        // ODA-428-F1: admission and handler must agree — accept hub lottery peer
-        // OR the configured OFT hub peer (forwarded-callback wiring).
-        bytes32 managerPeer = hubLotteryPeer;
-        bytes32 oftPeer = peers[hubEid];
-        bool fromAllowedPeer = (managerPeer != bytes32(0) && _origin.sender == managerPeer)
-            || (oftPeer != bytes32(0) && _origin.sender == oftPeer);
-        if (!fromAllowedPeer) {
+        // Verify sender is the hub lottery peer
+        if (hubLotteryPeer == bytes32(0) || _origin.sender != hubLotteryPeer) {
             revert InvalidCallback();
         }
 
@@ -1277,16 +1224,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Convert ShareOFT units to underlying Creator Coin amount
+     * @notice Convert ShareOFT units to underlying agent token amount
      * @dev M-03: 1 ■ = `VAULT_SHARE_NORMALIZATION` vault shares (▢). Prior path passed
      *      ShareOFT units directly into the vault and understated assets by ~1000×.
-     *      On remote chains (vault == address(0)), returns the denormalized vault-share units 1:1
-     *      with ▢ (no local vault PPS).
+     *      On remote chains (vault == address(0)), returns denormalized vault-share units.
      */
     function convertToAssets(uint256 shares) public view returns (uint256) {
         if (shares == 0) return 0;
         if (shares > type(uint256).max / VAULT_SHARE_NORMALIZATION) {
-            // Avoid overflow; callers should not pass pathological amounts.
             shares = type(uint256).max / VAULT_SHARE_NORMALIZATION;
         }
         uint256 vaultShares = shares * VAULT_SHARE_NORMALIZATION;
@@ -1301,7 +1246,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // getters for `addressType`, `isMinter`, `vault`, `owner`, `pendingFees`,
     // `totalFeesFlushed`, `totalLotteryEntriesSent`, `isHub`, `hubEid`, and
     // `hubGaugeReceiver`. Their dispatcher entries + selectors + literal
-    // strings ("Creator Vault Share Token", "4626.fun Share Token") were
+    // strings ("Agent Vault Share Token", "4626.fun Share Token") were
     // contributing to EIP-170 size pressure and pushing this contract over
     // the 24,576-byte runtime cap (audit M-01, 2026-04-25; see
     // docs/operations/contract-size-gate.md). Removed in the post-PLONK
@@ -1383,7 +1328,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     //      directly, since indexers reliably treat that as a URL but often
     //      silently skip `data:` schemes.
     //   2. Its bytecode footprint (Strings.escapeJSON, Base64 import, the
-    //      try/catch ICreatorOVaultAsset path, four `string.concat` /
+    //      try/catch IAgentOVaultAsset path, four `string.concat` /
     //      `abi.encodePacked` blobs) was meaningfully contributing to the
     //      contract's EIP-170 size pressure (audit M-01, 2026-04-25 — see
     //      docs/operations/contract-size-gate.md).

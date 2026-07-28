@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Registry4626ViewLib} from "@4626/shared/core/Registry4626ViewLib.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
@@ -87,6 +88,7 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     /// @notice Per-token Solana OVault mesh metadata.
     mapping(address => OmnichainVaultMeshConfig) private omnichainVaultMeshConfigs;
+    mapping(address => bool) private omnichainVaultMeshSet;
 
     /// @notice Agent lane integration metadata keyed by underlying token
     mapping(address => AgentIntegrationMeta) private agentIntegrationMetas;
@@ -187,9 +189,25 @@ contract Registry4626 is IRegistry4626, Ownable {
     // MODIFIERS
     // =================================
 
+    enum BindingKind {
+        Vault,
+        ShareOFT,
+        Wrapper,
+        Oracle,
+        GaugeController
+    }
+
+    enum EcosystemContractKind {
+        LotteryManager,
+        GaugeController,
+        GasReserve
+    }
+
     modifier onlyAuthorizedOrOwner() {
-        if (msg.sender != owner() && !authorizedFactories[msg.sender]) {
-            revert NotAuthorized();
+        if (msg.sender != owner()) {
+            if (!authorizedFactories[msg.sender]) revert NotAuthorized();
+            // ODA-465-6: re-check codehash pin at call time (not only at authorization).
+            _requireFactoryCodehash(msg.sender);
         }
         _;
     }
@@ -223,14 +241,10 @@ contract Registry4626 is IRegistry4626, Ownable {
      */
     function setAuthorizedFactory(address _factory, bool _authorized) external onlyOwner {
         if (_factory == address(0)) revert ZeroAddress();
-        bytes32 expected = approvedFactoryCodehashes[_factory];
-        if (expected != bytes32(0)) {
-            bytes32 actual;
-            assembly {
-                actual := extcodehash(_factory)
-            }
-            if (actual != expected) revert FactoryCodehashMismatch(_factory, expected, actual);
-        }
+        // ODA-495-M02: pin-check only when granting. A factory whose live bytecode has
+        // diverged from its pin is exactly the one that must stay revocable, so enforcing
+        // the check on de-authorization would block its own removal.
+        if (_authorized) _requireFactoryCodehash(_factory);
         authorizedFactories[_factory] = _authorized;
         emit FactoryAuthorized(_factory, _authorized);
     }
@@ -295,6 +309,17 @@ contract Registry4626 is IRegistry4626, Ownable {
         address previous = tokenInfos[_token].creator;
         if (previous == _creator) return;
 
+        // ODA-465-5: clearing creator authority must also clear the old canonical wallet
+        // and its reverse map so the previous wallet cannot keep attribution.
+        address oldWallet = tokenInfos[_token].canonicalWallet;
+        if (oldWallet != address(0)) {
+            if (canonicalWalletToToken[oldWallet] == _token) {
+                delete canonicalWalletToToken[oldWallet];
+            }
+            tokenInfos[_token].canonicalWallet = address(0);
+            emit CanonicalWalletSet(_token, address(0));
+        }
+
         tokenInfos[_token].creator = _creator;
         emit CreatorUpdated(_token, previous, _creator);
         emit TokenUpdated(_token);
@@ -325,111 +350,28 @@ contract Registry4626 is IRegistry4626, Ownable {
      * @notice Set vault address for a token
      */
     function setVault(address _token, address _vault) external override onlyAuthorizedOrOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_vault == address(0)) revert ZeroAddress();
-
-        address previous = tokenInfos[_token].vault;
-        _requireBindingWritable(_token, previous, _vault);
-        if (previous == _vault) return;
-
-        // ODA-430-F1 / 422-F1: refuse to steal another token's reverse vault mapping.
-        address reverseOwner = vaultToToken[_vault];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_vault, reverseOwner, _token);
-        }
-
-        // Clear old reverse mapping if exists
-        if (previous != address(0)) {
-            delete vaultToToken[previous];
-        }
-
-        tokenInfos[_token].vault = _vault;
-        vaultToToken[_vault] = _token;
-
-        emit TokenBindingUpdated(_token, "vault", previous, _vault);
-        emit TokenUpdated(_token);
+        _setTokenBinding(_token, _vault, BindingKind.Vault);
     }
 
     /**
      * @notice Set ShareOFT address for a token
      */
     function setShareOFTForToken(address _token, address _shareOFT) external override onlyAuthorizedOrOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_shareOFT == address(0)) revert ZeroAddress();
-
-        address previous = tokenInfos[_token].shareOFT;
-        _requireBindingWritable(_token, previous, _shareOFT);
-        if (previous == _shareOFT) return;
-
-        // M-NEW-03: refuse to steal another token's reverse ShareOFT mapping.
-        address reverseOwner = shareOFTToToken[_shareOFT];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_shareOFT, reverseOwner, _token);
-        }
-
-        if (previous != address(0)) {
-            delete shareOFTToToken[previous];
-        }
-
-        tokenInfos[_token].shareOFT = _shareOFT;
-        shareOFTToToken[_shareOFT] = _token;
-
-        emit TokenBindingUpdated(_token, "shareOFT", previous, _shareOFT);
-        emit TokenUpdated(_token);
+        _setTokenBinding(_token, _shareOFT, BindingKind.ShareOFT);
     }
 
     /**
      * @notice Set wrapper address for a token
      */
     function setWrapperForToken(address _token, address _wrapper) external override onlyAuthorizedOrOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_wrapper == address(0)) revert ZeroAddress();
-
-        address previous = tokenInfos[_token].wrapper;
-        _requireBindingWritable(_token, previous, _wrapper);
-        if (previous == _wrapper) return;
-
-        address reverseOwner = wrapperToToken[_wrapper];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_wrapper, reverseOwner, _token);
-        }
-
-        if (previous != address(0)) {
-            delete wrapperToToken[previous];
-        }
-
-        tokenInfos[_token].wrapper = _wrapper;
-        wrapperToToken[_wrapper] = _token;
-
-        emit TokenBindingUpdated(_token, "wrapper", previous, _wrapper);
-        emit TokenUpdated(_token);
+        _setTokenBinding(_token, _wrapper, BindingKind.Wrapper);
     }
 
     /**
      * @notice Set oracle address for a token
      */
     function setOracleForToken(address _token, address _oracle) external override onlyAuthorizedOrOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_oracle == address(0)) revert ZeroAddress();
-
-        address previous = tokenInfos[_token].oracle;
-        _requireBindingWritable(_token, previous, _oracle);
-        if (previous == _oracle) return;
-
-        address reverseOwner = oracleToToken[_oracle];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_oracle, reverseOwner, _token);
-        }
-
-        if (previous != address(0)) {
-            delete oracleToToken[previous];
-        }
-
-        tokenInfos[_token].oracle = _oracle;
-        oracleToToken[_oracle] = _token;
-
-        emit TokenBindingUpdated(_token, "oracle", previous, _oracle);
-        emit TokenUpdated(_token);
+        _setTokenBinding(_token, _oracle, BindingKind.Oracle);
     }
 
     /**
@@ -440,27 +382,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_gaugeController == address(0)) revert ZeroAddress();
-
-        address previous = tokenInfos[_token].gaugeController;
-        _requireBindingWritable(_token, previous, _gaugeController);
-        if (previous == _gaugeController) return;
-
-        address reverseOwner = gaugeControllerToToken[_gaugeController];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_gaugeController, reverseOwner, _token);
-        }
-
-        if (previous != address(0)) {
-            delete gaugeControllerToToken[previous];
-        }
-
-        tokenInfos[_token].gaugeController = _gaugeController;
-        gaugeControllerToToken[_gaugeController] = _token;
-
-        emit TokenBindingUpdated(_token, "gaugeController", previous, _gaugeController);
-        emit TokenUpdated(_token);
+        _setTokenBinding(_token, _gaugeController, BindingKind.GaugeController);
     }
 
     /**
@@ -481,15 +403,26 @@ contract Registry4626 is IRegistry4626, Ownable {
      *      - ERC-8004 agent identity (on-chain agent registration)
      *      - Vault owner and primary asset holder
      *      - Lottery prize recipient
-     *      Only the registry owner or the creator themselves can set this.
+     *      Auth (ODA-495-H01 / ODA-465-3):
+     *      - Registry owner may set or override any wallet.
+     *      - Otherwise only the token `creator` may set, and only as a self-bind
+     *        (`msg.sender == creator && msg.sender == _wallet`). Creators cannot bind
+     *        an arbitrary third-party wallet; strangers cannot claim a token by being `_wallet`.
+     *      - Replacing a different non-zero binding requires `liveRebindEnabled` and owner
+     *        (same one-shot latch as other token bindings).
      */
     function setCanonicalWallet(address _token, address _wallet) external override {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_wallet == address(0)) revert ZeroAddress();
 
-        // Only owner or the creator can set the canonical wallet
         address creator = tokenInfos[_token].creator;
-        if (msg.sender != owner() && msg.sender != creator) revert NotAuthorized();
+        if (msg.sender != owner()) {
+            // Creator self-bind only — not "any wallet claims itself for any token".
+            if (msg.sender != creator || msg.sender != _wallet) revert NotAuthorized();
+        }
+
+        address oldWallet = tokenInfos[_token].canonicalWallet;
+        _requireBindingWritable(_token, oldWallet, _wallet);
 
         // Enforce a 1:1 canonical wallet reverse mapping.
         // Without this check, a creator could "claim" another creator's wallet and hijack attribution.
@@ -499,7 +432,6 @@ contract Registry4626 is IRegistry4626, Ownable {
         }
 
         // Clear old reverse mapping if exists
-        address oldWallet = tokenInfos[_token].canonicalWallet;
         if (oldWallet != address(0) && oldWallet != _wallet) {
             // Defensive: only delete if the reverse mapping still points to this token.
             // (If state is already inconsistent from older deployments, don't clobber another token.)
@@ -535,7 +467,19 @@ contract Registry4626 is IRegistry4626, Ownable {
             if (_cfg.solanaAssetMint == bytes32(0)) revert ZeroBytes32();
         }
 
+        if (omnichainVaultMeshSet[_token]) {
+            OmnichainVaultMeshConfig memory current = omnichainVaultMeshConfigs[_token];
+            bool alreadyMatches = current.solanaEid == _cfg.solanaEid && current.hubComposer == _cfg.hubComposer
+                && current.assetMeshToken == _cfg.assetMeshToken && current.shareMeshToken == _cfg.shareMeshToken
+                && current.solanaAssetMint == _cfg.solanaAssetMint && current.enabled == _cfg.enabled;
+            if (!alreadyMatches) {
+                if (!liveRebindEnabled) revert BindingAlreadySet(_token, current.hubComposer);
+                if (msg.sender != owner()) revert LiveRebindOwnerOnly();
+            }
+        }
+
         omnichainVaultMeshConfigs[_token] = _cfg;
+        omnichainVaultMeshSet[_token] = true;
 
         emit OmnichainVaultMeshConfigured(
             _token,
@@ -596,8 +540,7 @@ contract Registry4626 is IRegistry4626, Ownable {
             }
         } else {
             // New chain — track it
-            if (remoteOFTChains[_token].length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) revert TooManyRemoteOftChains();
-            remoteOFTChains[_token].push(_chainEid);
+            _trackRemoteOFTChain(remoteOFTChains[_token], _chainEid);
         }
 
         // M-NEW-03: reverse map is single-valued — block remapping to a different token.
@@ -605,6 +548,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (reverseOwner != address(0) && reverseOwner != _token) {
             revert ReverseMappingConflict(_remoteOFT, reverseOwner, _token);
         }
+
 
         remoteOFTPeers[_token][_chainEid] = _remoteOFT;
         remoteOFTToToken[_remoteOFT] = _token;
@@ -624,17 +568,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         delete remoteOFTPeers[_token][_chainEid];
 
         // Remove from chain list (swap-and-pop)
-        uint32[] storage chains = remoteOFTChains[_token];
-        for (uint256 i; i < chains.length;) {
-            if (chains[i] == _chainEid) {
-                chains[i] = chains[chains.length - 1];
-                chains.pop();
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
+        _untrackRemoteOFTChain(remoteOFTChains[_token], _chainEid);
 
         // ODA-430-F2 / 422-F4: keep reverse map when another EID still points at this OFT.
         if (!_remoteOFTStillReferenced(_token, remoteOFT, 0)) {
@@ -669,14 +603,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         returns (uint32[] memory eids, address[] memory ofts)
     {
-        eids = remoteOFTChains[_token];
-        ofts = new address[](eids.length);
-        for (uint256 i; i < eids.length;) {
-            ofts[i] = remoteOFTPeers[_token][eids[i]];
-            unchecked {
-                ++i;
-            }
-        }
+        return Registry4626ViewLib.getAllRemoteOFTPeers(address(this), _token);
     }
 
     /**
@@ -711,10 +638,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (oldPeer == _remoteOFT) return;
 
         if (oldPeer == bytes32(0)) {
-            if (remoteOFTChainsBytes32[_token].length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) {
-                revert TooManyRemoteOftChains();
-            }
-            remoteOFTChainsBytes32[_token].push(_chainEid);
+            _trackRemoteOFTChain(remoteOFTChainsBytes32[_token], _chainEid);
         } else if (
             remoteOFTBytes32ToToken[oldPeer] == _token
                 && !_remoteOFTBytes32StillReferenced(_token, oldPeer, _chainEid)
@@ -726,6 +650,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (reverseOwner != address(0) && reverseOwner != _token) {
             revert ReverseMappingBytes32Conflict(_remoteOFT, reverseOwner, _token);
         }
+
 
         remoteOFTPeersBytes32[_token][_chainEid] = _remoteOFT;
         remoteOFTBytes32ToToken[_remoteOFT] = _token;
@@ -744,17 +669,7 @@ contract Registry4626 is IRegistry4626, Ownable {
 
         delete remoteOFTPeersBytes32[_token][_chainEid];
 
-        uint32[] storage chains = remoteOFTChainsBytes32[_token];
-        for (uint256 i = 0; i < chains.length;) {
-            if (chains[i] == _chainEid) {
-                chains[i] = chains[chains.length - 1];
-                chains.pop();
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
+        _untrackRemoteOFTChain(remoteOFTChainsBytes32[_token], _chainEid);
 
         if (!_remoteOFTBytes32StillReferenced(_token, oldPeer, 0)) {
             delete remoteOFTBytes32ToToken[oldPeer];
@@ -786,13 +701,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         returns (uint32[] memory eids, bytes32[] memory peers)
     {
-        uint32[] memory chains = remoteOFTChainsBytes32[_token];
-        eids = chains;
-        peers = new bytes32[](chains.length);
-        for (uint256 i = 0; i < chains.length; i++) {
-            peers[i] = remoteOFTPeersBytes32[_token][chains[i]];
-        }
-        return (eids, peers);
+        return Registry4626ViewLib.getAllRemoteOFTPeersBytes32(address(this), _token);
     }
 
     /**
@@ -839,14 +748,7 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     // FIX: F-25 — paginated access for large registries; prevents block gas limit DoS
     function getTokensPaginated(uint256 offset, uint256 limit) external view returns (address[] memory result) {
-        uint256 total = registeredTokens.length;
-        if (offset >= total) return new address[](0);
-        uint256 end = offset + limit;
-        if (end > total) end = total;
-        result = new address[](end - offset);
-        for (uint256 i = offset; i < end; i++) {
-            result[i - offset] = registeredTokens[i];
-        }
+        return Registry4626ViewLib.getTokensPaginated(address(this), offset, limit);
     }
 
     function isTokenRegistered(address _token) external view override returns (bool) {
@@ -859,6 +761,10 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     function getTokenCount() external view returns (uint256) {
         return registeredTokens.length;
+    }
+
+    function getRegisteredTokenAt(uint256 index) external view returns (address) {
+        return registeredTokens[index];
     }
 
     /**
@@ -906,19 +812,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     function isSolanaDepositEligible(address _token) external view override returns (bool) {
-        TokenInfo storage info = tokenInfos[_token];
-        if (info.token == address(0) || !info.isActive) return false;
-
-        OmnichainVaultMeshConfig storage cfg = omnichainVaultMeshConfigs[_token];
-        if (!cfg.enabled) return false;
-        if (
-            cfg.solanaEid == 0 || cfg.hubComposer == address(0) || cfg.assetMeshToken == address(0)
-                || cfg.shareMeshToken == address(0) || cfg.solanaAssetMint == bytes32(0)
-        ) {
-            return false;
-        }
-        if (info.vault == address(0) || info.wrapper == address(0) || info.shareOFT == address(0)) return false;
-        return true;
+        return Registry4626ViewLib.isSolanaDepositEligible(address(this), _token);
     }
 
     function getSolanaAssetMint(address _token) external view override returns (bytes32) {
@@ -1010,27 +904,11 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     function getLayerZeroEndpoint(uint256 _chainId) external view override returns (address) {
-        address ep = layerZeroEndpoints[_chainId];
-        return ep == address(0) ? layerZeroCommonEndpoint : ep;
+        return _getLayerZeroEndpointOrCommon(_chainId);
     }
 
     function setChainIdToEid(uint256 _chainId, uint32 _eid) external override onlyOwner {
-        if (_eid == 0) revert InvalidChainEid();
-
-        uint256 existingChain = eidToChainId[_eid];
-        if (existingChain != 0 && existingChain != _chainId) {
-            revert EidAlreadyMapped(_eid, existingChain, _chainId);
-        }
-
-        // ODA-430-F9: clear stale reverse when repointing a chain's EID.
-        uint32 previousEid = chainIdToEid[_chainId];
-        if (previousEid != 0 && previousEid != _eid && eidToChainId[previousEid] == _chainId) {
-            delete eidToChainId[previousEid];
-        }
-
-        chainIdToEid[_chainId] = _eid;
-        eidToChainId[_eid] = _chainId;
-
+        _setChainEidMapping(_chainId, _eid);
         emit ChainIdToEidUpdated(_chainId, _eid);
     }
 
@@ -1049,20 +927,18 @@ contract Registry4626 is IRegistry4626, Ownable {
     function getEffectiveLzConfig(uint256 _chainId) external view override returns (LzConfig memory) {
         LzConfig memory config = lzConfigs[_chainId];
 
-        if (config.useCustomOApp || config.isConfigured) {
-            return config;
+        if (!(config.useCustomOApp || config.isConfigured)) {
+            config = defaultLzConfig;
         }
 
-        // Use default config with chain-specific EID and endpoint
-        LzConfig memory effective = defaultLzConfig;
-        effective.eid = chainIdToEid[_chainId];
-        effective.endpoint =
-            layerZeroEndpoints[_chainId] != address(0) ? layerZeroEndpoints[_chainId] : layerZeroCommonEndpoint;
+        // ODA-465-4: always overlay live chainIdToEid + layerZeroEndpoints, even when isConfigured.
+        config.eid = chainIdToEid[_chainId];
+        config.endpoint = _getLayerZeroEndpointOrCommon(_chainId);
         // ODA-430-F13: unmapped chains must not report configured with eid=0.
-        if (effective.eid == 0) {
-            effective.isConfigured = false;
+        if (config.eid == 0) {
+            config.isConfigured = false;
         }
-        return effective;
+        return config;
     }
 
     /**
@@ -1084,17 +960,6 @@ contract Registry4626 is IRegistry4626, Ownable {
         bool _useCustomOApp
     ) external onlyOwner {
         if (_endpoint == address(0)) revert ZeroAddress();
-        if (_eid == 0) revert InvalidChainEid();
-
-        uint256 existingChain = eidToChainId[_eid];
-        if (existingChain != 0 && existingChain != _chainId) {
-            revert EidAlreadyMapped(_eid, existingChain, _chainId);
-        }
-
-        uint32 previousEid = chainIdToEid[_chainId];
-        if (previousEid != 0 && previousEid != _eid && eidToChainId[previousEid] == _chainId) {
-            delete eidToChainId[previousEid];
-        }
 
         lzConfigs[_chainId] = LzConfig({
             endpoint: _endpoint,
@@ -1111,8 +976,7 @@ contract Registry4626 is IRegistry4626, Ownable {
         });
 
         layerZeroEndpoints[_chainId] = _endpoint;
-        chainIdToEid[_chainId] = _eid;
-        eidToChainId[_eid] = _chainId;
+        _setChainEidMapping(_chainId, _eid);
 
         emit LzConfigUpdated(_chainId);
     }
@@ -1149,8 +1013,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     // =================================
 
     function setLotteryManager(uint256 _chainId, address _manager) external override onlyOwner {
-        lotteryManagers[_chainId] = _manager;
-        emit EcosystemContractSet(_chainId, "LotteryManager", _manager);
+        _setEcosystemContract(_chainId, _manager, EcosystemContractKind.LotteryManager);
     }
 
     function getLotteryManager(uint256 _chainId) external view override returns (address) {
@@ -1158,8 +1021,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     function setGaugeController(uint256 _chainId, address _controller) external override onlyOwner {
-        gaugeControllers[_chainId] = _controller;
-        emit EcosystemContractSet(_chainId, "GaugeController", _controller);
+        _setEcosystemContract(_chainId, _controller, EcosystemContractKind.GaugeController);
     }
 
     function getGaugeController(uint256 _chainId) external view override returns (address) {
@@ -1167,8 +1029,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     function setGasReserve(uint256 _chainId, address _reserve) external override onlyOwner {
-        gasReserves[_chainId] = _reserve;
-        emit EcosystemContractSet(_chainId, "GasReserve", _reserve);
+        _setEcosystemContract(_chainId, _reserve, EcosystemContractKind.GasReserve);
     }
 
     function getGasReserve(uint256 _chainId) external view override returns (address) {
@@ -1300,6 +1161,151 @@ contract Registry4626 is IRegistry4626, Ownable {
         return false;
     }
 
+    function _requireFactoryCodehash(address factory) internal view {
+        bytes32 expected = approvedFactoryCodehashes[factory];
+        if (expected == bytes32(0)) return;
+
+        bytes32 actual;
+        assembly {
+            actual := extcodehash(factory)
+        }
+        if (actual != expected) revert FactoryCodehashMismatch(factory, expected, actual);
+    }
+
+    function _setTokenBinding(address token, address next, BindingKind kind) internal {
+        TokenInfo storage info = tokenInfos[token];
+        if (info.token == address(0)) revert TokenNotRegistered(token);
+        if (next == address(0)) revert ZeroAddress();
+
+        address previous;
+        address reverseOwner;
+        bytes32 field;
+
+        if (kind == BindingKind.Vault) {
+            previous = info.vault;
+            field = "vault";
+        } else if (kind == BindingKind.ShareOFT) {
+            previous = info.shareOFT;
+            field = "shareOFT";
+        } else if (kind == BindingKind.Wrapper) {
+            previous = info.wrapper;
+            field = "wrapper";
+        } else if (kind == BindingKind.Oracle) {
+            previous = info.oracle;
+            field = "oracle";
+        } else {
+            previous = info.gaugeController;
+            field = "gaugeController";
+        }
+
+        _requireBindingWritable(token, previous, next);
+        if (previous == next) return;
+
+        if (kind == BindingKind.Vault) {
+            reverseOwner = vaultToToken[next];
+        } else if (kind == BindingKind.ShareOFT) {
+            reverseOwner = shareOFTToToken[next];
+        } else if (kind == BindingKind.Wrapper) {
+            reverseOwner = wrapperToToken[next];
+        } else if (kind == BindingKind.Oracle) {
+            reverseOwner = oracleToToken[next];
+        } else {
+            reverseOwner = gaugeControllerToToken[next];
+        }
+        if (reverseOwner != address(0) && reverseOwner != token) {
+            revert ReverseMappingConflict(next, reverseOwner, token);
+        }
+
+        if (previous != address(0)) {
+            if (kind == BindingKind.Vault) {
+                delete vaultToToken[previous];
+            } else if (kind == BindingKind.ShareOFT) {
+                delete shareOFTToToken[previous];
+            } else if (kind == BindingKind.Wrapper) {
+                delete wrapperToToken[previous];
+            } else if (kind == BindingKind.Oracle) {
+                delete oracleToToken[previous];
+            } else {
+                delete gaugeControllerToToken[previous];
+            }
+        }
+
+        if (kind == BindingKind.Vault) {
+            info.vault = next;
+            vaultToToken[next] = token;
+        } else if (kind == BindingKind.ShareOFT) {
+            info.shareOFT = next;
+            shareOFTToToken[next] = token;
+        } else if (kind == BindingKind.Wrapper) {
+            info.wrapper = next;
+            wrapperToToken[next] = token;
+        } else if (kind == BindingKind.Oracle) {
+            info.oracle = next;
+            oracleToToken[next] = token;
+        } else {
+            info.gaugeController = next;
+            gaugeControllerToToken[next] = token;
+        }
+
+        emit TokenBindingUpdated(token, field, previous, next);
+        emit TokenUpdated(token);
+    }
+
+    function _trackRemoteOFTChain(uint32[] storage chains, uint32 chainEid) internal {
+        if (chains.length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) revert TooManyRemoteOftChains();
+        chains.push(chainEid);
+    }
+
+    function _untrackRemoteOFTChain(uint32[] storage chains, uint32 chainEid) internal {
+        for (uint256 i; i < chains.length;) {
+            if (chains[i] == chainEid) {
+                chains[i] = chains[chains.length - 1];
+                chains.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _getLayerZeroEndpointOrCommon(uint256 chainId) internal view returns (address endpoint) {
+        endpoint = layerZeroEndpoints[chainId];
+        if (endpoint == address(0)) endpoint = layerZeroCommonEndpoint;
+    }
+
+    function _setChainEidMapping(uint256 chainId, uint32 eid) internal {
+        if (eid == 0) revert InvalidChainEid();
+
+        uint256 existingChain = eidToChainId[eid];
+        if (existingChain != 0 && existingChain != chainId) {
+            revert EidAlreadyMapped(eid, existingChain, chainId);
+        }
+
+        uint32 previousEid = chainIdToEid[chainId];
+        if (previousEid != 0 && previousEid != eid && eidToChainId[previousEid] == chainId) {
+            delete eidToChainId[previousEid];
+        }
+
+        chainIdToEid[chainId] = eid;
+        eidToChainId[eid] = chainId;
+    }
+
+    function _setEcosystemContract(uint256 chainId, address next, EcosystemContractKind kind) internal {
+        if (next == address(0)) revert ZeroAddress();
+
+        if (kind == EcosystemContractKind.LotteryManager) {
+            lotteryManagers[chainId] = next;
+            emit EcosystemContractSet(chainId, "LotteryManager", next);
+        } else if (kind == EcosystemContractKind.GaugeController) {
+            gaugeControllers[chainId] = next;
+            emit EcosystemContractSet(chainId, "GaugeController", next);
+        } else {
+            gasReserves[chainId] = next;
+            emit EcosystemContractSet(chainId, "GasReserve", next);
+        }
+    }
+
     function _getDefaultWrappedNativeSymbol(uint256 _chainId) internal pure returns (string memory) {
         if (_chainId == 146) return "WS"; // Sonic
         if (_chainId == 43114) return "WAVAX"; // Avalanche
@@ -1318,4 +1324,3 @@ contract Registry4626 is IRegistry4626, Ownable {
     event CurrentChainSet(uint256 indexed chainId);
     event ChainIdToEidUpdated(uint256 indexed chainId, uint32 eid);
 }
-

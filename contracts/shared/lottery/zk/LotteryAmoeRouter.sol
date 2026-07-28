@@ -67,6 +67,9 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     /// @notice Owner can update verifier address, allowlist roots, and consumer.
     address public owner;
 
+    /// @notice Two-step ownership transfer target (ODA-461-12).
+    address public pendingOwner;
+
     /// @notice Address allowed to publish daily allowlist roots (server signer).
     address public allowlistPublisher;
 
@@ -97,6 +100,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     uint256 public pendingVerifierAt;
     address public pendingManager;
     uint256 public pendingManagerAt;
+    address public pendingConsumer;
+    uint256 public pendingConsumerAt;
 
     /// @notice Daily allowlist roots, keyed by epoch.
     mapping(uint64 => bytes32) public allowlistRootOf;
@@ -136,6 +141,7 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     // -------------------------------------------------------------------------
 
     event OwnerUpdated(address indexed previous, address indexed current);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event AllowlistPublisherUpdated(address indexed previous, address indexed current);
     event PointsLedgerPublisherUpdated(address indexed previous, address indexed current);
     event VerifierUpdated(address indexed previous, address indexed current);
@@ -143,6 +149,7 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     event ManagerUpdated(address indexed previous, address indexed current);
     event VerifierUpdateQueued(address indexed pendingVerifier, uint256 executeAfter);
     event ManagerUpdateQueued(address indexed pendingManager, uint256 executeAfter);
+    event ConsumerUpdateQueued(address indexed pendingConsumer, uint256 executeAfter);
     event AllowlistRootSet(uint64 indexed epoch, bytes32 root);
     event PointsLedgerRootSet(uint64 indexed epoch, bytes32 root);
 
@@ -199,6 +206,10 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     error NoPendingUpdate();
     /// @notice Root was published but has not matured yet (ODA-426-F3).
     error RootTimelockActive(uint256 effectiveAt);
+    /// @notice Legacy ECDSA `submitAmoeEntry` is disabled; use ZK path (ODA-461-18).
+    error LegacyAmoeDisabled();
+    /// @notice ODA-461-12: caller is not the pending owner.
+    error NotPendingOwner();
 
     // -------------------------------------------------------------------------
     // Constants
@@ -256,10 +267,21 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         _;
     }
 
+    /// @notice Begin two-step ownership transfer (ODA-461-12).
+    /// @dev Does not transfer immediately — pending owner must call `acceptOwnership`.
     function setOwner(address _owner) external onlyOwner {
         if (_owner == address(0)) revert ZeroAddress();
-        emit OwnerUpdated(owner, _owner);
-        owner = _owner;
+        pendingOwner = _owner;
+        emit OwnershipTransferStarted(owner, _owner);
+    }
+
+    /// @notice Complete two-step ownership transfer (ODA-461-12).
+    function acceptOwnership() external {
+        address pending = pendingOwner;
+        if (pending == address(0) || msg.sender != pending) revert NotPendingOwner();
+        emit OwnerUpdated(owner, pending);
+        owner = pending;
+        pendingOwner = address(0);
     }
 
     function setAllowlistPublisher(address _publisher) external onlyOwner {
@@ -287,9 +309,27 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         emit VerifierUpdateQueued(_verifier, pendingVerifierAt);
     }
 
+    /// @dev Bootstrap-only while unset; thereafter use execute after timelock (ODA-461-13).
     function setConsumer(address _consumer) external onlyOwner {
-        emit ConsumerUpdated(address(consumer), _consumer);
-        consumer = ILotteryAmoeConsumer(_consumer);
+        if (address(consumer) == address(0)) {
+            emit ConsumerUpdated(address(consumer), _consumer);
+            consumer = ILotteryAmoeConsumer(_consumer);
+            return;
+        }
+        pendingConsumer = _consumer;
+        pendingConsumerAt = block.timestamp + CONFIG_UPDATE_TIMELOCK;
+        emit ConsumerUpdateQueued(_consumer, pendingConsumerAt);
+    }
+
+    function executeConsumerUpdate() external onlyOwner {
+        uint256 executeAfter = pendingConsumerAt;
+        if (executeAfter == 0) revert NoPendingUpdate();
+        if (block.timestamp < executeAfter) revert UpdateTimelockActive(executeAfter);
+        address nextConsumer = pendingConsumer;
+        emit ConsumerUpdated(address(consumer), nextConsumer);
+        consumer = ILotteryAmoeConsumer(nextConsumer);
+        pendingConsumer = address(0);
+        pendingConsumerAt = 0;
     }
 
     /// @notice Set the lottery-manager fan-out target. When non-zero, the
@@ -404,7 +444,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         //    so the proof can't be re-used against a different on-chain entry.
         if (uint256(uint160(creatorCoin)) != pubInputs[1]) revert InvalidProof();
         if (uint256(epoch) != pubInputs[3]) revert InvalidProof();
-        if (uint160(buyer) != uint160(pubInputs[8])) revert InvalidProof();
+        // ODA-461-23: compare buyer at full width (do not truncate pubInputs[8] to uint160).
+        if (uint256(uint160(buyer)) != pubInputs[8]) revert InvalidProof();
 
         // 2. Allowlist root pinning. The root must match the value the
         //    publisher posted for this epoch, and must have matured past
@@ -479,7 +520,8 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         //    Legacy event-only consumer hook (optional, kept for compat with
         //    deployments that wired the router as a passive broadcaster).
         if (address(consumer) != address(0)) {
-            consumer.recordAmoeEntry(buyer, creatorCoin, epoch, entryId);
+            // A legacy observer must not roll back the required manager settlement.
+            try consumer.recordAmoeEntry(buyer, creatorCoin, epoch, entryId) {} catch {}
         }
 
         emit AmoeEntrySettled(entryId, pointsBurnNullifier, pointsBurnedAsUSD, managerEntryId);
@@ -500,48 +542,15 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     // ECDSA is the compatibility path until clients ship the prover.
     // -------------------------------------------------------------------------
 
-    /// @notice Settle an ECDSA / EIP-1271 verified AMOE entry. Caller MUST be
-    ///         the trusted relayer (today: same key as `allowlistPublisher`).
+    /// @notice Legacy ECDSA path — disabled. ZK (`submitAmoeEntryZK`) is the live path.
+    /// @dev Signature was unused (ODA-461-18); keep ABI surface but fail closed.
     function submitAmoeEntry(
-        address buyer,
-        address creatorCoin,
-        bytes32 nonce,
-        uint256 deadline,
-        bytes calldata /* signature */
-    ) external returns (uint256 entryId) {
-        if (msg.sender != allowlistPublisher) revert NotPublisher();
-        // Reject deadlines that have already passed.
-        if (block.timestamp > deadline) revert DeadlineExpired();
-        // Reject deadlines that are too close to `now` to be safe under
-        // miner timestamp drift (see MIN_DEADLINE_BUFFER above). Using
-        // unchecked subtraction is safe because we just verified that
-        // `deadline >= block.timestamp`.
-        unchecked {
-            if (deadline - block.timestamp < MIN_DEADLINE_BUFFER) {
-                revert DeadlineTooSoon();
-            }
-        }
-
-        bytes32 nonceCommit = keccak256(abi.encode(nonce, buyer, creatorCoin));
-        if (usedNonceCommit[nonceCommit]) revert NonceReplayed();
-        usedNonceCommit[nonceCommit] = true;
-
-        unchecked {
-            entryId = ++nextEntryId;
-        }
-        // epoch is unknown on the legacy path; pass 0 and let downstream resolve
-        emit AmoeEntryRecorded(
-            entryId,
-            buyer,
-            creatorCoin,
-            0,
-            nonceCommit,
-            bytes32(0),
-            EntryPath.ECDSA
-        );
-
-        if (address(consumer) != address(0)) {
-            consumer.recordAmoeEntry(buyer, creatorCoin, 0, entryId);
-        }
+        address,
+        address,
+        bytes32,
+        uint256,
+        bytes calldata
+    ) external pure returns (uint256) {
+        revert LegacyAmoeDisabled();
     }
 }

@@ -332,7 +332,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function moveFromBuffer(uint256 toIndex, uint256 assets)
         external
-        onlySwapperOrKeeper
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 movedAssets, uint256 mintedBucketLp)
@@ -344,11 +344,15 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
         AjnaVaultLibrary.ensureBufferRatio(totalAssets(), currentBufferAssets, assets, AUTH.bufferRatio());
 
+        // Ajna may pull the full `assets` while returning a slightly lower `movedAssets`
+        // (empty-bucket dust). Refund whatever token balance actually remains — never
+        // `assets - movedAssets`, which under-funds when the pool kept the dust.
         BUFFER.withdrawToVault(assets);
         (mintedBucketLp, movedAssets) = AJNA_POOL.addQuoteToken(assets, toIndex, block.timestamp + 1 hours);
 
-        if (assets > movedAssets) {
-            _bufferDeposit(assets - movedAssets);
+        uint256 remaining = ASSET_TOKEN.balanceOf(address(this));
+        if (remaining > 0) {
+            _bufferDeposit(remaining);
         }
 
         if (mintedBucketLp > 0) {
@@ -391,7 +395,10 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
         bucketLp[fromIndex] -= fromBucketLp;
         bucketLp[toIndex] += toBucketLp;
-        _trackBucket(toIndex);
+        // ODA-466 low: only track destination when move minted LP (mirror moveFromBuffer).
+        if (toBucketLp > 0) {
+            _trackBucket(toIndex);
+        }
         _untrackBucketIfEmpty(fromIndex);
 
         emit BucketMoved(fromIndex, toIndex, fromBucketLp, toBucketLp);

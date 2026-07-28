@@ -33,6 +33,10 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
     error InvalidRequest();
     error CallbackAlreadySucceeded();
     error NoCallbackTarget();
+    /// @notice ODA-461-14: renounce would strand owner-only recovery.
+    error RenounceDisabled();
+    error NoPendingPriceOracle();
+    error TimelockNotExpired();
 
     bytes32 internal constant IGNORE_REQUEST_NOT_FOUND = bytes32("REQUEST_NOT_FOUND");
     bytes32 internal constant IGNORE_ALREADY_FULFILLED = bytes32("ALREADY_FULFILLED");
@@ -58,10 +62,18 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
     int256 public lastAggregatedPrice;
     uint256 public lastPriceTimestamp;
 
+    // ODA-461-13: timelock price-oracle rewires (2 days, matches hub coordinator delay).
+    uint256 public constant PRICE_ORACLE_TIMELOCK = 2 days;
+    address public pendingPriceOracle;
+    uint256 public priceOracleTimelockExpiry;
+    bool public priceOracleChangePending;
+
     // Events for price piggybacking
     event PriceReported(int256 priceUSD, uint256 timestamp);
     event AggregatedPriceReceived(int256 aggregatedPrice, uint256 timestamp);
     event PriceOracleSet(address oracle);
+    event PriceOracleChangeQueued(address indexed newOracle, uint256 effectiveAt);
+    event PriceOracleChangeExecuted(address indexed newOracle);
 
     // Request tracking
     struct RequestStatus {
@@ -151,7 +163,11 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
         internal
         override
     {
-        require(peers[_origin.srcEid] == _origin.sender, "Unauthorized");
+        // ODA-461-9: only accept VRF responses from the configured hub peer.
+        if (_origin.srcEid != hubEid || peers[_origin.srcEid] != _origin.sender) {
+            emit InvalidVrfResponsePayload(_origin.srcEid, _origin.sender, _payload.length);
+            return;
+        }
 
         uint64 sequence;
         uint256 randomWord;
@@ -400,9 +416,35 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
         requestTimeout = _timeout;
     }
 
+    /// @dev Bootstrap-only while unset; thereafter use queue/execute timelock (ODA-461-13).
     function setPriceOracle(address _oracle) external onlyOwner {
+        require(priceOracle == address(0), "Use timelock flow");
         priceOracle = _oracle;
         emit PriceOracleSet(_oracle);
+    }
+
+    function queuePriceOracleChange(address _oracle) external onlyOwner {
+        pendingPriceOracle = _oracle;
+        priceOracleTimelockExpiry = block.timestamp + PRICE_ORACLE_TIMELOCK;
+        priceOracleChangePending = true;
+        emit PriceOracleChangeQueued(_oracle, priceOracleTimelockExpiry);
+    }
+
+    function executePriceOracleChange() external onlyOwner {
+        if (!priceOracleChangePending) revert NoPendingPriceOracle();
+        if (block.timestamp < priceOracleTimelockExpiry) revert TimelockNotExpired();
+        address next = pendingPriceOracle;
+        priceOracle = next;
+        pendingPriceOracle = address(0);
+        priceOracleTimelockExpiry = 0;
+        priceOracleChangePending = false;
+        emit PriceOracleChangeExecuted(next);
+        emit PriceOracleSet(next);
+    }
+
+    /// @notice ODA-461-14: renouncing would brick owner-only recovery paths.
+    function renounceOwnership() public pure override {
+        revert RenounceDisabled();
     }
 
     // FIX: VRF-05 — allow owner to configure max acceptable price
@@ -451,13 +493,14 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3, ReentrancyGuard {
         }
     }
 
+    /// @dev Accept overpay so callers can buffer fees; LZ refunds excess to `_refundAddress`.
     function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
         if (msg.value == 0) {
             require(address(this).balance >= _nativeFee, "NotEnoughNative");
             return _nativeFee;
         }
-        if (msg.value != _nativeFee) revert NotEnoughNative(msg.value);
-        return _nativeFee;
+        if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
+        return msg.value;
     }
 
     function withdraw() external onlyOwner {

@@ -41,7 +41,9 @@ library AjnaVaultLibrary {
     function lpToAssets(IAjnaPool pool, uint256 bucketIndex, uint256 lpAmount) internal view returns (uint256) {
         if (lpAmount == 0) return 0;
 
-        (uint256 bucketLpTotal,, , uint256 bucketDeposit,) = pool.bucketInfo(bucketIndex);
+        // ODA-466-11: bankrupt buckets have worthless pre-bankruptcy LP.
+        (uint256 bucketLpTotal,, uint256 bankruptcyTime, uint256 bucketDeposit,) = pool.bucketInfo(bucketIndex);
+        if (bankruptcyTime != 0) return 0;
         if (bucketLpTotal == 0 || bucketDeposit == 0) return 0;
 
         return (lpAmount * bucketDeposit) / bucketLpTotal;

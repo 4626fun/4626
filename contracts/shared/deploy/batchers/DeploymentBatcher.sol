@@ -97,6 +97,10 @@ contract DeploymentBatcherPhase3Helper {
     uint32 internal constant CHARM_TWAP_DURATION = 300;
     // 125% min collateral ratio for Charm→Ajna borrow backstop (matches integration tests).
     uint256 internal constant CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS = 12_500;
+    // Finite Charm→Ajna borrow caps (owner may raise later via setAjnaBorrowConfig).
+    // Prevents unlimited drain of sibling Ajna sleeve / external quote liquidity.
+    uint256 internal constant CHARM_AJNA_MAX_DEBT = 100_000 ether;
+    uint256 internal constant CHARM_AJNA_MAX_BORROW_PER_WITHDRAW = 10_000 ether;
 
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
     address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
@@ -106,6 +110,8 @@ contract DeploymentBatcherPhase3Helper {
     error NotOwner();
     error InvalidCodeId();
     error Phase3ManagementMismatch(address expected, address actual);
+    /// @notice ODA-464-F05: Phase3 creatorToken must match vault.asset().
+    error Phase3AssetMismatch(address expectedAsset, address creatorToken);
     error MissingInitialSqrtPriceX96();
     error V3PoolMissing();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
@@ -167,6 +173,11 @@ contract DeploymentBatcherPhase3Helper {
         if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
         if (ICreatorOVaultManagementView(params.vault).management() != batcher) {
             revert Phase3ManagementMismatch(batcher, ICreatorOVaultManagementView(params.vault).management());
+        }
+        // ODA-464-F05: bind strategy pipeline asset to the vault's actual underlying.
+        address vaultAsset = ICreatorOVaultAssetView(params.vault).asset();
+        if (vaultAsset != params.creatorToken) {
+            revert Phase3AssetMismatch(vaultAsset, params.creatorToken);
         }
         if (params.solanaWeightBps != 0) revert InvalidWeight();
         if (params.charmWeightBps > 10_000 || params.ajnaWeightBps > 10_000) revert InvalidWeight();
@@ -235,6 +246,10 @@ contract DeploymentBatcherPhase3Helper {
                 IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
             }
 
+            // Arm toll/tax at zero so later fee changes require the 24h timelock.
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setToll(0);
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setTax(0);
+
             bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
             bytes memory ajnaVaultArgs = abi.encode(
                 ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth
@@ -251,6 +266,7 @@ contract DeploymentBatcherPhase3Helper {
             // instead of silently leaving auth locked to this helper address
             if (!IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this))) revert Phase3HelperLostAdmin();
             // Protocol automation Safe operates Ajna (setMinBucketIndex); treasury keeps adapter ownership only.
+            // Two-step handoff: nominate here; Safe must call acceptAdmin() to complete.
             IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolAutomation);
         }
 
@@ -287,8 +303,14 @@ contract DeploymentBatcherPhase3Helper {
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
         ICharmStrategy4626(charmStrategy).setAssetOracle(oracle);
         ICharmStrategy4626(charmStrategy).setAjnaPool(ajnaPool);
-        ICharmStrategy4626(charmStrategy)
-            .setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0);
+        ICharmStrategy4626(charmStrategy).setAjnaBorrowConfig(
+            true,
+            CHARM_AJNA_MAX_DEBT,
+            CHARM_AJNA_MAX_BORROW_PER_WITHDRAW,
+            CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS,
+            0,
+            0
+        );
     }
 
     function _deployCharmPipeline(
@@ -543,6 +565,10 @@ interface IOwnableView {
     function owner() external view returns (address);
 }
 
+interface IERC20Decimals {
+    function decimals() external view returns (uint8);
+}
+
 interface ICCALaunchArm {
     function setApprovedLauncher(address launcher, bool approved) external;
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
@@ -647,14 +673,22 @@ interface ICreatorOVaultManagementView {
     function management() external view returns (address);
 }
 
+interface ICreatorOVaultAssetView {
+    function asset() external view returns (address);
+}
+
 interface IAjnaVaultAuthConfigurator {
     function setBufferRatio(uint256 bufferRatioBps) external;
     function setMinBucketIndex(uint256 minBucketIndex) external;
     function setSwapper(address swapper) external;
     function setKeeper(address keeper, bool isKeeper) external;
+    function setToll(uint256 tollBps) external;
+    function setTax(uint256 taxBps) external;
     // FIX: F-04/F-21 — updated to two-step admin transfer pattern
     function transferAdmin(address admin) external;
+    function acceptAdmin() external;
     function isAdmin(address account) external view returns (bool);
+    function pendingAdmin() external view returns (address);
 }
 
 interface IERC4626StrategyAdapterAdmin {
@@ -704,6 +738,8 @@ contract DeploymentBatcherPhase1Module {
     error Phase1ShareOFTMissing();
     error Phase1ShareOFTAlreadyBound(address shareOFT, address existingVault, address expectedVault);
     error Phase1Missing();
+    /// @notice Nonzero ShareOFT salt override must equal the derived CREATE2 salt (blocks squats).
+    error InvalidShareOftSaltOverride();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -900,9 +936,17 @@ contract DeploymentBatcherPhase1Module {
     ) internal returns (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash, bytes32 baseSalt) {
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
         baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
-        shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? utilsHelper.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version)
-            : shareOftSaltOverride;
+        // ODA-494-H01: nonzero override is a confirmation of the derived salt only — never a
+        // free-form CREATE2 salt (would let callers squat another owner's ShareOFT address).
+        bytes32 derivedShareOftSalt =
+            utilsHelper.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version);
+        if (shareOftSaltOverride == bytes32(0)) {
+            shareOftSalt = derivedShareOftSalt;
+        } else if (shareOftSaltOverride != derivedShareOftSalt) {
+            revert InvalidShareOftSaltOverride();
+        } else {
+            shareOftSalt = derivedShareOftSalt;
+        }
         paramsHash = utilsHelper.phase1ParamsHash(
             params.creatorToken,
             params.owner,
@@ -975,6 +1019,9 @@ contract DeploymentBatcherPhase2Module {
     error SolanaShareBridgeNotConfigured();
     error SolanaShareOftPeerNotConfigured();
     error InsufficientSolanaBridgeFee(uint256 required, uint256 provided);
+    error RegistryCreatorMismatch(address creatorToken, address registeredCreator, address requestedOwner);
+    /// @dev ODA-464-F01 — first registry write requires Ownable match or a 1-unit token hold.
+    error InsufficientCreatorTokenControl(address creatorToken, uint256 requiredBalance);
     error SolanaBridgeRefundFailed();
     error AuctionAmountMismatch();
     error InvalidDepositAmount();
@@ -1175,15 +1222,44 @@ contract DeploymentBatcherPhase2Module {
 
         // Persist product-lane kind so Registry4626.getVaultKind is correct after deploy.
         // ODA-430-F5: registry now requires registerToken before setAgentIntegrationMeta.
+        // ODA-464-F01: first-writer registerToken is a permanent squat — require proof of
+        // control over creatorToken before the first registration (not mere self-naming).
         // Agent-specific fields (tax adapter / pair) are left zero unless a later epoch adds params.
         {
             IRegistry4626 reg = IRegistry4626(registry);
             if (reg.getTokenInfo(params.creatorToken).token == address(0)) {
+                _requireCreatorTokenControl(params.creatorToken, params.owner, false);
                 (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
                 reg.registerToken(params.creatorToken, name, symbol, params.owner, address(0), 0);
             }
         }
         _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
+    }
+
+    /// @dev ODA-464-F01: block gas-only registry squats. Prefer Ownable.owner() match;
+    ///      otherwise require holding ≥ 1 whole token unit unless `allowDepositProof`
+    ///      (finalize after MIN_FIRST_DEPOSIT pull).
+    function _requireCreatorTokenControl(address creatorToken, address owner_, bool allowDepositProof) internal view {
+        try IOwnableView(creatorToken).owner() returns (address tokenOwner) {
+            if (tokenOwner != address(0)) {
+                if (tokenOwner != owner_) {
+                    revert RegistryCreatorMismatch(creatorToken, tokenOwner, owner_);
+                }
+                return;
+            }
+        } catch {}
+
+        if (allowDepositProof) return;
+
+        uint256 need = 1;
+        try IERC20Decimals(creatorToken).decimals() returns (uint8 d) {
+            if (d > 0 && d <= 36) need = 10 ** uint256(d);
+        } catch {}
+        // Phase deploys allow `authorizedPhaseCallers` to act for `owner_`; control
+        // proof must check the represented owner, not the intermediary caller.
+        if (IERC20(creatorToken).balanceOf(owner_) < need) {
+            revert InsufficientCreatorTokenControl(creatorToken, need);
+        }
     }
 
     /// @dev When a pending init-code hash is published for `salt`, reuse checks skip
@@ -1314,9 +1390,14 @@ contract DeploymentBatcherPhase2Module {
         IRegistry4626 reg = IRegistry4626(registry);
         IRegistry4626.TokenInfo memory info = reg.getTokenInfo(params.creatorToken);
         if (info.token == address(0)) {
+            // Finalize already pulled MIN_FIRST_DEPOSIT — treat that as control proof
+            // for non-Ownable tokens (balance may now be zero after deposit).
+            _requireCreatorTokenControl(params.creatorToken, params.owner, true);
             (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
             reg.registerToken(params.creatorToken, name, symbol, params.owner, address(0), 0);
             info = reg.getTokenInfo(params.creatorToken);
+        } else if (info.creator != params.owner) {
+            revert RegistryCreatorMismatch(params.creatorToken, info.creator, params.owner);
         }
         if (info.vault == address(0)) {
             reg.setVault(params.creatorToken, params.vault);
@@ -1398,6 +1479,23 @@ contract DeploymentBatcherPhase2Module {
 
     error Phase2WiringMismatch();
 
+    /// @dev ODA-464-F06: MIN/MAX_FIRST_DEPOSIT are expressed in 18-decimal whole-token units.
+    function _scaledDepositBounds(address creatorToken) internal view returns (uint256 minDeposit, uint256 maxDeposit) {
+        uint8 decimals = 18;
+        try IERC20Decimals(creatorToken).decimals() returns (uint8 d) {
+            decimals = d;
+        } catch {}
+        if (decimals == 18) {
+            return (MIN_FIRST_DEPOSIT, MAX_FIRST_DEPOSIT);
+        }
+        if (decimals < 18) {
+            uint256 scale = 10 ** (18 - decimals);
+            return (MIN_FIRST_DEPOSIT / scale, MAX_FIRST_DEPOSIT / scale);
+        }
+        uint256 upScale = 10 ** (decimals - 18);
+        return (MIN_FIRST_DEPOSIT * upScale, MAX_FIRST_DEPOSIT * upScale);
+    }
+
     function _validateFinalizePhase2(
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         DeploymentBatcher.Phase1SplitState calldata p1state
@@ -1409,7 +1507,9 @@ contract DeploymentBatcherPhase2Module {
         if (params.gaugeController == address(0) || params.ccaLaunchArm == address(0) || params.oracle == address(0)) {
             revert ZeroAddress();
         }
-        if (params.depositAmount < MIN_FIRST_DEPOSIT || params.depositAmount > MAX_FIRST_DEPOSIT) {
+        // ODA-464-F06: scale 18-decimal deposit bounds to the creator token's decimals.
+        (uint256 minDeposit, uint256 maxDeposit) = _scaledDepositBounds(params.creatorToken);
+        if (params.depositAmount < minDeposit || params.depositAmount > maxDeposit) {
             revert InvalidDepositAmount();
         }
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
@@ -1762,6 +1862,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error DeprecatedFinalizeSolanaParams();
     error WrapperOwnerMismatch(address wrapper, address owner);
     error ShareOftOwnerMismatch(address shareOft, address owner);
+    error RegistryCreatorMismatch(address creatorToken, address registeredCreator, address requestedOwner);
+    error RolePolicyOverrideRejected(uint256 requestedPolicyId, uint256 configuredPolicyId);
     error Phase3ManagementMismatch(address expected, address actual);
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
@@ -1776,12 +1878,17 @@ contract DeploymentBatcher is ReentrancyGuard {
     error PhaseModuleCodehashNotApproved(address module);
     /// @dev AUDIT-2026-07-08-NEW-H: deploy codeId not on the treasury allowlist.
     error CodeIdNotApproved(bytes32 codeId);
+    /// @notice ODA-464-F02: live store bytecode no longer matches hash captured at approve time.
+    error CodeIdBytecodeHashMismatch(bytes32 codeId, bytes32 expected, bytes32 actual);
     error CodeIdAllowlistFrozen();
 
     /// @dev AUDIT-2026-07-08-H08 — mandatory codehash allowlist for phase1/2 module hot-swap.
     mapping(address => bytes32) public approvedPhaseModuleCodehashes;
     /// @dev AUDIT-2026-07-08-NEW-H — bytecode codeIds permitted for CREATE2 deploys via this batcher.
     mapping(bytes32 => bool) public approvedCodeIds;
+    /// @notice ODA-464-F02: keccak256(creationCode) snapshotted when a codeId is approved.
+    /// @dev Zero means legacy approve (or store miss at approve time) — hash check skipped.
+    mapping(bytes32 => bytes32) public approvedCodeIdBytecodeHash;
     /// @notice When true (default), every phase deploy codeId must be approved.
     bool public codeIdAllowlistEnabled = true;
     /// @notice When true, allowlist enabled flag and further disable attempts are frozen on.
@@ -2042,6 +2149,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     // PHASE 1
     // ================================
 
+    /**
+     * @notice Deploy Phase-1 core with optional ShareOFT salt confirmation.
+     * @param shareOftSaltOverride Zero uses the derived CREATE2 salt. Nonzero must equal
+     *        `deriveShareOftSalt(creatorToken, owner, toLower(shareSymbol), version)` —
+     *        free-form salts are rejected (`InvalidShareOftSaltOverride`).
+     */
     function deployPhase1CoreWithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
@@ -2050,6 +2163,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
     }
 
+    /**
+     * @notice Finalize Phase-1 with optional ShareOFT salt confirmation.
+     * @param shareOftSaltOverride Zero uses the derived CREATE2 salt. Nonzero must equal
+     *        `deriveShareOftSalt(creatorToken, owner, toLower(shareSymbol), version)` —
+     *        free-form salts are rejected (`InvalidShareOftSaltOverride`).
+     */
     function finalizePhase1WithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
@@ -2153,6 +2272,13 @@ contract DeploymentBatcher is ReentrancyGuard {
         returns (Phase2Result memory out)
     {
         _requireOwner(params.owner);
+        uint256 activeRolePolicyId = rolePolicyId;
+        if (vaultRolePolicyManager != address(0)) {
+            activeRolePolicyId = vaultRolePolicyId;
+            if (rolePolicyId != activeRolePolicyId) {
+                revert RolePolicyOverrideRejected(rolePolicyId, activeRolePolicyId);
+            }
+        }
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         Phase1SplitState memory p1state = phase1SplitStates[baseSalt];
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
@@ -2165,7 +2291,7 @@ contract DeploymentBatcher is ReentrancyGuard {
                 shareSymbolLower,
                 p1state,
                 vaultRolePolicyManager,
-                rolePolicyId
+                activeRolePolicyId
             )
         );
         out = abi.decode(outData, (Phase2Result));
@@ -2467,9 +2593,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     }
 
     /// @notice Approve or revoke a bytecode-store codeId for phase CREATE2 deploys.
+    /// @dev ODA-464-F02: on approve, snapshot keccak256(store.get(codeId)) so later store
+    ///      repoints cannot silently satisfy the label allowlist.
     function setApprovedCodeId(bytes32 codeId, bool approved) external onlyProtocolTreasury {
         if (codeId == bytes32(0)) revert InvalidCodeId();
         approvedCodeIds[codeId] = approved;
+        approvedCodeIdBytecodeHash[codeId] = approved ? _snapshotCodeIdBytecodeHash(codeId) : bytes32(0);
         emit CodeIdApprovalUpdated(codeId, approved);
     }
 
@@ -2479,7 +2608,17 @@ contract DeploymentBatcher is ReentrancyGuard {
             bytes32 codeId = codeIds[i];
             if (codeId == bytes32(0)) revert InvalidCodeId();
             approvedCodeIds[codeId] = approved;
+            approvedCodeIdBytecodeHash[codeId] = approved ? _snapshotCodeIdBytecodeHash(codeId) : bytes32(0);
             emit CodeIdApprovalUpdated(codeId, approved);
+        }
+    }
+
+    function _snapshotCodeIdBytecodeHash(bytes32 codeId) internal view returns (bytes32) {
+        try bytecodeStore.get(codeId) returns (bytes memory creationCode) {
+            if (creationCode.length == 0) return bytes32(0);
+            return keccak256(creationCode);
+        } catch {
+            return bytes32(0);
         }
     }
 
@@ -2498,9 +2637,15 @@ contract DeploymentBatcher is ReentrancyGuard {
     }
 
     /// @notice View helper for phase modules: reverts when allowlist is on and codeId is not approved.
+    /// @dev ODA-464-F02: when a bytecode hash was snapshotted at approve time, also require
+    ///      the live store contents still match (blocks label→bytecode repoint).
     function requireApprovedCodeId(bytes32 codeId) external view {
         if (!codeIdAllowlistEnabled) return;
         if (!approvedCodeIds[codeId]) revert CodeIdNotApproved(codeId);
+        bytes32 expected = approvedCodeIdBytecodeHash[codeId];
+        if (expected == bytes32(0)) return;
+        bytes32 actual = _snapshotCodeIdBytecodeHash(codeId);
+        if (actual != expected) revert CodeIdBytecodeHashMismatch(codeId, expected, actual);
     }
 
     function _validatePhaseModuleCodehash(address module) internal view {

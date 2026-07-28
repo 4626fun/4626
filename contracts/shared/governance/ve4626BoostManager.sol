@@ -80,6 +80,9 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public pendingBaseBoost;
     uint256 public pendingMaxBoost;
     uint256 public boostTimelockExpiry;
+    /// @notice ODA-468-M2: minVotingPower changes share the 48h queue/execute pattern.
+    uint256 public pendingMinVotingPower;
+    uint256 public minVotingPowerTimelockExpiry;
 
     // Flash-loan protection
     mapping(address => uint256) public lastBalanceUpdateBlock;
@@ -87,6 +90,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     event BoostCalculated(address indexed user, uint256 boostMultiplier);
     event BoostParametersUpdated(uint256 baseBoost, uint256 maxBoost);
     event MinVotingPowerUpdated(uint256 minPower);
+    event MinVotingPowerUpdateQueued(uint256 minPower, uint256 executeAfter);
     event BalanceTrackingUpdated(address indexed user, uint256 blockNumber);
     event VeLotteryTokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
@@ -101,6 +105,8 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     error NoPendingBoostUpdate();
     error NoPendingUtilityUpdate();
     error UtilityTimelockNotExpired(uint256 executeAfter);
+    error NoPendingMinVotingPowerUpdate();
+    error OwnershipRenounceDisabled();
 
     constructor(address _ve4626, address _owner) Ownable(_owner) {
         if (_ve4626 == address(0)) revert ZeroAddress();
@@ -277,9 +283,24 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         emit BoostParametersUpdated(pendingBaseBoost, pendingMaxBoost);
     }
 
+    /// @notice Queue a minVotingPower change (48h timelock, ODA-468-M2).
     function setMinVotingPower(uint256 _minPower) external onlyOwner {
-        minVotingPower = _minPower;
-        emit MinVotingPowerUpdated(_minPower);
+        pendingMinVotingPower = _minPower;
+        minVotingPowerTimelockExpiry = block.timestamp + BOOST_TIMELOCK_DURATION;
+        emit MinVotingPowerUpdateQueued(_minPower, minVotingPowerTimelockExpiry);
+    }
+
+    function executeMinVotingPowerUpdate() external onlyOwner {
+        if (minVotingPowerTimelockExpiry == 0) revert NoPendingMinVotingPowerUpdate();
+        if (block.timestamp < minVotingPowerTimelockExpiry) revert TimelockNotExpired();
+        minVotingPower = pendingMinVotingPower;
+        minVotingPowerTimelockExpiry = 0;
+        emit MinVotingPowerUpdated(pendingMinVotingPower);
+    }
+
+    /// @notice ODA-468-L11: owner-critical boost config — disable renounce.
+    function renounceOwnership() public pure override {
+        revert OwnershipRenounceDisabled();
     }
 
     function hasBoost(address user) external view returns (bool) {
