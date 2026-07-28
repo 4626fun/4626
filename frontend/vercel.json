@@ -921,19 +921,19 @@
     },
     {
       "src": "/api/v1/token/([a-fA-F0-9x]+)/image",
-      "dest": "/api/token/image?address=$1"
+      "dest": "/api/[...path]?path=token/image&address=$1"
     },
     {
       "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)",
-      "dest": "/api/token/image?address=$1&format=$2&size=64"
+      "dest": "/api/[...path]?path=token/image&address=$1&format=$2&size=64"
     },
     {
       "src": "/v1/token/([a-fA-F0-9x]+)/image",
-      "dest": "/api/token/image?address=$1"
+      "dest": "/api/[...path]?path=token/image&address=$1"
     },
     {
       "src": "/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)",
-      "dest": "/api/token/image?address=$1&format=$2&size=64"
+      "dest": "/api/[...path]?path=token/image&address=$1&format=$2&size=64"
     },
     {
       "src": "/v1/(.*)",

@@ -39,7 +39,7 @@ describe('token image route registration', () => {
       routes.some(
         (route) =>
           route.src === '/v1/token/([a-fA-F0-9x]+)/image' &&
-          route.dest === '/api/token/image?address=$1',
+          route.dest === '/api/[...path]?path=token/image&address=$1',
       ),
     ).toBe(true)
   })
