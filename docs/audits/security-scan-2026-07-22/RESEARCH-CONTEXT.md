@@ -9,15 +9,18 @@
 | Field | Value |
 |-------|-------|
 | Repo | https://github.com/4626fun/4626 |
-| Tag | `audit/oda-2026-07-22` |
-| Commit | `423e0e3` |
-| Tree | https://github.com/4626fun/4626/tree/audit/oda-2026-07-22/contracts |
+| Tag (current) | `audit/oda-2026-07-28-agent-lane` |
+| Commit | `0c47be2` |
+| Tree | https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts |
+| Mutable branch | `audit/oda-v1200-greenfield-candidate` (same slice) |
 
-**Stale-pin note:** Private remediations (Critical/High/Medium/Low) landed after this pin. Treat pin as the audited snapshot; call out “fixed privately / pin stale” where relevant (esp. lottery `adminModuleCall` → `onlyOwner`, High DoS fixes).
+**Historical pins (immutable):** July 22 `audit/oda-2026-07-22` @ `423e0e3`; July 23 remediated `audit/oda-2026-07-23-remediated` @ `413f060`.
+
+**Pin freshness:** Current tag includes greenfield remediations through private `main` + **agent-lane** vault/ShareOFT/wrapper/core/gauge (ODA-480-[3] agent cooldown parity). Do not use private `wenakita/4626` or legacy `wenakita/CreatorVault`.
 
 ## Scope map (core systems)
 
-Lottery/VRF · CreatorOVault + CoreModule · ShareOFT + Wrapper · DeploymentBatcher · Registry · Charm + Ajna strategies · Creator/Agent gauges · ve4626 + bribes.
+Lottery/VRF · CreatorOVault + CoreModule · Creator ShareOFT + Wrapper · **AgentOVault + CoreModule** · **Agent ShareOFT + Wrapper** · DeploymentBatcher · Registry · Charm + Ajna strategies · Creator/Agent gauges · ve4626 + bribes.
 
 ## ODA jobs (2026-07-22)
 
@@ -65,7 +68,7 @@ Lottery/VRF · CreatorOVault + CoreModule · ShareOFT + Wrapper · DeploymentBat
 5. Residual risks after FIXED items
 6. Launch-readiness recommendations (ops + pin republish)
 
-*Generated for LeftClaw research · 2026-07-23*
+*Updated for LeftClaw research · 2026-07-28 (agent-lane pin)*
 
 ## LeftClaw research job
 
@@ -76,4 +79,5 @@ Lottery/VRF · CreatorOVault + CoreModule · ShareOFT + Wrapper · DeploymentBat
 | Price | $3 USDC (x402) |
 | Payer | `0xB05Cf01231cF2fF99499682E64D3780d57c80FdD` |
 | Tracking file | `leftclaw-research-job.json` |
+| Status | **Stale / unindexed** as of 2026-07-28 — commissioned against July 22 pin `423e0e3` before agent-lane publish. Do not wait on 482. Re-commission a new research job against tag `audit/oda-2026-07-28-agent-lane` when needed. |
 

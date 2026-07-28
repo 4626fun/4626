@@ -41,3 +41,7 @@ See [TRIAGE.md](./TRIAGE.md). Jobs **462/463** still `in_progress` at last poll;
 ## Remediated pin (do not overwrite 423e0e3)
 
 New review jobs should pin [`4626fun/4626` @ `audit/oda-2026-07-23-remediated`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-23-remediated/contracts) (`413f060`). Historical jobs 461–468 / 480–481 remain tied to `423e0e3`.
+
+## Current auditor pin (2026-07-28)
+
+Point new review / research at [`4626fun/4626` @ `audit/oda-2026-07-28-agent-lane`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts) (`0c47be2`) — greenfield remediations **plus agent lane**. Mutable branch tip: `audit/oda-v1200-greenfield-candidate`. Historical jobs stay tied to their original pins.

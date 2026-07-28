@@ -25,3 +25,7 @@ for id in 494 495 496 497 498; do
   echo -n "$id "; curl -sL "https://www.onedollaraudit.com/api/jobs/$id" | jq -r .status
 done
 ```
+
+## Current auditor pin (2026-07-28)
+
+[`4626fun/4626` @ `audit/oda-2026-07-28-agent-lane`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts) (`0c47be2`) — includes agent lane. Branch tip `audit/oda-v1200-greenfield-candidate` tracks the same slice.

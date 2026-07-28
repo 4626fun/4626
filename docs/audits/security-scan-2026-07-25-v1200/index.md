@@ -54,3 +54,11 @@ Remediation contracts for **ODA-494-H01** / **ODA-495-H01** synced to public `d3
 - Private source: `b2df117ccd07ee1a63ca74d7b6abd9cd9d48e1e7` (`fix/wrapper-cooldown-hot-balance`; includes `main` #805)
 - Public: [`4626fun/4626` @ `audit/oda-v1200-greenfield-candidate`](https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts) (`d3e73cdcf21d95207f58c2eb41166cbfbe80d8fc`)
 - No new ODA jobs commissioned for this sync.
+
+## Public pin sync (2026-07-28 — agent lane)
+
+- Private source: `73e341cec` (`main`)
+- Public branch: [`audit/oda-v1200-greenfield-candidate`](https://github.com/4626fun/4626/tree/audit/oda-v1200-greenfield-candidate/contracts) @ `0c47be2`
+- Immutable tag: [`audit/oda-2026-07-28-agent-lane`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts)
+- Added: `AgentOVault`, `AgentShareOFT`, `AgentOVaultWrapper`, `AgentOVaultCoreModule`, `AgentGaugeController` (incl. #788 ODA-480-[3] agent cooldown parity)
+- No new ODA jobs commissioned for this sync.

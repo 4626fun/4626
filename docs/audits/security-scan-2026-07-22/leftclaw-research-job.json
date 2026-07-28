@@ -2,8 +2,12 @@
   "commissionedAt": "2026-07-23T12:11:05.742Z",
   "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "endpoint": "https://leftclaw.services/api/research",
-  "description": "Research report: 4626 Creator vault protocol on Base — architecture, trust boundaries, and residual risk after One Dollar Audit batch 2026-07-22 plus P0 remediations for jobs 480/481. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3) plus the operator 1-pager linked in context. Do NOT use wenakita/CreatorVault or private wenakita/4626. Synthesize (not a fresh line-by-line audit): vault/ShareOFT/wrapper, lottery/VRF, registry, Charm+Ajna, gauges, ve4626. Deliver: exec summary, architecture, trust model, ODA findings map (460-468; resubmits 480/481), residual risks after FIXED P0s, launch readiness.",
+  "description": "Research report: 4626 Creator vault protocol on Base \u2014 architecture, trust boundaries, and residual risk after One Dollar Audit batch 2026-07-22 plus P0 remediations for jobs 480/481. SOURCE OF TRUTH: github.com/4626fun/4626 @ tag audit/oda-2026-07-22 (commit 423e0e3) plus the operator 1-pager linked in context. Do NOT use wenakita/CreatorVault or private wenakita/4626. Synthesize (not a fresh line-by-line audit): vault/ShareOFT/wrapper, lottery/VRF, registry, Charm+Ajna, gauges, ve4626. Deliver: exec summary, architecture, trust model, ODA findings map (460-468; resubmits 480/481), residual risks after FIXED P0s, launch readiness.",
   "jobId": 482,
   "jobUrl": "https://leftclaw.services/jobs/482",
-  "message": "Research job created on-chain. Visit the jobUrl to track progress."
+  "message": "Research job created on-chain. Visit the jobUrl to track progress.",
+  "status": "stale_unindexed",
+  "staleNote": "Job page not found as of 2026-07-28; commissioned against July 22 pin. Re-commission against audit/oda-2026-07-28-agent-lane.",
+  "recommendedPin": "audit/oda-2026-07-28-agent-lane",
+  "recommendedCommit": "0c47be24efb9f48b03f54c289e2734f4cfd50cd8"
 }
