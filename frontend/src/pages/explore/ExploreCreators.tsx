@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
@@ -13,7 +14,7 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
-import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
+import { isScreenshotModeAllowed, useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
 import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
@@ -259,7 +260,10 @@ async function resolveCreatorSearchCandidates(query: string): Promise<ZoraCoin[]
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
+  const [searchParams] = useSearchParams()
   const screenshotMode = useScreenshotMode()
+  // Prod must never substitute demo rows — only local/dev screenshot capture.
+  const screenshotCaptureEnabled = isScreenshotModeAllowed(searchParams)
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
     useExploreSubnavParams({
@@ -369,7 +373,8 @@ export function ExploreCreators() {
     return localFilteredCoins
   }, [allCoins, directSearchCoins, localFilteredCoins, trimmedSearchQuery])
 
-  const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
+  const useScreenshotFallback =
+    screenshotCaptureEnabled && screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
 
   const profileIdentifiers = useMemo(() => {

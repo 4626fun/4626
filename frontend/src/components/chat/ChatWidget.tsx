@@ -115,6 +115,8 @@ function ChatWidgetInner() {
   const [isMobile, setIsMobile] = useState(false)
   const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
   const [pendingOpenRequest, setPendingOpenRequest] = useState<ChatOpenRequest | null>(null)
+  /** Keep chat open after a signed-out nav toggle finishes connecting. */
+  const [pendingNavOpen, setPendingNavOpen] = useState(false)
   const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
   const newDmInputRef = useRef<HTMLInputElement>(null)
 
@@ -276,6 +278,13 @@ function ChatWidgetInner() {
     if (typeof window === 'undefined') return
 
     const handleToggleRequest = () => {
+      if (!isConnected) {
+        // Signed-out: always request open after connect (don't toggle-collapse).
+        setPendingNavOpen(true)
+        setBarExpanded(true)
+        maybeConnectMessaging()
+        return
+      }
       setBarExpanded((prev) => {
         const next = !prev
         if (next) maybeConnectMessaging()
@@ -285,7 +294,14 @@ function ChatWidgetInner() {
 
     window.addEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
     return () => window.removeEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
-  }, [maybeConnectMessaging])
+  }, [isConnected, maybeConnectMessaging])
+
+  useEffect(() => {
+    if (!pendingNavOpen || !isConnected) return
+    setBarExpanded(true)
+    setPendingNavOpen(false)
+    maybeConnectMessaging()
+  }, [isConnected, maybeConnectMessaging, pendingNavOpen])
 
   useEffect(() => {
     if (!pendingOpenRequest || status !== 'connected') return

@@ -10,7 +10,6 @@ import {
   VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD,
   VAULT_DEPLOY_LIST_USD,
   VAULT_DEPLOY_PROMO_USD,
-  vaultDeployPriceAfterCoinLaunchUsd,
 } from '@/pages/deploy/deployPricing'
 
 const VAULT_POSTER_URL = '/immersive/assets/vault/ethereum_vault_poster.png'
@@ -56,7 +55,7 @@ const CARDS: CardConfig[] = [
     title: 'Vault',
     desc: 'Yield vault for your Creator Coin',
     standards: ['ERC-20', 'ERC-4626'],
-    requires: `Requires a Zora Creator Coin · launch on 4626 for −$${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} (now ${formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())})`,
+    requires: `Requires a Zora Creator Coin · launch on 4626 for $${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} off`,
     to: '/deploy/vault',
     price: {
       was: formatVaultDeployUsd(VAULT_DEPLOY_LIST_USD),

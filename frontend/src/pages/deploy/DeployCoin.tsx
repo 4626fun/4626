@@ -30,7 +30,7 @@ function shortAddress(value: string): string {
   return `${normalized.slice(0, 6)}…${normalized.slice(-4)}`
 }
 
-function FlowTabs({ active }: { active: 'coin' | 'vault' }) {
+function FlowTabs({ active, vaultTo = '/deploy/vault' }: { active: 'coin' | 'vault'; vaultTo?: string }) {
   return (
     <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 p-1 text-[11px]">
       <span
@@ -48,7 +48,7 @@ function FlowTabs({ active }: { active: 'coin' | 'vault' }) {
             ? 'rounded-lg bg-white/12 px-3 py-1 text-white'
             : 'rounded-lg px-3 py-1 text-zinc-400 hover:text-white'
         }
-        to="/deploy/vault"
+        to={vaultTo}
       >
         Vault
       </Link>
@@ -144,14 +144,9 @@ function LaunchSuccess(props: LaunchResult) {
           <h2 className="text-[18px] font-semibold text-emerald-200">Creator coin is live</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-zinc-400">
             <span className="font-mono text-zinc-300">${props.symbol}</span> launched through 4626
-            with platform referrer set. Vault deploy is now{' '}
-            <span className="text-zinc-500 line-through">
-              {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)}
-            </span>{' '}
-            <span className="font-medium text-emerald-200">
-              {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
-            </span>{' '}
-            (−${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD}).
+            with platform referrer set. You unlocked a ${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} vault
+            deploy discount off the {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)} launch bundle
+            (promo target {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}).
           </p>
         </div>
       </div>
@@ -193,7 +188,7 @@ function LaunchSuccess(props: LaunchResult) {
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           <Vault className="h-4 w-4" aria-hidden />
-          Deploy vault for ${props.symbol} · {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
+          Deploy vault for ${props.symbol} · ${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} off unlocked
         </Link>
         <a
           href={`https://zora.co/coin/base:${props.coinAddress}`}
@@ -248,16 +243,16 @@ export function DeployCoin() {
                 <p className="max-w-2xl text-sm font-light text-zinc-500">
                   Create your Zora Creator Coin through 4626 so platform referral rewards accrue to
                   the protocol — and unlock a ${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} vault deploy
-                  discount (
-                  <span className="text-zinc-400 line-through">
-                    {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)}
-                  </span>{' '}
-                  <span className="text-zinc-300">
-                    {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
-                  </span>
-                  ).
+                  discount off the {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)} launch bundle.
                 </p>
-                <FlowTabs active="coin" />
+                <FlowTabs
+                  active="coin"
+                  vaultTo={
+                    launchResult
+                      ? buildDeployVaultFromCoinPath(launchResult.coinAddress)
+                      : '/deploy/vault'
+                  }
+                />
                 <StepRail complete={Boolean(launchResult)} />
               </div>
               <div className="vault-pill normal-case tracking-[0.02em] gap-2 px-3 py-1">
@@ -304,10 +299,11 @@ export function DeployCoin() {
                 </div>
                 <ul className="space-y-3 text-[13px] leading-relaxed text-zinc-400">
                   <li>
-                    <span className="text-zinc-200">$100 off vault deploy</span>
+                    <span className="text-zinc-200">${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} off vault deploy</span>
                     <span className="mt-0.5 block text-[12px] text-zinc-600">
-                      Launching here drops vault deploy from {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)} to{' '}
-                      {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}.
+                      Launching here unlocks a ${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} discount off the{' '}
+                      {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)} vault bundle (promo target{' '}
+                      {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}).
                     </span>
                   </li>
                   <li>
