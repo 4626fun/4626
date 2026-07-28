@@ -171,7 +171,11 @@ import {
   isAgentTokenV4Integration,
   resolveAgentTokenIntegration,
 } from '@/lib/onchain/resolveAgentTokenIntegration'
-import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
+import { computeMarketFloorQuote, creatorUsdPrice1e18FromEthFloor } from '@/lib/cca/marketFloor'
+import {
+  evaluateOracleLaunchPreflight,
+  impliedFdvEthFromWeiPerToken,
+} from '@/lib/cca/oracleLaunchPreflight'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonce } from '@/lib/deploy/permit2'
@@ -266,6 +270,7 @@ const DEFAULT_PAYOUT_ROUTER_WETH_SHARE_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
+// Graduation minimum for Uniswap CCA (requiredCurrencyRaised) — NOT FDV and NOT a bid cap.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
 // Phase-2 share split in the deployment batcher: 30% CCA / 30% vesting / 30% Solana / 10% LP.
 const DEFAULT_AUCTION_PERCENT = 30
@@ -6130,6 +6135,66 @@ function DeployVaultBatcher({
                 'Launch floor is enforced onchain from oracle data; refresh oracle state before launching auction.',
             )
           }
+          // Keep CCA floor tied to the underlying Zora V4 creator/agent market — not a
+          // stale or dust-V3 oracle seed. requiredRaise (0.1 ETH default) is unrelated.
+          {
+            const GET_ASSET_PRICE_ABI = [
+              {
+                type: 'function',
+                name: 'getAssetPrice',
+                stateMutability: 'view',
+                inputs: [],
+                outputs: [
+                  { name: 'price', type: 'int256' },
+                  { name: 'timestamp', type: 'uint256' },
+                ],
+              },
+            ] as const
+            const CHAINLINK_ABI = [
+              {
+                type: 'function',
+                name: 'latestRoundData',
+                stateMutability: 'view',
+                inputs: [],
+                outputs: [
+                  { type: 'uint80' },
+                  { type: 'int256' },
+                  { type: 'uint256' },
+                  { type: 'uint256' },
+                  { type: 'uint80' },
+                ],
+              },
+            ] as const
+            const marketQuote = await computeMarketFloorQuote({
+              publicClient,
+              creatorCoin: getAddress(creatorToken as Address),
+            })
+            const [oraclePrice, ethRound] = await Promise.all([
+              publicClient.readContract({
+                address: expected.oracle,
+                abi: GET_ASSET_PRICE_ABI,
+                functionName: 'getAssetPrice',
+              }) as Promise<readonly [bigint, bigint]>,
+              publicClient.readContract({
+                address: BASE_CHAINLINK_ETH_USD,
+                abi: CHAINLINK_ABI,
+                functionName: 'latestRoundData',
+              }),
+            ])
+            const ethUsd1e18 = BigInt((ethRound as readonly unknown[])[1] as bigint) * 10n ** 10n
+            const marketFloorUsd1e18 = creatorUsdPrice1e18FromEthFloor({
+              weiPerToken: marketQuote.weiPerToken,
+              ethUsdPrice1e18: ethUsd1e18,
+            })
+            const oracleCheck = evaluateOracleLaunchPreflight({
+              oracleAssetUsd1e18: oraclePrice[0] > 0n ? oraclePrice[0] : 0n,
+              oracleUpdatedAtSec: Number(oraclePrice[1] ?? 0n),
+              marketFloorUsd1e18,
+            })
+            if (!oracleCheck.ok) {
+              throw new Error(`Phase 4 oracle/market-floor precheck failed: ${oracleCheck.reason}`)
+            }
+          }
           setPhase('phase4')
           await sendPhaseCalls(phase4Calls, 'phase4')
         }
@@ -9083,15 +9148,22 @@ function DeployVaultMain() {
     const weiPerToken = marketFloorQuery.data?.weiPerToken
     if (typeof weiPerToken !== 'bigint' || weiPerToken <= 0n) return null
     const ethShort = formatEthPerTokenForUi(weiPerToken)
+    const fdvEth = impliedFdvEthFromWeiPerToken({ weiPerToken })
+    const fdvShort = fdvEth >= 10 ? fdvEth.toFixed(2) : fdvEth.toFixed(4)
     const durationSec = marketFloorQuery.data?.creatorZora?.durationSec
     const mins = typeof durationSec === 'number' && durationSec > 0 ? Math.round(durationSec / 60) : null
     const discount = marketFloorQuery.data?.zoraEth?.discountBps
     const bufferBps = typeof discount === 'number' ? Math.max(0, 10_000 - discount) : null
     const bufferPct = bufferBps !== null ? Math.round(bufferBps / 100) : null
-    const meta = [mins ? `TWAP ${mins}m` : null, bufferPct !== null ? `-${bufferPct}% buffer` : null]
+    const meta = [
+      mins ? `TWAP ${mins}m` : null,
+      bufferPct !== null ? `-${bufferPct}% buffer` : null,
+      `~${fdvShort} ETH FDV @ 1B`,
+      'CCA floor uses oracle seeded from this market',
+    ]
       .filter(Boolean)
       .join(', ')
-    return meta ? `${ethShort} ETH / ${derivedShareSymbol} (${meta})` : `${ethShort} ETH / ${derivedShareSymbol}`
+    return `${ethShort} ETH / ${derivedShareSymbol} (${meta})`
   }, [derivedShareSymbol, marketFloorQuery.data])
 
   const deploymentBatcherAddress = (() => {
@@ -9673,14 +9745,14 @@ function DeployVaultMain() {
               : 'activate vault_full_deploy',
     },
     {
-      label: 'Market floor reference (UI only)',
+      label: 'Market floor (underlying V4 → CCA oracle seed)',
       ok: true,
       hint: marketFloorQuery.isFetching
         ? 'computing'
         : marketFloorQuery.isError
           ? 'error'
           : marketFloorQuery.data?.weiPerToken
-            ? `${Number(formatUnits(marketFloorQuery.data.weiPerToken, 18)).toFixed(6)} ETH`
+            ? `${Number(formatUnits(marketFloorQuery.data.weiPerToken, 18)).toExponential(3)} ETH/token · ~${impliedFdvEthFromWeiPerToken({ weiPerToken: marketFloorQuery.data.weiPerToken }).toFixed(2)} ETH FDV`
             : 'missing',
     },
     {

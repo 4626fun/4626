@@ -26,10 +26,21 @@ contract MockRegistryForOracleQuoteTokenGuard {
 contract MockV3PoolForOracleQuoteTokenGuard {
     address public immutable token0;
     address public immutable token1;
+    uint128 public poolLiquidity;
 
     constructor(address _token0, address _token1) {
         token0 = _token0;
         token1 = _token1;
+        // Default above CreatorOracle/AgentOracle MIN_V3_ORACLE_LIQUIDITY.
+        poolLiquidity = 1e18;
+    }
+
+    function setLiquidity(uint128 _liquidity) external {
+        poolLiquidity = _liquidity;
+    }
+
+    function liquidity() external view returns (uint128) {
+        return poolLiquidity;
     }
 
     /// @dev Constant tick 0 (price 1:1 in raw units) for TWAP reads.
@@ -127,6 +138,42 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
 
         assertEq(oracle.v3UsdToken(), zoraToken);
+    }
+
+    function test_creatorOracle_rejectsDustV3PoolLiquidity() external {
+        CreatorOracle oracle = _deployCreatorOracle();
+
+        address creatorToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address zoraToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        MockV3PoolForOracleQuoteTokenGuard pool =
+            new MockV3PoolForOracleQuoteTokenGuard(creatorToken, zoraToken);
+        pool.setLiquidity(1); // mirrors the Akita dust CREATOR/USDC pool that poisoned CCA floor
+
+        oracle.setReferenceQuoteToken(zoraToken);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOracle.V3PoolLiquidityTooLow.selector, uint128(1), oracle.MIN_V3_ORACLE_LIQUIDITY()
+            )
+        );
+        oracle.setV3Pool(address(pool), creatorToken, zoraToken, 1800);
+    }
+
+    function test_agentOracle_rejectsDustV3PoolLiquidity() external {
+        AgentOracle oracle = _deployAgentOracle();
+
+        address agentToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address virtualToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        MockV3PoolForOracleQuoteTokenGuard pool =
+            new MockV3PoolForOracleQuoteTokenGuard(agentToken, virtualToken);
+        pool.setLiquidity(1);
+
+        oracle.setReferenceQuoteToken(virtualToken);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgentOracle.V3PoolLiquidityTooLow.selector, uint128(1), oracle.MIN_V3_ORACLE_LIQUIDITY()
+            )
+        );
+        oracle.setV3Pool(address(pool), agentToken, virtualToken, 1800);
     }
 
     function test_creatorOracle_lockedReferenceQuoteTokenCannotChange() external {

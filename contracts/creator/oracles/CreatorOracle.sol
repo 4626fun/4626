@@ -65,6 +65,11 @@ contract CreatorOracle is OApp, IOracle4626 {
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
 
+    /// @notice Minimum Uniswap V3 pool liquidity accepted for oracle configuration.
+    /// @dev Rejects dust / spoof pools (e.g. liquidity == 1) that produce nonsense TWAPs
+    ///      and poison CCA launch floors. Real Base CREATOR/USDC pools are far above this.
+    uint128 public constant MIN_V3_ORACLE_LIQUIDITY = 1e12;
+
     /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
     /// @dev Mitigates L-1 (audit `docs/audits/aristotle/oracle`) — mirrors Chainlink's
     ///      reference sequencer-uptime pattern of not trusting prices for a window
@@ -275,6 +280,7 @@ contract CreatorOracle is OApp, IOracle4626 {
     error V4NotConfigured();
     error V3NotConfigured();
     error InvalidV3Pool();
+    error V3PoolLiquidityTooLow(uint128 liquidity, uint128 minimum);
     error UnsupportedDecimals();
     error NeedMoreObservations();
     error StalePrice();
@@ -451,6 +457,11 @@ contract CreatorOracle is OApp, IOracle4626 {
         address t1 = IUniswapV3Pool(_pool).token1();
         bool ok = (t0 == _creatorToken && t1 == _usdToken) || (t0 == _usdToken && t1 == _creatorToken);
         if (!ok) revert InvalidV3Pool();
+
+        uint128 poolLiquidity = IUniswapV3Pool(_pool).liquidity();
+        if (poolLiquidity < MIN_V3_ORACLE_LIQUIDITY) {
+            revert V3PoolLiquidityTooLow(poolLiquidity, MIN_V3_ORACLE_LIQUIDITY);
+        }
 
         uint8 creatorDec = IERC20Metadata(_creatorToken).decimals();
         uint8 usdDec = IERC20Metadata(_usdToken).decimals();

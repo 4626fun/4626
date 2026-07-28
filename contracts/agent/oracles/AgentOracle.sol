@@ -55,6 +55,11 @@ contract AgentOracle is OApp, IOracle4626 {
 
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
+
+    /// @notice Minimum Uniswap V3 pool liquidity accepted for oracle configuration.
+    /// @dev Rejects dust / spoof pools that would poison CCA / mesh launch floors.
+    uint128 public constant MIN_V3_ORACLE_LIQUIDITY = 1e12;
+
     /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
     uint256 public constant SEQUENCER_GRACE_PERIOD = 3600; // 1 hour
 
@@ -259,6 +264,7 @@ contract AgentOracle is OApp, IOracle4626 {
     error V2NotConfigured();
     error NeedMoreObservations();
     error InvalidV3Pool();
+    error V3PoolLiquidityTooLow(uint128 liquidity, uint128 minimum);
     error InvalidV2Pair();
     error UnsupportedDecimals();
     error StalePrice();
@@ -384,6 +390,11 @@ contract AgentOracle is OApp, IOracle4626 {
         address t1 = IUniswapV3Pool(_pool).token1();
         bool ok = (t0 == _agentToken && t1 == _quoteToken) || (t0 == _quoteToken && t1 == _agentToken);
         if (!ok) revert InvalidV3Pool();
+
+        uint128 poolLiquidity = IUniswapV3Pool(_pool).liquidity();
+        if (poolLiquidity < MIN_V3_ORACLE_LIQUIDITY) {
+            revert V3PoolLiquidityTooLow(poolLiquidity, MIN_V3_ORACLE_LIQUIDITY);
+        }
 
         uint8 creatorDec = IERC20Metadata(_agentToken).decimals();
         uint8 usdDec = IERC20Metadata(_quoteToken).decimals();
