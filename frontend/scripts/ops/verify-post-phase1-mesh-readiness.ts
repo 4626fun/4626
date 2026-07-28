@@ -218,9 +218,10 @@ async function main(): Promise<void> {
       shareOft,
       '--oft-store',
       oftStore.toBase58(),
-      '--mint',
-      shareMeshMint.toBase58(),
-      ...(process.env.SOLANA_SHARE_DEST ? ['--dest', process.env.SOLANA_SHARE_DEST] : ['--skip-dest-ata']),
+      // mint/dest must be paired; omit both when dest unset (ULN still gates; ATA optional)
+      ...(process.env.SOLANA_SHARE_DEST
+        ? ['--mint', shareMeshMint.toBase58(), '--dest', process.env.SOLANA_SHARE_DEST]
+        : []),
     ],
     { cwd: FRONTEND_ROOT, encoding: 'utf8', env: process.env },
   )
