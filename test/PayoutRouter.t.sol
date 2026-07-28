@@ -476,4 +476,126 @@ contract PayoutRouterTest is Test {
             address(0)
         );
     }
+
+    // ================================
+    // ODA-520 remediations
+    // ================================
+
+    function test_ODA520_H1_keeperCapAppliesToConvertAndQueueV3Venue() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        router.setKeeperExternalSpendCap(address(usdc), 5e18, 1 days);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 20e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 5e18, 1);
+
+        vm.prank(keeper);
+        vm.expectRevert(); // KeeperExternalSpendCapExceeded — V3 venue now consumes the cap
+        router.convertAndQueue(address(usdc), 1e18, 1);
+
+        // Owner remains exempt.
+        router.convertAndQueue(address(usdc), 1e18, 1);
+    }
+
+    function test_ODA520_H2_swapRouterBlockedFromExternalAllowlist() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(PayoutRouter.InvalidExternalSwapAddress.selector, address(swapRouter))
+        );
+        router.setExternalSwapTargetApproval(address(swapRouter), true);
+
+        vm.expectRevert(abi.encodeWithSelector(PayoutRouter.InvalidExternalSwapAddress.selector, address(weth)));
+        router.setExternalSwapSpenderApproval(address(weth), true);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(PayoutRouter.InvalidExternalSwapAddress.selector, address(protocolRewards))
+        );
+        router.setExternalSwapTargetApproval(address(protocolRewards), true);
+    }
+
+    function test_ODA520_H2_M4_setSwapPathDoesNotGrantStandingAllowance() public {
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        assertEq(usdc.allowance(address(router), address(swapRouter)), 0);
+
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 10e18);
+
+        router.convertAndQueue(address(usdc), 10e18, 1);
+        assertEq(usdc.allowance(address(router), address(swapRouter)), 0);
+    }
+
+    function test_ODA520_L3_sweepShareOftQueuesResidualBalance() public {
+        shareOft.mint(address(router), 7e18);
+        uint256 sharesQueued = router.sweepShareOFT();
+        assertEq(sharesQueued, 7_000e18);
+        assertEq(shareOft.balanceOf(address(router)), 0);
+        assertEq(burnStream.queuedShares(), 7_000e18);
+
+        vm.expectRevert(PayoutRouter.NoShareOftToSweep.selector);
+        router.sweepShareOFT();
+    }
+
+    function test_ODA520_L5_capReconfigurePreservesAccruedSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, 1 days);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 8e18, 1);
+
+        // Tightening must not refund the 8e18 already spent.
+        router.setKeeperExternalSpendCap(address(usdc), 5e18, 1 days);
+
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 1e18, 1);
+    }
+
+    function test_ODA520_L5_decayingWindowPreventsBoundaryDoubleSpend() public {
+        address keeper = makeAddr("keeper");
+        router.setKeeper(keeper);
+        uint64 window = 1 days;
+        router.setKeeperExternalSpendCap(address(usdc), 10e18, window);
+
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        swapRouter.setRate(address(usdc), address(shareOft), 1e18);
+        shareOft.mint(address(swapRouter), 100e18);
+        usdc.mint(address(router), 50e18);
+
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        // One second before a hard-boundary reset would have fired under the old logic,
+        // decaying window still has nearly-full accrued spend — no 2× burst.
+        vm.warp(block.timestamp + window - 1);
+        vm.prank(keeper);
+        vm.expectRevert();
+        router.convertAndQueue(address(usdc), 10e18, 1);
+
+        // After a full window of decay, the full cap is available again.
+        vm.warp(block.timestamp + 1);
+        vm.prank(keeper);
+        router.convertAndQueue(address(usdc), 10e18, 1);
+    }
+
+    function test_ODA520_setSwapPathRejectsMalformedHopLength() public {
+        // 44 bytes: endpoints decode but (len-20) % 23 != 0
+        bytes memory bad = bytes.concat(bytes20(address(usdc)), hex"0bb8", bytes20(address(shareOft)), hex"00");
+        vm.expectRevert(abi.encodeWithSelector(PayoutRouter.InvalidPath.selector, address(usdc)));
+        router.setSwapPath(address(usdc), bad);
+    }
 }

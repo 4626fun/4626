@@ -1,0 +1,301 @@
+Source URL: https://leftclaw.services/result/520.html
+Title: CreatorPayoutRouter & CreatorCoinPolicyController — LeftClaw Services
+
+🦞 LeftClaw Services · Smart Contract Audit 
+
+# CreatorPayoutRouter & CreatorCoinPolicyController
+
+Job #520 · completed on-chain · report pinned to IPFS
+
+**Job page** #520 **Canonical report** IPFS **Generated** 2026-07-28 
+
+2
+
+High
+
+1
+
+Medium
+
+2
+
+Low
+
+Contents
+
+1. Scope
+2. Reconciliation Summary
+3. Findings
+4. Findings List
+1. Leads
+2. Verified non-issues (checked and cleared across 2+ independent agents in both phases — no action needed)
+3. Access-Control Inventory (client reference)
+4. Threat Model (client reference)
+
+# 🔐 Security Review — CreatorPayoutRouter & CreatorCoinPolicyController
+
+## Scope
+
+| **Repo**                     | github.com/4626fun/4626                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tag / Commit**             | audit/oda-2026-07-28-strategies-revenue @ f09a31ad09fbe6e0c7833bce7b61b8743a2b6293                                                                                                                                                                      |
+| **Files reviewed**           | contracts/creator/revenue/CreatorPayoutRouter.sol (599 lines) · contracts/creator/revenue/CreatorCoinPolicyController.sol (80 lines)                                                                                                                    |
+| **Methodology**              | Three-phase: Phase 0 context (protocol map + access-control inventory + threat catalog, opus) → Phase 1 breadth (7 ethskills domain agents, opus) → Phase 2 depth (12 pashov attacker-mindset agents, opus, run blind to Phase 1) → this reconciliation |
+| **Out-of-repo dependencies** | vault, wrapper, burnStream, swapRouter, weth, protocolRewards, creatorCoin, shareOFT — all reached only via locally-declared interfaces; no source available in this scope                                                                              |
+| **Reporting floor**          | Confidence ≥ 50; below that, listed under **Leads** only                                                                                                                                                                                                |
+
+**Note on prior audits.** The source carries inline comments referencing prior fixes (`FIX: L-3`, `FIX: L-4`, `FIX: CPC-01`, `M-NEW-01`, `M-05`, pointing at `docs/audits/aristotle/oracle` and a separate CreatorVault business-logic audit). This engagement did not read those prior reports and did not reuse any of their findings — every item below was independently derived from this run's own Phase 0 map and Phase 1/Phase 2 agents reading the code fresh. Where this run's findings overlap with what those comments suggest was already fixed, that overlap is noted so the client can see which categories of issue recur.
+
+---
+
+## Reconciliation Summary
+
+**Phase 1 (7 ethskills domains) raw output**: \~90 individual findings/leads across general, precision-math, erc20, defi-amm, assembly, dos, access-control — heavily overlapping by root cause.  
+**Phase 2 (12 pashov agents, blind to Phase 1)**: independently produced the _same two headline root causes_ in 11–12 of 12 agents, plus 5 additional corroborated findings and \~10 shared leads.  
+**Cross-phase overlap**: the two headline findings (keeper-cap bypass via the V3 venue; `swapRouter` allowlist omission enabling cross-token drain) were found by **every phase-2 agent and every phase-1 domain that touched access control, economics, or DoS** — this is the strongest possible corroboration signal available from this methodology.  
+**Phase-1-only**: ERC20 approval-lifecycle/BNB-zero-approval items, unit-mixing in `processBatch` events, path-encoding boundary detail. **Phase-2-only**: the `swapRouter`\-as-spender self-revocation DoS (Finding 5) and the controller no-timelock revenue-redirect observation (Finding 7) — both re-examined and confirmed against source before inclusion.  
+**Re-examined leads kept**: 7 (folded into Findings 1–7 below or the Leads section). **Demoted**: 0 — no phase-unique lead was found to be spurious on re-read; several were downgraded in severity per the judging gates (admin-only actions, bounded/self-inflicted impact).  
+**Coverage**: 24/24 access-control-inventory entrypoints addressed (either by a finding or an explicit "examined, no issue" below); 10/10 phase-0 threat-catalog rows answered. **Coverage holes closed this pass: 0** (both phases already covered every privileged entrypoint and threat-catalog row; no first-time re-read was needed in this reconciliation beyond confirming citations against source, which is reported separately from hole-closing).
+
+---
+
+## Findings
+
+\[92\] **1\. Keeper spend cap is enforced on only one of two conversion venues — the default venue is completely uncapped**
+
+`CreatorPayoutRouter._convertAndQueue` (entered via `convertAndQueue()` L310 and `processBatch()` kind=0, L349-350) · Confidence: 92 · **Severity:** High · **\[both — corroborated by all 7 Phase-1 domains and 12/12 Phase-2 agents\]**
+
+**Description**  
+`_consumeKeeperExternalSpend(tokenIn, amountIn)` — the per-token, per-window budget that exists specifically to bound a compromised or malicious `keeper` (`keeperExternalSpendCaps`, doc comment L110-111: _"Caps apply only to `keeper` (owner is exempt)"_) — is called from exactly one place in the contract: L504, inside `_convertViaExternalAndQueue`. `_convertAndQueue` (L450-489, both the creator-coin branch and the Uniswap-V3-swap branch) never calls it. The only guard on the V3 branch is `if (minOut == 0) revert ZeroAmount();` (L466) — a floor that `minOut = 1` (one wei) satisfies while permitting near-total value loss, and `minOut` is chosen entirely by the caller being constrained. `deadline: block.timestamp + swapDeadlineBuffer` (L479) is computed at execution time, so it can never actually be stale — it provides no independent staleness protection.
+
+**Proof of Concept** (constant-product trace, verified independently by two Phase-2 agents with matching numbers)  
+Pool state: x = 100 WETH / y = 1,000,000 shareOFT (k = 1e8). Router holds 50 WETH with a registered `WETH→shareOFT` V3 path and a keeper cap of, say, 1 WETH/day on the _other_ (external) venue — irrelevant here since that cap is never read.
+
+1. Keeper (or an attacker holding a compromised keeper key) front-runs with 900 WETH: x → 1000, y → 100,000; attacker now holds \~900,000 shareOFT.
+2. Keeper calls `convertAndQueue(weth, 50e18, 1)`. L466 passes (`1 != 0`). L472 passes (balance ≥ amountIn). `exactInput` executes at the skewed price: x → 1050, y ≈ 95,238 → router receives ≈ 4,762 shareOFT (fair-value would have been ≈ 333,333 shareOFT — a 98.6% loss). L485 `tokenOut(4,762) < minOut(1)` is false → passes. `_unwrapShareOftAndQueue` queues the 4,762 shares for burn; the transaction looks like a routine, successful conversion.
+3. Keeper back-runs, selling the \~900,000 shareOFT back into the pool, netting ≈ 946 WETH for the 900 WETH spent — a profit of ≈ 46 WETH, i.e. **\~93% of the router's 50 WETH balance**, extracted in one atomic transaction with **zero keeper-cap consumption**.
+
+This is repeatable every block, for every token that has ever had a V3 path registered, and also applies unchanged to `weth` — one of the three assets `executeEmergencyWithdraw` (L417-419) is specifically designed to protect from owner extraction. Because the owner is also exempt from the keeper cap (`_consumeKeeperExternalSpend` returns immediately at L537 for any non-keeper caller) and controls `minOut` on this same function, the owner can extract WETH through this identical path with **zero delay**, bypassing the 1-day `EMERGENCY_WITHDRAW_DELAY` timelock the contract explicitly built to prevent "owner-drain centralization" (comment at L412-416).
+
+**Fix**
+
+```diff
+     function _convertAndQueue(address tokenIn, uint256 amountIn, uint256 minOut)
+         internal
+         returns (uint256 tokenOut, uint256 sharesQueued)
+     {
+         if (tokenIn == address(0)) revert ZeroAddress();
+         if (amountIn == 0) revert ZeroAmount();
++
++        _consumeKeeperExternalSpend(tokenIn, amountIn);
+
+         if (tokenIn == address(creatorCoin)) {
+
+```
+
+Additionally, replace the `minOut != 0` floor on both venues with a bound derived from an owner-configured slippage-basis-points parameter checked against an oracle/TWAP quote — `!= 0` is not a slippage floor.
+
+---
+
+\[88\] **2\. `swapRouter` omitted from the external-swap custody-surface blocklist — an allowlisted canonical router lets a keeper drain any _other_ registered token via its permanent standing allowance**
+
+`CreatorPayoutRouter._requireSafeExternalSwapAddress` (L269-276) / `_convertViaExternalAndQueue` (L491-534) / `setSwapPath` (L257) · Confidence: 88 · **Severity:** High · **\[both — corroborated by 6/7 Phase-1 domains and 11/12 Phase-2 agents\]**
+
+**Description**  
+`setSwapPath()` grants `IERC20(tokenIn).forceApprove(swapRouter, type(uint256).max)` (L257) for every token ever registered — permanent, with **no revocation function anywhere in the contract**. `_requireSafeExternalSwapAddress` (L269-276) exists specifically to stop the owner from allowlisting the contract's own custody surfaces as an external-swap target/spender, and blocks `address(this)`, `vault`, `wrapper`, `burnStream`, `creatorCoin`, `shareOFT` — but **not `swapRouter`**, even though `swapRouter` is the one address holding a standing unlimited allowance over _every_ payout token. The comment immediately above the filter (L262-268) even instructs operators to keep the external venue to _"Canonical DEX routers only"_ — inviting exactly the allowlisting move that defeats the filter's own purpose.
+
+Because the per-call keeper-spend-cap charge (L504) and the overspend guard (L523-526, `tokenInBefore - tokenInAfter > amountIn`) are both scoped to the single **caller-declared** `tokenIn`, a keeper can declare a cheap/dust amount of a lightly-capped token while the calldata spends a _different_ token's full balance through `swapRouter`'s pre-existing unlimited allowance — and neither guard ever inspects that second token.
+
+**Proof of Concept**  
+Preconditions (all plausible, single-owner operational steps): `setSwapPath(USDC, …)` and `setSwapPath(WETH, …)` have both been called (granting `swapRouter` unlimited allowance over both); owner has allowlisted `swapRouter` as an external target and spender via `setExternalSwapTargetApproval`/`setExternalSwapSpenderApproval` (both pass `_requireSafeExternalSwapAddress`, per its omission above); `keeperExternalSpendCaps[USDC] = {cap: 1000e6, window: 1 day}`. Router holds 1,000 WETH and 5,000 USDC.
+
+Keeper calls `convertViaExternalAndQueue({tokenIn: USDC, amountIn: 1, minOut: 1, spender: swapRouter, swapTarget: swapRouter, swapCallData: SwapRouter.multicall([exactInput(WETH→X, recipient: attacker, amountIn: 1000e18, amountOutMinimum: 0), exactInput(USDC→shareOFT, recipient: router, amountIn: 1, amountOutMinimum: 0)])})`.
+
+* L502-503: `USDC` passes (not creatorCoin/shareOFT), non-zero amounts — pass.
+* L504: `_consumeKeeperExternalSpend(USDC, 1)` — 1 wei of a 1000e6 cap consumed. Passes.
+* L509-510: `tokenInBefore(USDC) = 5000e6 ≥ 1` — passes.
+* L512, L514-515: `swapRouter` has code; transient allowance of 1 wei USDC set — irrelevant, the theft leg uses the _standing_ WETH allowance, not this one.
+* L518: `swapRouter.multicall(...)` executes via `delegatecall` internally, so `msg.sender` inside each leg is still the router; leg 1 pulls 1,000 WETH from the router using the L257 standing allowance and sends the output to `attacker`; leg 2 produces a shareOFT credit to the router from the 1-wei USDC leg.
+* L521: router's ETH balance unchanged (0 = 0) — passes.
+* L523-526: `tokenInBefore - tokenInAfter` for **USDC** \= 0 (USDC was never touched by the WETH leg), `0 > 1` is false — **passes; the 1,000 WETH movement is never examined by this check.**
+* L528-530: shareOFT delta from the dust USDC leg ≥ `minOut = 1` — passes.
+
+Result: 1,000 WETH extracted to the attacker; the keeper-cap ledger shows 1 wei of USDC consumed; the emitted `ExternalSwapAndQueued(USDC, swapRouter, swapRouter, 1, …)` event looks like a routine dust conversion.
+
+**Fix**
+
+```diff
+     function _requireSafeExternalSwapAddress(address addr) internal view {
+         if (
+             addr == address(this) || addr == vault || addr == wrapper || addr == burnStream
+-                || addr == address(creatorCoin) || addr == address(shareOFT)
++                || addr == address(creatorCoin) || addr == address(shareOFT)
++                || addr == swapRouter || addr == weth || addr == protocolRewards
+         ) {
+             revert InvalidExternalSwapAddress(addr);
+         }
+     }
+
+```
+
+Independent of the filter fix, stop granting standing unlimited allowances in `setSwapPath` (L257) — approve `swapRouter` for exactly `amountIn` immediately before `exactInput` in `_convertAndQueue` and reset to 0 after, mirroring the pattern already used correctly at L514/L515/L519 in the external venue.
+
+---
+
+\[80\] **3\. `shareOFT` reaching the router outside a measured swap is permanently and unconditionally unrecoverable**
+
+`CreatorPayoutRouter._unwrapShareOftAndQueue` / `setSwapPath` (L251) / `_convertViaExternalAndQueue` (L500) / `executeEmergencyWithdraw` (L417-419) · Confidence: 80 · **Severity:** Low · **\[both — corroborated by 9/12 Phase-2 agents plus Phase-1 general/erc20/dos domains\]**
+
+**Description**  
+All four conceivable exits for a `shareOFT` balance are closed by code, and were traced exhaustively:
+
+1. `convertAndQueue(shareOFT, x, minOut)` — falls to the swap branch (not creator coin), requires `swapPathToShareOFT[shareOFT]`, which can **never** be non-empty because `setSwapPath` (L249) reverts `InvalidPath` whenever `tokenIn == address(shareOFT)` → always reverts `PathNotSet` (L469).
+2. `convertViaExternalAndQueue({tokenIn: shareOFT, …})` — L500 rejects `tokenIn == address(shareOFT)` directly.
+3. `executeEmergencyWithdraw(shareOFT, …)` — L417-419 rejects it as a protected asset.
+4. `_unwrapShareOftAndQueue` — the only function that can ever move `shareOFT` out — is invoked exclusively with a **balance delta** computed within the same call (`shareOFT.balanceOf(this) - shareBefore` at L484, or `shareAfter - shareBefore` at L529), never the standing balance. Any pre-existing `shareOFT` sitting in the router is structurally excluded from every future conversion.
+
+Contrast the other two protected assets: `creatorCoin` escapes via the direct-deposit branch (L457-462); `weth` escapes via a settable V3 path (only `creatorCoin`/`shareOFT` are excluded at L249). `shareOFT` alone has zero route in or out once it arrives outside a measured swap window — a direct third-party transfer, a cross-chain OFT credit, or wrapper dust all become permanently frozen.
+
+**Proof of Concept** — exhaustive enumeration above; each of the four reverts was traced against the exact source lines and confirmed to fire unconditionally regardless of caller.
+
+**Fix**
+
+```diff
++    function sweepShareOFT() external onlyOwnerOrKeeper nonReentrant returns (uint256 sharesQueued) {
++        uint256 bal = shareOFT.balanceOf(address(this));
++        sharesQueued = _unwrapShareOftAndQueue(bal);
++    }
+
+```
+
+Routes any residual `shareOFT` into the burn stream — the protocol's intended sink — so it introduces no new drain surface while closing the lock.
+
+---
+
+\[75\] **4\. Using `swapRouter` as the external-venue `spender` self-revokes the permanent `setSwapPath` allowance — a keeper can persistently brick the primary conversion venue**
+
+`CreatorPayoutRouter._convertViaExternalAndQueue` (L514-519) interacting with `setSwapPath` (L257) · Confidence: 75 · **Severity:** Medium · **\[phase2: 2 agents, numerical-gap + economic-security, independently traced identical mechanism\]**
+
+**Description**  
+`_convertViaExternalAndQueue`'s per-call approval teardown (`forceApprove(spender, 0)` → `forceApprove(spender, amountIn)` → … → `forceApprove(spender, 0)`, L514/515/519) and `setSwapPath`'s permanent grant (L257) both write to the **same** `(token, spender)` allowance slot whenever `spender == swapRouter`. `forceApprove` assigns absolutely rather than incrementing, so a single external-venue call with `spender = swapRouter` leaves that token's allowance to `swapRouter` at exactly 0 — permanently, since no function ever re-approves it except a fresh `setSwapPath` call (owner-only).
+
+**Proof of Concept**  
+`setSwapPath(USDC, path)` sets `USDC.allowance(router, swapRouter) = type(uint256).max` (L257). Keeper calls `convertViaExternalAndQueue({tokenIn: USDC, amountIn: 1, spender: swapRouter, swapTarget: swapRouter, …})`: L514 sets allowance to 0, L515 to 1, L518 the call executes, L519 sets it back to 0\. Post-state: `USDC.allowance(router, swapRouter) == 0`. The next `convertAndQueue(USDC, …)` passes every in-contract check (L456-474) and then reverts inside `swapRouter.exactInput`'s internal `transferFrom` for lack of allowance. Recovery requires an owner `setSwapPath` transaction; a malicious keeper can immediately re-brick it for the cost of 1 wei of `tokenIn` and gas — a persistent, cheaply-repeatable DoS on the primary (uncapped, per Finding 1) conversion venue for that token.
+
+**Fix**  
+Have `_convertAndQueue` manage its own per-call approval (`forceApprove(swapRouter, amountIn)` before `exactInput`, `forceApprove(swapRouter, 0)` after) instead of depending on a standing grant from `setSwapPath` — this single change also closes Finding 2's enabling precondition.
+
+---
+
+\[70\] **5\. Keeper spend-cap window permits a 2× burst at every boundary; cap reconfiguration silently refunds the keeper's spent budget**
+
+`CreatorPayoutRouter._consumeKeeperExternalSpend` (L546-558) / `setKeeperExternalSpendCap` (L296-303) · Confidence: 70 · **Severity:** Low · **\[both — corroborated by 7+ agents across both phases with matching arithmetic\]**
+
+**Description**  
+Two related mechanisms in the same accounting path:
+
+* **Fixed (non-sliding) window.** `windowStart`/`spentInWindow` reset to `block.timestamp`/`0` the moment `block.timestamp >= windowStart + window` (L547-551). A keeper can spend the full `cap` at `windowEnd - 1` and the full `cap` again one block later at `windowEnd` — **2× the configured cap within seconds.**
+* **Reconfiguration resets accrued spend.** `setKeeperExternalSpendCap` unconditionally writes `spendCap.windowStart = uint64(block.timestamp); spendCap.spentInWindow = 0;` (L299-300) on **every** call, including a cap _reduction_. An owner responding to suspicious activity by lowering the cap immediately hands the keeper a fresh full window instead of restricting them.
+
+**Proof of Concept**  
+`setKeeperExternalSpendCap(USDC, 1000e6, 86400)` at `t=0` → `windowStart=0`. At `t=86399`: `86399 >= 86400` false, keeper spends `1000e6` (cap reached). At `t=86400` (next block, \~2s later on Base): `86400 >= 86400` true → reset → keeper spends `1000e6` again. **2,000e6 USDC moved in \~2 seconds against a cap documented as 1,000e6/day.** Separately: owner sees the burst and calls `setKeeperExternalSpendCap(USDC, 500e6, 86400)` intending to tighten — L299-300 zeroes `spentInWindow`, handing the keeper a third full tranche of 500e6 immediately.
+
+**Fix**  
+Use a sliding/decaying window (e.g. `spentInWindow -= min(spentInWindow, cap * elapsed / window)` before adding new spend) instead of a hard reset; in `setKeeperExternalSpendCap`, only initialize `windowStart`/`spentInWindow` when `windowStart == 0`, preserving accrued spend across cap adjustments.
+
+---
+
+\[55\] **6\. `CreatorCoinPolicyController`'s revenue-redirect handoff carries no timelock — a compromised controller-owner key redirects the entire future revenue stream instantly, with no delay comparable to the router's 1-day emergency-withdraw window**
+
+`CreatorCoinPolicyController.acceptCreatorCoinOwnership` (L67-74) / `proposeCreatorCoinOwnershipTransfer` (L60-64) · Confidence: 55 · **Severity: Low (centralization/control-design observation — requires the trusted controller-owner key, not an unprivileged exploit path)**
+
+**Description**  
+The controller's own `Ownable` owner can call `proposeCreatorCoinOwnershipTransfer(self)` then `acceptCreatorCoinOwnership()` (gated only by `msg.sender == pendingCreatorCoinOwner`, L69) in the same or next transaction — no delay, no minimum notice — becoming the CreatorCoin's direct owner and then calling `creatorCoin.setPayoutRecipient(attacker)` itself, permanently diverting **all future external-earnings revenue** away from the router/burn-stream lane. This is a strictly larger-blast-radius action than anything `CreatorPayoutRouter.executeEmergencyWithdraw` can reach (which moves one already-accumulated token balance), yet the router gates that lesser action behind a mandatory 1-day timelock (`EMERGENCY_WITHDRAW_DELAY`) while this redirection has none. This finding requires the trusted controller-owner key (or its compromise); it is reported as a design-consistency/centralization observation rather than an unprivileged-attacker exploit, per its nature.
+
+**Proof of Concept**  
+`proposeCreatorCoinOwnershipTransfer(ownerAddress)` (L60, `onlyOwner`) → `acceptCreatorCoinOwnership()` from `ownerAddress` (L67, passes L68-69 since `pendingCreatorCoinOwner == ownerAddress == msg.sender`) → `ICreatorCoinAdmin(creatorCoin).transferOwnership(ownerAddress)` (L72) succeeds → the controller's `enforcePayoutRouter()` is now moot; `ownerAddress` directly calls `creatorCoin.setPayoutRecipient(attackerWallet)`.
+
+**Fix**  
+Gate `acceptCreatorCoinOwnership` behind a delay recorded at proposal time (`if (block.timestamp < proposedAt + 1 days) revert TooEarly();`), matching `EMERGENCY_WITHDRAW_DELAY`'s intent.
+
+---
+
+## Findings List
+
+| # | Confidence | Severity | Title                                                                                        |
+| - | ---------- | -------- | -------------------------------------------------------------------------------------------- |
+| 1 | \[92\]     | High     | Keeper spend cap enforced on only one of two conversion venues                               |
+| 2 | \[88\]     | High     | swapRouter omitted from custody-surface blocklist — cross-token drain via standing allowance |
+| 3 | \[80\]     | Low      | shareOFT outside a measured swap is permanently unrecoverable                                |
+| 4 | \[75\]     | Medium   | External-venue spender=swapRouter self-revokes the standing V3 allowance (persistent DoS)    |
+| 5 | \[70\]     | Low      | Keeper spend-cap window permits 2× burst; reconfiguration resets accrued spend               |
+| 6 | \[55\]     | Low      | Controller's revenue-redirect handoff has no timelock (centralization observation)           |
+
+---
+
+## Leads
+
+_High-signal trails where the exploit chain could not be fully completed against out-of-repo dependencies, or where impact is bounded/self-inflicted only. Not scored._
+
+* **Vault-share return-value trust vs. delta measurement** — `_unwrapShareOftAndQueue`/`_queueCreatorCoinDeposit` — Code smells: `wrapper.unwrap()`/`vault.deposit()` return values are trusted directly (only `!= 0` checked, L565/L572) and forwarded to `safeTransfer`/`queueShares`, inconsistent with the delta-measured `shareOFT` accounting used elsewhere (L474/L484, L509/L528) — 10+ agents across both phases flagged this identically. Unverified because `wrapper`/`vault` are out-of-repo; if their returns ever diverge from actual delivery, this either bricks the conversion (over-report) or leaves stranded, owner-withdrawable vault shares (under-report, since `vault` is absent from the L417-419 protected list).
+* **`ExternalSwapEthChanged` invariant is dead code** — `_convertViaExternalAndQueue` L521 — Code smells: `receive()` (L220-224) auto-wraps any inbound ETH to WETH, restoring `address(this).balance` to `ethBefore` before the check runs, so it cannot detect ETH inflow; outflow is already impossible (`value: 0`). 9+ agents confirmed this is unenforceable but could not construct an independent exploit beyond Findings 1/2.
+* **Underflow-panic on `tokenInBefore - tokenInAfter`** (L523-526) — when the external call nets a `tokenIn` _increase_ (aggregator refund, positive-rebase token), the unguarded subtraction panics rather than reverting with a diagnosable error. Fail-closed (no loss), reported by 6+ agents.
+* **`receive()` costs far more than the 2,300-gas stipend** forwarded by `.transfer()`/`.send()` — any stipend-limited ETH payer cannot pay the router at all. 8+ agents flagged this; unverified since the upstream payer (CreatorCoin payout lane, `protocolRewards`) is out-of-repo.
+* **`_claimProtocolRewards`'s fallback selector `0x9f1d9267` verified via `cast sig` (by 4 independent agents) to be `withdrawFor(address,address,uint256)` — the wrong arity** for Zora ProtocolRewards' documented `withdrawFor(address,uint256)` (`0xdb518db2`), making the fallback dead code against the hardcoded default target (`DEFAULT_PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B`). Claim success/amount is also unverified — `_claimProtocolRewards` trusts a bare `ok` with no balance-delta check, and `claimProtocolRewards`/`claimAllProtocolRewards` report the _requested_ amount, not a measured one.
+* **Swap deadline (`block.timestamp + swapDeadlineBuffer`, L479) computed at execution time can never expire** — functionally equivalent to no deadline at all; `swapDeadlineBuffer`'s `[1 min, 1 hour]` bounds (L240) configure nothing. 6+ agents.
+* **`setSwapPath` path-length validation is incomplete** — never checks `(path.length - 20) % 23 == 0` (the true Uniswap V3 hop-count structure), only the first/last 20 bytes. A malformed-but-endpoint-valid path passes registration (granting the irrevocable `swapRouter` allowance from Finding 2) then reliably fails closed at swap time (`MinOutNotMet` reverts, since the mis-decoded terminal token isn't `shareOFT`). 8+ agents; fail-safe for funds, but bricks that token's lane until re-registered.
+* **`CreatorCoinPolicyController` constructor has no code-length check** on `creatorCoin`/`payoutRouter` (contrast the router's own `protocolRewards.code.length` check, L213); `enforcePayoutRouter`/`acceptCreatorCoinOwnership` never read back the result to confirm the external call had the intended effect. 5+ agents.
+* **`processBatch`'s `totalTokenOut` accumulator mixes creatorCoin-denominated and shareOFT-denominated units** into one sum (L364-365 vs. L459/L484/L529) — off-chain accounting/event corruption only, no on-chain consequence (only `totalSharesQueued` is unit-consistent). 6+ agents.
+* **`executeEmergencyWithdraw` has no upper expiry once queued**, and `emergencyWithdraw` silently overwrites any existing pending request with no cancellation event — a request queued and forgotten stays executable indefinitely, and observability of overwritten requests is lost. 5+ agents.
+
+## Verified non-issues (checked and cleared across 2+ independent agents in both phases — no action needed)
+
+* `_readAddress`'s assembly `mload` reads up to 12 bytes past the array end, but `shr(96, ...)` always discards exactly those bytes — the returned address is correct in every case.
+* `swapTarget.code.length` check (L512) has no TOCTOU window before the call at L518.
+* `amountIn = type(uint256).max` cannot make the overspend guard vacuous — blocked by the pre-check `tokenInBefore < amountIn` (L510).
+* No mid-`processBatch` keeper-cap-window roll is possible; `block.timestamp` is constant within a transaction.
+* `CreatorCoinPolicyController.acceptCreatorCoinOwnership` correctly clears `pendingCreatorCoinOwner` before the external call (proper checks-effects-interactions).
+
+---
+
+## Access-Control Inventory (client reference)
+
+| Entrypoint                                                                                                                 | Guard                                        | Caller            | Addressed by                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| receive()                                                                                                                  | none                                         | anyone            | Lead: gas-stipend incompatibility                                                                                                                                                                                                                                                                                                  |
+| setKeeper/removeKeeper/setSwapDeadlineBuffer/setSwapPath/setExternalSwap{Target,Spender}Approval/setKeeperExternalSpendCap | onlyOwner                                    | owner             | Findings 2, 4, 5; Lead: path-length validation                                                                                                                                                                                                                                                                                     |
+| convertAndQueue/processBatch                                                                                               | onlyOwnerOrKeeper+nonReentrant               | owner/keeper      | **Finding 1**                                                                                                                                                                                                                                                                                                                      |
+| convertViaExternalAndQueue                                                                                                 | onlyOwnerOrKeeper+nonReentrant+allowlist+cap | owner/keeper      | **Finding 2**, Finding 4                                                                                                                                                                                                                                                                                                           |
+| emergencyWithdraw/cancelEmergencyWithdraw/executeEmergencyWithdraw                                                         | onlyOwner (+nonReentrant except cancel)      | owner             | Finding 1 (WETH bypass note); Lead: no expiry, silent overwrite                                                                                                                                                                                                                                                                    |
+| claimProtocolRewards/claimAllProtocolRewards                                                                               | onlyOwnerOrKeeper+nonReentrant               | owner/keeper      | Lead: wrong-arity fallback selector, unverified claim amount                                                                                                                                                                                                                                                                       |
+| Controller enforcePayoutRouter/proposeCreatorCoinOwnershipTransfer/cancelCreatorCoinOwnershipTransfer                      | onlyOwner                                    | controller owner  | Finding 6                                                                                                                                                                                                                                                                                                                          |
+| Controller acceptCreatorCoinOwnership                                                                                      | inline msg.sender==pendingCreatorCoinOwner   | nominated address | Finding 6                                                                                                                                                                                                                                                                                                                          |
+| Inherited transferOwnership/renounceOwnership (both contracts, one-step Ownable)                                           | onlyOwner                                    | owner             | Examined — renouncing router ownership leaves keeper permanently uncappable/unremovable (compounds Finding 1); renouncing controller ownership permanently freezes CreatorCoin admin. No unprivileged amplifier named for either — recorded as design observations, not separate findings, per this engagement's judging standard. |
+| protocolRewardsClaimable() and all public-variable getters                                                                 | none (view)                                  | anyone            | Examined, no issue — read-only                                                                                                                                                                                                                                                                                                     |
+
+**Entrypoints: 24 total (20 source-declared + 4 inherited), 24 addressed above.**
+
+## Threat Model (client reference)
+
+| Actor                                                            | Reaches                                            | Invariant that must hold                                                                           | Status                                                                                                                |
+| ---------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Compromised/malicious keeper                                     | convertAndQueue/processBatch(kind=0)               | Keeper spend is capped per-token per-window                                                        | **Violated — Finding 1**                                                                                              |
+| Compromised/malicious keeper (with owner-allowlisted swapRouter) | convertViaExternalAndQueue                         | External-swap venue cannot move tokens other than the declared tokenIn                             | **Violated — Finding 2**                                                                                              |
+| Owner                                                            | executeEmergencyWithdraw vs. convertAndQueue       | Protected payout assets (creatorCoin/shareOFT/WETH) cannot be extracted without the 1-day timelock | **Violated for WETH — see Finding 1's impact note** (owner is cap-exempt and reaches the identical uncapped path)     |
+| Owner                                                            | renounceOwnership() (router)                       | keeper remains revocable/cappable for the contract's lifetime                                      | Invariant holds only while owner is non-zero — design observation, no unprivileged amplifier, not separately reported |
+| Controller owner                                                 | acceptCreatorCoinOwnership                         | Revenue-redirect authority is at least as time-delayed as the router's own emergency-withdraw path | **Violated — Finding 6**                                                                                              |
+| Anyone / cross-chain bridge / dust sender                        | shareOFT arriving outside a swap                   | Every asset the router can receive has some route out                                              | **Violated — Finding 3**                                                                                              |
+| protocolRewards (immutable, assumed-honest)                      | \_claimProtocolRewards                             | Claimed amount reflects amount received                                                            | Unverified — see Leads (wrong-arity selector, unmeasured claim)                                                       |
+| swapRouter/vault/wrapper (immutable, out-of-repo)                | conversion legs                                    | Return values from these calls reflect actual token movement                                       | Unverified — see Leads (trusted return values vs. delta measurement)                                                  |
+| Arbitrary caller                                                 | receive()                                          | Router can always accept ETH revenue                                                               | Partially violated — see Leads (gas-stipend incompatibility)                                                          |
+| Keeper (own action, not adversarial)                             | convertViaExternalAndQueue with spender=swapRouter | Standing V3-venue allowances remain intact for legitimate future use                               | **Violated — Finding 4**                                                                                              |
+
+**Threat rows: 10, 10 answered.**
+
+---
+
+> ⚠️ This review was performed by an autonomous AI audit pipeline (context-building → breadth checklist agents → depth attacker-mindset agents, run blind to each other → reconciliation). AI analysis can never verify the complete absence of vulnerabilities and no guarantee of security is given. A human security review, a bug bounty program, and on-chain monitoring are strongly recommended before deployment, especially given the concentration of findings around the keeper/owner trust boundary that this contract explicitly designs around.
+
+**Canonical copy:** this is a styled rendering of the immutable report delivered on IPFS —<https://bafkreibavescsycylq776xyhf3eqcphsx6wsm3cmzy5v7o5paye4kpol3u.ipfs.community.bgipfs.com/>. If the two ever differ, the IPFS copy is authoritative.
+
+Audited by LeftClaw Services 🦞 — job#520 on Base. Rendered 2026-07-28.
