@@ -59,7 +59,6 @@ import {
 import {
   buildAlfaClubEthFundingCalls,
   BASE_WETH_TOKEN,
-  ZORA_NATIVE_ETH_TOKEN,
 } from "@/lib/alfaclub/ethFundingRouter";
 import {
   estimateEthWeiForRequiredPairErc20,

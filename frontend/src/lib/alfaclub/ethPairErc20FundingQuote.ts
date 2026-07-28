@@ -47,7 +47,7 @@ export async function fetchEthToPairErc20AmountOut(params: {
         tokenIn: params.lane.ethTokenIn,
         tokenOut: params.lane.pairErc20,
         swapper: params.sender,
-        slippageTolerance: String(params.slippagePct),
+        slippageTolerance: params.slippagePct,
         providerOverride: 'uniswap',
       }
       const quote = await fetchTradeQuote(body)
