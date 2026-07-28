@@ -29,3 +29,9 @@
 - Prior full pass: [security-scan-2026-07-22](../security-scan-2026-07-22/)
 - Greenfield delta: [security-scan-2026-07-25-v1200](../security-scan-2026-07-25-v1200/)
 - Research brief: [../security-scan-2026-07-22/RESEARCH-CONTEXT.md](../security-scan-2026-07-22/RESEARCH-CONTEXT.md)
+
+## Commission next jobs
+
+Reusable agent prompt: [COMMISSION-PROMPT.md](./COMMISSION-PROMPT.md).
+
+**Live Base today:** v1.19.3 bytecode epoch + v1.19.4 Creator-core repair on v1.19.1 greenfield infra addresses. The public pin (`0c47be2`) is source-ahead of that seal for several creator/share contracts — see prompt for bytecode-match guidance.
