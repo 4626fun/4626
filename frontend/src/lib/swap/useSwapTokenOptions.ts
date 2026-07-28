@@ -11,6 +11,7 @@ import {
   enrichDiscoveredSwapTokenOptions,
   normalizeSwapTokenSearchQuery,
 } from '@/lib/swap/zoraTokenSearch'
+import { isExcludedSwapTokenAddress } from '@/lib/swap/swapTokenAddressGuards'
 import { fetchSwapZoraHoldings, type SwapZoraHoldingRow } from './swapZoraHoldings'
 import {
   enrichSwapTokenOption,
@@ -271,10 +272,17 @@ export function useSwapTokenOptions(params: UseSwapTokenOptionsParams): UseSwapT
     ]
     const byAddress = new Map<string, SwapTokenOption>()
     for (const option of merged) {
+      if (isExcludedSwapTokenAddress(option.address, balanceOwnerAddress)) continue
       byAddress.set(option.address.toLowerCase(), option)
     }
     return [...byAddress.values()]
-  }, [discoveredCreatorTokenOptions, extraTokenOptions, internalTokenOptions, userHoldingsOptions])
+  }, [
+    balanceOwnerAddress,
+    discoveredCreatorTokenOptions,
+    extraTokenOptions,
+    internalTokenOptions,
+    userHoldingsOptions,
+  ])
 
   const opaqueSwapTokenOptions = useMemo(
     () => allTokenOptions.filter((option) => swapTokenOptionNeedsLabelEnrichment(option)),
@@ -334,12 +342,13 @@ export function useSwapTokenOptions(params: UseSwapTokenOptionsParams): UseSwapT
   )
 
   const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
+    if (isExcludedSwapTokenAddress(option.address, balanceOwnerAddress)) return
     setExtraTokenOptions((previous) => {
       const normalized = option.address.toLowerCase()
       if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
       return [...previous, { ...option }]
     })
-  }, [])
+  }, [balanceOwnerAddress])
 
   return {
     swapTokenOptions,

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
-import { erc20Abi, getAddress, isAddress, type Address } from 'viem'
+import { getAddress, isAddress, type Address } from 'viem'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { Alert } from '@/components/ui/Alert'
@@ -26,6 +26,10 @@ import {
 } from '@/lib/swap/alfaclubRoomTokens'
 import { formatSwapTokenBalanceLabel } from '@/lib/swap/swapDisplayAmount'
 import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
+import {
+  isExcludedSwapTokenAddress,
+  resolveAddressTokenImport,
+} from '@/lib/swap/swapTokenAddressGuards'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -59,7 +63,7 @@ type AddressCandidate = TokenDisplay & {
   decimals: number
 }
 
-const ADDRESS_METADATA_CACHE_KEY = 'swap.addressMetadataCache.v1'
+const ADDRESS_METADATA_CACHE_KEY = 'swap.addressMetadataCache.v2'
 const QUICK_PICK_SYMBOLS = ['ETH', 'WETH', 'USDC', 'USDT', 'CBBTC', 'ZORA'] as const
 
 const TRENDING_PINNED: Array<{ address: `0x${string}`; fallback: SwapTokenOption }> = [
@@ -199,16 +203,24 @@ function resolveTokenRowAmountLabels(params: {
   }
 }
 
+const BASE_NETWORK_MARK = '/base/base-chain-light.svg'
+
 function NetworkChip({ chainId }: { chainId: SupportedChainId }) {
   const meta = getChainMeta(chainId)
   if (!meta) return null
+  const isBase = meta.id === BASE_CHAIN_ID
+  const logoSrc = isBase ? BASE_NETWORK_MARK : meta.logoUrl
   return (
     <div
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/45"
       title={meta.name}
       aria-label={meta.name}
     >
-      <img src={meta.logoUrl} alt="" className="h-6 w-6 rounded-[6px] object-contain" />
+      <img
+        src={logoSrc}
+        alt=""
+        className={isBase ? 'h-5 w-5 rounded-[4px] object-contain' : 'h-5 w-5 rounded-full object-cover'}
+      />
     </div>
   )
 }
@@ -395,6 +407,10 @@ export function TokenSelectorModal({
   const [debouncedQuery] = useDebounceValue(query, 250)
   const trimmedQuery = debouncedQuery.trim()
   const isAddressSearch = isAddressLike(trimmedQuery)
+  const selectableTokenOptions = useMemo(
+    () => tokenOptions.filter((option) => !isExcludedSwapTokenAddress(option.address, balanceOwnerAddress)),
+    [balanceOwnerAddress, tokenOptions],
+  )
 
   const [addressLookupError, setAddressLookupError] = useState<string | null>(null)
   const [needsUnverifiedConfirm, setNeedsUnverifiedConfirm] = useState<SwapTokenOption | null>(null)
@@ -417,7 +433,7 @@ export function TokenSelectorModal({
   )
 
   const matchedTokens = useMemo(() => {
-    const filtered = tokenOptions.filter((option) => tokenMatches(option, trimmedQuery))
+    const filtered = selectableTokenOptions.filter((option) => tokenMatches(option, trimmedQuery))
     if (!isAddressSearch || !trimmedQuery) {
       return {
         core: filtered.filter((o) => tokenSection(o) === 'core'),
@@ -433,7 +449,7 @@ export function TokenSelectorModal({
       }
     }
     return { core: [], creator: [], content: [], recent: [], holdings: [] }
-  }, [isAddressSearch, tokenOptions, trimmedQuery, recentTokenAddresses])
+  }, [isAddressSearch, selectableTokenOptions, trimmedQuery, recentTokenAddresses])
 
   useEffect(() => {
     if (!open) {
@@ -580,67 +596,60 @@ export function TokenSelectorModal({
         return
       }
 
-      const cacheKey = `${chainIdForLookup}:${trimmedQuery.toLowerCase()}`
-      const cached = addressMetadataCache[cacheKey]
-      if (cached) {
-        const cachedChainId = toSupportedChainId(cached.chainId, chainIdForLookup)
-        setAddressCandidate({
-          address: trimmedQuery as `0x${string}`,
-          chainId: cachedChainId,
-          symbol: cached.symbol,
-          name: cached.name,
-          decimals: cached.decimals,
-          logoUrl: cached.logoUrl ?? null,
-          logoUrls: [],
-        })
+      const tokenAddress = getAddress(trimmedQuery)
+      // Reset query-scoped UI state here (not in a sibling effect) so a synchronous
+      // known-CSW rejection is not wiped by a later trimmedQuery effect in the same flush.
+      setNeedsUnverifiedConfirm(null)
+      setActiveIndex(0)
+
+      if (isExcludedSwapTokenAddress(tokenAddress, balanceOwnerAddress)) {
+        setAddressCandidate(null)
+        setAddressLookupError('This address is a Coinbase Smart Wallet, not a token.')
         setAddressLookupLoading(false)
         return
       }
 
+      const cacheKey = `${chainIdForLookup}:${tokenAddress.toLowerCase()}`
       setAddressLookupLoading(true)
       setAddressLookupError(null)
       try {
-        const tokenAddress = trimmedQuery as `0x${string}`
-        const [nameResult, symbolResult, decimalsResult] = await Promise.all([
-          publicClient.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: 'name',
-          }).catch(() => null),
-          publicClient.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: 'symbol',
-          }).catch(() => null),
-          publicClient.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: 'decimals',
-          }).catch(() => 18),
-        ])
+        // Always re-validate through the import guards. Cache may only supply
+        // previously observed ERC-20 metadata after a successful import.
+        const imported = await resolveAddressTokenImport({
+          client: publicClient,
+          address: tokenAddress,
+        })
 
         if (cancelled) return
 
-        const name =
-          typeof nameResult === 'string' && nameResult.trim() ? nameResult.trim() : `Token ${trimmedQuery.slice(0, 6)}`
-        const symbol = typeof symbolResult === 'string' && symbolResult.trim() ? symbolResult.trim() : 'TOKEN'
-        const decimals = Number(decimalsResult)
+        if (!imported.ok) {
+          setAddressCandidate(null)
+          setAddressLookupError(
+            imported.reason === 'smart_wallet'
+              ? 'This address is a Coinbase Smart Wallet, not a token.'
+              : 'Unable to load token metadata for this address.',
+          )
+          return
+        }
 
+        const { name, symbol, decimals } = imported.metadata
+        const cached = addressMetadataCache[cacheKey]
+        const logoUrl = tokenAddressMetadata.imageUrl ?? cached?.logoUrl ?? null
         setAddressCandidate({
           address: tokenAddress,
           chainId: chainIdForLookup,
           symbol,
           name,
-          decimals: Number.isFinite(decimals) ? decimals : 18,
-          logoUrl: tokenAddressMetadata.imageUrl ?? null,
+          decimals,
+          logoUrl,
           logoUrls: [],
         })
         const newEntry: AddressMetadataCacheEntry = {
           chainId: chainIdForLookup,
           symbol,
           name,
-          decimals: Number.isFinite(decimals) ? decimals : 18,
-          logoUrl: tokenAddressMetadata.imageUrl ?? null,
+          decimals,
+          logoUrl,
         }
         setAddressMetadataCache((previous) => {
           const next = { ...previous, [cacheKey]: newEntry }
@@ -667,6 +676,7 @@ export function TokenSelectorModal({
     }
   }, [
     addressLookupAttempt,
+    balanceOwnerAddress,
     chainIdForLookup,
     isAddressSearch,
     open,
@@ -677,6 +687,9 @@ export function TokenSelectorModal({
   ])
 
   useEffect(() => {
+    // Address-lookup effect owns candidate/error lifecycle for 0x queries.
+    // Only clear leftover import UI when leaving address search.
+    if (isAddressLike(trimmedQuery)) return
     setAddressLookupError(null)
     setNeedsUnverifiedConfirm(null)
     setAddressCandidate(null)
@@ -709,7 +722,7 @@ export function TokenSelectorModal({
 
     const seen = new Set<string>()
     const trendingAddresses = new Set(
-      resolveTrendingTokens(tokenOptions).map((option) => option.address.toLowerCase()),
+      resolveTrendingTokens(selectableTokenOptions).map((option) => option.address.toLowerCase()),
     )
 
     // Dedicated "Your holdings" section first (Zora creator/content coins owned by the wallet, using the parent/main/zora CSW as balance owner).
@@ -723,7 +736,7 @@ export function TokenSelectorModal({
     })
 
     if (!trimmedQuery) {
-      resolveTrendingTokens(tokenOptions)
+      resolveTrendingTokens(selectableTokenOptions)
         .filter((option) => !option.isUserHolding) // keep user's Zora CSW holdings out of Trending so they can appear in the dedicated holdings section
         .forEach((option) => {
           const key = option.address.toLowerCase()
@@ -760,7 +773,7 @@ export function TokenSelectorModal({
     chainIdForLookup,
     isAddressSearchActive,
     matchedTokens,
-    tokenOptions,
+    selectableTokenOptions,
     trimmedQuery,
   ])
 
@@ -789,7 +802,7 @@ export function TokenSelectorModal({
       seen.add(key)
       addresses.push(value)
     }
-    resolveTrendingTokens(tokenOptions).forEach((option) => push(option.address))
+    resolveTrendingTokens(selectableTokenOptions).forEach((option) => push(option.address))
     quickPickTokens.forEach((option) => push(option.address))
     visibleRows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
     return addresses.slice(0, MAX_BALANCE_LOOKUPS)
@@ -798,7 +811,7 @@ export function TokenSelectorModal({
     chainIdForLookup,
     quickPickTokens,
     visibleRows,
-    tokenOptions,
+    selectableTokenOptions,
   ])
 
   const balanceQueries = useQueries({

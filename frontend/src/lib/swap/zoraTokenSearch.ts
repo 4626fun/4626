@@ -7,6 +7,7 @@ import type { ZoraCoin } from '@/lib/zora/types'
 import { BASE_CHAIN_ID } from '@/lib/uniswap/swapUtils'
 
 import { enrichSwapTokenOptions, resolveCreatorCoinLabelsFromZora } from './swapTokenLabels'
+import { isExcludedSwapTokenAddress } from './swapTokenAddressGuards'
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const MIN_ZORA_SEARCH_QUERY_LENGTH = 2
@@ -120,6 +121,7 @@ export async function searchZoraCreatorCoinsForSwap(query: string): Promise<Zora
 export function zoraCoinToSwapTokenOption(coin: ZoraCoin, chainId: number = BASE_CHAIN_ID): SwapTokenOption | null {
   const address = typeof coin.address === 'string' ? coin.address.trim() : ''
   if (!address || !isAddress(address)) return null
+  if (isExcludedSwapTokenAddress(address)) return null
 
   const checksummed = getAddress(address)
   const coinType = String(coin.coinType ?? '').toUpperCase()
