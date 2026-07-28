@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeFunctionData, type Address, type Hex } from 'viem'
+import { encodeAbiParameters, encodeFunctionData, type Address, type Hex } from 'viem'
 
 import {
   attachFinalizeShareBridgeValueToCalls,
@@ -18,6 +18,43 @@ const BATCHER = '0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8' as Address
 const REGISTRY = '0x3f64087dc361Ad52300409E5873b26941D6418B6' as Address
 const DESTINATION = `0x${'ab'.repeat(32)}` as Hex
 const REGISTRY_PEER = `0x${'cd'.repeat(32)}` as Hex
+const SEND_LIB = '0xB5320B0B3a13cC860893E2Bd79FCd7e13484Dda2' as Address
+const RECV_LIB = '0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf' as Address
+const GREEN_ULN = encodeAbiParameters(
+  [{ type: 'tuple', components: [
+    { name: 'confirmations', type: 'uint64' },
+    { name: 'requiredDvnCount', type: 'uint8' },
+    { name: 'optionalDvnCount', type: 'uint8' },
+    { name: 'optionalDvnThreshold', type: 'uint8' },
+    { name: 'requiredDvns', type: 'address[]' },
+    { name: 'optionalDvns', type: 'address[]' },
+  ] }],
+  [{ confirmations: 15n, requiredDvnCount: 0, optionalDvnCount: 5, optionalDvnThreshold: 3, requiredDvns: [], optionalDvns: [
+    '0x9e059a54699a285714207b43B055483E78FAac25',
+    '0xa7b5189bcA84Cd304D8553977c7C614329750d99',
+    '0xc2A0C36f5939A14966705c7Cec813163FaEEa1F0',
+    '0xcd37CA043f8479064e10635020c65FfC005d36f6',
+    '0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc',
+  ] as Address[] }],
+)
+const GREEN_RECV_ULN = encodeAbiParameters(
+  [{ type: 'tuple', components: [
+    { name: 'confirmations', type: 'uint64' },
+    { name: 'requiredDvnCount', type: 'uint8' },
+    { name: 'optionalDvnCount', type: 'uint8' },
+    { name: 'optionalDvnThreshold', type: 'uint8' },
+    { name: 'requiredDvns', type: 'address[]' },
+    { name: 'optionalDvns', type: 'address[]' },
+  ] }],
+  [{ confirmations: 32n, requiredDvnCount: 0, optionalDvnCount: 5, optionalDvnThreshold: 3, requiredDvns: [], optionalDvns: [
+    '0x9e059a54699a285714207b43B055483E78FAac25',
+    '0xa7b5189bcA84Cd304D8553977c7C614329750d99',
+    '0xc2A0C36f5939A14966705c7Cec813163FaEEa1F0',
+    '0xcd37CA043f8479064e10635020c65FfC005d36f6',
+    '0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc',
+  ] as Address[] }],
+)
+const GREEN_ENFORCED = '0x00030100210100000000000000000000000000030d40000000000000000000000000001f1df0' as Hex
 
 const FINALIZE_PARAMS = {
   creatorToken: '0x1111111111111111111111111111111111111111',
@@ -75,6 +112,7 @@ type WiringMockConfig = {
   shareOftPeer?: Hex | null
   previewThrows?: boolean
   quoteOftThrows?: boolean
+  sendConfirmations?: bigint
 }
 
 function buildFinalizeCalldata(depositAmount = FINALIZE_PARAMS.depositAmount): Hex {
@@ -96,10 +134,11 @@ function createWiringMockClient(config: WiringMockConfig = {}) {
     shareOftPeer = null,
     previewThrows = false,
     quoteOftThrows = false,
+    sendConfirmations = 15n,
   } = config
 
   return {
-    readContract: vi.fn(async (req: { functionName: string; address?: Address }) => {
+    readContract: vi.fn(async (req: { functionName: string; address?: Address; args?: readonly unknown[] }) => {
       if (req.functionName === 'getOVaultRuntimeConfig') {
         return { hubComposer: FINALIZE_PARAMS.oracle, solanaEid, enabled }
       }
@@ -121,6 +160,32 @@ function createWiringMockClient(config: WiringMockConfig = {}) {
       if (req.functionName === 'quoteSend') {
         return { nativeFee, lzTokenFee: 0n }
       }
+      if (req.functionName === 'getSendLibrary') return SEND_LIB
+      if (req.functionName === 'getReceiveLibrary') return [RECV_LIB, false]
+      if (req.functionName === 'getConfig') {
+        // First getConfig in Promise.all is send; second is receive — distinguish by lib arg when present.
+        const lib = req.args?.[1]
+        if (typeof lib === 'string' && lib.toLowerCase() === RECV_LIB.toLowerCase()) return GREEN_RECV_ULN
+        if (sendConfirmations === 15n) return GREEN_ULN
+        return encodeAbiParameters(
+          [{ type: 'tuple', components: [
+            { name: 'confirmations', type: 'uint64' },
+            { name: 'requiredDvnCount', type: 'uint8' },
+            { name: 'optionalDvnCount', type: 'uint8' },
+            { name: 'optionalDvnThreshold', type: 'uint8' },
+            { name: 'requiredDvns', type: 'address[]' },
+            { name: 'optionalDvns', type: 'address[]' },
+          ] }],
+          [{ confirmations: sendConfirmations, requiredDvnCount: 0, optionalDvnCount: 5, optionalDvnThreshold: 3, requiredDvns: [], optionalDvns: [
+            '0x9e059a54699a285714207b43B055483E78FAac25',
+            '0xa7b5189bcA84Cd304D8553977c7C614329750d99',
+            '0xc2A0C36f5939A14966705c7Cec813163FaEEa1F0',
+            '0xcd37CA043f8479064e10635020c65FfC005d36f6',
+            '0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc',
+          ] as Address[] }],
+        )
+      }
+      if (req.functionName === 'enforcedOptions') return GREEN_ENFORCED
       throw new Error(`unexpected readContract: ${req.functionName}`)
     }),
   }
@@ -167,6 +232,20 @@ describe('shareBridgeOftWiring', () => {
       }),
     ).rejects.toMatchObject({
       code: 'oft_peer_not_configured',
+    } satisfies Partial<ShareBridgeOftWiringError>)
+  })
+
+  it('throws when Base send ULN confirmations are below template (B2 class)', async () => {
+    const client = createWiringMockClient({ sendConfirmations: 10n })
+    await expect(
+      assertShareBridgeOftWiringForFinalize({
+        publicClient: client,
+        batcherAddress: BATCHER,
+        finalizeCallData: buildFinalizeCalldata(),
+        registryAddress: REGISTRY,
+      }),
+    ).rejects.toMatchObject({
+      code: 'lz_uln_pathway_not_ready',
     } satisfies Partial<ShareBridgeOftWiringError>)
   })
 

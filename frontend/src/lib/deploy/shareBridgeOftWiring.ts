@@ -12,6 +12,10 @@ import {
   readFinalizePhase2WrapperHasBytecode,
   type FinalizeShareBridgeQuoteError,
 } from './finalizeShareBridgeFee.js'
+import {
+  formatBaseShareMeshUlnGateFailure,
+  readAndAssessBaseShareMeshUln,
+} from './shareMeshLzBaseUlnGate.js'
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 
@@ -56,6 +60,7 @@ export class ShareBridgeOftWiringError extends Error {
     | 'oft_peer_not_configured'
     | 'share_oft_peer_mismatch'
     | 'quote_failed'
+    | 'lz_uln_pathway_not_ready'
 
   constructor(
     code: ShareBridgeOftWiringError['code'],
@@ -166,4 +171,21 @@ export async function assertShareBridgeOftWiringForFinalize(params: {
   }
 
   if (!status.bridgeRequired) return
+
+  const decoded = decodeFinalizePhase2Call(params.finalizeCallData)
+  if (!decoded) {
+    throw new ShareBridgeOftWiringError(
+      'finalize_decode_failed',
+      'Unable to decode finalizePhase2 calldata for Share-mesh ULN gate.',
+    )
+  }
+
+  const uln = await readAndAssessBaseShareMeshUln({
+    publicClient: params.publicClient,
+    shareOft: decoded.params.shareOFT,
+    solanaEid: status.solanaEid,
+  })
+  if (!uln.ok) {
+    throw new ShareBridgeOftWiringError('lz_uln_pathway_not_ready', formatBaseShareMeshUlnGateFailure(uln))
+  }
 }

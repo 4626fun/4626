@@ -5,6 +5,7 @@ import {
   EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS,
   NIL_REQUIRED_DVN_COUNT,
   asPaddedEvmPeer,
+  assessBaseShareMeshUlnForPipeA,
   assessShareMeshLzPathway,
   enforcedOptionsMatchSolanaTemplate,
   outboundMeetsInbound,
@@ -147,6 +148,28 @@ describe('shareMeshLzPathwayPolicy', () => {
     expect(effective.optionalDvnCount).toBe(5)
     expect(effective.optionalDvnThreshold).toBe(3)
     expect(effective.requiredDvnCount).toBe(0)
+  })
+
+
+  it('Base-only Pipe A gate rejects B2-class send confirmations=10', () => {
+    const result = assessBaseShareMeshUlnForPipeA({
+      baseSend: slice(10n),
+      baseReceive: slice(EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS),
+      enforcedOptionsHex:
+        '0x00030100210100000000000000000000000000030d40000000000000000000000000001f1df0',
+    })
+    expect(result.ok).toBe(false)
+    expect(result.checks.find((c) => c.id === 'base_send_confirmations_policy')?.ok).toBe(false)
+  })
+
+  it('Base-only Pipe A gate accepts template Base ULN + enforced options', () => {
+    const result = assessBaseShareMeshUlnForPipeA({
+      baseSend: slice(EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS),
+      baseReceive: slice(EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS),
+      enforcedOptionsHex:
+        '0x00030100210100000000000000000000000000030d40000000000000000000000000001f1df0',
+    })
+    expect(result.ok).toBe(true)
   })
 
   it('pads EVM peers and matches template enforced options markers', () => {
