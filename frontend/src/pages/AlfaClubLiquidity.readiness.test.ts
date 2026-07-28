@@ -192,11 +192,48 @@ describe("AlfaClub official Sudoswap market readiness", () => {
           mode: "buyWithEth",
           ethAmount: 1_000_000_000_000_000n,
           snapshot: snapshot({ creatorCoinBalance: 0n }),
+          ethFundingCoversBuy: true,
         }),
       ),
     ).toBeNull();
     expect(
       getAlfaClubLiquidityDisabledReason(ready({ mode: "buyWithEth" })),
     ).toBe("Enter a positive ETH amount");
+  });
+
+  it("waits for the ETH→AKITA funding quote before enabling submit", () => {
+    expect(
+      getAlfaClubLiquidityDisabledReason(
+        ready({
+          mode: "buyWithEth",
+          ethAmount: 1_000_000_000_000_000n,
+          ethFundingQuoteLoading: true,
+        }),
+      ),
+    ).toBe("Quoting ETH → AKITA funding");
+  });
+
+  it("blocks ETH buys that do not cover the Sudoswap AKITA requirement", () => {
+    expect(
+      getAlfaClubLiquidityDisabledReason(
+        ready({
+          mode: "buyWithEth",
+          ethAmount: 1_000_000_000_000_000n,
+          ethFundingCoversBuy: false,
+        }),
+      ),
+    ).toBe("ETH amount is too low for this key buy");
+  });
+
+  it("blocks ETH buys when the Zora funding quote fails", () => {
+    expect(
+      getAlfaClubLiquidityDisabledReason(
+        ready({
+          mode: "buyWithEth",
+          ethAmount: 1_000_000_000_000_000n,
+          ethFundingQuoteFailed: true,
+        }),
+      ),
+    ).toBe("ETH → AKITA funding quote failed");
   });
 });

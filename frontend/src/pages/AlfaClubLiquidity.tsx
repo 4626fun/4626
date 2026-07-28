@@ -61,6 +61,11 @@ import {
   ZORA_NATIVE_ETH_TOKEN,
 } from "@/lib/alfaclub/ethFundingRouter";
 import {
+  estimateEthWeiForRequiredAkita,
+  formatEthWeiForInput,
+  fundingCoversSudoswapBuy,
+} from "@/lib/alfaclub/ethFriendKeyQuote";
+import {
   buildSwapFromZoraQuote,
   fetchZoraTradeQuoteFromApi,
   signZoraQuotePermits,
@@ -146,6 +151,12 @@ export function getAlfaClubLiquidityDisabledReason(params: {
   mode: Mode;
   keyAmount: bigint | null;
   ethAmount?: bigint | null;
+  /** When buyWithEth: true while the ETH→AKITA funding quote is in flight. */
+  ethFundingQuoteLoading?: boolean;
+  /** When buyWithEth: whether the current ETH amount covers the Sudoswap AKITA buy. */
+  ethFundingCoversBuy?: boolean | null;
+  /** When buyWithEth: Zora ETH→AKITA quote request failed. */
+  ethFundingQuoteFailed?: boolean;
 }): string | null {
   if (!params.configReady)
     return "Official Sudoswap market deployment is not configured";
@@ -176,6 +187,12 @@ export function getAlfaClubLiquidityDisabledReason(params: {
       params.snapshot.creatorCoinBalance < quote.amount
     )
       return "Creator Coin balance is too low";
+    if (params.mode === "buyWithEth" && params.ethFundingQuoteLoading)
+      return "Quoting ETH → AKITA funding";
+    if (params.mode === "buyWithEth" && params.ethFundingQuoteFailed)
+      return "ETH → AKITA funding quote failed";
+    if (params.mode === "buyWithEth" && params.ethFundingCoversBuy === false)
+      return "ETH amount is too low for this key buy";
   } else {
     if (params.snapshot.keyBalance < params.keyAmount)
       return "FriendKey balance is too low";
@@ -392,6 +409,8 @@ export function AlfaClubLiquidity({
   }, [embedded, initialMode]);
   const [keyAmountInput, setKeyAmountInput] = useState("1");
   const [ethAmountInput, setEthAmountInput] = useState("0.001");
+  /** When true, do not overwrite the ETH field from the composite key→ETH quote. */
+  const [ethAmountTouched, setEthAmountTouched] = useState(false);
   const [slippageInput, setSlippageInput] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastHash, setLastHash] = useState<string | null>(null);
@@ -413,6 +432,10 @@ export function AlfaClubLiquidity({
     () => parsePositiveBigInt(keyAmountInput),
     [keyAmountInput],
   );
+  useEffect(() => {
+    // Key quantity is authoritative for ETH→FriendKey pricing; re-enable auto ETH fill.
+    setEthAmountTouched(false);
+  }, [keyAmountInput]);
   const ethAmount = useMemo(
     () => parsePositiveEther(ethAmountInput),
     [ethAmountInput],
@@ -849,6 +872,154 @@ export function AlfaClubLiquidity({
       return null;
     }
   }, [keyAmount, mode, quantityQuote, slippageBps, snapshot]);
+
+  // Submit uses addSlippageBps(quote.amount) as the Sudoswap buyLimit that funding must cover.
+  const requiredAkitaForBuy =
+    mode === "buyWithEth" && quantityQuote && quantityQuote.errorCode === 0n
+      ? addSlippageBps(quantityQuote.amount, slippageBps)
+      : null;
+  const ethFundingQuoteSender =
+    executionAddress ??
+    ("0x0000000000000000000000000000000000000001" as Address);
+
+  const ethFundingQuoteQuery = useQuery({
+    queryKey: [
+      "alfaclub-eth-friendkey-funding-quote",
+      keyAmount?.toString() ?? "",
+      requiredAkitaForBuy?.toString() ?? "",
+      slippageBps.toString(),
+      ethFundingQuoteSender.toLowerCase(),
+      ethAmountTouched ? (ethAmount?.toString() ?? "0") : "auto",
+    ],
+    enabled: Boolean(
+      mode === "buyWithEth" &&
+        keyAmount &&
+        requiredAkitaForBuy &&
+        requiredAkitaForBuy > 0n,
+    ),
+    staleTime: 12_000,
+    queryFn: async (): Promise<{
+      ethNeeded: bigint;
+      requiredAkita: bigint;
+      fundingAkitaOut: bigint;
+    }> => {
+      if (!requiredAkitaForBuy || requiredAkitaForBuy <= 0n) {
+        throw new Error("Missing Sudoswap AKITA requirement for ETH funding quote");
+      }
+      if (ethAmountTouched && ethAmount && ethAmount > 0n) {
+        const manualPayload = await fetchZoraTradeQuoteFromApi({
+          tokenIn: ZORA_NATIVE_ETH_TOKEN,
+          tokenOut: ROOM_1659_CREATOR_COIN,
+          amountIn: ethAmount.toString(),
+          sender: ethFundingQuoteSender,
+          slippagePct: Number(slippageInput),
+        });
+        const fundingAkitaOut = BigInt(
+          String(manualPayload.quote?.amountOut ?? "0"),
+        );
+        if (fundingAkitaOut <= 0n) {
+          throw new Error("Zora returned no AKITA output for the ETH funding quote");
+        }
+        return {
+          ethNeeded: ethAmount,
+          requiredAkita: requiredAkitaForBuy,
+          fundingAkitaOut,
+        };
+      }
+      const probeEth =
+        ethAmount && ethAmount > 0n ? ethAmount : parseEther("0.001");
+      const probePayload = await fetchZoraTradeQuoteFromApi({
+        tokenIn: ZORA_NATIVE_ETH_TOKEN,
+        tokenOut: ROOM_1659_CREATOR_COIN,
+        amountIn: probeEth.toString(),
+        sender: ethFundingQuoteSender,
+        slippagePct: Number(slippageInput),
+      });
+      const probeAkitaOut = BigInt(String(probePayload.quote?.amountOut ?? "0"));
+      if (probeAkitaOut <= 0n) {
+        throw new Error("Zora returned no AKITA output for the ETH funding probe");
+      }
+      let ethNeeded = estimateEthWeiForRequiredAkita({
+        requiredAkita: requiredAkitaForBuy,
+        probeEthWei: probeEth,
+        probeAkitaOut,
+        bufferBps: 100n,
+      });
+      const refinePayload = await fetchZoraTradeQuoteFromApi({
+        tokenIn: ZORA_NATIVE_ETH_TOKEN,
+        tokenOut: ROOM_1659_CREATOR_COIN,
+        amountIn: ethNeeded.toString(),
+        sender: ethFundingQuoteSender,
+        slippagePct: Number(slippageInput),
+      });
+      const fundingAkitaOut = BigInt(
+        String(refinePayload.quote?.amountOut ?? "0"),
+      );
+      if (fundingAkitaOut <= 0n) {
+        throw new Error("Zora returned no AKITA output for the refined ETH quote");
+      }
+      if (fundingAkitaOut < requiredAkitaForBuy) {
+        ethNeeded = estimateEthWeiForRequiredAkita({
+          requiredAkita: requiredAkitaForBuy,
+          probeEthWei: ethNeeded,
+          probeAkitaOut: fundingAkitaOut,
+          bufferBps: 250n,
+        });
+        const finalPayload = await fetchZoraTradeQuoteFromApi({
+          tokenIn: ZORA_NATIVE_ETH_TOKEN,
+          tokenOut: ROOM_1659_CREATOR_COIN,
+          amountIn: ethNeeded.toString(),
+          sender: ethFundingQuoteSender,
+          slippagePct: Number(slippageInput),
+        });
+        const finalOut = BigInt(String(finalPayload.quote?.amountOut ?? "0"));
+        return {
+          ethNeeded,
+          requiredAkita: requiredAkitaForBuy,
+          fundingAkitaOut: finalOut > 0n ? finalOut : fundingAkitaOut,
+        };
+      }
+      return {
+        ethNeeded,
+        requiredAkita: requiredAkitaForBuy,
+        fundingAkitaOut,
+      };
+    },
+  });
+
+  useEffect(() => {
+    if (mode !== "buyWithEth" || ethAmountTouched) return;
+    const ethNeeded = ethFundingQuoteQuery.data?.ethNeeded;
+    if (!ethNeeded || ethNeeded <= 0n) return;
+    const next = formatEthWeiForInput(ethNeeded);
+    if (!next || next === ethAmountInput) return;
+    setEthAmountInput(next);
+  }, [
+    ethAmountInput,
+    ethAmountTouched,
+    ethFundingQuoteQuery.data?.ethNeeded,
+    mode,
+  ]);
+
+  const ethFundingQuoteFailed =
+    mode === "buyWithEth" &&
+    ethFundingQuoteQuery.isError &&
+    !ethFundingQuoteQuery.data;
+
+  const ethFundingCoversBuy =
+    mode !== "buyWithEth"
+      ? null
+      : ethFundingQuoteFailed
+        ? false
+        : !ethFundingQuoteQuery.data || !ethAmount
+          ? null
+          : fundingCoversSudoswapBuy({
+              fundingAkitaOut: ethFundingQuoteQuery.data.fundingAkitaOut,
+              requiredAkita: ethFundingQuoteQuery.data.requiredAkita,
+            }) &&
+            (ethAmountTouched ||
+              ethAmount >= ethFundingQuoteQuery.data.ethNeeded);
+
   const decimals = snapshot?.creatorCoinDecimals ?? 18;
   const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
 
@@ -1252,6 +1423,13 @@ export function AlfaClubLiquidity({
     mode,
     keyAmount,
     ethAmount,
+    ethFundingQuoteLoading:
+      mode === "buyWithEth" &&
+      Boolean(keyAmount && requiredAkitaForBuy) &&
+      ethFundingQuoteQuery.isFetching &&
+      !ethFundingQuoteQuery.data,
+    ethFundingCoversBuy,
+    ethFundingQuoteFailed,
   });
 
   const marketStats = (
@@ -1360,6 +1538,7 @@ export function AlfaClubLiquidity({
       !disabledReason ||
       disabledReason.startsWith("Enter a positive") ||
       disabledReason === "Verifying the live Sudoswap market" ||
+      disabledReason === "Quoting ETH → AKITA funding" ||
       disabledReason === "Connect an execution-ready wallet" ||
       disabledReason === "Wallet execution is not ready";
     const hardError =
@@ -1442,7 +1621,10 @@ export function AlfaClubLiquidity({
           }
           buyQuoteLoading={
             payingWithEth
-              ? false
+              ? Boolean(keyAmount) &&
+                (quoteQuery.isFetching ||
+                  ethFundingQuoteQuery.isFetching ||
+                  !ethFundingQuoteQuery.data)
               : Boolean(keyAmount) && quoteQuery.isFetching && !quote
           }
           estimatedOutUsd={null}
@@ -1488,10 +1670,11 @@ export function AlfaClubLiquidity({
           onOpenTokenSelector={(side) => onOpenTokenSelector?.(side)}
           onAmountChange={(value) => {
             if (payingWithEth) {
-              setEthAmountInput(value.replace(/[^0-9.]/g, ""))
-              return
+              setEthAmountTouched(true);
+              setEthAmountInput(value.replace(/[^0-9.]/g, ""));
+              return;
             }
-            setKeyAmountInput(value.replace(/[^\d]/g, ""))
+            setKeyAmountInput(value.replace(/[^\d]/g, ""));
           }}
           onQuickPercent={(pct) => {
             if (payingWithEth) return
@@ -1516,7 +1699,7 @@ export function AlfaClubLiquidity({
           executionMode={executionMode}
           fallbackActive={false}
           swapProviderLabel="Sudoswap"
-          quoteAggregatorLabel="Sudoswap"
+          quoteAggregatorLabel={payingWithEth ? "Zora" : "Sudoswap"}
           providerHref="https://sudoswap.xyz"
           providerHint={
             <InfoHint
