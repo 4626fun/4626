@@ -68,6 +68,7 @@ import {
 import {
   buildSwapFromZoraQuote,
   fetchZoraTradeQuoteFromApi,
+  readZoraQuoteAmountOut,
   signZoraQuotePermits,
   zoraTradeQuoteToResponse,
 } from "@/lib/zora/zoraTradeApi";
@@ -913,10 +914,9 @@ export function AlfaClubLiquidity({
           amountIn: ethAmount.toString(),
           sender: ethFundingQuoteSender,
           slippagePct: Number(slippageInput),
+          allowAmountOutOnly: true,
         });
-        const fundingAkitaOut = BigInt(
-          String(manualPayload.quote?.amountOut ?? "0"),
-        );
+        const fundingAkitaOut = readZoraQuoteAmountOut(manualPayload);
         if (fundingAkitaOut <= 0n) {
           throw new Error("Zora returned no AKITA output for the ETH funding quote");
         }
@@ -934,8 +934,9 @@ export function AlfaClubLiquidity({
         amountIn: probeEth.toString(),
         sender: ethFundingQuoteSender,
         slippagePct: Number(slippageInput),
+        allowAmountOutOnly: true,
       });
-      const probeAkitaOut = BigInt(String(probePayload.quote?.amountOut ?? "0"));
+      const probeAkitaOut = readZoraQuoteAmountOut(probePayload);
       if (probeAkitaOut <= 0n) {
         throw new Error("Zora returned no AKITA output for the ETH funding probe");
       }
@@ -951,10 +952,9 @@ export function AlfaClubLiquidity({
         amountIn: ethNeeded.toString(),
         sender: ethFundingQuoteSender,
         slippagePct: Number(slippageInput),
+        allowAmountOutOnly: true,
       });
-      const fundingAkitaOut = BigInt(
-        String(refinePayload.quote?.amountOut ?? "0"),
-      );
+      const fundingAkitaOut = readZoraQuoteAmountOut(refinePayload);
       if (fundingAkitaOut <= 0n) {
         throw new Error("Zora returned no AKITA output for the refined ETH quote");
       }
@@ -971,8 +971,9 @@ export function AlfaClubLiquidity({
           amountIn: ethNeeded.toString(),
           sender: ethFundingQuoteSender,
           slippagePct: Number(slippageInput),
+          allowAmountOutOnly: true,
         });
-        const finalOut = BigInt(String(finalPayload.quote?.amountOut ?? "0"));
+        const finalOut = readZoraQuoteAmountOut(finalPayload);
         return {
           ethNeeded,
           requiredAkita: requiredAkitaForBuy,
@@ -1541,12 +1542,18 @@ export function AlfaClubLiquidity({
       disabledReason === "Quoting ETH → AKITA funding" ||
       disabledReason === "Connect an execution-ready wallet" ||
       disabledReason === "Wallet execution is not ready";
+    const fundingQuoteError =
+      ethFundingQuoteQuery.error instanceof Error
+        ? ethFundingQuoteQuery.error.message
+        : null;
     const hardError =
       snapshotQuery.error instanceof Error
         ? snapshotQuery.error.message
-        : disabledReason && !softDisabledReason
-          ? disabledReason
-          : null;
+        : fundingQuoteError && ethFundingQuoteFailed
+          ? fundingQuoteError
+          : disabledReason && !softDisabledReason
+            ? disabledReason
+            : null;
     const priceImpactLabel = quotePreview
       ? `${(Number(quotePreview.priceImpactBps) / 100).toLocaleString("en-US", {
           maximumFractionDigits: 2,

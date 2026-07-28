@@ -256,16 +256,24 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   sender: string
   slippagePct: number
   signatures?: ZoraTradeQuotePermit[]
+  /**
+   * Funding-preview quotes only need amountOut. When true, accept a successful
+   * quote payload even if Zora omitted executable calldata (e.g. permit-only).
+   */
+  allowAmountOutOnly?: boolean
 }): Promise<ZoraTradeQuotePayload> {
   const res = await apiFetch(ZORA_TRADE_QUOTE_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    withCredentials: true,
     body: jsonStringifyForApi({
       tokenIn: params.tokenIn,
       tokenOut: params.tokenOut,
       amountIn: params.amountIn,
       sender: params.sender,
       slippage: slippagePercentToFraction(params.slippagePct),
+      preview: params.allowAmountOutOnly === true ? true : undefined,
+      allowAmountOutOnly: params.allowAmountOutOnly === true ? true : undefined,
       signatures: params.signatures?.map((item) => ({
         signature: item.signature,
         permit: convertPermitAmountsToString(item.permit),
@@ -289,7 +297,22 @@ export async function fetchZoraTradeQuoteFromApi(params: {
       : null
 
   if (!data?.call?.target || !data?.call?.data) {
-    if (data?.permits?.length) {
+    const amountOut = String((raw as any)?.quote?.amountOut ?? '').trim()
+    if (params.allowAmountOutOnly && amountOut && amountOut !== '0') {
+      return {
+        call: {
+          target: '0x0000000000000000000000000000000000000000',
+          data: '0x',
+          value: '0',
+        },
+        quote: (raw as any)?.quote,
+        permits: (raw as any)?.permits,
+      }
+    }
+    const permits = (data?.permits ?? (raw as any)?.permits) as
+      | ZoraTradeQuotePermit[]
+      | undefined
+    if (permits?.length) {
       throw new Error(
         'Zora trade requires a Permit2 signature before the swap can be quoted. Open review and confirm in your wallet.',
       )
@@ -298,6 +321,17 @@ export async function fetchZoraTradeQuoteFromApi(params: {
   }
 
   return data
+}
+
+export function readZoraQuoteAmountOut(payload: ZoraTradeQuotePayload | null | undefined): bigint {
+  const raw = payload?.quote?.amountOut
+  if (raw === undefined || raw === null) return 0n
+  try {
+    const amount = BigInt(String(raw))
+    return amount > 0n ? amount : 0n
+  } catch {
+    return 0n
+  }
 }
 
 const UNIVERSAL_ROUTER_BASE = '0x6ff5693b99212da76ad316178a184ab56d299b43'

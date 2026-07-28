@@ -34,14 +34,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  // Pricing quotes are used by ETH→FriendKey funding preview before SIWE may exist.
+  // Prefer principal+IP when authenticated; otherwise fall back to IP-only limits.
   const principalAddress = readRequestPrincipalAddress(req)
-  if (!principalAddress) {
-    return res.status(401).json({ success: false, error: 'Authentication required' })
-  }
-
   const clientIp = getClientIp(req)
   const rate = await checkDurableRateLimit(
-    rateLimitKey('zora-trade-quote', principalAddress.toLowerCase(), clientIp),
+    rateLimitKey(
+      'zora-trade-quote',
+      principalAddress ? principalAddress.toLowerCase() : 'anon',
+      clientIp,
+    ),
     RATE_LIMITS.general,
     { failClosed: true },
   )
@@ -72,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sender,
       slippage: readSlippageFraction(body),
       signatures: Array.isArray(body.signatures) ? (body.signatures as any) : undefined,
+      allowAmountOutOnly: body.preview === true || body.allowAmountOutOnly === true,
     })
     return res.status(200).json({ success: true, data: quote })
   } catch (error) {

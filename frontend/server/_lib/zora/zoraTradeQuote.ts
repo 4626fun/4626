@@ -73,6 +73,8 @@ export async function fetchZoraTradeQuote(params: {
   slippage?: number
   sender: string
   signatures?: ZoraTradeQuotePermit[]
+  /** When true, return amountOut even if Zora omitted executable calldata. */
+  allowAmountOutOnly?: boolean
 }): Promise<ZoraTradeQuoteResult> {
   const amountIn = String(params.amountIn ?? '').trim()
   if (!/^\d+$/.test(amountIn) || BigInt(amountIn) <= 0n) {
@@ -136,6 +138,18 @@ export async function fetchZoraTradeQuote(params: {
   const data = raw
 
   if (!data.call?.target || !data.call?.data) {
+    const amountOut = String(data.quote?.amountOut ?? '').trim()
+    if (params.allowAmountOutOnly && amountOut && amountOut !== '0') {
+      return {
+        call: {
+          target: '0x0000000000000000000000000000000000000000',
+          data: '0x',
+          value: '0',
+        },
+        permits: data.permits,
+        quote: data.quote,
+      }
+    }
     if (data.permits?.length) {
       throw new Error(
         'Zora quote returned Permit2 authorization only. Sign permits and request a follow-up quote.',
