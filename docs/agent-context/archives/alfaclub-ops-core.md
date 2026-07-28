@@ -76,3 +76,21 @@ Buy-with-ETH is **not** ETH↔key. Price as:
 
 - `pnpm -C frontend exec vitest run src/lib/alfaclub/ethFriendKeyQuote.test.ts src/lib/alfaclub/ethFundingRouter.test.ts src/lib/zora/zoraTradeAmountOut.test.ts api/__tests__/zoraTradeQuoteAuth.test.ts src/pages/AlfaClubLiquidity.readiness.test.ts`
 - Unauthenticated `POST /api/zora/tradeQuote` with native ETH → AKITA + `preview: true` must return `200` with `quote.amountOut` (not `401 Authentication required`).
+
+### Planned live cutover: ShareOFT ↔ FriendKey
+
+Target buy-with-ETH path when vaults are live:
+
+**ETH → (Uniswap) ShareOFT → (Sudoswap) FriendKey ERC-1155**
+
+Prep (do not enable in production until checklist is green):
+
+1. Deploy + register an official Sudoswap ERC-1155/ERC-20 TRADE pair with **ShareOFT** as the ERC-20 (same 690 bps fee / XYK rules as room 1659).
+2. Point `VITE_ALFACLUB_ROOM_1659_SUDOSWAP_PAIR` / `ALFACLUB_ROOM_1659_SUDOSWAP_PAIR` at that pair.
+3. Set `VITE_ALFACLUB_FRIENDKEY_PAIR_ERC20_KIND=shareOft` (and align paymaster `ALFACLUB_LP_CREATOR_COIN` / access-policy pair ERC-20 to ShareOFT — the on-chain `markets()` field is still named `creatorCoin` but holds the pair ERC-20).
+4. Verify ETH→ShareOFT Uniswap depth; funding quotes use `ethFundingProvider: 'uniswap'`.
+5. Wire Uniswap **execute** for ETH funding (quote path is ready; submit still gates ShareOFT until execute cutover).
+6. Keep creator-coin lane as rollback: unset/ `creatorCoin` kind.
+
+Code: `friendKeyFundingLane.ts`, `ethPairErc20FundingQuote.ts`, `AlfaClubLiquidity` (`fundingLane`).
+

@@ -2,34 +2,37 @@ import { describe, expect, it } from 'vitest'
 
 import {
   estimateEthWeiForRequiredAkita,
+  estimateEthWeiForRequiredPairErc20,
   formatEthWeiForInput,
   fundingCoversSudoswapBuy,
 } from './ethFriendKeyQuote'
 
-describe('estimateEthWeiForRequiredAkita', () => {
-  it('scales a probe quote up to the required Creator Coin amount with buffer', () => {
+describe('estimateEthWeiForRequiredPairErc20', () => {
+  it('scales probe rate with a buffer (Akita alias)', () => {
     const eth = estimateEthWeiForRequiredAkita({
-      requiredAkita: 250n * 10n ** 18n,
-      probeEthWei: 10n ** 15n,
-      probeAkitaOut: 100n * 10n ** 18n,
+      requiredAkita: 200n,
+      probeEthWei: 100n,
+      probeAkitaOut: 100n,
       bufferBps: 100n,
     })
-    expect(eth).toBe(2_525_000_000_000_000n)
+    // raw=200, +1% buffer => 202
+    expect(eth).toBe(202n)
   })
 
-  it('rounds up when the division is not exact', () => {
-    const eth = estimateEthWeiForRequiredAkita({
-      requiredAkita: 3n,
-      probeEthWei: 10n,
-      probeAkitaOut: 2n,
+  it('rounds up fractional wei', () => {
+    const eth = estimateEthWeiForRequiredPairErc20({
+      requiredPairErc20: 3n,
+      probeEthWei: 100n,
+      probePairErc20Out: 200n,
       bufferBps: 0n,
     })
-    expect(eth).toBe(15n)
+    // ceil(3*100/200)=2
+    expect(eth).toBe(2n)
   })
 })
 
 describe('formatEthWeiForInput', () => {
-  it('formats whole and fractional ETH without trailing zeros', () => {
+  it('formats whole and fractional ether', () => {
     expect(formatEthWeiForInput(10n ** 18n)).toBe('1')
     expect(formatEthWeiForInput(1_500_000_000_000_000_000n)).toBe('1.5')
     expect(formatEthWeiForInput(1_000_000_000_000_000n)).toBe('0.001')
@@ -37,18 +40,18 @@ describe('formatEthWeiForInput', () => {
 })
 
 describe('fundingCoversSudoswapBuy', () => {
-  it('requires funding output to meet the Sudoswap buy input', () => {
+  it('accepts either pair-ERC20 or legacy Akita field names', () => {
     expect(
       fundingCoversSudoswapBuy({
-        fundingAkitaOut: 99n,
-        requiredAkita: 100n,
-      }),
-    ).toBe(false)
-    expect(
-      fundingCoversSudoswapBuy({
-        fundingAkitaOut: 100n,
-        requiredAkita: 100n,
+        fundingPairErc20Out: 10n,
+        requiredPairErc20: 10n,
       }),
     ).toBe(true)
+    expect(
+      fundingCoversSudoswapBuy({
+        fundingAkitaOut: 9n,
+        requiredAkita: 10n,
+      }),
+    ).toBe(false)
   })
 })

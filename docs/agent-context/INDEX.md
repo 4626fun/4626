@@ -50,6 +50,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | EIP-8130, native AA, Base Cobalt, EntryPoint migration | [docs/_internal/eip-8130-native-aa-readiness.md](../_internal/eip-8130-native-aa-readiness.md) |
 | `/h pos`, counter-trade, room 1659, Hermit | `alfaclub-ops-core.md` |
 | ETH→FriendKey, buyWithEth, Zora tradeQuote, Sudoswap ERC-1155 quote | `alfaclub-ops-core.md` |
+| ShareOFT↔FriendKey, FriendKey funding lane, ETH→ShareOFT | `alfaclub-ops-core.md` |
 | Railway Hermit health, daily brief bot | `alfaclub-ops-ops.md` |
 | PROTOCOL vs CANONICAL, XMTP inbox | `wallet-identity.md` |
 | Deploy-session owner delegation, ERC-8004, Privy agent wallet | `wallet-csw-lifecycle.md` |

@@ -41,6 +41,7 @@ import {
 import {
   creatorCoinRawLogo,
   NATIVE_TOKEN_ADDRESS,
+  shareTokenLogo,
   uniswapChainLogo,
   type TokenDisplay,
 } from "@/lib/uniswap/swapUtils";
@@ -61,14 +62,18 @@ import {
   ZORA_NATIVE_ETH_TOKEN,
 } from "@/lib/alfaclub/ethFundingRouter";
 import {
-  estimateEthWeiForRequiredAkita,
+  estimateEthWeiForRequiredPairErc20,
   formatEthWeiForInput,
   fundingCoversSudoswapBuy,
 } from "@/lib/alfaclub/ethFriendKeyQuote";
+import { fetchEthToPairErc20AmountOut } from "@/lib/alfaclub/ethPairErc20FundingQuote";
+import {
+  resolveRoom1659FriendKeyFundingLane,
+  ROOM_1659_CREATOR_COIN as ROOM_1659_CREATOR_COIN_LANE,
+} from "@/lib/alfaclub/friendKeyFundingLane";
 import {
   buildSwapFromZoraQuote,
   fetchZoraTradeQuoteFromApi,
-  readZoraQuoteAmountOut,
   signZoraQuotePermits,
   zoraTradeQuoteToResponse,
 } from "@/lib/zora/zoraTradeApi";
@@ -87,9 +92,7 @@ import { useSwapEmbeddedEoa } from "@/lib/swap/useSwapEmbeddedEoa";
 import { isBaseAppDirectCswPath } from "@/lib/xmtp/baseAppDirectXmtp";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
-const ROOM_1659_CREATOR_COIN = getAddress(
-  "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
-);
+const ROOM_1659_CREATOR_COIN = ROOM_1659_CREATOR_COIN_LANE;
 const ROOM_1659_TOKEN_ID = 1659n;
 const ROOM_1659_TRADING_PAIR_FEE = 69_000_000_000_000_000n;
 const QUOTE_DEADLINE_SECONDS = 600n;
@@ -445,6 +448,10 @@ export function AlfaClubLiquidity({
     () => parseSlippageBps(slippageInput),
     [slippageInput],
   );
+  // Creator Coin today; ShareOFT when VITE_ALFACLUB_FRIENDKEY_PAIR_ERC20_KIND=shareOft
+  // and a ShareOFT↔FriendKey Sudoswap pair is live.
+  const fundingLane = useMemo(() => resolveRoom1659FriendKeyFundingLane(), []);
+  const pairErc20 = fundingLane.pairErc20;
 
   const executionMode =
     accountContext.activeAccountType === "SMART_WALLET" ? "canonical" : "eoa";
@@ -460,6 +467,7 @@ export function AlfaClubLiquidity({
     queryKey: [
       "alfaclub-sudoswap-market",
       pair?.toLowerCase() ?? "",
+      pairErc20.toLowerCase(),
       executionAddress?.toLowerCase() ?? "",
     ],
     enabled: Boolean(
@@ -594,7 +602,7 @@ export function AlfaClubLiquidity({
         getAddress(pairFactory) === factory &&
         Number(pairVariant) === 3 &&
         Number(poolType) === 2 &&
-        getAddress(pairToken) === ROOM_1659_CREATOR_COIN &&
+        getAddress(pairToken) === pairErc20 &&
         getAddress(pairNft) === ALFACLUB.friendKey &&
         pairTokenId === ROOM_1659_TOKEN_ID &&
         getAddress(pairCurve) === xykCurve &&
@@ -605,7 +613,7 @@ export function AlfaClubLiquidity({
         getAddress(adapterCurve) === xykCurve &&
         getAddress(adapterRouter) === router &&
         getAddress(routerAdapter) === adapter &&
-        getAddress(market[0]) === ROOM_1659_CREATOR_COIN &&
+        getAddress(market[0]) === pairErc20 &&
         market[1] === ROOM_1659_TOKEN_ID &&
         market[2];
       if (!invariantOk)
@@ -654,33 +662,33 @@ export function AlfaClubLiquidity({
       ] = await Promise.all([
         publicClient
           .readContract({
-            address: ROOM_1659_CREATOR_COIN,
+            address: pairErc20,
             abi: erc20Abi,
             functionName: "name",
           })
           .catch(() => "Creator Coin"),
         publicClient
           .readContract({
-            address: ROOM_1659_CREATOR_COIN,
+            address: pairErc20,
             abi: erc20Abi,
             functionName: "symbol",
           })
           .catch(() => "CREATOR"),
         publicClient
           .readContract({
-            address: ROOM_1659_CREATOR_COIN,
+            address: pairErc20,
             abi: erc20Abi,
             functionName: "decimals",
           })
           .catch(() => 18),
         publicClient.readContract({
-          address: ROOM_1659_CREATOR_COIN,
+          address: pairErc20,
           abi: erc20Abi,
           functionName: "balanceOf",
           args: [executionAddress],
         }),
         publicClient.readContract({
-          address: ROOM_1659_CREATOR_COIN,
+          address: pairErc20,
           abi: erc20Abi,
           functionName: "allowance",
           args: [executionAddress, permit2],
@@ -689,7 +697,7 @@ export function AlfaClubLiquidity({
           address: permit2,
           abi: PERMIT2_ALLOWANCE_TRANSFER_ABI,
           functionName: "allowance",
-          args: [executionAddress, ROOM_1659_CREATOR_COIN, adapter],
+          args: [executionAddress, pairErc20, adapter],
         }),
         publicClient.readContract({
           address: ALFACLUB.friendKey,
@@ -704,7 +712,7 @@ export function AlfaClubLiquidity({
           args: [executionAddress, adapter],
         }),
         publicClient.readContract({
-          address: ROOM_1659_CREATOR_COIN,
+          address: pairErc20,
           abi: erc20Abi,
           functionName: "balanceOf",
           args: [pair],
@@ -886,6 +894,8 @@ export function AlfaClubLiquidity({
   const ethFundingQuoteQuery = useQuery({
     queryKey: [
       "alfaclub-eth-friendkey-funding-quote",
+      fundingLane.kind,
+      pairErc20.toLowerCase(),
       keyAmount?.toString() ?? "",
       requiredAkitaForBuy?.toString() ?? "",
       slippageBps.toString(),
@@ -899,26 +909,30 @@ export function AlfaClubLiquidity({
         requiredAkitaForBuy > 0n,
     ),
     staleTime: 12_000,
-    queryFn: async (): Promise<{
+        queryFn: async (): Promise<{
       ethNeeded: bigint;
       requiredAkita: bigint;
       fundingAkitaOut: bigint;
     }> => {
       if (!requiredAkitaForBuy || requiredAkitaForBuy <= 0n) {
-        throw new Error("Missing Sudoswap AKITA requirement for ETH funding quote");
+        throw new Error(
+          `Missing Sudoswap ${fundingLane.pairSymbol} requirement for ETH funding quote`,
+        );
       }
-      if (ethAmountTouched && ethAmount && ethAmount > 0n) {
-        const manualPayload = await fetchZoraTradeQuoteFromApi({
-          tokenIn: ZORA_NATIVE_ETH_TOKEN,
-          tokenOut: ROOM_1659_CREATOR_COIN,
-          amountIn: ethAmount.toString(),
+      const quoteOut = async (amountInWei: bigint) =>
+        fetchEthToPairErc20AmountOut({
+          lane: fundingLane,
+          amountInWei,
           sender: ethFundingQuoteSender,
           slippagePct: Number(slippageInput),
-          allowAmountOutOnly: true,
         });
-        const fundingAkitaOut = readZoraQuoteAmountOut(manualPayload);
+
+      if (ethAmountTouched && ethAmount && ethAmount > 0n) {
+        const fundingAkitaOut = await quoteOut(ethAmount);
         if (fundingAkitaOut <= 0n) {
-          throw new Error("Zora returned no AKITA output for the ETH funding quote");
+          throw new Error(
+            `${fundingLane.ethFundingProvider} returned no ${fundingLane.pairSymbol} output for the ETH funding quote`,
+          );
         }
         return {
           ethNeeded: ethAmount,
@@ -928,52 +942,32 @@ export function AlfaClubLiquidity({
       }
       const probeEth =
         ethAmount && ethAmount > 0n ? ethAmount : parseEther("0.001");
-      const probePayload = await fetchZoraTradeQuoteFromApi({
-        tokenIn: ZORA_NATIVE_ETH_TOKEN,
-        tokenOut: ROOM_1659_CREATOR_COIN,
-        amountIn: probeEth.toString(),
-        sender: ethFundingQuoteSender,
-        slippagePct: Number(slippageInput),
-        allowAmountOutOnly: true,
-      });
-      const probeAkitaOut = readZoraQuoteAmountOut(probePayload);
+      const probeAkitaOut = await quoteOut(probeEth);
       if (probeAkitaOut <= 0n) {
-        throw new Error("Zora returned no AKITA output for the ETH funding probe");
+        throw new Error(
+          `${fundingLane.ethFundingProvider} returned no ${fundingLane.pairSymbol} output for the ETH funding probe`,
+        );
       }
-      let ethNeeded = estimateEthWeiForRequiredAkita({
-        requiredAkita: requiredAkitaForBuy,
+      let ethNeeded = estimateEthWeiForRequiredPairErc20({
+        requiredPairErc20: requiredAkitaForBuy,
         probeEthWei: probeEth,
-        probeAkitaOut,
+        probePairErc20Out: probeAkitaOut,
         bufferBps: 100n,
       });
-      const refinePayload = await fetchZoraTradeQuoteFromApi({
-        tokenIn: ZORA_NATIVE_ETH_TOKEN,
-        tokenOut: ROOM_1659_CREATOR_COIN,
-        amountIn: ethNeeded.toString(),
-        sender: ethFundingQuoteSender,
-        slippagePct: Number(slippageInput),
-        allowAmountOutOnly: true,
-      });
-      const fundingAkitaOut = readZoraQuoteAmountOut(refinePayload);
+      let fundingAkitaOut = await quoteOut(ethNeeded);
       if (fundingAkitaOut <= 0n) {
-        throw new Error("Zora returned no AKITA output for the refined ETH quote");
+        throw new Error(
+          `${fundingLane.ethFundingProvider} returned no ${fundingLane.pairSymbol} output for the refined ETH quote`,
+        );
       }
       if (fundingAkitaOut < requiredAkitaForBuy) {
-        ethNeeded = estimateEthWeiForRequiredAkita({
-          requiredAkita: requiredAkitaForBuy,
+        ethNeeded = estimateEthWeiForRequiredPairErc20({
+          requiredPairErc20: requiredAkitaForBuy,
           probeEthWei: ethNeeded,
-          probeAkitaOut: fundingAkitaOut,
+          probePairErc20Out: fundingAkitaOut,
           bufferBps: 250n,
         });
-        const finalPayload = await fetchZoraTradeQuoteFromApi({
-          tokenIn: ZORA_NATIVE_ETH_TOKEN,
-          tokenOut: ROOM_1659_CREATOR_COIN,
-          amountIn: ethNeeded.toString(),
-          sender: ethFundingQuoteSender,
-          slippagePct: Number(slippageInput),
-          allowAmountOutOnly: true,
-        });
-        const finalOut = readZoraQuoteAmountOut(finalPayload);
+        const finalOut = await quoteOut(ethNeeded);
         return {
           ethNeeded,
           requiredAkita: requiredAkitaForBuy,
@@ -1022,7 +1016,10 @@ export function AlfaClubLiquidity({
               ethAmount >= ethFundingQuoteQuery.data.ethNeeded);
 
   const decimals = snapshot?.creatorCoinDecimals ?? 18;
-  const logoUrl = creatorCoinRawLogo(ROOM_1659_CREATOR_COIN, base.id);
+  const logoUrl =
+    fundingLane.kind === "shareOft"
+      ? shareTokenLogo(pairErc20, base.id)
+      : creatorCoinRawLogo(pairErc20, base.id);
 
   const resolvedSignerAddress = useMemo((): Address | null => {
     if (signerAddressOverride) return getAddress(signerAddressOverride);
@@ -1158,7 +1155,7 @@ export function AlfaClubLiquidity({
           functionName: "fee",
         }),
         publicClient.readContract({
-          address: ROOM_1659_CREATOR_COIN,
+          address: pairErc20,
           abi: erc20Abi,
           functionName: "allowance",
           args: [executionAddress, permit2],
@@ -1167,7 +1164,7 @@ export function AlfaClubLiquidity({
           address: permit2,
           abi: PERMIT2_ALLOWANCE_TRANSFER_ABI,
           functionName: "allowance",
-          args: [executionAddress, ROOM_1659_CREATOR_COIN, adapter],
+          args: [executionAddress, pairErc20, adapter],
         }),
         publicClient.readContract({
           address: ALFACLUB.friendKey,
@@ -1188,7 +1185,7 @@ export function AlfaClubLiquidity({
           args: [pair, ROOM_1659_TOKEN_ID],
         }),
         publicClient.readContract({
-          address: ROOM_1659_CREATOR_COIN,
+          address: pairErc20,
           abi: erc20Abi,
           functionName: "balanceOf",
           args: [pair],
@@ -1225,21 +1222,26 @@ export function AlfaClubLiquidity({
 
       let calls: TransactionRequest[];
       if (mode === "buyWithEth") {
+        if (fundingLane.kind === "shareOft") {
+          throw new Error(
+            "ShareOFT↔FriendKey ETH buys are quote-ready but not execution-ready yet. Keep VITE_ALFACLUB_FRIENDKEY_PAIR_ERC20_KIND=creatorCoin until the ShareOFT Sudoswap pair and Uniswap funding execute path are cut over.",
+          );
+        }
         if (!ethAmount) throw new Error("Enter a positive ETH amount");
         const canonicalEthFunding = executionMode === "canonical";
         const tokenIn = canonicalEthFunding
           ? BASE_WETH_TOKEN
-          : ZORA_NATIVE_ETH_TOKEN;
+          : fundingLane.ethTokenIn;
         let zoraPayload = await fetchZoraTradeQuoteFromApi({
           tokenIn,
-          tokenOut: ROOM_1659_CREATOR_COIN,
+          tokenOut: pairErc20,
           amountIn: ethAmount.toString(),
           sender: executionAddress,
           slippagePct: Number(slippageInput),
         });
         let zoraQuote = zoraTradeQuoteToResponse({
           tokenIn,
-          tokenOut: ROOM_1659_CREATOR_COIN,
+          tokenOut: pairErc20,
           amountIn: ethAmount.toString(),
           payload: zoraPayload,
         });
@@ -1264,7 +1266,7 @@ export function AlfaClubLiquidity({
           }
           zoraPayload = await fetchZoraTradeQuoteFromApi({
             tokenIn,
-            tokenOut: ROOM_1659_CREATOR_COIN,
+            tokenOut: pairErc20,
             amountIn: ethAmount.toString(),
             sender: executionAddress,
             slippagePct: Number(slippageInput),
@@ -1272,7 +1274,7 @@ export function AlfaClubLiquidity({
           });
           zoraQuote = zoraTradeQuoteToResponse({
             tokenIn,
-            tokenOut: ROOM_1659_CREATOR_COIN,
+            tokenOut: pairErc20,
             amountIn: ethAmount.toString(),
             payload: zoraPayload,
           });
@@ -1330,7 +1332,7 @@ export function AlfaClubLiquidity({
           adapter,
           permit2,
           friendKey: ALFACLUB.friendKey,
-          creatorCoin: ROOM_1659_CREATOR_COIN,
+          creatorCoin: pairErc20,
           pair,
           keyAmount,
           buyLimit: limit,
@@ -1348,7 +1350,7 @@ export function AlfaClubLiquidity({
           adapter,
           permit2,
           friendKey: ALFACLUB.friendKey,
-          creatorCoin: ROOM_1659_CREATOR_COIN,
+          creatorCoin: pairErc20,
           pair,
           sender: executionAddress,
           keyAmount,
@@ -1488,7 +1490,8 @@ export function AlfaClubLiquidity({
         keyId: ROOM_1659_TOKEN_ID,
         roomName: "AKITA",
       });
-    const creatorSymbol = snapshot?.creatorCoinSymbol ?? "AKITA";
+    const creatorSymbol =
+      snapshot?.creatorCoinSymbol ?? fundingLane.pairSymbol;
     const keyIdForImage = (initialTokenId ?? ROOM_1659_TOKEN_ID).toString();
     const keyImageUrl = resolveAlfaClubKeyImageUrl({
       keyId: keyIdForImage,
@@ -1507,7 +1510,7 @@ export function AlfaClubLiquidity({
     };
     const creatorDisplay: TokenDisplay = {
       symbol: creatorSymbol,
-      name: snapshot?.creatorCoinName ?? "AKITA Creator Coin",
+      name: snapshot?.creatorCoinName ?? fundingLane.pairName,
       logoUrl: logoUrl ?? null,
     };
     const payingWithEth = mode === "buyWithEth";
@@ -1591,7 +1594,7 @@ export function AlfaClubLiquidity({
             </div>
             {payingWithEth ? (
               <>
-                <span className="text-zinc-600">ETH → ZORA → {creatorSymbol} → key</span>
+                <span className="text-zinc-600">{fundingLane.routeHint}</span>
                 <label className="ml-auto inline-flex items-center gap-1.5 text-zinc-500">
                   Keys
                   <input
@@ -1648,10 +1651,10 @@ export function AlfaClubLiquidity({
               ? ALFACLUB.friendKey
               : payingWithEth
                 ? NATIVE_TOKEN_ADDRESS
-                : ROOM_1659_CREATOR_COIN
+                : pairErc20
           }
           tokenOutAddress={
-            sellingKeys ? ROOM_1659_CREATOR_COIN : ALFACLUB.friendKey
+            sellingKeys ? pairErc20 : ALFACLUB.friendKey
           }
           isConnected={Boolean(executionAddress)}
           isReady={!disabledReason && !isSubmitting && !switchingChain}
@@ -1659,7 +1662,7 @@ export function AlfaClubLiquidity({
           status={lastHash}
           error={hardError}
           routeSummary={
-            payingWithEth ? "ETH → ZORA → AKITA → Sudoswap" : "Sudoswap v2"
+            payingWithEth ? fundingLane.routeSummary : "Sudoswap v2"
           }
           gasEstimateLabel={
             executionMode === "canonical" ? "Sponsored" : null
@@ -1822,7 +1825,7 @@ export function AlfaClubLiquidity({
                   <div className="flex min-w-0 items-center gap-1.5 text-zinc-300">
                     <TokenAvatar
                       token={{
-                        address: ROOM_1659_CREATOR_COIN,
+                        address: pairErc20,
                         symbol: creatorSymbol,
                         logoUrl: logoUrl ?? undefined,
                       }}
