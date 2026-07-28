@@ -76,12 +76,11 @@ Docs index: https://www.tribe.run/docs — also `llms.txt` / `llms-full.txt` for
 
 ## ODA / LeftClaw public contracts pin (operator)
 
-Slim audit slice lives on `4626fun/4626` (not a full monorepo mirror).
+Slim audit slice lives on [`4626fun/4626`](https://github.com/4626fun/4626) (not a full monorepo mirror). **One branch:** `main`.
 
 | Pin | Use |
 |-----|-----|
-| **Current** [`audit/oda-2026-07-28-agent-lane`](https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts) @ `0c47be2` | Auditor / research source of truth — creator **and agent** vault stacks |
-| Branch tip `audit/oda-v1200-greenfield-candidate` | Same slice; may move on re-sync |
-| July 22 `423e0e3` / July 23 `413f060` | Immutable historical pins |
+| **Current** [`contracts/`](https://github.com/4626fun/4626/tree/main/contracts) on `main` | Auditor / research source of truth — creator **and agent** vault stacks |
+| Tags `audit/oda-2026-07-22`, `audit/oda-2026-07-23-remediated`, `audit/oda-2026-07-28-*` | Immutable historical pins (prefer tags over deleted `audit/*` branches) |
 
 Private `wenakita/4626` remains build/deploy source of truth. Publishing a pin ≠ Base redeploy.
