@@ -1366,8 +1366,9 @@ a {
   position: relative;
   z-index: 1;
   border-top: 1px solid var(--line);
-  margin-top: 40px;
-  padding: 28px var(--pad-x) 40px;
+  margin-top: 0;
+  padding: 36px var(--pad-x) 48px;
+  background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.015) 100%);
 }
 .foot__row {
   max-width: var(--max);
@@ -2107,7 +2108,7 @@ svg.hero__lightning #hero-lightning-bolts path {
   position: relative;
   width: 100vw;
   margin-left: calc(50% - 50vw);
-  height: 280vh;
+  height: 220vh;
   /* No section-level background darkening at all. The radial vignette
      that was here previously was making the top of this section slightly
      LIGHTER than the body's flat dark below the hero, creating a visible
@@ -2279,7 +2280,7 @@ svg.hero__lightning #hero-lightning-bolts path {
 .reveal.is-revealed-4 .reveal__scrollhint { opacity: 1; }
 
 @media (max-width: 720px) {
-  .reveal { height: 240vh; }
+  .reveal { height: 200vh; }
   .reveal__title { font-size: clamp(40px, 12vw, 64px); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -4360,15 +4361,15 @@ html body.is-folding > header {
 .page-flow-section::before {
   top: 0;
   background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
-  opacity: 0.85;
+  opacity: 0.55;
 }
 .page-flow-section::after {
   bottom: 0;
   background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
-  opacity: 0.85;
+  opacity: 0.45;
 }
-.reveal.page-flow-section::before { opacity: 0.55; }
-.mkt-scrollstory.page-flow-section::before { opacity: 0.65; }
+.reveal.page-flow-section::before { opacity: 0.35; }
+.mkt-scrollstory.page-flow-section::before { opacity: 0.4; }
 
 /* Subtle ambient tone per section zone */
 .mkt-scrollstory.page-flow-section {
@@ -5019,10 +5020,14 @@ html.nav-drawer-open body {
 }
 
 /* Vault previews */
-.mkt-vaults { display: flex; flex-direction: column; gap: 20px; }
+.mkt-vaults { display: flex; flex-direction: column; gap: 22px; max-width: 40rem; }
 .mkt-vault {
-  padding: clamp(22px, 3vw, 28px);
-  border-color: color-mix(in srgb, var(--vault-accent, #4d7eff) 18%, rgba(255, 255, 255, 0.05));
+  padding: clamp(24px, 3.2vw, 32px);
+  border-color: color-mix(in srgb, var(--vault-accent, #4d7eff) 22%, rgba(255, 255, 255, 0.06));
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 60px -20px color-mix(in srgb, var(--vault-accent, #4d7eff) 35%, transparent);
   transition: opacity 0.25s var(--ease), transform 0.25s var(--ease), border-color 0.4s var(--ease);
 }
 .mkt-vault__badge {
@@ -5128,27 +5133,64 @@ html.nav-drawer-open body {
   transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
 }
 
-/* Features grid */
+/* Features grid — editorial cards, matching hero serif language */
 .mkt-feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
+}
+@media (min-width: 960px) {
+  .mkt-feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
 }
 .mkt-feature {
-  padding: clamp(20px, 2.5vw, 24px);
+  position: relative;
+  padding: clamp(22px, 2.8vw, 28px);
+  overflow: hidden;
+  transition:
+    border-color 0.35s var(--ease),
+    transform 0.35s var(--ease),
+    box-shadow 0.35s var(--ease);
+}
+.mkt-feature::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(232, 185, 100, 0.45) 50%,
+    transparent 100%
+  );
+  opacity: 0.7;
+}
+.mkt-feature:hover {
+  border-color: rgba(232, 185, 100, 0.18);
+  transform: translateY(-2px);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 40px -16px rgba(232, 185, 100, 0.18);
 }
 .mkt-feature h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  font-family: var(--serif);
+  font-size: clamp(1.05rem, 1.4vw, 1.25rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #fafafa;
 }
 .mkt-feature p {
   margin: 0;
   font-size: 13px;
   font-weight: 300;
-  line-height: 1.6;
+  line-height: 1.65;
   color: #a1a1aa;
 }
 
@@ -5178,13 +5220,16 @@ html.nav-drawer-open body {
 }
 
 /* =============================================================
-   MKT SCROLL-STORY — pinned cumulative step reveal (#lifecycle)
+   MKT SCROLL-STORY — keynote one-step reveal (#lifecycle)
+   Desktop + mobile: show ONE active step at a time (like the
+   typography reveal above). The old cumulative stack left clipped
+   cards, header collisions, and large empty black voids.
    ============================================================= */
 .mkt-scrollstory {
   position: relative;
   width: 100vw;
   margin-left: calc(50% - 50vw);
-  height: 420vh;
+  height: 360vh;
   overflow: clip;
   isolation: isolate;
   background: transparent;
@@ -5203,97 +5248,131 @@ html.nav-drawer-open body {
   width: 100%;
   max-width: 56rem;
   margin: 0 auto;
-  padding: clamp(72px, 10vh, 96px) clamp(16px, 4vw, 24px) clamp(32px, 5vh, 48px);
+  padding: clamp(88px, 11vh, 112px) clamp(16px, 4vw, 24px) clamp(28px, 4vh, 40px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 100vh;
   box-sizing: border-box;
 }
 .mkt-scrollstory .mkt-intro {
-  margin-bottom: clamp(16px, 2.5vh, 28px);
+  margin-bottom: clamp(18px, 2.8vh, 28px);
   flex-shrink: 0;
 }
+.mkt-scrollstory .mkt-headline {
+  margin-bottom: 12px;
+}
+.mkt-scrollstory .mkt-lede {
+  max-width: 34rem;
+}
+
+/* Stage holds a single full-height step card — no translate stack */
 .mkt-scrollstory__stage {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: calc(100vh - clamp(220px, 32vh, 300px));
+  max-height: none;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
-          mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
+  display: flex;
+  align-items: flex-start;
+  /* Soft bottom fade only — never clip titles against the headline */
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 92%, transparent 100%);
+          mask-image: linear-gradient(to bottom, black 0%, black 92%, transparent 100%);
 }
 .mkt-scrollstory__track {
-  transform: translateY(var(--story-offset, 0));
-  transition: transform 0.85s cubic-bezier(0.2, 0.7, 0.2, 1);
-  will-change: transform;
+  position: relative;
+  width: 100%;
+  transform: none !important;
+  transition: none;
+  will-change: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+/* Progress rail becomes a vertical accent next to the active step only */
+.mkt-scrollstory .mkt-timeline {
+  gap: 0;
 }
 .mkt-scrollstory .mkt-timeline__rail {
-  bottom: auto;
-  height: var(--story-rail-height, 72px);
-  transition: height 0.85s var(--ease);
+  display: none;
 }
+
+/* Default: all steps hidden */
 .mkt-scrollstory .mkt-step {
   display: none;
   opacity: 0;
-  transform: translateY(20px) scale(0.98);
+  transform: translateY(18px);
   pointer-events: none;
   transition:
-    opacity 0.75s cubic-bezier(0.2, 0.7, 0.2, 1),
-    transform 0.75s cubic-bezier(0.2, 0.7, 0.2, 1);
+    opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
+/* Keynote: only the active step is shown */
 .mkt-scrollstory.is-story-1 .mkt-step[data-story-step="1"],
-.mkt-scrollstory.is-story-2 .mkt-step[data-story-step="1"],
 .mkt-scrollstory.is-story-2 .mkt-step[data-story-step="2"],
-.mkt-scrollstory.is-story-3 .mkt-step[data-story-step="1"],
-.mkt-scrollstory.is-story-3 .mkt-step[data-story-step="2"],
 .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="3"],
-.mkt-scrollstory.is-story-4 .mkt-step {
+.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="4"] {
   display: flex;
   opacity: 1;
   pointer-events: auto;
   transform: none;
 }
-.mkt-scrollstory.is-story-2 .mkt-step[data-story-step="1"] {
-  opacity: 0.85;
-  transform: scale(0.97);
-}
-.mkt-scrollstory.is-story-3 .mkt-step[data-story-step="1"] {
-  opacity: 0.72;
-  transform: scale(0.94);
-}
-.mkt-scrollstory.is-story-3 .mkt-step[data-story-step="2"] {
-  opacity: 0.85;
-  transform: scale(0.97);
-}
-.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="1"] {
-  opacity: 0.65;
-  transform: scale(0.91);
-}
-.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="2"] {
-  opacity: 0.75;
-  transform: scale(0.94);
-}
-.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="3"] {
-  opacity: 0.85;
-  transform: scale(0.97);
-}
-.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="4"] {
-  opacity: 1;
-  transform: none;
-}
+
+/* Bars fill when their step is active */
 .mkt-scrollstory .mkt-bar i { width: 0; }
+.mkt-scrollstory.is-story-1 .mkt-step[data-story-step="1"] .mkt-bar i,
+.mkt-scrollstory.is-story-2 .mkt-step[data-story-step="2"] .mkt-bar i,
 .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="3"] .mkt-bar i,
-.mkt-scrollstory.is-story-4 .mkt-step[data-story-step="3"] .mkt-bar i,
 .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="4"] .mkt-bar i {
   width: var(--pct, 0%);
 }
+
+/* Step badge sits as a gold-tinted pill */
+.mkt-scrollstory .mkt-step {
+  padding-left: 0;
+  gap: 14px;
+}
+.mkt-scrollstory .mkt-step__badge {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 185, 100, 0.22);
+  background: rgba(232, 185, 100, 0.06);
+  color: rgba(245, 209, 130, 0.85);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  place-items: center;
+  display: inline-grid;
+  margin-bottom: 2px;
+}
+.mkt-scrollstory .mkt-step__panel {
+  padding: clamp(20px, 2.8vw, 30px);
+  /* Soft gold edge to match hero / CTA lockups */
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Compact strategy tiles on the earn step so it fits a single viewport */
+.mkt-scrollstory .mkt-strategy-grid {
+  gap: 10px;
+}
+.mkt-scrollstory .mkt-strategy {
+  padding: 12px;
+}
+.mkt-scrollstory .mkt-alloc {
+  gap: 14px;
+}
+
 .mkt-scrollstory__footer {
   flex-shrink: 0;
-  margin-top: clamp(16px, 2.5vh, 24px);
+  margin-top: clamp(14px, 2vh, 22px);
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(10px);
   pointer-events: none;
-  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+  transition: opacity 0.65s var(--ease), transform 0.65s var(--ease);
 }
 .mkt-scrollstory.is-story-done .mkt-scrollstory__footer {
   opacity: 1;
@@ -5301,9 +5380,31 @@ html.nav-drawer-open body {
   pointer-events: auto;
 }
 
+/* Step progress dots (driven by is-story-N on the section) */
+.mkt-scrollstory__dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.mkt-scrollstory__dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.35s var(--ease), transform 0.35s var(--ease), width 0.35s var(--ease);
+}
+.mkt-scrollstory.is-story-1 .mkt-scrollstory__dots span:nth-child(1),
+.mkt-scrollstory.is-story-2 .mkt-scrollstory__dots span:nth-child(2),
+.mkt-scrollstory.is-story-3 .mkt-scrollstory__dots span:nth-child(3),
+.mkt-scrollstory.is-story-4 .mkt-scrollstory__dots span:nth-child(4) {
+  width: 22px;
+  background: linear-gradient(90deg, #d8a64a, #f5d182);
+  transform: none;
+}
+
 @media (max-width: 720px) {
-  /* Slower, reveal-style pacing — one step at a time, intro pinned at top */
-  .mkt-scrollstory { height: 360vh; }
+  .mkt-scrollstory { height: 340vh; }
 
   .mkt-scrollstory__pin {
     align-items: stretch;
@@ -5321,12 +5422,12 @@ html.nav-drawer-open body {
   }
 
   .mkt-scrollstory .mkt-intro {
-    margin-bottom: clamp(14px, 2vh, 22px);
+    margin-bottom: clamp(12px, 1.8vh, 18px);
   }
 
   .mkt-scrollstory .mkt-headline {
     font-size: clamp(1.65rem, 7.5vw, 2.15rem);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .mkt-scrollstory .mkt-lede {
@@ -5339,36 +5440,8 @@ html.nav-drawer-open body {
     min-height: 0;
     max-height: none;
     overflow: hidden;
-    /* Drop the top fade — it was clipping step titles near the section headline */
     -webkit-mask-image: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);
             mask-image: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);
-  }
-
-  .mkt-scrollstory__track {
-    transform: none !important;
-    transition: none;
-  }
-
-  /* Mobile: reveal-style — show only the active step, not a scrolling stack */
-  .mkt-scrollstory.is-story-1 .mkt-step[data-story-step="1"],
-  .mkt-scrollstory.is-story-2 .mkt-step[data-story-step="2"],
-  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="3"],
-  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="4"] {
-    display: flex;
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-
-  .mkt-scrollstory.is-story-2 .mkt-step[data-story-step="1"],
-  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="1"],
-  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="2"],
-  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="1"],
-  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="2"],
-  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="3"] {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
   }
 
   .mkt-scrollstory .mkt-step__panel {
@@ -5382,7 +5455,12 @@ html.nav-drawer-open body {
   }
   .mkt-scrollstory .mkt-strategy {
     padding: 12px 0;
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
+  .mkt-scrollstory .mkt-strategy:last-child { border-bottom: 0; }
   .mkt-scrollstory .mkt-strategy p,
   .mkt-scrollstory .mkt-alloc li p {
     font-size: 12px;
@@ -5415,6 +5493,9 @@ html.nav-drawer-open body {
   }
   .mkt-scrollstory__track {
     transform: none !important;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
   .mkt-scrollstory .mkt-step {
     display: flex !important;
@@ -5430,4 +5511,5 @@ html.nav-drawer-open body {
   .mkt-scrollstory .mkt-bar i {
     width: var(--pct, 0%) !important;
   }
+  .mkt-scrollstory__dots { display: none; }
 }
