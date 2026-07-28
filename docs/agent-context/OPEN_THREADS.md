@@ -1,6 +1,6 @@
 # Open threads & next prompts
 
-Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat** for each item below — do not continue this optimization thread.
+Generated 2026-07-15 from transcript scan + repo state. **Refreshed 2026-07-28** — status annotations added per item (rotations executed, deploy-guards resolved, stash count grew). **Start a new Agent chat** for each item below — do not continue this optimization thread.
 
 ## Conversation hygiene
 
@@ -26,6 +26,8 @@ Generated 2026-07-15 from transcript scan + repo state. **Start a new Agent chat
 ## Open — product / ops
 
 ### 1. v1.19.3 / v1.19.4 Creator `/deploy` canary (highest priority)
+
+> **2026-07-28 status: rotations EXECUTED.** `RotateLiveBatcherPhase1ModulesV193` 5/5 txs (Jul 19), `RotateLiveBatcherCreatorCoreV194` 2/2 txs (Jul 24), 0 failed (broadcast `run-latest.json` receipts, Base 8453). `releases/current.md` already names v1.19.3 + v1.19.4 as current. **Still open:** record the Creator production `/deploy` canary outcome, then close.
 
 **Repo truth:** `docs/reference/addresses.md` — **v1.19.1 greenfield shell** with
 **v1.19.3 bytecode** and **v1.19.4 Creator-core Phase1Module** `0x8C1C6C10…`
@@ -60,6 +62,8 @@ Report every exit code.
 
 ### 2. `validate:deploy-guards` (pre-existing)
 
+> **2026-07-28 status: RESOLVED.** `pnpm -C frontend validate:deploy-guards` EXIT=0 — `guard:registry4626-naming` and `guard:canonical-csw` both pass. Item can be removed on next regeneration.
+
 `pnpm -C frontend validate:deploy-guards` fails on **`guard:registry4626-naming`** — legacy `bribeDepot` / `setVe4626*` naming in tests/server. Not introduced by context optimization.
 
 **Paste:**
@@ -75,6 +79,8 @@ Smallest safe diff — rename to canonical *4626 forms only where guard requires
 ```
 
 ### 3. Stale git stash
+
+> **2026-07-28 status: WORSE — 38 stashes** (34 when written; 9 are lint-staged automatic backups). Automation arc adds ~2/day. Triage deferred until the branch-cycling session settles.
 
 `git stash list` shows `wip-unrelated-before-room-chat-auth` and older lint-staged backups. Review or drop if obsolete:
 
