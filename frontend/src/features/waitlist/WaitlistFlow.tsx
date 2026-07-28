@@ -23,15 +23,16 @@ import { Button } from '@/components/ui/Button'
 import { InputOTP, type InputOTPStatus } from '@/components/ui/InputOTP'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { cn } from '@/lib/shared/utils'
-import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import {
   isWaitlistStartAuthSearchParam,
+  normalizeWaitlistReferralCode,
+  readStoredWaitlistReferralCode,
   readWaitlistAlfaClubReturnPath,
+  storeWaitlistReferralCode,
   WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
-import { getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   createAlfaClubAuthHandoffTarget,
@@ -80,6 +81,12 @@ import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { appendLocalhostPrivyAuthNoteIfNeeded } from '@/lib/privy/localhostPrivyAuthNotice'
 import { useWaitlistZoraOAuthReturnRecovery } from '@/lib/privy/useWaitlistZoraOAuthReturnRecovery'
 import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
+import { WaitlistAtmosphere } from '@/features/waitlist/WaitlistAtmosphere'
+import { WaitlistJoinPanel } from '@/features/waitlist/WaitlistJoinPanel'
+import { WaitlistGameDashboard } from '@/features/waitlist/WaitlistGameDashboard'
+import { useWaitlistGameHq } from '@/features/waitlist/useWaitlistGameHq'
+import { WAITLIST_JOIN_POINTS } from '@/features/waitlist/waitlistGameConstants'
+import { toast } from '@/components/ui/Toast'
 import {
   linkAndSyncPrivyProvider,
   syncAccountsProviderLink,
@@ -664,6 +671,27 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       return false
     }
   }, [])
+
+  // Capture `?ref=CODE` into the same session store used by `/r/:code` invite entry.
+  const [landingReferralCode, setLandingReferralCode] = useState<string | null>(() =>
+    readStoredWaitlistReferralCode(),
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const fromQuery = normalizeWaitlistReferralCode(params.get('ref'))
+      if (fromQuery) {
+        storeWaitlistReferralCode(fromQuery)
+        setLandingReferralCode(fromQuery)
+        return
+      }
+      setLandingReferralCode(readStoredWaitlistReferralCode())
+    } catch {
+      setLandingReferralCode(readStoredWaitlistReferralCode())
+    }
+  }, [])
+
   const alfaClubReturnPath = useMemo(
     () =>
       typeof window === 'undefined'
@@ -939,6 +967,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     // Optimistic bump so the dock doesn't wait on CDN/in-process cache after join.
     setListCount((current) => (current == null ? current : current + 1))
     void fetchWaitlistStats({ fresh: true })
+    toast.success(`+${WAITLIST_JOIN_POINTS} points — Welcome to Creator Vaults. You're on the list.`)
   }, [fetchWaitlistStats])
 
   const handleAlfaClubContinue = useCallback(async () => {
@@ -1268,6 +1297,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   const handleEngagementProgressVerified = useCallback(() => {
     markXPhaseDone()
+    toast.success('X engagement verified — points updated')
   }, [markXPhaseDone])
 
   // Edit = unlink then re-open the connect panel for that provider, so users
@@ -1462,6 +1492,12 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const appAccepted = resolveWaitlistAppAccepted({
     sessionAppAccessStatus: waitlistMeQuery.data?.appAccessStatus,
     accountAppAccessStatus: accountMe?.appAccessStatus,
+  })
+  const gameHq = useWaitlistGameHq({
+    enabled: Boolean(joinedSessionAddress),
+    accountMe,
+    getPrivyAccessToken,
+    joinedSessionAddress,
   })
   const showEmailSignupForm = shouldShowWaitlistEmailSignup({
     joinedSessionAddress,
@@ -1712,21 +1748,196 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       : { opacity: 0, y: -14, scale: 0.98, filter: 'blur(4px)' },
   }
 
+  const hqTaskStepKey =
+    activeStepKey === 'x-link' || activeStepKey === 'x-engagement'
+      ? ('x' as const)
+      : activeStepKey === 'wallet'
+        ? ('wallet' as const)
+        : activeStepKey === 'zora'
+          ? ('zora' as const)
+          : null
+
+  const continueSlot =
+    appAccepted ? (
+      <MagneticButton>
+        {alfaClubReturnPath ? (
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
+            disabled={continueBusy}
+            onClick={() => void handleAlfaClubContinue()}
+          >
+            <ButtonSheen />
+            <span className="relative z-10 inline-flex items-center gap-2.5">
+              {continueBusy ? 'Returning to AlfaClub…' : 'Return to AlfaClub'}
+              <ArrowRight
+                className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
+            disabled={continueBusy}
+            onClick={() => void handleAppContinue()}
+          >
+            <ButtonSheen />
+            <span className="relative z-10 inline-flex items-center gap-2.5">
+              {continueBusy ? 'Entering app…' : 'Enter app'}
+              <ArrowRight
+                className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </span>
+          </Button>
+        )}
+      </MagneticButton>
+    ) : null
+
+  const hqActiveStep = (
+    <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
+      {activeStepKey === 'x-link' ? (
+        <motion.div
+          key="hq-x-link"
+          custom={linkingDirection}
+          variants={stepVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <WaitlistTwitterLinkPanel
+            busy={twitterBusy}
+            onConnect={() => {
+              setTwitterError(null)
+              void handleLinkTwitter()
+            }}
+            onSkip={handleSkipXPhase}
+          />
+        </motion.div>
+      ) : activeStepKey === 'x-engagement' ? (
+        <motion.div
+          key="hq-x-engagement"
+          custom={linkingDirection}
+          variants={stepVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <WaitlistTwitterEngagementSteps
+            getAccessToken={getPrivyAccessToken}
+            onProgressVerified={handleEngagementProgressVerified}
+            onSkip={handleSkipXPhase}
+          />
+        </motion.div>
+      ) : activeStepKey === 'wallet' ? (
+        <motion.div
+          key="hq-wallet"
+          custom={linkingDirection}
+          variants={stepVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <WaitlistWalletConnectPanel
+            busy={walletBusy}
+            onConnect={() => {
+              setWalletError(null)
+              void handleLinkWallet()
+            }}
+            onSkip={handleSkipWallet}
+          />
+        </motion.div>
+      ) : activeStepKey === 'zora' ? (
+        <motion.div
+          key="hq-zora"
+          custom={linkingDirection}
+          variants={stepVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <WaitlistZoraConnectPanel
+            busy={zoraBusy}
+            onConnect={() => {
+              setZoraError(null)
+              void handleLinkZora()
+            }}
+            onSkip={handleSkipZora}
+          />
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  )
+
+  const hqReminders = (
+    <AnimatePresence initial={false}>
+      {xSkippedWithoutLink ? (
+        <motion.div
+          key="hq-reminder-x"
+          variants={reminderVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <SkippedStepReminder
+            label="X"
+            points={PROVIDER_POINTS.twitter ?? 0}
+            onLinkNow={handleUndoSkipX}
+          />
+        </motion.div>
+      ) : null}
+      {showWalletSkippedReminder ? (
+        <motion.div
+          key="hq-reminder-wallet"
+          variants={reminderVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <SkippedStepReminder
+            label="Wallet"
+            points={PROVIDER_POINTS.external_eoa ?? 0}
+            onLinkNow={handleUndoSkipWallet}
+          />
+        </motion.div>
+      ) : null}
+      {showZoraSkippedReminder ? (
+        <motion.div
+          key="hq-reminder-zora"
+          variants={reminderVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={stepTransition}
+        >
+          <SkippedStepReminder
+            label="Zora"
+            points={PROVIDER_POINTS.zora_cross_app ?? 0}
+            onLinkNow={handleUndoSkipZora}
+          />
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  )
+
   return (
     <section
       id={sectionId}
       className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden"
     >
-      {/* Ambient background — faint wire grid + bottom fade */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute inset-0 bg-wire-grid opacity-[0.035]" />
-        <div
-          className="absolute inset-x-0 bottom-0 h-32"
-          style={{
-            background: 'linear-gradient(to bottom, transparent, rgb(var(--vault-bg) / 0.9))',
-          }}
-        />
-      </div>
+      <WaitlistAtmosphere />
 
       <div className="relative mx-auto w-full max-w-md px-4 py-10 sm:px-6 sm:py-14">
         <motion.div
@@ -1736,30 +1947,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative w-full space-y-5 sm:space-y-6"
         >
-          {/* Persistent brand mark — shown across every step of the flow (signup, code) as
-              a clickable escape hatch back to 4626.fun. Hidden once approved: the success
-              state below renders the same mark as its own indicator, so keeping this one
-              too would show the logo twice on one screen. */}
-          {!(joinedSessionAddress && appAccepted) ? (
-            <div className="flex justify-center">
-              <a
-                href={getMarketingBaseUrl()}
-                aria-label="Back to 4626.fun"
-                title="Back to 4626.fun"
-                className="brand-mark-3d flex size-12 items-center justify-center overflow-hidden rounded-2xl sm:size-[52px]"
-              >
-                <img
-                  src={siteAssets.logo}
-                  alt="4626"
-                  width={52}
-                  height={52}
-                  draggable={false}
-                  className="size-full scale-[1.316] select-none object-contain"
-                />
-              </a>
-            </div>
-          ) : null}
-
           <AnimatePresence mode="wait" initial={false}>
             {joinedSessionAddress ? (
               <motion.div
@@ -1769,108 +1956,37 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                className="space-y-6 sm:space-y-7"
+                transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
               >
-            <div className="text-center">
-              <div className="flex flex-col items-center gap-3">
-                {appAccepted ? (
-                  // Same brand mark as the pre-join header — no ambient glow.
-                  <motion.div
-                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                    className="relative flex items-center justify-center"
-                  >
-                    <span className="brand-mark-3d flex size-14 items-center justify-center overflow-hidden rounded-2xl">
-                      <img
-                        src={siteAssets.logo}
-                        alt=""
-                        aria-hidden="true"
-                        draggable={false}
-                        className="size-full scale-[1.316] select-none object-contain"
-                      />
-                    </span>
-                  </motion.div>
-                ) : null}
-
-                <div className="space-y-1">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.h1
-                      key={appAccepted ? 'approved' : 'listed'}
-                      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                      className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl"
-                    >
-                      {appAccepted ? "You're approved" : "You're on the list"}
-                    </motion.h1>
-                  </AnimatePresence>
-                  <WaitlistWelcomeGreeting
-                    accountMe={accountMe}
-                    accountMeLoading={accountMeLoading}
-                    walletReturnAddress={
-                      returningViaWallet
-                        ? (props.walletSessionAddress ??
-                          accountMe?.linkedMethods?.external_eoa?.[0] ??
-                          null)
-                        : null
-                    }
-                    returningViaWallet={returningViaWallet}
-                  />
-                  {appAccepted ? null : (
-                    <p className="text-sm leading-relaxed text-zinc-400">
-                      We'll notify you when your spot opens.
-                    </p>
-                  )}
-                </div>
-
-                {appAccepted ? (
-                  <div className="w-full pt-2">
-                    <MagneticButton>
-                      {alfaClubReturnPath ? (
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="lg"
-                          className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
-                          disabled={continueBusy}
-                          onClick={() => void handleAlfaClubContinue()}
-                        >
-                          <ButtonSheen />
-                          <span className="relative z-10 inline-flex items-center gap-2.5">
-                            {continueBusy ? 'Returning to AlfaClub…' : 'Return to AlfaClub'}
-                            <ArrowRight
-                              className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="lg"
-                          className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
-                          disabled={continueBusy}
-                          onClick={() => void handleAppContinue()}
-                        >
-                          <ButtonSheen />
-                          <span className="relative z-10 inline-flex items-center gap-2.5">
-                            {continueBusy ? 'Entering app…' : 'Enter app'}
-                            <ArrowRight
-                              className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </Button>
-                      )}
-                    </MagneticButton>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+                <WaitlistGameDashboard
+                  appAccepted={appAccepted}
+                  greeting={
+                    <WaitlistWelcomeGreeting
+                      accountMe={accountMe}
+                      accountMeLoading={accountMeLoading}
+                      walletReturnAddress={
+                        returningViaWallet
+                          ? (props.walletSessionAddress ??
+                            accountMe?.linkedMethods?.external_eoa?.[0] ??
+                            null)
+                          : null
+                      }
+                      returningViaWallet={returningViaWallet}
+                    />
+                  }
+                  hq={gameHq}
+                  continueSlot={continueSlot}
+                  socialProof={renderSocialProof(false)}
+                  tasks={{
+                    twitterLinked,
+                    xPhaseDone,
+                    walletLinked: walletIdentityLinked,
+                    zoraLinked,
+                    activeStepKey: hqTaskStepKey,
+                    activeStep: hqActiveStep,
+                    reminders: hqReminders,
+                  }}
+                />
               </motion.div>
             ) : (
               <motion.div
@@ -1880,29 +1996,34 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                className="space-y-6 sm:space-y-7"
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               >
-            <>
-              <div className="space-y-3 text-center">
-                <span className="mx-auto inline-flex items-center gap-1.5 text-[11px] font-medium tracking-[0.08em] text-zinc-500">
-                  <span
-                    className="size-1 rounded-full bg-[rgb(var(--brand-primary))]"
-                    aria-hidden="true"
-                  />
-                  early access
-                </span>
-                <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
-                  Join the waitlist
-                </h1>
-                {!showEmailSignupForm || walletSignInPending ? (
-                  <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">
-                    {walletSignInPending
-                      ? 'Sign in with your linked wallet to continue.'
-                      : 'Restoring your waitlist session…'}
-                  </p>
-                ) : null}
-              </div>
+              <WaitlistJoinPanel
+                referralCode={landingReferralCode}
+                socialProof={<div className="text-center">{renderSocialProof(true)}</div>}
+                returningWallet={
+                  (showEmailSignupForm && step === 'email') || walletSignInPending ? (
+                    <WaitlistReturningWalletSignIn
+                      busy={walletSignInPending}
+                      onSignIn={handleSignInWithLinkedWallet}
+                      onCancel={onCancelWalletSignIn}
+                      labelSlot={
+                        <WaitlistAlreadyJoinedSlot
+                          dockPhase={alreadyJoinedDockPhase}
+                          joinedLabel={joinedCount}
+                        />
+                      }
+                    />
+                  ) : null
+                }
+              >
+              {!showEmailSignupForm || walletSignInPending ? (
+                <p className="mx-auto mb-3 max-w-xs text-center text-sm leading-relaxed text-zinc-400">
+                  {walletSignInPending
+                    ? 'Sign in with your linked wallet to continue.'
+                    : 'Restoring your waitlist session…'}
+                </p>
+              ) : null}
 
               {showEmailSignupForm ? (
                 <BeamCard className="p-5 sm:p-6" accent={otpSubmitPhase === 'verified' ? 'success' : 'default'}>
@@ -2133,23 +2254,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                   </div>
                 </BeamCard>
               ) : null}
-
-              <div className="text-center">{renderSocialProof(true)}</div>
-
-              {(showEmailSignupForm && step === 'email') || walletSignInPending ? (
-                <WaitlistReturningWalletSignIn
-                  busy={walletSignInPending}
-                  onSignIn={handleSignInWithLinkedWallet}
-                  onCancel={onCancelWalletSignIn}
-                  labelSlot={
-                    <WaitlistAlreadyJoinedSlot
-                      dockPhase={alreadyJoinedDockPhase}
-                      joinedLabel={joinedCount}
-                    />
-                  }
-                />
-              ) : null}
-            </>
+              </WaitlistJoinPanel>
               </motion.div>
             )}
           </AnimatePresence>
@@ -2163,8 +2268,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
               <p className="text-sm leading-relaxed text-rose-200">{error}</p>
             </div>
           ) : null}
-
-          {joinedSessionAddress ? renderSocialProof(false) : null}
         </motion.div>
       </div>
 
