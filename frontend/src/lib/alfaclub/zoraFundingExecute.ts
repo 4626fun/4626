@@ -230,6 +230,12 @@ export function assertZoraFundingExecute(
     if (!input) throw new Error('ETH funding router command input is missing')
 
     if (command === CMD_WRAP_ETH) {
+      if (sawWrapEth) {
+        throw new Error('ETH funding quote must wrap ETH only once')
+      }
+      if (sawPermit2TransferWeth) {
+        throw new Error('ETH funding quote must not combine WRAP_ETH with Permit2 WETH pulls')
+      }
       const [recipient, amount] = decodeAbiParameters(WRAP_ETH_PARAMS, input)
       if (
         getAddress(recipient) !== ADDRESS_THIS &&
@@ -264,6 +270,17 @@ export function assertZoraFundingExecute(
     }
 
     if (command === CMD_PERMIT2_TRANSFER_FROM) {
+      // One reviewed WETH deposit only. A second pull (or Permit2 after WRAP_ETH) plus
+      // amountIn=CONTRACT_BALANCE would spend multiples of the user-reviewed amount.
+      if (params.mode === 'nativeEth') {
+        throw new Error('Native ETH funding must not pull WETH through Permit2')
+      }
+      if (sawWrapEth) {
+        throw new Error('ETH funding quote must not combine WRAP_ETH with Permit2 WETH pulls')
+      }
+      if (sawPermit2TransferWeth) {
+        throw new Error('ETH funding quote must pull deposited WETH through Permit2 only once')
+      }
       const [token, recipient, amount] = decodeAbiParameters(PERMIT2_TRANSFER_PARAMS, input)
       if (getAddress(token) !== BASE_WETH_TOKEN) {
         throw new Error('ETH funding Permit2 transfer must pull WETH only')

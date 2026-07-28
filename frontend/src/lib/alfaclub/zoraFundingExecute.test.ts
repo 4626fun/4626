@@ -3,8 +3,10 @@ import { getAddress } from 'viem'
 
 import { assertZoraFundingExecute } from './zoraFundingExecute'
 import {
+  encodeDoublePermit2WethFundingExecute,
   encodeMinimalNativeEthFundingExecute,
   encodeMinimalWethFundingExecute,
+  encodeNativeEthFundingWithPermit2Pull,
   encodeWethFundingWithV4SettlePull,
 } from './zoraFundingExecuteFixtures'
 
@@ -46,6 +48,38 @@ describe('assertZoraFundingExecute', () => {
         mode: 'wethPermit2',
       }),
     ).toThrow(/must not pull V3 input from the user/i)
+  })
+
+  it('rejects a second Permit2 WETH pull of the reviewed amount', () => {
+    const data = encodeDoublePermit2WethFundingExecute({
+      inputAmount: 1_000_000_000_000_000n,
+      amountOutMinimum: 250n,
+    })
+    expect(() =>
+      assertZoraFundingExecute({
+        data,
+        sender: SENDER,
+        creatorCoin: CREATOR,
+        inputAmount: 1_000_000_000_000_000n,
+        mode: 'wethPermit2',
+      }),
+    ).toThrow(/Permit2 only once/i)
+  })
+
+  it('rejects Permit2 WETH pulls on native ETH funding plans', () => {
+    const data = encodeNativeEthFundingWithPermit2Pull({
+      inputAmount: 1_000_000_000_000_000n,
+      amountOutMinimum: 250n,
+    })
+    expect(() =>
+      assertZoraFundingExecute({
+        data,
+        sender: SENDER,
+        creatorCoin: CREATOR,
+        inputAmount: 1_000_000_000_000_000n,
+        mode: 'nativeEth',
+      }),
+    ).toThrow(/must not pull WETH through Permit2/i)
   })
 
   it('rejects V4 SETTLE that pulls an unrelated token from the user', () => {

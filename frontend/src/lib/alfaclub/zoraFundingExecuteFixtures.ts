@@ -9,6 +9,9 @@ import {
   type Hex,
 } from 'viem'
 
+/** Universal Router sentinel: pull the router's full token balance. */
+const UR_CONTRACT_BALANCE = 1n << 255n
+
 const SENDER = getAddress('0x1000000000000000000000000000000000000001')
 const CREATOR = getAddress('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
 const WETH = getAddress('0x4200000000000000000000000000000000000006')
@@ -16,6 +19,38 @@ const ROUTER = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
 const ADDRESS_THIS = getAddress('0x0000000000000000000000000000000000000002')
 
 const EXECUTE_ABI = parseAbi(['function execute(bytes commands, bytes[] inputs) payable'])
+
+function encodePermit2Transfer(token: Address, amount: bigint): Hex {
+  return encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
+    token,
+    ROUTER,
+    amount,
+  ])
+}
+
+function encodeV3SwapExactIn(params: {
+  recipient: Address
+  amountIn: bigint
+  amountOutMinimum: bigint
+  path: Hex
+  payerIsUser?: boolean
+}): Hex {
+  return encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
+    params.recipient,
+    params.amountIn,
+    params.amountOutMinimum,
+    params.path,
+    params.payerIsUser ?? false,
+  ])
+}
+
+function encodeSweep(token: Address, recipient: Address, amountMin: bigint): Hex {
+  return encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
+    token,
+    recipient,
+    amountMin,
+  ])
+}
 
 export function encodeMinimalWethFundingExecute(params: {
   sender?: Address
@@ -34,24 +69,77 @@ export function encodeMinimalWethFundingExecute(params: {
   const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
   const commands = '0x020004' as Hex
   const inputs: Hex[] = [
-    encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
-      transferToken,
-      ROUTER,
-      params.inputAmount,
-    ]),
-    encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
+    encodePermit2Transfer(transferToken, params.inputAmount),
+    encodeV3SwapExactIn({
       recipient,
-      params.inputAmount,
-      params.amountOutMinimum,
+      amountIn: params.inputAmount,
+      amountOutMinimum: params.amountOutMinimum,
       path,
       // Consume WETH already pulled onto the router via Permit2 — never re-pull from user.
-      params.payerIsUser ?? false,
-    ]),
-    encodeAbiParameters(parseAbiParameters('address,address,uint256'), [
-      creatorCoin,
-      recipient,
-      0n,
-    ]),
+      payerIsUser: params.payerIsUser,
+    }),
+    encodeSweep(creatorCoin, recipient, 0n),
+  ]
+  return encodeFunctionData({
+    abi: EXECUTE_ABI,
+    functionName: 'execute',
+    args: [commands, inputs],
+  })
+}
+
+/**
+ * Malicious plan: two Permit2 WETH pulls of the reviewed amount, then swap the
+ * router's full balance (CONTRACT_BALANCE) so spend exceeds the reviewed deposit.
+ */
+export function encodeDoublePermit2WethFundingExecute(params: {
+  sender?: Address
+  creatorCoin?: Address
+  inputAmount: bigint
+  amountOutMinimum: bigint
+}): Hex {
+  const sender = params.sender ?? SENDER
+  const creatorCoin = params.creatorCoin ?? CREATOR
+  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
+  const commands = '0x02020004' as Hex
+  const inputs: Hex[] = [
+    encodePermit2Transfer(WETH, params.inputAmount),
+    encodePermit2Transfer(WETH, params.inputAmount),
+    encodeV3SwapExactIn({
+      recipient: sender,
+      amountIn: UR_CONTRACT_BALANCE,
+      amountOutMinimum: params.amountOutMinimum,
+      path,
+    }),
+    encodeSweep(creatorCoin, sender, 0n),
+  ]
+  return encodeFunctionData({
+    abi: EXECUTE_ABI,
+    functionName: 'execute',
+    args: [commands, inputs],
+  })
+}
+
+/** Malicious native-ETH plan: WRAP_ETH plus an extra Permit2 WETH pull. */
+export function encodeNativeEthFundingWithPermit2Pull(params: {
+  sender?: Address
+  creatorCoin?: Address
+  inputAmount: bigint
+  amountOutMinimum: bigint
+}): Hex {
+  const sender = params.sender ?? SENDER
+  const creatorCoin = params.creatorCoin ?? CREATOR
+  const path = encodePacked(['address', 'uint24', 'address'], [WETH, 3000, creatorCoin])
+  const commands = '0x0b020004' as Hex
+  const inputs: Hex[] = [
+    encodeAbiParameters(parseAbiParameters('address,uint256'), [ADDRESS_THIS, params.inputAmount]),
+    encodePermit2Transfer(WETH, params.inputAmount),
+    encodeV3SwapExactIn({
+      recipient: sender,
+      amountIn: UR_CONTRACT_BALANCE,
+      amountOutMinimum: params.amountOutMinimum,
+      path,
+    }),
+    encodeSweep(creatorCoin, sender, 0n),
   ]
   return encodeFunctionData({
     abi: EXECUTE_ABI,
@@ -130,11 +218,7 @@ export function encodeWethFundingWithV4SettlePull(params: {
   ]
   const commands = '0x0210' as Hex // PERMIT2_TRANSFER_FROM + V4_SWAP
   const inputs: Hex[] = [
-    encodeAbiParameters(parseAbiParameters('address,address,uint160'), [
-      WETH,
-      ROUTER,
-      params.inputAmount,
-    ]),
+    encodePermit2Transfer(WETH, params.inputAmount),
     encodeAbiParameters(parseAbiParameters('bytes,bytes[]'), [v4Actions, v4Params]),
   ]
   return encodeFunctionData({
@@ -156,14 +240,13 @@ export function encodeMinimalNativeEthFundingExecute(params: {
   const commands = '0x0b0004' as Hex
   const inputs: Hex[] = [
     encodeAbiParameters(parseAbiParameters('address,uint256'), [ADDRESS_THIS, params.inputAmount]),
-    encodeAbiParameters(parseAbiParameters('address,uint256,uint256,bytes,bool'), [
-      sender,
-      params.inputAmount,
-      params.amountOutMinimum,
+    encodeV3SwapExactIn({
+      recipient: sender,
+      amountIn: params.inputAmount,
+      amountOutMinimum: params.amountOutMinimum,
       path,
-      false,
-    ]),
-    encodeAbiParameters(parseAbiParameters('address,address,uint256'), [creatorCoin, sender, 0n]),
+    }),
+    encodeSweep(creatorCoin, sender, 0n),
   ]
   return encodeFunctionData({
     abi: EXECUTE_ABI,
