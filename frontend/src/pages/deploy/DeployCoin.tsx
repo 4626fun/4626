@@ -10,6 +10,12 @@ import {
   formatZoraPlatformReferrerLabel,
   getZoraPlatformReferrerAddress,
 } from '@/lib/zora/referrals'
+import {
+  formatVaultDeployUsd,
+  VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD,
+  VAULT_DEPLOY_PROMO_USD,
+  vaultDeployPriceAfterCoinLaunchUsd,
+} from '@/pages/deploy/deployPricing'
 import { useAccountContext } from '@/wallet/accountContext'
 
 type LaunchResult = {
@@ -138,7 +144,14 @@ function LaunchSuccess(props: LaunchResult) {
           <h2 className="text-[18px] font-semibold text-emerald-200">Creator coin is live</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-zinc-400">
             <span className="font-mono text-zinc-300">${props.symbol}</span> launched through 4626
-            with platform referrer set. Next: wrap it in a vault.
+            with platform referrer set. Vault deploy is now{' '}
+            <span className="text-zinc-500 line-through">
+              {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)}
+            </span>{' '}
+            <span className="font-medium text-emerald-200">
+              {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
+            </span>{' '}
+            (−${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD}).
           </p>
         </div>
       </div>
@@ -180,7 +193,7 @@ function LaunchSuccess(props: LaunchResult) {
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           <Vault className="h-4 w-4" aria-hidden />
-          Deploy vault for ${props.symbol}
+          Deploy vault for ${props.symbol} · {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
         </Link>
         <a
           href={`https://zora.co/coin/base:${props.coinAddress}`}
@@ -234,7 +247,15 @@ export function DeployCoin() {
                 <h1 className="headline text-4xl sm:text-6xl">Launch Coin</h1>
                 <p className="max-w-2xl text-sm font-light text-zinc-500">
                   Create your Zora Creator Coin through 4626 so platform referral rewards accrue to
-                  the protocol — then continue to your ERC-4626 vault.
+                  the protocol — and unlock a ${VAULT_DEPLOY_COIN_LAUNCH_DISCOUNT_USD} vault deploy
+                  discount (
+                  <span className="text-zinc-400 line-through">
+                    {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)}
+                  </span>{' '}
+                  <span className="text-zinc-300">
+                    {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}
+                  </span>
+                  ).
                 </p>
                 <FlowTabs active="coin" />
                 <StepRail complete={Boolean(launchResult)} />
@@ -282,6 +303,13 @@ export function DeployCoin() {
                   </div>
                 </div>
                 <ul className="space-y-3 text-[13px] leading-relaxed text-zinc-400">
+                  <li>
+                    <span className="text-zinc-200">$100 off vault deploy</span>
+                    <span className="mt-0.5 block text-[12px] text-zinc-600">
+                      Launching here drops vault deploy from {formatVaultDeployUsd(VAULT_DEPLOY_PROMO_USD)} to{' '}
+                      {formatVaultDeployUsd(vaultDeployPriceAfterCoinLaunchUsd())}.
+                    </span>
+                  </li>
                   <li>
                     <span className="text-zinc-200">Platform referrer locked in</span>
                     <span className="mt-0.5 block text-[12px] text-zinc-600">
