@@ -1,11 +1,15 @@
 ---
-description: AlfaClub Hermit, rooms, counter-trade, and /h command invariants
+description: AlfaClub Hermit, rooms, counter-trade, /h, and ETH→FriendKey quote invariants
 globs:
   - frontend/server/_lib/alfaclub/**
+  - frontend/server/_lib/zora/zoraTradeQuote.ts
   - frontend/server/agents/hermit/**
   - frontend/server/agents/eliza/**
+  - frontend/api/_handlers/zora/_tradeQuote.ts
   - frontend/src/pages/AlfaClub*
   - frontend/src/features/alfaclub/**
+  - frontend/src/lib/alfaclub/**
+  - frontend/src/lib/zora/zoraTradeApi.ts
 alwaysApply: false
 ---
 
@@ -16,6 +20,7 @@ alwaysApply: false
 - **`/h` is the sole public Hermit entrypoint** — no legacy `/arena` flat remaps.
 - Room 1659 inverse: FriendKey stake gate; no bot-self-trade; harvest-and-dip on add/reduce.
 - Product shell: **`alfaclub.4626.fun`**; chat API proxy stays on `relay.4626.fun`.
+- **ETH→FriendKey buy:** composite only — ETH → Zora AKITA → Sudoswap ERC-1155. Full native sentinel `0xeee…eee` (40 hex); funding preview must not require SIWE; do not treat ETH/key as a direct rate. Detail: `docs/agent-context/archives/alfaclub-ops-core.md` § ETH → FriendKey.
 
 Validate: `pnpm -C frontend validate:alfaclub`. Template: `.cursor/commands/alfaclub-ops.md`.
 

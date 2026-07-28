@@ -48,3 +48,31 @@ Parent index: [alfaclub-ops.md](./alfaclub-ops.md). **Read one sub-archive only*
 - **Hermit first-time onboarding nudge** (`HERMIT_ONBOARDING_NUDGE` in `skillRouter.ts`) appends the dialect/`/hermit setup` footer on the first successful creative reply until `hermit.onboarded` is persisted for that wallet/room.
 
 - **Hermit AlfaClub optional X cross-post** (`HERMIT_ALFACLUB_POST_X_FIRST`) posts to X first, then sends the tweet URL in-room for card rendering; when the @4626fun app lacks write permission, append `formatHermitXCrossPostSkipMessage` in-room instead of failing the creative reply.
+
+
+## ETH → FriendKey (ERC-1155) composite quote (room 1659)
+
+Buy-with-ETH is **not** ETH↔key. Price as:
+
+**ETH → (Zora) AKITA Creator Coin → (Sudoswap) FriendKey ERC-1155**
+
+### Invariants
+
+- **Composite quote only.** Never treat ETH amount and key quantity as a direct exchange rate in `AlfaClubLiquidity` buyWithEth mode.
+- **Sudoswap sets AKITA need; Zora sets ETH need.** `getBuyNFTQuote` → required AKITA (use slipperized buyLimit = `addSlippageBps(quote.amount)`). Live Zora ETH→AKITA probe/refine derives ETH to cover that buyLimit (`ethFriendKeyQuote.ts` + `ethFundingQuoteQuery`).
+- **Native ETH sentinel is full 20 bytes:** `ZORA_NATIVE_ETH_TOKEN` / server `NATIVE_TOKEN_ADDRESS` = `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`. Truncated `0xeee…` (36 nibbles) fails `isAddress` and breaks Zora currency mapping.
+- **Funding preview must not require SIWE.** Connected CSW can load Sudoswap on-chain without a session cookie. `/api/zora/tradeQuote` must allow IP-rate-limited anonymous pricing quotes (`anon` rate-limit key). Client sends `withCredentials: true` when a session exists.
+- **Preview may be amountOut-only.** Funding estimate uses `allowAmountOutOnly` / `preview: true` — do not require executable calldata for the auto-fill quote. Submit path still needs a full executable Zora quote + permits as today.
+- **Gate submit on coverage.** Disable when funding AKITA out < required buyLimit, while quoting, or when the funding quote errors. Surface the real Zora/API error string in the UI hard error.
+
+### Touch points
+
+- UI: `frontend/src/pages/AlfaClubLiquidity.tsx` (`buyWithEth`, `ethFundingQuoteQuery`)
+- Helpers: `frontend/src/lib/alfaclub/ethFriendKeyQuote.ts`, `ethFundingRouter.ts`
+- Client API: `frontend/src/lib/zora/zoraTradeApi.ts` (`fetchZoraTradeQuoteFromApi`)
+- Server: `frontend/api/_handlers/zora/_tradeQuote.ts`, `frontend/server/_lib/zora/zoraTradeQuote.ts`
+
+### Regression checks
+
+- `pnpm -C frontend exec vitest run src/lib/alfaclub/ethFriendKeyQuote.test.ts src/lib/alfaclub/ethFundingRouter.test.ts src/lib/zora/zoraTradeAmountOut.test.ts api/__tests__/zoraTradeQuoteAuth.test.ts src/pages/AlfaClubLiquidity.readiness.test.ts`
+- Unauthenticated `POST /api/zora/tradeQuote` with native ETH → AKITA + `preview: true` must return `200` with `quote.amountOut` (not `401 Authentication required`).

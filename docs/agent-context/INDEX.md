@@ -24,7 +24,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | [ajna-vault-ops.md](./archives/ajna-vault-ops.md) | — | Nested Ajna sleeve + **v1.20.0 launch expectations** (buffer vs LP, dust, Safe handoff) |
 | [lottery-vrf-ops.md](./archives/lottery-vrf-ops.md) | — | VRF hub, integrator, lottery manager |
 | [swap-execution.md](./archives/swap-execution.md) | — | `/swap`, paymaster, txRouter |
-| [alfaclub-ops.md](./archives/alfaclub-ops.md) | [core](./archives/alfaclub-ops-core.md) · [ops](./archives/alfaclub-ops-ops.md) · [prefs](./archives/alfaclub-ops-prefs.md) | Hermit, `/h`, room 1659, counter-trade |
+| [alfaclub-ops.md](./archives/alfaclub-ops.md) | [core](./archives/alfaclub-ops-core.md) · [ops](./archives/alfaclub-ops-ops.md) · [prefs](./archives/alfaclub-ops-prefs.md) | Hermit, `/h`, room 1659, counter-trade, ETH→FriendKey quote |
 | [wallet-identity.md](./archives/wallet-identity.md) | — | PROTOCOL vs CANONICAL CSW |
 | [wallet-csw-lifecycle.md](./archives/wallet-csw-lifecycle.md) | — | Server CSW delegation, XMTP, ERC-8004, deploy-session steps |
 | [wallet-relay-owner-install.md](./archives/wallet-relay-owner-install.md) | — | Relay, owner-install |
@@ -49,6 +49,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | AA25, paymaster, txRouter, canonical4337 | `swap-execution.md` |
 | EIP-8130, native AA, Base Cobalt, EntryPoint migration | [docs/_internal/eip-8130-native-aa-readiness.md](../_internal/eip-8130-native-aa-readiness.md) |
 | `/h pos`, counter-trade, room 1659, Hermit | `alfaclub-ops-core.md` |
+| ETH→FriendKey, buyWithEth, Zora tradeQuote, Sudoswap ERC-1155 quote | `alfaclub-ops-core.md` |
 | Railway Hermit health, daily brief bot | `alfaclub-ops-ops.md` |
 | PROTOCOL vs CANONICAL, XMTP inbox | `wallet-identity.md` |
 | Deploy-session owner delegation, ERC-8004, Privy agent wallet | `wallet-csw-lifecycle.md` |

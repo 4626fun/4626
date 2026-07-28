@@ -37,7 +37,7 @@ Use [docs/agent-context/INDEX.md](docs/agent-context/INDEX.md). Do **not** load 
 | Deploy-session operator | `archives/deploy-vault-operator.md` |
 | Ajna sleeve / v1.20.0 buffer→LP | `archives/ajna-vault-ops.md` |
 | Lottery / VRF ops | `archives/lottery-vrf-ops.md` |
-| AlfaClub / Hermit | `archives/alfaclub-ops.md` → core / ops / prefs |
+| AlfaClub / Hermit / ETH→FriendKey quote | `archives/alfaclub-ops.md` → core / ops / prefs |
 | Protocol vs operator CSW | `archives/wallet-identity.md` |
 | Server CSW delegation / XMTP / deploy-session | `archives/wallet-csw-lifecycle.md` |
 | Relay / owner-install | `archives/wallet-relay-owner-install.md` |
