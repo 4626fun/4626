@@ -70,7 +70,7 @@ import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { isCanonicalCsw } from '@/wallet/canonicalWalletPolicy'
-import { useScreenshotReady } from '@/lib/ui/screenshotMode'
+import { isScreenshotModeAllowed, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { normalizeSwapAddress } from '@/lib/swap/resolveSwapBalanceOwner'
 import { AlfaClubLiquidity } from '@/pages/AlfaClubLiquidity'
 import { AKITA_DEFAULTS } from '@/config/contracts.defaults'
@@ -150,6 +150,7 @@ function KeySwapSurface(props: {
 export function Swap() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
+  const screenshotCaptureEnabled = isScreenshotModeAllowed(searchParams)
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const privyClientStatus = usePrivyClientStatus()
@@ -1228,7 +1229,15 @@ export function Swap() {
     void confirmAndExecute()
   }, [confirmAndExecute, confirmIntent])
 
-  const screenshotReady = !tokenInIdentity.isLoading && !tokenOutIdentity.isLoading && tokenInSymbol.length > 0 && tokenOutSymbol.length > 0
+  // Dev-only (`isScreenshotModeAllowed` is false in production). Force the
+  // trade card so featured captures show product UI rather than the signed-out gate.
+  const showSwapForm = screenshotCaptureEnabled || connectGate.ready
+  const screenshotReady =
+    showSwapForm &&
+    !tokenInIdentity.isLoading &&
+    !tokenOutIdentity.isLoading &&
+    tokenInSymbol.length > 0 &&
+    tokenOutSymbol.length > 0
 
   useScreenshotReady(screenshotReady)
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -1241,7 +1250,7 @@ export function Swap() {
         swapPanel={
           <>
           {
-            !connectGate.ready ? (
+            !showSwapForm ? (
               <div className="relative">
                 <SwapConnectGate
                   gate={connectGate}

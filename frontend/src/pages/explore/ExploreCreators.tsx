@@ -541,12 +541,16 @@ export function ExploreCreators() {
     return getHorizontalScrollStops(columns)
   }, [currentTimeFilter, collapseIdentity])
 
-  const tablePending = shouldShowExploreTableLoading({
-    isLoading,
-    isFetching,
-    hasRows: displayCoins.length > 0,
-    hasActiveSearch: trimmedSearchQuery.length > 0,
-  })
+  // Screenshot demo rows are already on-screen while the live query is still
+  // loading — don't cover them with the table pending overlay.
+  const tablePending =
+    !hasScreenshotFallbackRows &&
+    shouldShowExploreTableLoading({
+      isLoading,
+      isFetching,
+      hasRows: displayCoins.length > 0,
+      hasActiveSearch: trimmedSearchQuery.length > 0,
+    })
 
   return (
     <ExplorePageShell
