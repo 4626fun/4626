@@ -9,7 +9,8 @@
 #     68:0x2bdda0a15a502c96cff79aecb1dd459855792272c6bb44a99aba7e94bb06b4d5 \
 #     ledger68:0x1a590d02657716f62174d7f12e09ef2f5af83676fc891fdacdec42d33c0580e9
 #
-# Requires: PRIVATE_KEY, BASE_RPC_URL in .env (treasury owner = router owner).
+# Requires: PRIVATE_KEY, BASE_RPC_URL in .env (router owner signs publisher role flips).
+# Temporary publisher defaults to the PRIVATE_KEY signer (override via AMOE_CUTOVER_PUBLISHER).
 
 set -euo pipefail
 
@@ -22,7 +23,10 @@ set +a
 ROUTER="${1:?router address required}"
 shift
 
-TREASURY="${PROTOCOL_TREASURY:-0xB05Cf01231cF2fF99499682E64D3780d57c80FdD}"
+# Temporary publisher must be the EOA that signs with PRIVATE_KEY.
+# Do not use PROTOCOL_TREASURY here — that is often a Safe and causes NotPublisher.
+SIGNER="$(cast wallet address --private-key "$PRIVATE_KEY")"
+TREASURY="${AMOE_CUTOVER_PUBLISHER:-$SIGNER}"
 CANONICAL_CSW="${AMOE_PUBLISHER:-0x793ca28123cba3ca3c20b9c6c67f37510c89c145}"
 
 publishers_changed=0
@@ -47,7 +51,7 @@ restore_publishers() {
 }
 trap restore_publishers EXIT
 
-echo "==> Temporarily set publishers to treasury EOA $TREASURY"
+echo "==> Temporarily set publishers to cutover EOA $TREASURY"
 cast send "$ROUTER" "setAllowlistPublisher(address)" "$TREASURY" \
   --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash'
 publishers_changed=1

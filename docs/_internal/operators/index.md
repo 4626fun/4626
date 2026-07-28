@@ -6,7 +6,7 @@ Curated runbooks for production — **~69 pages** on [docs.4626.fun](https://doc
 
 | Topic | Link |
 |-------|------|
-| **Current release** | [v1.19.1 greenfield target](/operations/deployment/releases/current) |
+| **Current release** | [v1.20.0 greenfield target](/operations/deployment/releases/current) |
 | **Live addresses** | [Contract addresses](/reference/addresses) |
 | **Greenfield gate** | [Launch readiness](/operations/vault/greenfield-launch-readiness) |
 | **Deploy runbooks** | [Deployment hub](/operations/deployment) |
@@ -20,7 +20,7 @@ Curated runbooks for production — **~69 pages** on [docs.4626.fun](https://doc
 ```bash
 ./test/current-release-target-guard.sh
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-  --batcher 0xa18169caf37fa0347285B16aAFC2B09eCB43F145
+  --batcher 0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032
 ```
 
 AlfaClub, analytics, AKITA prelaunch, incidents, and historical archive notes live in `docs/_internal/operations/` (repo-only).

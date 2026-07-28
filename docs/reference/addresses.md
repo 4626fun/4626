@@ -7,7 +7,7 @@ sidebar_position: 1
 
 Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.20.0** greenfield stack (hard cutover; no dual-epoch launch lane).
 
-v1.20.0 greenfield infra is live with a fully seeded bytecode store (includes Ajna dust-refund + Phase 3 automation-keeper seal). Prior v1.19.x addresses remain onchain for already-deployed vaults but are **not** supported launch or ops targets. Creator + Agent paid canaries on the new stack remain outstanding.
+v1.20.0 greenfield infra is live with a fully seeded bytecode store (includes Ajna dust-refund + Phase 3 automation-keeper seal). Prior v1.19.x addresses remain onchain for already-deployed vaults but are **not** supported launch or ops targets. Creator + Agent paid canaries on the new stack remain outstanding. AMOE roots for allowlist epochs 86–88 and ledger epoch 68 are live on router `0xf07D4811…`.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 

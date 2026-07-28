@@ -11,12 +11,12 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0xa18169caf37fa0347285B16aAFC2B09eCB43F145'
-const DEFAULT_STORE = '0xF9622613682a12E46b914c7498716F42E44c4d36'
-const DEFAULT_DEPLOYER = '0xe2a8aA094EAf0f9ED05C030E6FcB90B9d139b0e2'
+const DEFAULT_BATCHER = '0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032'
+const DEFAULT_STORE = '0x8599CA87b28320158941C59CB3cd9a3f12083530'
+const DEFAULT_DEPLOYER = '0xdffB25505F5050E15B3602296330Ef352127d1Ef'
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 
-// v1.19.1 DeploymentBatcher exposes salt-aware Phase1 split entrypoints only.
+// v1.20.0 DeploymentBatcher exposes salt-aware Phase1 split entrypoints only.
 const SELECTOR_PHASE1_CORE_WITH_SALT = '8287b529'
 const SELECTOR_PHASE1_FINALIZE_WITH_SALT = 'af399b2b'
 

@@ -10,7 +10,7 @@ Public names used across docs and the app, with internal or onchain identifiers 
 ## Quick definitions
 
 **New vault launch** *(greenfield)*  
-A brand-new vault on the **current** release (**v1.19.1 stack · v1.19.3 bytecode epoch (v1.19.4 Creator-core repair)**) — not a patch or migration of an older vault (e.g. AKITA).
+A brand-new vault on the **current** release (**v1.20.0 greenfield**) — not a patch or migration of an older vault (e.g. AKITA).
 
 **Solana share bridge at finalize** *(Pipe A, `solana_ovault_mesh`)*  
 At Phase 2 finalize, about **30%** of tradable `■` shares bridge to Solana via LayerZero automatically. Included in the launch bundle; Base trading and the fair-launch auction do not wait on it.
@@ -23,7 +23,7 @@ Deployed on an **older batcher or release**. Do not assume AKITA-era addresses o
 | Public name (docs & app) | Internal / onchain | Notes |
 |--------------------------|-------------------|--------|
 | **Launch bundle ($499 USDC)** | `vault_full_deploy` | Unlocks deploy; includes Charm + Ajna + Solana mesh + Meteora |
-| **New vault launch** | *Greenfield* | New deploy on current release (v1.19.1 stack · v1.19.3 bytecode epoch (v1.19.4 Creator-core repair)), not legacy vaults |
+| **New vault launch** | *Greenfield* | New deploy on current release (v1.20.0 greenfield), not legacy vaults |
 | **Solana bridge at finalize (~30% of ■)** | *Pipe A*, `solana_ovault_mesh` | Automatic LayerZero bridge in Phase 2 finalize — not a separate purchase |
 | **Fair-launch auction** | CCA | Uniswap V4 price discovery at activation |
 | **Auction schedule** | Thursday 00:00 UTC epoch | CCA bids open on the next weekly epoch after `launchDeferredAuction` |
@@ -119,4 +119,4 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 
 **Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
 
-**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from the v1.19.3 / v1.19.4 on v1.19.1 stack new-vault path.
+**Legacy vault** — Deployed on an older batcher/version (e.g. AKITA); may differ from the v1.20.0 new-vault path.

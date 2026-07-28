@@ -46,6 +46,12 @@ function parseEpochs(): bigint[] {
     .map((s) => BigInt(s))
 }
 
+function jsonSafe(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    typeof item === 'bigint' ? item.toString() : item,
+  )
+}
+
 async function resetPublishState(epochs: bigint[]): Promise<void> {
   const db = await requirePublisherDb()
   for (const epoch of epochs) {
@@ -120,7 +126,7 @@ async function main() {
       publisherVersion,
       broadcast: defaultBroadcastSetAllowlistRoot,
     })
-    process.stdout.write(`[amoe-cutover] allowlist epoch=${epoch.toString()} ${JSON.stringify(allow)}\n`)
+    process.stdout.write(`[amoe-cutover] allowlist epoch=${epoch.toString()} ${jsonSafe(allow)}\n`)
     if (allow.kind === 'finished') {
       await confirmAllowlistPublish(epoch, allow.txHash)
     }
@@ -148,7 +154,7 @@ async function main() {
       lookupBurnContext: (args) => defaultLookupBurnContext(ledgerDb, args),
       publisherVersion,
     })
-    process.stdout.write(`[amoe-cutover] ledger epoch=${epoch.toString()} ${JSON.stringify(ledger)}\n`)
+    process.stdout.write(`[amoe-cutover] ledger epoch=${epoch.toString()} ${jsonSafe(ledger)}\n`)
   }
 
   const [{ createPublicClient, http }, { base }] = await Promise.all([

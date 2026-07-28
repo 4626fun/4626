@@ -14,7 +14,7 @@ Internal runbooks use shorthand that differs from creator-facing docs at [docs.4
 | Share allocation at finalize | **30 / 30 / 30 / 10** | Auction / vesting / Solana bridge / LP reserve |
 | Phase 3 strategy split | **45% Charm / 45% Ajna / 10% idle** | Solana is Phase 2b, not a Phase 3 weight |
 | First deposit | **50M–100M** creator coin | Onchain floor 50M (`MIN_FIRST_DEPOSIT`) |
-| Current deploy batcher | v1.19.1 `0xa18169ca…F145` | Pre-v1.19.1 shells (e.g. `0x660B25…`) deprecated for new launches |
+| Current deploy batcher | v1.20.0 `0x83A9b248…8032` | Prior v1.19.x shells (e.g. `0xa18169…`) deprecated for new launches |
 
 **Address source of truth:** [docs/reference/addresses.md](../reference/addresses.md) (published) and [current release](./operations/operations/deployment/releases/current.md) (internal).
 
