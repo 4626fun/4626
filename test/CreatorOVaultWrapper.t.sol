@@ -191,12 +191,22 @@ contract CreatorOVaultWrapperTest is Test {
         vm.expectRevert(CreatorOVaultWrapper.AmountTooSmallToNormalize.selector);
         wrapper.depositFor(999, 0, bob);
 
+        // Operator depositFor must not spend the beneficiary's dust to mint to the operator.
         vm.prank(composer);
-        uint256 secondOut = wrapper.depositFor(999, 0, alice);
-        assertEq(secondOut, 1);
-        assertEq(shareOFT.balanceOf(composer), 2);
+        vm.expectRevert(CreatorOVaultWrapper.AmountTooSmallToNormalize.selector);
+        wrapper.depositFor(999, 0, alice);
+        assertEq(wrapper.userDustShares(alice), 1, "beneficiary dust retained");
+        assertEq(shareOFT.balanceOf(composer), 1);
+
+        // Beneficiary can clear their own dust via a self-attributed wrap/deposit path.
+        creatorCoin.mint(alice, 999);
+        vm.prank(alice);
+        creatorCoin.approve(address(wrapper), type(uint256).max);
+        vm.prank(alice);
+        uint256 aliceOut = wrapper.deposit(999, 0);
+        assertEq(aliceOut, 1);
         assertEq(wrapper.userDustShares(alice), 0);
-        assertEq(wrapper.userDustShares(bob), 0);
+        assertEq(shareOFT.balanceOf(alice), 1);
     }
 
     /// ODA-498-3: operators must not siphon beneficiary dust via withdrawFor.

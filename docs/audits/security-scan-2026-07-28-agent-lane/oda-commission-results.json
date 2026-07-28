@@ -1,0 +1,139 @@
+{
+  "commissionedAt": "2026-07-28T09:57:36Z",
+  "payer": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "amountUsdcEach": 1,
+  "spendUsdc": 4.0,
+  "activeJobsSpendUsdc": 3.0,
+  "declinedSpendUsdc": 1.0,
+  "publicRepo": "4626fun/4626",
+  "publicTag": "audit/oda-2026-07-28-agent-lane",
+  "publicSha": "0c47be24efb9f48b03f54c289e2734f4cfd50cd8",
+  "publicPinUrl": "https://github.com/4626fun/4626/tree/audit/oda-2026-07-28-agent-lane/contracts",
+  "liveStackLabel": "v1.19.3 bytecode epoch + v1.19.4 Creator-core repair on v1.19.1 greenfield infra",
+  "context": "P0 agent-lane first dedicated ODA jobs. Pin includes #788 / ODA-480-[3] withdraw-cooldown parity. Do not re-pay 494-498. P1/P2 skipped.",
+  "bytecodeCheckNote": "forge inspect + cast keccak vs deployments/base/v1.19.3-bytecode-manifest.json codeId. All agent systems: pin-ahead-of-live.",
+  "jobs": [
+    {
+      "id": "agent_vault",
+      "title": "AgentOVault + CoreModule",
+      "ok": true,
+      "jobId": 509,
+      "jobUrl": "https://onedollaraudit.com/audit/509",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/509",
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you.",
+      "replacesDeclinedJobId": 506,
+      "files": [
+        "contracts/agent/vault/AgentOVault.sol",
+        "contracts/agent/vault/modules/AgentOVaultCoreModule.sol",
+        "contracts/shared/vault/modules/OVaultModuleStorage.sol",
+        "contracts/shared/vault/modules/OVaultModuleBase.sol",
+        "contracts/shared/vault/modules/OVaultModuleConstants.sol"
+      ],
+      "liveAddresses": {
+        "AgentOVaultCoreModule": "0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE",
+        "Registry4626": "0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2",
+        "DeploymentBatcher": "0xa18169caf37fa0347285B16aAFC2B09eCB43F145",
+        "Phase1Module": "0x8C1C6C10442F9bC7F8C50B196cF14812b2BB12F3",
+        "Factory": "0xCAb65a066A4D52DD29ffB418B319819176b89610",
+        "Store": "0xF9622613682a12E46b914c7498716F42E44c4d36"
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "bytecodeDetails": {
+        "AgentOVault": {
+          "match": false,
+          "head": "0x5ec3a49dbe7465d20ec0bd868d57638dbe3c136766fec2093f1af56ff45fa75f",
+          "live": "0x9f8488dd71a40673db3ad5e82930312e6f657dc6071f285d4b6d5d9b88d27ee9",
+          "detail": "HEAD/pin newer than live seal (or drifted)"
+        },
+        "AgentOVaultCoreModule": {
+          "match": false,
+          "head": "0x09013dc181b2133df8c565ccc45aeaa2ff68f42d3ca94a40d27b5a518c9e16f2",
+          "live": "0x3abfec3012cd27fd4017b7851a210185054380928b641b3ac5fc2386638e3efe",
+          "detail": "HEAD/pin newer than live seal (or drifted)"
+        }
+      },
+      "priorJobsContextOnly": [
+        497,
+        480
+      ]
+    },
+    {
+      "id": "agent_shareoft",
+      "title": "AgentShareOFT + Wrapper",
+      "ok": true,
+      "jobId": 507,
+      "jobUrl": "https://onedollaraudit.com/audit/507",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/507",
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you.",
+      "files": [
+        "contracts/agent/vault/AgentShareOFT.sol",
+        "contracts/agent/vault/AgentOVaultWrapper.sol"
+      ],
+      "liveAddresses": {
+        "AgentOVaultCoreModule": "0xe3f7115aba3658201a3be2EaF699173E5cD0d6fE",
+        "note": "No live per-agent vault CREATE2 instance yet; implementation-only. Creator + Agent paid canaries outstanding."
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "bytecodeDetails": {
+        "AgentShareOFT": {
+          "match": false,
+          "head": "0xddbece3a08d1be1710e58177d777dac556a0ad72820b4be78525465db445ca5a",
+          "live": "0xe4cb250be6c94f39d3bd0aa71a9239b004927ade085d31dd70015d6c05ba42d8",
+          "detail": "HEAD/pin newer than live seal (or drifted)"
+        },
+        "AgentOVaultWrapper": {
+          "match": false,
+          "head": "0x42b34ed24ad907b3b35cc5d20d7ad38013de769f5051f5ae2b31285bdd1ad811",
+          "live": "0x3fecc89861e16f85067a9311a5cad2b292712185b64cf74755f3d7114bffba62",
+          "detail": "HEAD/pin newer than live seal (or drifted)"
+        }
+      },
+      "priorJobsContextOnly": [
+        498,
+        481
+      ]
+    },
+    {
+      "id": "agent_gauge",
+      "title": "AgentGaugeController",
+      "ok": true,
+      "jobId": 508,
+      "jobUrl": "https://onedollaraudit.com/audit/508",
+      "statusUrl": "https://onedollaraudit.com/api/jobs/508",
+      "estimatedCompletionSeconds": 3600,
+      "message": "Audit job created on-chain. Poll statusUrl (JSON) until status is 'complete', or pass a callbackUrl to get the result POSTed to you.",
+      "files": [
+        "contracts/agent/revenue/AgentGaugeController.sol"
+      ],
+      "liveAddresses": {
+        "Registry4626": "0x1365e9CEfc516f8A287c51FBaeF96FB4581c6CA2",
+        "LotteryManager4626": "0xB45E68a5867935a5734E4185977F81c528006650",
+        "note": "No live agent gauge wired yet; source-only. Creator + Agent paid canaries outstanding."
+      },
+      "bytecodeMatch": "pin-ahead-of-live",
+      "bytecodeDetails": {
+        "AgentGaugeController": {
+          "match": false,
+          "head": "0x0953f62e4925a683d85d6ef3000735a25dbf4631c7b3249c4650664d3f53ce17",
+          "live": "0x926378e8ca4ef77eff29cfdaf570f75d83ff57a8cb9592f13297f9a8f18fbcbc",
+          "detail": "HEAD/pin newer than live seal (or drifted)"
+        }
+      },
+      "priorJobsContextOnly": [
+        467
+      ]
+    }
+  ],
+  "declined": [
+    {
+      "jobId": 506,
+      "jobUrl": "https://onedollaraudit.com/audit/506",
+      "title": "AgentOVault + CoreModule",
+      "reason": "LeftClaw declined shortly after create (oversized/noisy brief). Replaced by 509 with shorter description.",
+      "replacedBy": 509
+    }
+  ],
+  "note": "Do not re-pay to re-check \u2014 poll statusUrl. No broadcast/redeploy in this step. Active jobs: 509, 507, 508."
+}

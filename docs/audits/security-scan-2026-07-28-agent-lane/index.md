@@ -36,4 +36,23 @@ Reusable agent prompt: [COMMISSION-PROMPT.md](./COMMISSION-PROMPT.md).
 
 **Live Base today:** v1.19.3 bytecode epoch + v1.19.4 Creator-core repair on v1.19.1 greenfield infra addresses. The public pin (`0c47be2`) is source-ahead of that seal for several creator/share contracts — see prompt for bytecode-match guidance.
 
+## Commissioned jobs
+
+- Job table: [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md)
+- Results JSON: [oda-commission-results.json](./oda-commission-results.json)
+- Active P0 jobs **509** (AgentOVault+Core), **507** (AgentShareOFT+Wrapper), **508** (AgentGauge). Declined **506** replaced by 509.
+- Do not re-pay to poll.
+
+## Triage / remediations
+
+- Job **507** complete — report archived under [oda-reports/507-report.md](./oda-reports/507-report.md)
+- Creator-parity remediations: [oda-507-remediation.md](./oda-507-remediation.md) (ODA-507-1/2/4)
 - ODA-510 lottery remediations: [oda-510-remediation.md](./oda-510-remediation.md)
+- Jobs **508** / **509** still in progress at last check — do not re-pay
+
+## Follow-on jobs
+
+- Lottery **510** + CreatorOracle **511** — see [one-dollar-audit-jobs.md](./one-dollar-audit-jobs.md) / [oda-commission-lottery-oracle.json](./oda-commission-lottery-oracle.json).
+- AgentOracle deferred.
+
+- Low/Info wait-work: [oda-low-info-remediations.md](./oda-low-info-remediations.md)
