@@ -7,7 +7,9 @@ import {
   getNumberQuery,
   getStringQuery,
   handleOptions,
+  isPublicReadMethod,
   requireServerKey,
+  sendPublicReadJson,
   setCache,
   setPublicCors,
 } from '../../../server/zora/_shared.js'
@@ -35,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (handleOptions(req, res)) return
 
-  if (req.method !== 'GET') {
+  if (!isPublicReadMethod(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -63,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Cache for 1 hour (metadata doesn't change often)
     setCache(res, 3600)
-    return res.status(200).json(metadata)
+    return sendPublicReadJson(req, res, 200, metadata)
   } catch (e: unknown) {
     const message =
       e instanceof Error ? e.message : 'Failed to fetch token metadata'
