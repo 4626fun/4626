@@ -1,13 +1,28 @@
 /**
- * Preflight helpers so CCA launch floors track the underlying creator/agent
- * market (Zora V4 TWAP via `computeMarketFloorQuote`) instead of a stale or
- * dust-pool oracle seed.
+ * Preflight helpers so Creator Coin CCA launch floors track the underlying
+ * Zora V4 TWAP (`computeMarketFloorQuote`) instead of a stale or dust-pool
+ * oracle seed.
+ *
+ * AgentTokenV4 markets are Virtuals V2 (`uniswapV2Pair`) — they do not expose
+ * Zora `getPoolKey()`, so the V4 cross-check must not run for `vaultKind=agent`.
  */
 
 export const ORACLE_MAX_STALENESS_SEC = 7200
 
 /** Max |oracle − marketFloor| / marketFloor before launch is blocked (20%). */
 export const ORACLE_MARKET_FLOOR_MAX_DEVIATION_BPS = 2000n
+
+export type OracleLaunchVaultKind = 'creator' | 'agent'
+
+/**
+ * Zora V4 market-floor cross-check is Creator Coin only.
+ * Agent deploys keep the onchain `previewLaunchPricing` gate instead.
+ */
+export function usesZoraV4MarketFloorCrossCheck(
+  vaultKind: OracleLaunchVaultKind,
+): boolean {
+  return vaultKind === 'creator'
+}
 
 export type OracleLaunchPreflightInput = {
   /** Creator USD from CreatorOracle.getAssetPrice (1e18). */

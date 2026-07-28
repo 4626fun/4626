@@ -175,6 +175,7 @@ import { computeMarketFloorQuote, creatorUsdPrice1e18FromEthFloor } from '@/lib/
 import {
   evaluateOracleLaunchPreflight,
   impliedFdvEthFromWeiPerToken,
+  usesZoraV4MarketFloorCrossCheck,
 } from '@/lib/cca/oracleLaunchPreflight'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -6135,9 +6136,10 @@ function DeployVaultBatcher({
                 'Launch floor is enforced onchain from oracle data; refresh oracle state before launching auction.',
             )
           }
-          // Keep CCA floor tied to the underlying Zora V4 creator/agent market — not a
-          // stale or dust-V3 oracle seed. requiredRaise (0.1 ETH default) is unrelated.
-          {
+          // Creator Coins: keep CCA floor tied to the Zora V4 market — not a stale or
+          // dust-V3 oracle seed. AgentTokenV4 has no Zora getPoolKey(); agents already
+          // passed onchain previewLaunchPricing above. requiredRaise is unrelated.
+          if (usesZoraV4MarketFloorCrossCheck(vaultKind)) {
             const GET_ASSET_PRICE_ABI = [
               {
                 type: 'function',

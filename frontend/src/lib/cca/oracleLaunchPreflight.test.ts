@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   evaluateOracleLaunchPreflight,
   impliedFdvEthFromWeiPerToken,
+  usesZoraV4MarketFloorCrossCheck,
 } from './oracleLaunchPreflight'
+
+describe('usesZoraV4MarketFloorCrossCheck', () => {
+  it('runs for Creator Coin deploys only', () => {
+    expect(usesZoraV4MarketFloorCrossCheck('creator')).toBe(true)
+    expect(usesZoraV4MarketFloorCrossCheck('agent')).toBe(false)
+  })
+})
 
 describe('evaluateOracleLaunchPreflight', () => {
   const nowSec = 1_785_000_000
