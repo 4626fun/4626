@@ -155,8 +155,8 @@ export const CCA_LAUNCH_CHAINS = {
     targetCcaFactoryVersion: 'v2.1.0',
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x1F98400000000000000000000000000000000004',
-    // https://data.chain.link/feeds/unichain/unichain/eth-usd-svr (standard proxy)
-    chainlinkEthUsd: '0xBcE7D6328c3132649669528e57F60c7f4F7d8CCa',
+    // Chainlink directory ETH/USD (verified codesize>0; feed decimals=18).
+    chainlinkEthUsd: '0xBcE70e194940a157f3A80566505a7E96f5238CCa',
     sequencerUptimeFeed: ZERO_ADDRESS,
     taxHook: ZERO_ADDRESS,
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
@@ -180,8 +180,8 @@ export const CCA_LAUNCH_CHAINS = {
     targetCcaFactoryVersion: 'v2.1.0',
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32',
-    // https://data.chain.link/feeds/arbitrum/mainnet/eth-usd
-    chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B629db276d',
+    // Chainlink directory ETH/USD (verified codesize>0 on Arb One).
+    chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
     sequencerUptimeFeed: '0xFdB631F5EE196F0ed6FAa767959853A9F217697D',
     taxHook: ZERO_ADDRESS,
@@ -206,13 +206,13 @@ export const CCA_LAUNCH_CHAINS = {
     targetCcaFactoryVersion: 'v2.1.0',
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x8366a39CC670B4001A1121B8F6A443A643e40951',
-    // No published Chainlink ETH/USD / sequencer feed pin yet — set before launch.
-    chainlinkEthUsd: ZERO_ADDRESS,
+    // Chainlink directory ETH/USD on Robinhood mainnet (verified codesize>0).
+    chainlinkEthUsd: '0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9',
     sequencerUptimeFeed: ZERO_ADDRESS,
     taxHook: ZERO_ADDRESS,
-    // Uniswap has not deployed the v2.1.0 CCA factory on Robinhood Chain; we deploy
-    // it ourselves with protocolFeeController = address(0) during bootstrap.
-    ccaFactoryV210ExpectedEmptyPreBootstrap: true,
+    // Factory v2.1.0 already live with protocolFeeController=0 (2026-07-29 probe).
+    // Keep false; preflight WARN only if code disappears.
+    ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'ROBINHOOD_RPC_URL',
     defaultRpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
   },

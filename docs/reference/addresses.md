@@ -230,6 +230,19 @@ Chainlink ETH/USD + sequencer feeds: `frontend/src/config/ccaLaunchChains.ts`.
 Hard constraint: factory protocol fee must be zero on every chain
 (`CCALaunchArm.migrate()` requires swept currency == `currencyRaised()`).
 
+Chainlink ETH/USD (spoke oracle `setChainlinkFeed`; verified codesize on 2026-07-29):
+
+| Chain     | ETH/USD feed                                   | Sequencer uptime                          |
+| --------- | ---------------------------------------------- | ----------------------------------------- |
+| Ethereum  | `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`   | n/a                                       |
+| Base      | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70`   | `0xBCF85224fc0756B9Fa45aA7892530B47e10b6433` |
+| Arbitrum  | `0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612`   | `0xFdB631F5EE196F0ed6FAa767959853A9F217697D` |
+| Unichain  | `0xBcE70e194940a157f3A80566505a7E96f5238CCa`   | n/a (decimals=18)                         |
+| Robinhood | `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9`   | n/a                                       |
+
+**Ops note:** Base hub registry must be re-seeded so chainId 130 maps to Unichain
+LZ `0x6F47…DD5B` / EID 30320 (live registry still had canonical `0x1a44…` + eid 0).
+
 ## External Contracts
 
 | Contract                  | Chain | Address                                      |

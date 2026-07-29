@@ -95,8 +95,11 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
         `  --rpc-url ${rpc} --broadcast -vvvv\n\n`,
     )
     process.stdout.write(
-      `# Wire ShareOFT peers + layerzero-evm-share-mesh ([15,15], 3-of-5 DVN)\n` +
-        `# then SeedRegistry setRemoteOFTPeer on Base\n\n`,
+      `WIRE_SIDE=hub SPOKE_EID=${chain.eid} HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} SPOKE_SHARE_OFT=<spoke> \\\n` +
+        `  forge script script/WireShareOftHubSpokePeers.s.sol --rpc-url $BASE_RPC_URL --broadcast\n` +
+        `WIRE_SIDE=spoke HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} SPOKE_SHARE_OFT=<spoke> \\\n` +
+        `  forge script script/WireShareOftHubSpokePeers.s.sol --rpc-url ${rpc} --broadcast\n` +
+        `# Also apply layerzero-evm-share-mesh DVN config ([15,15], 3-of-5)\n\n`,
     )
     process.stdout.write(
       `EXPECTED_CHAIN_ID=${chain.chainId} \\\n` +

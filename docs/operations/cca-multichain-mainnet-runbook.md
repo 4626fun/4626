@@ -14,7 +14,7 @@ Coordinated ■AKITA CCA launch capability on:
 | ----- | ------ |
 | Base | Live arm on CCA factory v1.1.0 |
 | Ethereum / Arbitrum / Unichain | Uniswap CCA v2.1.0 already deployed |
-| Robinhood (4663) | Bootstrap CCA factory v2.1.0 ourselves (`protocolFeeController = 0`) |
+| Robinhood (4663) | CCA factory v2.1.0 already live with `protocolFeeController = 0` (re-verify in preflight) |
 
 ## Hard gates (fail closed)
 
@@ -50,22 +50,25 @@ pnpm -C frontend ops:plan-akita-cca-spokes
 
 Expect WARN (not FAIL) on Robinhood factory until step 1.
 
-### 1. Robinhood only — bootstrap CCA factory v2.1.0
+### 1. Robinhood CCA factory
 
-Deploy Uniswap ContinuousClearingAuctionFactory v2.1.0 at the CREATE2 vanity
-`0x000000001F26a0044BaA66024e7b6599c61963F8` if salt/bytecode allow; otherwise
-record the actual address and override via `setCcaFactoryV2` on the arm.
+As of 2026-07-29 the v2.1.0 factory is already live at
+`0x000000001F26a0044BaA66024e7b6599c61963F8` with `protocolFeeController = 0`.
+If preflight ever shows empty code, re-bootstrap with feeController=0 (or
+override via `setCcaFactoryV2` on the arm).
 
-Constructor: `protocolFeeController = address(0)`.
+### 2. Registry seed (Base hub) — required before Unichain oracle/OFT
 
-Re-run preflight until Robinhood factory row is PASS.
-
-### 2. Registry seed (Base hub)
+Live Base registry previously pointed Unichain (130) at the **canonical** LZ
+address `0x1a44…` which has **no code on Unichain**. Re-seed so Unichain uses
+`0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` and EID `30320`:
 
 ```bash
-# Includes Unichain 130 / EID 30320 after this branch
 forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
   --rpc-url $BASE_RPC_URL --broadcast
+# Verify:
+# cast call $REGISTRY "getLayerZeroEndpoint(uint256)(address)" 130 --rpc-url $BASE_RPC_URL
+# expect 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B
 ```
 
 ### 3. Spoke registry + LZ endpoints
@@ -177,8 +180,19 @@ Thursday-epoch schedule is strategy-enforced. Fast-chain step curves are automat
 | Multichain preflight | `pnpm -C frontend ops:verify-cca-multichain` | exit 0 |
 | Solana mesh (if Pipe A) | `pnpm -C frontend ops:verify-share-mesh-lz --share-oft … --oft-store …` | exit 0 |
 
-## Out of scope / follow-ups
+## Known gaps (do not treat as ready for Thursday launch)
 
+- **No spoke `CCALaunchArm` deploy script** — ctor + `setCcaFactoryV2` + schedule
+  still manual Foundry/AA.
+- **No `setMigrationConfig` / PositionManager pins** per spoke — migrate blocked
+  until wired.
+- **Spoke taxHooks still `address(0)`** — migrate/grad blocked until per-chain hooks.
+- **Hub ShareOFT + hub oracle peers** for 30101/30110/30320/30416 are currently
+  zero on Base — wire after each spoke deploy.
+- **Bytecode infra** (`DeployUniversalBytecodeInfra` + QuoteLib) required before
+  remote OFT/oracle CREATE2; not yet an automated deploy-helper stage.
+- **`/api/v1/auction/status` is Base-RPC-only** — spoke auction UI must not rely
+  on it for lifecycle until chainId-aware.
 - Per-chain tax hook addresses in CompleteAuction (Base-only until pinned).
 - RPC same-origin proxy for Unichain/Robinhood (browser CORS).
 - Bytecode-store reseed after CCA arm bytecode change (required before CREATE2 batcher deploys of the new arm).

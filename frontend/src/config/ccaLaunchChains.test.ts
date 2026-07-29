@@ -114,9 +114,8 @@ describe('ccaLaunchChains', () => {
     }
   })
 
-  it('marks only robinhood as expected-empty factory pre-bootstrap', () => {
-    expect(CCA_LAUNCH_CHAINS.robinhood.ccaFactoryV210ExpectedEmptyPreBootstrap).toBe(true)
-    for (const key of ['ethereum', 'base', 'unichain', 'arbitrum'] as const) {
+  it('does not expect empty CCA v2.1.0 factory on any launch chain', () => {
+    for (const key of EXPECTED_KEYS) {
       expect(CCA_LAUNCH_CHAINS[key].ccaFactoryV210ExpectedEmptyPreBootstrap).toBe(false)
     }
   })
@@ -129,12 +128,14 @@ describe('ccaLaunchChains', () => {
       '0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',
     )
     expect(CCA_LAUNCH_CHAINS.arbitrum.chainlinkEthUsd).toBe(
-      '0x639Fe6ab55C921f74e7fac1ee960C0B629db276d',
+      '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
     )
     expect(CCA_LAUNCH_CHAINS.unichain.chainlinkEthUsd).toBe(
-      '0xBcE7D6328c3132649669528e57F60c7f4F7d8CCa',
+      '0xBcE70e194940a157f3A80566505a7E96f5238CCa',
     )
-    expect(CCA_LAUNCH_CHAINS.robinhood.chainlinkEthUsd).toBe(ZERO_ADDRESS)
+    expect(CCA_LAUNCH_CHAINS.robinhood.chainlinkEthUsd).toBe(
+      '0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9',
+    )
     expect(CCA_LAUNCH_CHAINS.arbitrum.sequencerUptimeFeed).not.toBe(ZERO_ADDRESS)
     expect(CCA_LAUNCH_CHAINS.base.sequencerUptimeFeed).not.toBe(ZERO_ADDRESS)
     expect(CCA_LAUNCH_CHAINS.ethereum.sequencerUptimeFeed).toBe(ZERO_ADDRESS)

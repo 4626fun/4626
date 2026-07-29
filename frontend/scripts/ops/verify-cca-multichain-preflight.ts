@@ -214,6 +214,34 @@ async function checkChain(key: CcaLaunchChainKey): Promise<CheckRow[]> {
       : `LZ EndpointV2 ${chain.lzEndpointV2} has no code`,
   })
 
+  if (chain.chainlinkEthUsd.toLowerCase() === ZERO_ADDRESS) {
+    rows.push({
+      chain: chain.label,
+      status: 'WARN',
+      detail: 'Chainlink ETH/USD unset (spoke oracle setChainlinkFeed skipped)',
+    })
+  } else {
+    const feedCode = await client.getCode({ address: chain.chainlinkEthUsd as Address })
+    rows.push({
+      chain: chain.label,
+      status: hasCode(feedCode) ? 'PASS' : 'FAIL',
+      detail: hasCode(feedCode)
+        ? `Chainlink ETH/USD ${chain.chainlinkEthUsd} live`
+        : `Chainlink ETH/USD ${chain.chainlinkEthUsd} has no code`,
+    })
+  }
+
+  if (chain.sequencerUptimeFeed.toLowerCase() !== ZERO_ADDRESS) {
+    const seqCode = await client.getCode({ address: chain.sequencerUptimeFeed as Address })
+    rows.push({
+      chain: chain.label,
+      status: hasCode(seqCode) ? 'PASS' : 'FAIL',
+      detail: hasCode(seqCode)
+        ? `Sequencer uptime feed ${chain.sequencerUptimeFeed} live`
+        : `Sequencer uptime feed ${chain.sequencerUptimeFeed} has no code`,
+    })
+  }
+
   return rows
 }
 

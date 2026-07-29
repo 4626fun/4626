@@ -48,8 +48,10 @@ function main(): void {
       `  2. EnsureSpokeRegistry (EXPECTED_CHAIN_ID=${chain.chainId}) — registry + LZ/hub seed\n`,
     )
     process.stdout.write(`  3. forge script DeployRemoteShareOft (EXPECTED_CHAIN_ID=${chain.chainId})\n`)
-    process.stdout.write('  4. Wire Base↔spoke ShareOFT peers (layerzero-evm-share-mesh; [15,15]; 3-of-5 DVN)\n')
-    process.stdout.write('  5. SeedRegistry setRemoteOFTPeer on Base\n')
+    process.stdout.write(
+      '  4. WireShareOftHubSpokePeers hub+spoke + layerzero-evm-share-mesh ([15,15]; 3-of-5 DVN)\n',
+    )
+    process.stdout.write('  5. (Optional) REGISTRY+CREATOR_TOKEN on hub wire calls setRemoteOFTPeer\n')
     process.stdout.write(
       `  6. forge script DeployRemoteCreatorOracle (EXPECTED_CHAIN_ID=${chain.chainId})\n` +
         `       SET_CHAINLINK_ETH_USD=${chain.chainlinkEthUsd}\n` +
