@@ -14,6 +14,7 @@ interface IShareOFT is IERC20 {
 
 interface IQueueAwareVault {
     function largeWithdrawalThreshold() external view returns (uint256);
+    function gaugeController() external view returns (address);
 }
 
 /**
@@ -465,7 +466,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
         // ODA-498-4: parity with withdraw* — large unwraps must use the async queue.
-        _requireSynchronousRedemption(amountOut);
+        // The vault-registered gauge is exempt: it unwraps its burn slice only to call
+        // burnSharesForPriceIncrease (no underlying redemption), so gating it would let a
+        // large fee cycle brick distribute() permanently.
+        if (msg.sender != _registeredGaugeController()) {
+            _requireSynchronousRedemption(amountOut);
+        }
 
         // Transfer vault shares to user
         IERC20(address(vault)).safeTransfer(msg.sender, amountOut);
@@ -505,7 +511,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         }
 
         // Include user dust so normalization never destroys value.
-        uint256 priorDust = userDustShares[accountingUser];
+        // Only fold existing dust into the mint when the mint recipient is the
+        // accounting user — otherwise depositFor could mint a beneficiary's dust
+        // to the operator. When mintTo differs, preserve the beneficiary ledger and
+        // accumulate the wrap remainder so prior dust is not wiped / totals desynced.
+        uint256 existingDust = userDustShares[accountingUser];
+        uint256 priorDust = (accountingUser == mintTo) ? existingDust : 0;
         uint256 normalizedInput = vaultSharesAfterFee + priorDust;
 
         // NORMALIZE: Divide by 1000 to get share token amount
@@ -514,8 +525,13 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (shareOFTOut == 0) revert AmountTooSmallToNormalize();
 
         uint256 newDust = normalizedInput - (shareOFTOut * NORMALIZATION_FACTOR);
-        userDustShares[accountingUser] = newDust;
-        totalUserDustShares = totalUserDustShares - priorDust + newDust;
+        if (accountingUser == mintTo) {
+            userDustShares[accountingUser] = newDust;
+            totalUserDustShares = totalUserDustShares - priorDust + newDust;
+        } else {
+            userDustShares[accountingUser] = existingDust + newDust;
+            totalUserDustShares += newDust;
+        }
 
         // Track locked shares (minus fee)
         totalLocked += vaultSharesAfterFee;
@@ -777,6 +793,11 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         creatorCoin.forceApprove(address(vault), type(uint256).max);
     }
 
+    /// @notice Disable renounce — would brick one-shot ShareOFT binding / recovery paths.
+    function renounceOwnership() public pure override {
+        revert("RenounceDisabled");
+    }
+
     function _requiredLockedBacking() internal view returns (uint256) {
         return totalMinted * NORMALIZATION_FACTOR + totalUserDustShares;
     }
@@ -869,5 +890,13 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (previewAssets >= threshold) {
             revert AsyncRedemptionRequired(previewAssets, threshold);
         }
+    }
+
+    /// @dev Fail-safe: an unreadable gaugeController never qualifies for the gate exemption.
+    function _registeredGaugeController() internal view returns (address gauge) {
+        (bool success, bytes memory data) =
+            address(vault).staticcall(abi.encodeWithSelector(IQueueAwareVault.gaugeController.selector));
+        if (!success || data.length < 32) return address(0);
+        gauge = abi.decode(data, (address));
     }
 }

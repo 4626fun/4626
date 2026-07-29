@@ -44,3 +44,4 @@ Synced from private `main` `9045a682a`.
 - New pin file: `contracts/agent/interfaces/IAgentTokenV4.sol` (quoted-tax interface used by the measured paths).
 - Also catches the pin up on prior private work: ODA-507 wrapper hot-units cooldown + `forceApprove`, Ajna automation-Safe keeper wiring in `DeploymentBatcher`, README drift.
 - Storage note: `MODULE_STORAGE_VERSION` v5 → v6 (appended `isTrustedAdapter` mapping). Source pin review only — publishing ≠ Base redeploy.
+- **Bugbot follow-up (post-sync, private `c6a56263b`):** the vault-registered gauge's burn-slice `unwrap` is exempt from the wrapper async-redemption gate on both lanes — a large fee cycle could otherwise brick `distribute()` permanently (`AsyncRedemptionRequired` is not a bridged-accounting revert, and the creator lane would silently fold the slice into jackpot every cycle). Gate unchanged for all other callers (ODA-498-4 preserved).
