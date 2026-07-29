@@ -2469,6 +2469,67 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         return VAULT_VERSION;
     }
 
+    /// @notice One-call position card for UIs: everything a vault page needs about a
+    ///         user, in a single RPC call. `cooldownEndBlock` and `queuedUnlockBlock`
+    ///         are raw block numbers — compare against `block.number` client-side.
+    ///         `maxWithdrawNow` is liquidity/threshold capacity only; it does NOT
+    ///         reflect the cooldown gate (pair with cooldownEndBlock).
+    struct VaultPosition {
+        uint256 shares;
+        uint256 assets;
+        uint256 maxWithdrawNow;
+        uint256 queuedShares;
+        uint256 queuedAssetsEst;
+        uint256 queuedUnlockBlock;
+        uint256 cooldownEndBlock;
+        bool claimableNow;
+    }
+
+    /// @notice Best-effort ETA for turning `shares` into assets, honoring the actual
+    ///         gate order: cooldown → (sync | queue+delay). `available=false` while
+    ///         paused or non-Normal (gates closed indefinitely). Liquidity is NOT
+    ///         modeled for the sync path — pair with `maxWithdraw`.
+    struct WithdrawalEta {
+        bool available;
+        bool requiresAsync;
+        uint256 cooldownEndBlock;
+        uint256 earliestClaimBlock;
+    }
+
+    function positionOf(address user) external view returns (VaultPosition memory p) {
+        p.shares = balanceOf(user);
+        p.assets = p.shares == 0 ? 0 : previewRedeem(p.shares);
+        p.maxWithdrawNow = maxWithdraw(user);
+        QueuedWithdrawal storage q = queuedWithdrawals[user];
+        p.queuedShares = q.shares;
+        p.queuedAssetsEst = q.shares == 0 ? 0 : convertToAssets(q.shares);
+        p.queuedUnlockBlock = q.unlockBlock;
+        p.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
+        p.claimableNow =
+            q.shares > 0 && block.number >= q.unlockBlock && !paused && vaultMode == VaultMode.Normal;
+    }
+
+    function withdrawalEta(address user, uint256 shares) external view returns (WithdrawalEta memory eta) {
+        if (shares == 0) revert InvalidAmount();
+        eta.available = !paused && vaultMode == VaultMode.Normal;
+        eta.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
+        uint256 startBlock = block.number > eta.cooldownEndBlock ? block.number : eta.cooldownEndBlock;
+
+        // Same classification the queue enforces (uncapped conversion, >= threshold).
+        eta.requiresAsync =
+            largeWithdrawalThreshold != 0 && convertToAssets(shares) >= largeWithdrawalThreshold;
+        if (!eta.requiresAsync) {
+            eta.earliestClaimBlock = startBlock;
+            return eta;
+        }
+
+        // Queue path: request at startBlock, claim after largeWithdrawalDelayBlocks.
+        // An existing queued slot never regresses its unlock (max rule), so model the merge.
+        uint256 unlock = startBlock + largeWithdrawalDelayBlocks;
+        uint256 existingUnlock = queuedWithdrawals[user].unlockBlock;
+        eta.earliestClaimBlock = existingUnlock > unlock ? existingUnlock : unlock;
+    }
+
     /// @notice Newest PPS checkpoint at or before `timestamp` (ring scan, newest first).
     function ppsCheckpointAtOrBefore(uint40 timestamp) public view returns (bool found, uint40 ts, uint216 pps) {
         uint64 writes = ppsCheckpointWrites;
