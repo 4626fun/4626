@@ -18,7 +18,7 @@ function TaskRow({ title, description, points, done, children }: TaskRowProps) {
   return (
     <div
       className={cn(
-        'rounded-xl px-3.5 py-3 ring-1 transition',
+        'rounded-xl px-3.5 py-3 ring-1 transition backdrop-blur-md',
         done
           ? 'bg-emerald-500/[0.06] ring-emerald-500/20'
           : 'bg-white/[0.03] ring-white/[0.06]',

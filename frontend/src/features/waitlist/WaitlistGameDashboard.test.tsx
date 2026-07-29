@@ -153,7 +153,8 @@ describe('WaitlistJoinPanel', () => {
     )
 
     expect(screen.getByTestId('waitlist-join-panel')).toBeTruthy()
-    expect(screen.getByText('Creator Vaults.')).toBeTruthy()
+    expect(screen.getByText('ERC-4626 Creator Vaults')).toBeTruthy()
+    expect(screen.getByText('4626.fun')).toBeTruthy()
     expect(screen.getByText('Earn Together.')).toBeTruthy()
     expect(screen.getByText(/Base · Private beta/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /join with email/i })).toBeTruthy()

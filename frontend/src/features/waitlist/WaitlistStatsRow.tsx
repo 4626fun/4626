@@ -15,7 +15,7 @@ function StatCard({ label, value, emphasize = false, loading = false }: StatCard
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-2 py-3',
+        'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-2 py-3 backdrop-blur-md',
         emphasize
           ? 'bg-[rgb(var(--brand-gold)/0.08)] ring-1 ring-[rgb(var(--brand-gold)/0.22)]'
           : 'bg-white/[0.03] ring-1 ring-white/[0.06]',

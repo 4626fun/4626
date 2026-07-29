@@ -43,7 +43,7 @@ export function WaitlistInviteCard({
   if (loading && !referralCode) {
     return (
       <div
-        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]"
+        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
         data-testid="waitlist-invite-card"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -57,7 +57,7 @@ export function WaitlistInviteCard({
   if (unavailable || !inviteUrl || !referralCode) {
     return (
       <div
-        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]"
+        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
         data-testid="waitlist-invite-card"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -72,7 +72,7 @@ export function WaitlistInviteCard({
 
   return (
     <div
-      className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]"
+      className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
       data-testid="waitlist-invite-card"
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">

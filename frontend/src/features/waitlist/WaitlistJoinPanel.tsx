@@ -74,8 +74,11 @@ export function WaitlistJoinPanel({
       </motion.div>
 
       <motion.div variants={item} className="space-y-3 text-center">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+          ERC-4626 Creator Vaults
+        </p>
         <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
-          Creator Vaults.
+          4626.fun
         </h1>
         <p className="font-serif text-lg italic tracking-[-0.01em] text-[rgb(var(--brand-gold))] sm:text-xl">
           Earn Together.
@@ -98,7 +101,7 @@ export function WaitlistJoinPanel({
         variants={item}
         className="text-center text-[11px] leading-relaxed text-zinc-600"
       >
-        Built for creators on Base. No spam. Leave anytime.
+        Built on Base — one email to join, no spam, leave anytime.
       </motion.p>
     </motion.div>
   )

@@ -87,7 +87,7 @@ export function WaitlistMiniLeaderboard({
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06]">
+      <div className="overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] backdrop-blur-md">
         {loading && topRows.length === 0 ? (
           <div className="space-y-2 px-3 py-4" aria-hidden>
             {Array.from({ length: 3 }).map((_, i) => (
