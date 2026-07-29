@@ -97,8 +97,20 @@ contract CCALaunchArmEncodingHelper {
         return _createLinearSteps(duration);
     }
 
+    /// @dev Above this many blocks the classic 3-step curve degrades (integer mps hits 0/1).
+    uint64 internal constant SAFE_DEFAULT_MAX_DURATION = 2_000_000;
+    /// @dev Above this many blocks even the quarter-ramp cannot approximate 20% in phase one
+    ///      (a dead window would be required), so the body becomes perfectly uniform.
+    uint64 internal constant QUARTER_RAMP_MAX_DURATION = 3_000_000;
+
+    error DurationExceedsExpressibleIssuance(uint64 duration);
+
     function createUniswapSafeDefaultSteps(uint64 duration) external pure returns (bytes memory) {
         if (duration <= 2) return _createLinearSteps(duration);
+        // Fast-chain branches (Orbit L2 block domains): 7 days is ~2.42M blocks on Arbitrum and
+        // ~6.05M on Robinhood Chain, where the classic curve's integer mps rates degenerate.
+        if (duration > QUARTER_RAMP_MAX_DURATION) return _createUniformFastChainSteps(duration);
+        if (duration > SAFE_DEFAULT_MAX_DURATION) return _createQuarterRampSteps(duration);
 
         uint64 lastBlock = 1;
         uint64 phase1Blocks = duration / 2;
@@ -122,15 +134,70 @@ contract CCALaunchArmEncodingHelper {
         return abi.encodePacked(packed1, packed2, packed3);
     }
 
-    function deriveScheduledStartBlock(uint256 blockNumber, uint256 blockTimestamp, uint64 launchBlockTimeSeconds)
-        external
-        pure
-        returns (uint64 startBlock)
-    {
+    /// @dev 5-step ramp for 2M < duration <= 3M blocks (e.g. Arbitrum 7 days ≈ 2.42M blocks).
+    ///      Quarters at rates (rA, rA+1, rB, rB+1) approximate the 20/45 profile with integer mps;
+    ///      the final block carries the remainder like the classic curve (~35-40%).
+    function _createQuarterRampSteps(uint64 duration) internal pure returns (bytes memory) {
+        uint64 quarter = duration / 4;
+        uint64 b1 = quarter;
+        uint64 b2 = quarter;
+        uint64 b3 = quarter;
+        uint64 b4 = duration - 3 * quarter - 1;
+
+        uint24 rA = _rampRate(2_000_000, duration);
+        uint24 rB = _rampRate(4_500_000, duration);
+
+        uint256 issued = uint256(rA) * b1 + uint256(rA + 1) * b2 + uint256(rB) * b3 + uint256(rB + 1) * b4;
+        uint24 finalMps = uint24(MPS - uint32(issued));
+
+        bytes8 packed1 = bytes8((uint64(rA) << 40) | uint64(b1));
+        bytes8 packed2 = bytes8((uint64(rA + 1) << 40) | uint64(b2));
+        bytes8 packed3 = bytes8((uint64(rB) << 40) | uint64(b3));
+        bytes8 packed4 = bytes8((uint64(rB + 1) << 40) | uint64(b4));
+        bytes8 packed5 = bytes8((uint64(finalMps) << 40) | uint64(1));
+
+        return abi.encodePacked(packed1, packed2, packed3, packed4, packed5);
+    }
+
+    /// @dev Solve (2r+1) * (duration/4) ≈ target for r, clamped to >= 1 so no quarter is dead.
+    function _rampRate(uint24 target, uint64 duration) internal pure returns (uint24 r) {
+        uint256 t = (4 * uint256(target)) / uint256(duration);
+        if (t <= 1) return 1;
+        r = uint24((t - 1) / 2);
+        if (r == 0) r = 1;
+    }
+
+    /// @dev For duration > 3M blocks (e.g. Robinhood 7 days ≈ 6.05M blocks at ~100ms): integer
+    ///      mps >= 1 forces >= ~60% issuance before the final block, so the body is perfectly
+    ///      uniform at mps 1 and the final block carries the standard remainder tranche.
+    function _createUniformFastChainSteps(uint64 duration) internal pure returns (bytes memory) {
+        if (duration >= MPS) revert DurationExceedsExpressibleIssuance(duration);
+
+        uint64 bodyBlocks = duration - 1;
+        uint24 finalMps = uint24(uint256(MPS) - uint256(bodyBlocks));
+
+        bytes8 packed1 = bytes8((uint64(1) << 40) | uint64(bodyBlocks));
+        bytes8 packed2 = bytes8((uint64(finalMps) << 40) | uint64(1));
+
+        return abi.encodePacked(packed1, packed2);
+    }
+
+    function deriveScheduledStartBlock(
+        uint256 blockNumber,
+        uint256 blockTimestamp,
+        uint64 launchBlockTimeSeconds,
+        uint64 launchBlocksPerSecond
+    ) external pure returns (uint64 startBlock) {
         uint256 nextThursdayStartTimestamp = _nextThursdayStartTimestamp(blockTimestamp);
         uint256 deltaBlocks;
         if (nextThursdayStartTimestamp > blockTimestamp) {
-            deltaBlocks = Math.ceilDiv(nextThursdayStartTimestamp - blockTimestamp, uint256(launchBlockTimeSeconds));
+            if (launchBlocksPerSecond > 0) {
+                // Sub-second (Orbit) chains: express the wait directly in fast L2 blocks.
+                deltaBlocks = (nextThursdayStartTimestamp - blockTimestamp) * launchBlocksPerSecond;
+            } else {
+                deltaBlocks =
+                    Math.ceilDiv(nextThursdayStartTimestamp - blockTimestamp, uint256(launchBlockTimeSeconds));
+            }
         }
         if (deltaBlocks == 0) deltaBlocks = 1;
         startBlock = uint64(blockNumber + deltaBlocks);

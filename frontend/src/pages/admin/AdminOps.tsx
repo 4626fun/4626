@@ -67,6 +67,7 @@ import {
   type TxState,
 } from './adminOpsHelpers'
 import { RemoteFeeFlushCard } from './RemoteFeeFlushCard'
+import { AkitaCcaSpokesCard } from './AkitaCcaSpokesCard'
 function TxMeta({ state }: { state?: TxState }) {
   if (!state || state.status === 'idle') return null
   return (
@@ -3245,6 +3246,13 @@ export function AdminOps() {
         kind: 'anchor' as const,
       },
       {
+        id: 'akita-cca-spokes',
+        label: '■AKITA CCA spokes',
+        description: 'Fan-out remote ShareOFT + CCA arms from Base.',
+        to: '#akita-cca-spokes',
+        kind: 'anchor' as const,
+      },
+      {
         id: 'share-token-metadata',
         label: 'Share token metadata',
         description: 'Pin ShareOFT metadata to Lens Grove.',
@@ -3296,6 +3304,9 @@ export function AdminOps() {
               <KeeperTickCard />
               <div id="remote-fee-flush">
                 <RemoteFeeFlushCard />
+              </div>
+              <div id="akita-cca-spokes">
+                <AkitaCcaSpokesCard />
               </div>
             </div>
           </div>

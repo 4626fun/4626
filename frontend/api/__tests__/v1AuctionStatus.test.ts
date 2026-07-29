@@ -135,6 +135,70 @@ describe('v1 auction status handler', () => {
     expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
+  it('returns curated static ■AKITA ShareOFT icon (not api.4626.fun compositor)', async () => {
+    const AKITA_SHARE = '0x44710150A469DE368Abc82F05e6217086Be84626'
+    mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case 'getAuctionStatus':
+          return [AUCTION, true, false, 123n, 456n]
+        case 'getLifecycleStatus':
+          return {
+            phase: 1,
+            auction: AUCTION,
+            isGraduated: false,
+            auctionWindowOpen: true,
+            claimOpen: false,
+            currencySwept: false,
+            unsoldSwept: false,
+            migrated: false,
+            failedFinalized: false,
+            startBlock: 1000n,
+            endBlock: 2000n,
+            claimBlock: 2100n,
+            migrationBlock: 2001n,
+            sweepBlock: 2500n,
+            lpReserveAmount: 789n,
+            clearingPrice: 123n,
+            currencyRaised: 456n,
+          }
+        case 'getBackingTelemetry':
+          return {
+            vault: '0x4444444444444444444444444444444444444444',
+            launchTotalAssets: 1000n,
+            launchTotalSupply: 1000n,
+            currentTotalAssets: 1250n,
+            currentTotalSupply: 1000n,
+            assetsDelta: 250n,
+            supplyDelta: 0n,
+          }
+        case 'currency':
+          return CURRENCY
+        case 'auctionToken':
+          return AKITA_SHARE
+        case 'decimals':
+          return 18
+        case 'symbol':
+          return '■AKITA'
+        default:
+          return null
+      }
+    })
+
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaLaunchArm: CCA_STRATEGY },
+      headers: { host: 'app.4626.fun' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.auctionTokenImagePath).toBe('/tokens/akita-share-token.png')
+    expect(res.body?.data?.auctionTokenImageUrl).toBe('https://4626.fun/tokens/akita-share-token.png')
+  })
+
   it('returns canonical token image URL and same-origin fallback path', async () => {
     const mod = await import('../_handlers/v1/auction/_status.ts')
     const handler = mod.default

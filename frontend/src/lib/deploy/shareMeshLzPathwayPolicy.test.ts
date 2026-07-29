@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import {
   EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS,
+  EXPECTED_EVM_LANE_CONFIRMATIONS,
   EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS,
   NIL_REQUIRED_DVN_COUNT,
+  SHARE_MESH_ARBITRUM_EID,
+  SHARE_MESH_BASE_EID,
+  SHARE_MESH_ETHEREUM_EID,
+  SHARE_MESH_ROBINHOOD_EID,
+  SHARE_MESH_SOLANA_EID,
+  SHARE_MESH_UNICHAIN_EID,
   asPaddedEvmPeer,
   assessBaseShareMeshUlnForPipeA,
   assessShareMeshLzPathway,
@@ -41,6 +48,29 @@ function policySnapshot(overrides?: Partial<PathwayConfirmationSnapshot>): Pathw
 }
 
 describe('shareMeshLzPathwayPolicy', () => {
+  it('records canonical EVM lane EIDs and [15,15] confirmation policy', () => {
+    expect(SHARE_MESH_BASE_EID).toBe(30_184)
+    expect(SHARE_MESH_SOLANA_EID).toBe(30_168)
+    expect(SHARE_MESH_ETHEREUM_EID).toBe(30_101)
+    expect(SHARE_MESH_ARBITRUM_EID).toBe(30_110)
+    expect(SHARE_MESH_UNICHAIN_EID).toBe(30_320)
+    expect(SHARE_MESH_ROBINHOOD_EID).toBe(30_416)
+    expect(EXPECTED_EVM_LANE_CONFIRMATIONS).toBe(15n)
+    const eids = new Set([
+      SHARE_MESH_BASE_EID,
+      SHARE_MESH_SOLANA_EID,
+      SHARE_MESH_ETHEREUM_EID,
+      SHARE_MESH_ARBITRUM_EID,
+      SHARE_MESH_UNICHAIN_EID,
+      SHARE_MESH_ROBINHOOD_EID,
+    ])
+    expect(eids.size).toBe(6)
+    // EVM-lane policy [15,15] satisfies outbound >= inbound in both directions
+    expect(outboundMeetsInbound(EXPECTED_EVM_LANE_CONFIRMATIONS, EXPECTED_EVM_LANE_CONFIRMATIONS)).toBe(
+      true,
+    )
+  })
+
   it('blocks when source outbound confirmations are below destination inbound', () => {
     expect(outboundMeetsInbound(10n, 15n)).toBe(false)
     expect(outboundMeetsInbound(15n, 15n)).toBe(true)

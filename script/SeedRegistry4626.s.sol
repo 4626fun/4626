@@ -76,6 +76,12 @@ contract SeedRegistry4626 is Script {
     address constant MONAD_WMON = address(0); // TBD at launch
     address constant MONAD_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
 
+    // --- Unichain ---
+    uint256 constant UNICHAIN_CHAIN_ID = 130;
+    uint32 constant UNICHAIN_EID = 30320;
+    address constant UNICHAIN_WETH = 0x4200000000000000000000000000000000000006;
+    address constant UNICHAIN_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+
     // --- Robinhood Chain (remote ShareOFT only; Base remains hub) ---
     uint256 constant ROBINHOOD_CHAIN_ID = 4663;
     uint32 constant ROBINHOOD_EID = 30416;
@@ -155,6 +161,9 @@ contract SeedRegistry4626 is Script {
         // Arbitrum
         _tryRegisterChain(registry, ARB_CHAIN_ID, "Arbitrum", ARB_WETH);
 
+        // Unichain
+        _tryRegisterChain(registry, UNICHAIN_CHAIN_ID, "Unichain", UNICHAIN_WETH);
+
         // BSC
         _tryRegisterChain(registry, BSC_CHAIN_ID, "BSC", BSC_WBNB);
 
@@ -185,6 +194,9 @@ contract SeedRegistry4626 is Script {
         registry.setLayerZeroEndpoint(ARB_CHAIN_ID, ARB_LZ_ENDPOINT);
         console.log(unicode"   ✓ Arbitrum");
 
+        registry.setLayerZeroEndpoint(UNICHAIN_CHAIN_ID, UNICHAIN_LZ_ENDPOINT);
+        console.log(unicode"   ✓ Unichain");
+
         registry.setLayerZeroEndpoint(BSC_CHAIN_ID, BSC_LZ_ENDPOINT);
         console.log(unicode"   ✓ BSC");
 
@@ -213,6 +225,9 @@ contract SeedRegistry4626 is Script {
 
         registry.setChainIdToEid(ARB_CHAIN_ID, ARB_EID);
         console.log(unicode"   ✓ Arbitrum  42161 <-> 30110");
+
+        registry.setChainIdToEid(UNICHAIN_CHAIN_ID, UNICHAIN_EID);
+        console.log(unicode"   ✓ Unichain  130 <-> 30320");
 
         registry.setChainIdToEid(BSC_CHAIN_ID, BSC_EID);
         console.log(unicode"   ✓ BSC  56 <-> 30102");

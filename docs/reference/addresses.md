@@ -214,13 +214,18 @@ Canonical launch parameters live in `frontend/src/config/ccaLaunchChains.ts`.
 Do not invent ShareOFT / arm / oracle addresses — pin via `VITE_AKITA_*_<CHAIN>`
 after each chain's deploy lands. Preflight: `pnpm -C frontend ops:verify-cca-multichain`.
 
-| Chain     | chainId | LZ EID | CCA factory (target) | PoolManager v4 | ■AKITA stack |
-| --------- | ------- | ------ | -------------------- | -------------- | ------------ |
-| Base      | 8453    | 30184  | v1.1.0 live arm `0xCCcc…0bD5`; new arms → v2.1.0 `0x0000…63F8` | `0x4985…2b2b` | Live (see AKITA_DEFAULTS) |
-| Ethereum  | 1       | 30101  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x0000…8A90` | TBD — env pin after deploy |
-| Arbitrum  | 42161   | 30110  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x360E…FB32` | TBD — env pin after deploy |
-| Unichain  | 130     | 30320  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x1F98…0004` | TBD — env pin after deploy |
-| Robinhood | 4663    | 30416  | v2.1.0 — **deploy ourselves** with `protocolFeeController = address(0)` (Uniswap has not shipped CCA here) | `0x8366…0951` | TBD — env pin after deploy |
+Spokes = remote ShareOFT + thin CreatorOracle + CCA arm (vault/wrapper/gauge/Zora
+token stay on Base). Pins after deploy: `VITE_AKITA_SHARE_OFT_<CHAIN>` +
+`VITE_AKITA_CCA_STRATEGY_<CHAIN>` (oracle is onchain-wired; no env pin).
+Chainlink ETH/USD + sequencer feeds: `frontend/src/config/ccaLaunchChains.ts`.
+
+| Chain     | chainId | LZ EID | CCA factory (target) | PoolManager v4 | ■AKITA on this chain |
+| --------- | ------- | ------ | -------------------- | -------------- | -------------------- |
+| Base      | 8453    | 30184  | v1.1.0 live arm `0xCCcc…0bD5`; new arms → v2.1.0 `0x0000…63F8` | `0x4985…2b2b` | Full hub (AKITA_DEFAULTS) |
+| Ethereum  | 1       | 30101  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x0000…8A90` | ShareOFT + oracle + CCA TBD |
+| Arbitrum  | 42161   | 30110  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x360E…FB32` | ShareOFT + oracle + CCA TBD |
+| Unichain  | 130     | 30320  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x1F98…0004` | ShareOFT + oracle + CCA TBD |
+| Robinhood | 4663    | 30416  | v2.1.0 — **deploy ourselves** with `protocolFeeController = address(0)` | `0x8366…0951` | ShareOFT + oracle + CCA TBD |
 
 Hard constraint: factory protocol fee must be zero on every chain
 (`CCALaunchArm.migrate()` requires swept currency == `currencyRaised()`).

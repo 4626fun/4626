@@ -110,6 +110,32 @@ contract MockCcaFactory {
     }
 }
 
+contract MockCcaFactoryV2 {
+    address public lastToken;
+    uint256 public lastAmount;
+    bytes public lastConfigData;
+    bytes32 public lastSalt;
+    MockAuction public lastAuction;
+    bool public nextGraduated = true;
+
+    function setNextGraduated(bool value) external {
+        nextGraduated = value;
+    }
+
+    function create(address token, uint256 amount, bytes calldata configData, bytes32 salt)
+        external
+        returns (address)
+    {
+        lastToken = token;
+        lastAmount = amount;
+        lastConfigData = configData;
+        lastSalt = salt;
+
+        lastAuction = new MockAuction(uint128(amount), nextGraduated);
+        return address(lastAuction);
+    }
+}
+
 contract CCALaunchArmLaunchHandshakeTest is Test {
     uint24 internal constant MPS = 10_000_000;
     uint8 internal constant PHASE_AUCTION_LIVE = 1;
@@ -230,6 +256,155 @@ contract CCALaunchArmLaunchHandshakeTest is Test {
         address[] memory history = launchArm.getPastAuctions();
         assertEq(history.length, 1, "failed auction should be archived");
         assertEq(history[0], launchedAuction, "archived auction mismatch");
+    }
+
+    function testLaunchAuctionUsesV2FactoryCreateEntrypoint() external {
+        MockCcaFactoryV2 factoryV2 = new MockCcaFactoryV2();
+        factoryV2.setNextGraduated(false);
+        launchArm.setCcaFactoryV2(address(factoryV2));
+
+        assertTrue(launchArm.ccaFactoryV2(), "v2 flag should be set");
+        assertEq(launchArm.ccaFactory(), address(factoryV2), "factory address mismatch");
+
+        vm.roll(1_000_000);
+        vm.warp(4 days + 13 hours);
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+
+        uint256 amount = 100_000e18;
+        address auction = launchArm.launchAuction(amount, 1e15, 1e18, hex"1234");
+
+        assertEq(auction, address(factoryV2.lastAuction()), "v2 auction address mismatch");
+        assertEq(factoryV2.lastToken(), address(token), "v2 create token mismatch");
+        assertEq(factoryV2.lastAmount(), amount, "v2 create amount mismatch");
+        assertEq(token.balanceOf(auction), amount, "v2 auction must be funded with full auction amount");
+        assertTrue(MockAuction(auction).tokensReceived(), "v2 auction should receive onTokensReceived");
+
+        EncodedAuctionParams memory params = abi.decode(factoryV2.lastConfigData(), (EncodedAuctionParams));
+        bytes memory expectedSafeSteps = _createUniswapSafeDefaultSteps(launchArm.defaultDuration());
+        assertEq(
+            keccak256(params.auctionStepsData), keccak256(expectedSafeSteps), "v2 config must reuse safe schedule"
+        );
+        assertEq(params.currency, address(0), "v2 config currency mismatch");
+    }
+
+    function testSetCcaFactoryResetsToV1Semantics() external {
+        MockCcaFactoryV2 factoryV2 = new MockCcaFactoryV2();
+        launchArm.setCcaFactoryV2(address(factoryV2));
+        assertTrue(launchArm.ccaFactoryV2(), "v2 flag should be set");
+
+        launchArm.setCcaFactory(address(factory));
+        assertFalse(launchArm.ccaFactoryV2(), "setCcaFactory must reset to v1 semantics");
+        assertEq(launchArm.ccaFactory(), address(factory), "factory address mismatch after reset");
+
+        vm.roll(1_000_000);
+        vm.warp(4 days + 13 hours);
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+        factory.setNextGraduated(false);
+
+        address auction = launchArm.launchAuction(100_000e18, 1e15, 1e18, hex"");
+        assertEq(auction, address(factory.lastAuction()), "launch should route through v1 initializeDistribution");
+    }
+
+    function testOrbitLaunchSchedulesInArbSysBlockDomain() external {
+        address arbSys = address(100);
+        vm.etch(arbSys, hex"6080604052");
+        uint256 arbBlock = 500_000_000;
+        vm.mockCall(arbSys, abi.encodeWithSelector(bytes4(0xa3b1b31d)), abi.encode(arbBlock));
+
+        CCALaunchArm orbitArm = new CCALaunchArm(address(token), address(0), address(this), address(this), address(this));
+        orbitArm.setCcaFactory(address(factory));
+        orbitArm.setOracleConfig(address(oracle), address(0x1111), address(0x2222), address(this));
+        orbitArm.setLaunchBlocksPerSecond(10);
+
+        vm.warp(4 days + 13 hours);
+        uint256 launchTimestamp = block.timestamp;
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+        factory.setNextGraduated(false);
+
+        uint256 amount = 100_000e18;
+        token.approve(address(orbitArm), type(uint256).max);
+        address auction = orbitArm.launchAuction(amount, 1e15, 1e18, hex"");
+
+        EncodedAuctionParams memory params = abi.decode(factory.lastConfigData(), (EncodedAuctionParams));
+        uint256 expectedDelta = (_nextThursdayStartTimestamp(launchTimestamp) - launchTimestamp) * 10;
+        assertEq(params.startBlock, uint64(arbBlock + expectedDelta), "start must be scheduled in arbBlockNumber domain");
+        assertEq(params.endBlock, params.startBlock + orbitArm.defaultDuration(), "end block mismatch");
+
+        CCALaunchArm.LifecycleStatus memory lifecycle = orbitArm.getLifecycleStatus();
+        assertEq(lifecycle.phase, PHASE_AUCTION_SCHEDULED, "orbit launch should start scheduled");
+
+        vm.mockCall(arbSys, abi.encodeWithSelector(bytes4(0xa3b1b31d)), abi.encode(uint256(params.startBlock)));
+        lifecycle = orbitArm.getLifecycleStatus();
+        assertEq(lifecycle.phase, PHASE_AUCTION_LIVE, "phase must follow arbBlockNumber, not block.number");
+        assertTrue(MockAuction(auction).tokensReceived(), "orbit auction should receive tokens");
+    }
+
+    function testSetLaunchBlocksPerSecondRejectsZero() external {
+        vm.expectRevert(CCALaunchArm.InvalidConfig.selector);
+        launchArm.setLaunchBlocksPerSecond(0);
+    }
+
+    function testFastChainArbitrumScheduleUsesQuarterRamp() external {
+        launchArm.setDefaultDuration(2_419_200); // 7 days at ~250ms blocks
+        factory.setNextGraduated(false);
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+
+        launchArm.launchAuction(100_000e18, 1e15, 1e18, hex"");
+
+        EncodedAuctionParams memory params = abi.decode(factory.lastConfigData(), (EncodedAuctionParams));
+        assertEq(params.auctionStepsData.length, 40, "quarter-ramp schedule should contain exactly 5 steps");
+
+        (uint24 mps0, uint40 delta0) = _parseStep(params.auctionStepsData, 0);
+        (uint24 mps1, uint40 delta1) = _parseStep(params.auctionStepsData, 1);
+        (uint24 mps2, uint40 delta2) = _parseStep(params.auctionStepsData, 2);
+        (uint24 mps3, uint40 delta3) = _parseStep(params.auctionStepsData, 3);
+        (uint24 mps4, uint40 delta4) = _parseStep(params.auctionStepsData, 4);
+
+        assertEq(delta0, 604_800);
+        assertEq(delta1, 604_800);
+        assertEq(delta2, 604_800);
+        assertEq(delta3, 604_799);
+        assertEq(delta4, 1, "final step must be the single final block");
+        assertEq(uint256(delta0) + delta1 + delta2 + delta3 + delta4, 2_419_200, "steps must span the duration");
+
+        assertTrue(mps0 < mps1 && mps1 < mps2 && mps2 < mps3, "body rates should ramp monotonically");
+        uint256 issued = uint256(mps0) * delta0 + uint256(mps1) * delta1 + uint256(mps2) * delta2
+            + uint256(mps3) * delta3 + uint256(mps4) * delta4;
+        assertEq(issued, 10_000_000, "steps must issue exactly 100% of supply");
+        assertGt(mps4, 3_000_000, "final block should carry the standard remainder tranche");
+        assertLt(mps4, 5_000_000, "final block tranche should stay near the classic ~35-40%");
+    }
+
+    function testFastChainRobinhoodScheduleUsesUniformBody() external {
+        launchArm.setDefaultDuration(6_048_000); // 7 days at ~100ms blocks
+        factory.setNextGraduated(false);
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+
+        launchArm.launchAuction(100_000e18, 1e15, 1e18, hex"");
+
+        EncodedAuctionParams memory params = abi.decode(factory.lastConfigData(), (EncodedAuctionParams));
+        assertEq(params.auctionStepsData.length, 16, "uniform fast-chain schedule should contain exactly 2 steps");
+
+        (uint24 mps0, uint40 delta0) = _parseStep(params.auctionStepsData, 0);
+        (uint24 mps1, uint40 delta1) = _parseStep(params.auctionStepsData, 1);
+
+        assertEq(mps0, 1, "body should be perfectly uniform at mps 1");
+        assertEq(delta0, 6_047_999);
+        assertEq(delta1, 1);
+        assertEq(uint256(mps0) * delta0 + uint256(mps1) * delta1, 10_000_000, "steps must issue exactly 100%");
+        assertEq(mps1, 3_952_001, "final block should carry the ~39.5% remainder tranche");
+    }
+
+    function testLaunchRevertsWhenDurationExceedsExpressibleIssuance() external {
+        launchArm.setDefaultDuration(10_000_000); // >= MPS: full issuance not expressible at mps >= 1
+        oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                bytes4(keccak256("DurationExceedsExpressibleIssuance(uint64)")), uint64(10_000_000)
+            )
+        );
+        launchArm.launchAuction(100_000e18, 1e15, 1e18, hex"");
     }
 
     function testLaunchAuctionRevertsWhenOraclePriceUnavailable() external {

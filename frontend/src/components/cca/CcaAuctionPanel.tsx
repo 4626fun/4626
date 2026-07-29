@@ -6,6 +6,53 @@ import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { apiFetch } from '@/lib/api/apiBase'
+import { DEFAULT_CHAIN_ID, getChainMeta } from '@/config/chains'
+import { AKITA } from '@/config/contracts'
+
+/** Curated ■AKITA ShareOFT breakout icon (site-root public asset). */
+const AKITA_SHARE_TOKEN_ICON = '/tokens/akita-share-token.png'
+
+function isAkitaShareOft(address: string | null | undefined): boolean {
+  if (!address || !isAddress(address)) return false
+  return address.toLowerCase() === String(AKITA.shareOFT).toLowerCase()
+}
+
+function preferSameOriginTokenImage(params: {
+  absoluteUrl: string | null
+  relativePath: string | null
+  auctionToken: string | null | undefined
+  chainId: number
+}): string {
+  // Always prefer the curated static asset for the live ■AKITA ShareOFT —
+  // DexScreener / broken api.4626.fun absolute URLs have failed this surface before.
+  if (isAkitaShareOft(params.auctionToken)) return AKITA_SHARE_TOKEN_ICON
+
+  const relative = params.relativePath?.trim() || null
+  if (relative?.startsWith('/tokens/')) return relative
+
+  const absolute = params.absoluteUrl?.trim() || null
+  if (absolute) {
+    try {
+      const host = new URL(absolute).hostname.toLowerCase()
+      // Dead / retired API host — never paint a broken <img> from it.
+      if (host === 'api.4626.fun') {
+        /* fall through */
+      } else {
+        return absolute
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (relative?.startsWith('/')) return relative
+
+  if (params.auctionToken && isAddress(params.auctionToken)) {
+    return `/api/v1/token/${params.auctionToken.toLowerCase()}/image?chain=${params.chainId}&format=png`
+  }
+
+  return '/assets/logo-mark.svg'
+}
 
 import {
   MAX_UINT128,
@@ -89,7 +136,9 @@ export function CcaAuctionPanel({
   wsSymbol: string
   vaultAddress?: Address
 }) {
-  const { isConnected, address } = useAccount()
+  const { isConnected, address, chainId: walletChainId } = useAccount()
+  const explorerBaseUrl =
+    getChainMeta(walletChainId ?? DEFAULT_CHAIN_ID)?.explorerUrl ?? 'https://basescan.org'
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple')
   const [spendEth, setSpendEth] = useState('')
   const [maxPriceEthPerToken, setMaxPriceEthPerToken] = useState('')
@@ -181,7 +230,14 @@ export function CcaAuctionPanel({
             ? json.data.auctionTokenImagePath.trim()
             : null
         if (!cancelled) {
-          setAuctionTokenImageUrl(absoluteUrl ?? relativePath ?? null)
+          setAuctionTokenImageUrl(
+            preferSameOriginTokenImage({
+              absoluteUrl,
+              relativePath,
+              auctionToken: null,
+              chainId: walletChainId ?? DEFAULT_CHAIN_ID,
+            }),
+          )
           setLifecyclePhase(typeof json.data?.lifecyclePhase === 'number' ? json.data.lifecyclePhase : null)
           setAssetsDelta(BigInt(json.data?.assetsDelta ?? '0'))
           setSupplyDelta(BigInt(json.data?.supplyDelta ?? '0'))
@@ -198,7 +254,7 @@ export function CcaAuctionPanel({
     return () => {
       cancelled = true
     }
-  }, [ccaLaunchArm])
+  }, [ccaLaunchArm, walletChainId])
 
   const auctionAddress = (auctionStatus?.[0] ?? ZERO_ADDRESS) as Address
   const isActive = Boolean(auctionStatus?.[1] ?? false)
@@ -214,12 +270,13 @@ export function CcaAuctionPanel({
     (assetsDelta !== 0n || supplyDelta !== 0n)
 
   const tokenImageSrc = useMemo(() => {
-    if (auctionTokenImageUrl) return auctionTokenImageUrl
-    if (auctionTokenAddress && isAddress(auctionTokenAddress)) {
-      return `https://dd.dexscreener.com/ds-data/tokens/base/${String(auctionTokenAddress).toLowerCase()}.png`
-    }
-    return '/assets/logo-mark.svg'
-  }, [auctionTokenAddress, auctionTokenImageUrl])
+    return preferSameOriginTokenImage({
+      absoluteUrl: auctionTokenImageUrl,
+      relativePath: null,
+      auctionToken: auctionTokenAddress,
+      chainId: walletChainId ?? DEFAULT_CHAIN_ID,
+    })
+  }, [auctionTokenAddress, auctionTokenImageUrl, walletChainId])
 
   useEffect(() => {
     setTokenImageBroken(false)
@@ -873,7 +930,7 @@ export function CcaAuctionPanel({
                             </div>
                             <div className="text-xs text-cyan-400/60 font-mono">
                               <a
-                                href={`https://basescan.org/tx/${bidTxHash}`}
+                                href={`${explorerBaseUrl}/tx/${bidTxHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-cyan-400 transition-colors underline"
@@ -942,7 +999,7 @@ export function CcaAuctionPanel({
             <div className="flex items-center justify-between py-1.5 border-b border-white/5">
               <span className="text-zinc-600">Strategy Contract</span>
               <a 
-                href={`https://basescan.org/address/${ccaLaunchArm}`}
+                href={`${explorerBaseUrl}/address/${ccaLaunchArm}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-cyan-400 hover:text-cyan-300 transition-colors"
@@ -954,7 +1011,7 @@ export function CcaAuctionPanel({
               <div className="flex items-center justify-between py-1.5 border-b border-white/5">
                 <span className="text-zinc-600">Vault Address</span>
                 <a 
-                  href={`https://basescan.org/address/${vaultAddress}`}
+                  href={`${explorerBaseUrl}/address/${vaultAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-cyan-400 hover:text-cyan-300 transition-colors"
@@ -967,7 +1024,7 @@ export function CcaAuctionPanel({
               <div className="flex items-center justify-between py-1.5 border-b border-white/5">
                 <span className="text-zinc-600">Auction Contract</span>
                 <a 
-                  href={`https://basescan.org/address/${auctionAddress}`}
+                  href={`${explorerBaseUrl}/address/${auctionAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-cyan-400 hover:text-cyan-300 transition-colors"
@@ -980,7 +1037,7 @@ export function CcaAuctionPanel({
               <div className="flex items-center justify-between py-1.5">
                 <span className="text-zinc-600">Token Address</span>
                 <a 
-                  href={`https://basescan.org/address/${auctionTokenAddress}`}
+                  href={`${explorerBaseUrl}/address/${auctionTokenAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-cyan-400 hover:text-cyan-300 transition-colors"

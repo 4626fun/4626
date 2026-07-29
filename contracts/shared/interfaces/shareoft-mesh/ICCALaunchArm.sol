@@ -9,11 +9,14 @@ pragma solidity ^0.8.20;
  */
 interface ICCALaunchArm {
     function setApprovedLauncher(address launcher, bool approved) external;
+    function setCcaFactory(address newFactory) external;
+    function setCcaFactoryV2(address newFactory) external;
     function setRecipients(address _fundsRecipient, address _tokensRecipient) external;
     function setBackingVault(address _backingVault) external;
     function setLaunchDiscountBps(uint16 _discountBps) external;
     function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external;
     function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external;
+    function setLaunchBlocksPerSecond(uint64 _blocksPerSecond) external;
     function setMigrationConfig(
         address _positionManager,
         address _positionRecipient,

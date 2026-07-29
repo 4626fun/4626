@@ -300,6 +300,22 @@ export const AKITA_DEFAULTS = {
   oracle: addr("3954fC7c961f17699497BB3D7b7e903722881ffa"),
 } as const;
 
+/**
+ * ■AKITA CCA launch expansion chains (chainId → env suffix).
+ *
+ * Spokes are ShareOFT + CCA arm only — vault/wrapper/gauge/Zora token stay on
+ * Base. Required pins after each spoke deploy:
+ *   `VITE_AKITA_SHARE_OFT_<SUFFIX>`
+ *   `VITE_AKITA_CCA_STRATEGY_<SUFFIX>`
+ * Never invent addresses; leave unset until deploy lands.
+ */
+export const AKITA_EXPANSION_CHAIN_ENV_SUFFIX: Readonly<Record<number, string>> = {
+  1: "ETHEREUM",
+  42161: "ARBITRUM",
+  130: "UNICHAIN",
+  4663: "ROBINHOOD",
+};
+
 export const ERC4626_DEFAULTS = {
   // Canonical protocol token defaults currently point to the live Base protocol stack.
   // Keep explicit addresses here so this default set remains independent from AKITA aliases.

@@ -23,7 +23,14 @@ import {
   Flame,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { CONTRACTS, AKITA } from '@/config/contracts'
+import {
+  CONTRACTS,
+  AKITA,
+  getAkitaCcaLaunchArmForChain,
+  getAkitaChainStack,
+  isAkitaExpansionChain,
+} from '@/config/contracts'
+import { DEFAULT_CHAIN_ID, getChainMeta } from '@/config/chains'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { Spinner } from '@/components/ui/Spinner'
 
@@ -151,24 +158,38 @@ const ZERO_ADDRESS = `0x${'0000000000000000000000000000000000000000'}` as const
 export function CompleteAuction() {
   const { strategy } = useParams()
   const navigate = useNavigate()
-  const { address } = useAccount()
+  const { address, chainId: walletChainId } = useAccount()
   const publicClient = usePublicClient()
   const [currentStep, setCurrentStep] = useState<Step>('check')
   const [error, setError] = useState<string | null>(null)
 
-  // Default to AKITA CCA strategy if not provided
-  const strategyAddress = (strategy || AKITA.ccaLaunchArm) as `0x${string}`
+  // Resolve the CCA arm for the connected chain. Expansion chains never fall
+  // back to the live Base stack — that would read/write the Base arm on the
+  // wrong chain. Route `strategy` overrides only when it is a valid address.
+  const chainId = walletChainId ?? DEFAULT_CHAIN_ID
+  const chainMeta = getChainMeta(chainId)
+  const explorerBaseUrl = chainMeta?.explorerUrl ?? 'https://basescan.org'
+  const pinnedArm = getAkitaCcaLaunchArmForChain(walletChainId)
+  const expansionMissingPin = isAkitaExpansionChain(walletChainId) && !pinnedArm
+  const strategyAddress = (strategy || pinnedArm || (!isAkitaExpansionChain(walletChainId) ? AKITA.ccaLaunchArm : undefined)) as
+    | `0x${string}`
+    | undefined
+  const akitaStack = getAkitaChainStack(walletChainId)
+  // Tax hook setTaxConfig is Base-only until per-chain hooks are pinned.
+  const taxHookConfiguredOnChain = !isAkitaExpansionChain(walletChainId)
 
   // Read auction status
   const { data: auctionStatus } = useReadContract({
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getAuctionStatus',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
   const { data: lifecycleStatus } = useReadContract({
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getLifecycleStatus',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
 
   // Read token address
@@ -176,6 +197,7 @@ export function CompleteAuction() {
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'auctionToken',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
 
   // Read funds recipient (vault)
@@ -183,6 +205,7 @@ export function CompleteAuction() {
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'fundsRecipient',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
   const vaultAddress = (fundsRecipient && typeof fundsRecipient === 'string' ? fundsRecipient : null) as
     | `0x${string}`
@@ -221,6 +244,7 @@ export function CompleteAuction() {
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'feeRecipient',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
 
   // Read tax rate
@@ -228,6 +252,7 @@ export function CompleteAuction() {
     address: strategyAddress,
     abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'taxRateBps',
+    query: { enabled: !!strategyAddress && !expansionMissingPin },
   })
 
   // Step 1: Sweep Currency (moves raised funds into strategy)
@@ -322,6 +347,10 @@ export function CompleteAuction() {
   }, [isFailed, failedRecoveryComplete, isSweepSuccess, isMigrateSuccess, isConfigSuccess])
 
   const handleSweepCurrency = () => {
+    if (!strategyAddress) {
+      setError('CCA arm not pinned for this chain')
+      return
+    }
     setError(null)
     sweepCurrency({
       address: strategyAddress,
@@ -331,6 +360,10 @@ export function CompleteAuction() {
   }
 
   const handleMigrate = () => {
+    if (!strategyAddress) {
+      setError('CCA arm not pinned for this chain')
+      return
+    }
     setError(null)
     migrateAuction({
       address: strategyAddress,
@@ -340,6 +373,10 @@ export function CompleteAuction() {
   }
 
   const handleConfigureTaxHook = () => {
+    if (!taxHookConfiguredOnChain) {
+      setError('Tax-hook configuration is Base-only until a per-chain hook is pinned')
+      return
+    }
     if (!tokenAddress || !feeRecipient) {
       setError('Missing token or fee recipient address')
       return
@@ -363,6 +400,10 @@ export function CompleteAuction() {
   }
 
   const handleSweepUnsoldTokens = () => {
+    if (!strategyAddress) {
+      setError('CCA arm not pinned for this chain')
+      return
+    }
     setError(null)
     sweepUnsoldTokens({
       address: strategyAddress,
@@ -400,6 +441,28 @@ export function CompleteAuction() {
   const formatEth = (value: bigint | undefined) => {
     if (!value) return '0'
     return Number(formatUnits(value, 18)).toFixed(4)
+  }
+
+  if (expansionMissingPin || !strategyAddress) {
+    const chainLabel = chainMeta?.name ?? `chain ${chainId}`
+    return (
+      <div className="max-w-2xl mx-auto space-y-6 py-8">
+        <div className="glass-card p-6 border border-amber-500/30 bg-amber-500/5">
+          <h1 className="font-display text-2xl font-bold mb-2">CCA stack not pinned</h1>
+          <p className="text-surface-400 text-sm">
+            No ■AKITA CCA arm is configured for {chainLabel}. Expansion chains never reuse the
+            Base stack. Deploy the arm on this chain, then set the matching{' '}
+            <code className="text-xs">VITE_AKITA_CCA_STRATEGY_*</code> env pin before completing
+            the auction here.
+          </p>
+          {!akitaStack.shareOFT && (
+            <p className="text-surface-500 text-xs mt-3">
+              ShareOFT / vault / oracle pins for this chain are also empty.
+            </p>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -535,7 +598,7 @@ export function CompleteAuction() {
                     )}
                     {unsoldTxHash && (
                       <a
-                        href={`https://basescan.org/tx/${unsoldTxHash}`}
+                        href={`${explorerBaseUrl}/tx/${unsoldTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
@@ -598,7 +661,7 @@ export function CompleteAuction() {
                     ) : null}
                     {strategySweepTxHash && (
                       <a
-                        href={`https://basescan.org/tx/${strategySweepTxHash}`}
+                        href={`${explorerBaseUrl}/tx/${strategySweepTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
@@ -661,7 +724,7 @@ export function CompleteAuction() {
                     )}
                     {sweepTxHash && (
                       <a
-                        href={`https://basescan.org/tx/${sweepTxHash}`}
+                        href={`${explorerBaseUrl}/tx/${sweepTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
@@ -724,7 +787,7 @@ export function CompleteAuction() {
                     )}
                     {migrateTxHash && (
                       <a
-                        href={`https://basescan.org/tx/${migrateTxHash}`}
+                        href={`${explorerBaseUrl}/tx/${migrateTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
@@ -801,7 +864,7 @@ export function CompleteAuction() {
                     )}
                     {configTxHash && (
                       <a
-                        href={`https://basescan.org/tx/${configTxHash}`}
+                        href={`${explorerBaseUrl}/tx/${configTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2"
@@ -908,7 +971,7 @@ export function CompleteAuction() {
             </div>
             {activateTxHash && !isFailed && (
               <a
-                href={`https://basescan.org/tx/${activateTxHash}`}
+                href={`${explorerBaseUrl}/tx/${activateTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 mt-2 justify-center"

@@ -262,10 +262,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenAddr = typeof auctionToken === 'string' && isAddress(auctionToken) ? (auctionToken as `0x${string}`) : null
     const currencyAddr = typeof currency === 'string' && isAddressLike(currency) ? (currency as `0x${string}`) : null
     const tokenAddressLower = tokenAddr ? tokenAddr.toLowerCase() : null
-    const tokenImagePath = tokenAddressLower ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
-    const tokenImageCanonicalPath = tokenAddressLower ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png` : null
+    // Curated ShareOFT icons (site-root public assets). Prefer these over the
+    // /api/v1/token/... compositor and never emit dead api.4626.fun absolute URLs
+    // as the primary image — those broke ■AKITA rendering on auction surfaces.
+    const STATIC_SHARE_TOKEN_ICON_BY_ADDRESS: Readonly<Record<string, string>> = {
+      '0x44710150a469de368abc82f05e6217086be84626': '/tokens/akita-share-token.png',
+    }
+    const staticShareIcon = tokenAddressLower ? STATIC_SHARE_TOKEN_ICON_BY_ADDRESS[tokenAddressLower] ?? null : null
+    const tokenImagePath = staticShareIcon
+      ? staticShareIcon
+      : tokenAddressLower
+        ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png`
+        : null
+    const tokenImageCanonicalPath = staticShareIcon
+      ? staticShareIcon
+      : tokenAddressLower
+        ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png`
+        : null
     const canonicalApiOrigin = getCanonicalApiOrigin()
-    const tokenImageUrl = tokenImageCanonicalPath && canonicalApiOrigin ? `${canonicalApiOrigin}${tokenImageCanonicalPath}` : tokenImagePath
+    // For curated static icons, always use the public app origin (4626.fun), never API_HOST.
+    const tokenImageUrl = staticShareIcon
+      ? `https://4626.fun${staticShareIcon}`
+      : tokenImageCanonicalPath && canonicalApiOrigin
+        ? `${canonicalApiOrigin}${tokenImageCanonicalPath}`
+        : tokenImagePath
     const metadataClient = createPublicClient({
       chain: base,
       transport: http(resolvedRpcUrl ?? rpcUrls[0], { timeout: 20_000 }),

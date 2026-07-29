@@ -1,0 +1,217 @@
+/**
+ * Canonical per-chain parameters for the AKITA CCA launch arms (ShareOFT mesh: CCA arm).
+ *
+ * Source of truth for the Base → Ethereum / Arbitrum / Unichain / Robinhood extension.
+ * Durations/delays are expressed in blocks; fast chains (blocks-per-second scheduling)
+ * set `launchBlocksPerSecond` and leave `launchBlockTimeSeconds` at 0 (unused).
+ *
+ * Factory policy:
+ * - `targetCcaFactoryVersion` is the factory a *new* arm on that chain should use.
+ * - Live Base AKITA arm remains on v1.1.0 historically; new Base arms (and every
+ *   expansion chain) target v2.1.0.
+ * - v2.1.0 auctions subtract a protocol fee at sweep via the factory-bound
+ *   protocolFeeController. CCALaunchArm.migrate() requires swept == currencyRaised,
+ *   so `requireZeroCcaProtocolFee` must hold (gate: `pnpm -C frontend ops:verify-cca-multichain`).
+ */
+
+export const CCA_FACTORY_V110 = '0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5' as const
+export const CCA_FACTORY_V210 = '0x000000001F26a0044BaA66024e7b6599c61963F8' as const
+
+/** Canonical LayerZero EndpointV2 (most EVM chains). */
+export const LZ_ENDPOINT_V2_CANONICAL = '0x1a44076050125825900e736c501f859c50fE728c' as const
+/** Robinhood Chain EndpointV2 (non-canonical deployment). */
+export const LZ_ENDPOINT_V2_ROBINHOOD = '0x6F475642a6e85809B1c36Fa62763669b1b48DD5B' as const
+
+export const SEVEN_DAYS_SECONDS = 604_800
+
+export type CcaFactoryVersion = 'v1.1.0' | 'v2.1.0'
+
+export type CcaLaunchChain = {
+  label: string
+  chainId: number
+  /** LayerZero endpoint id. */
+  eid: number
+  lzEndpointV2: `0x${string}`
+  /** Nominal block time in seconds (display/derivation only). */
+  blockTimeSeconds: number
+  /** ~7-day default auction duration in blocks (CCALaunchArm defaultDuration). */
+  defaultDurationBlocks: number
+  /** Blocks-per-second auction scheduling; 0 = seconds-based scheduling. */
+  launchBlocksPerSecond: number
+  /** Seconds-based auction block time; unused when launchBlocksPerSecond > 0. */
+  launchBlockTimeSeconds: number
+  /** ~2h claim delay in blocks. */
+  defaultClaimDelayBlocks: number
+  /** ~8h sweep delay in blocks. */
+  defaultSweepDelayBlocks: number
+  migrationDelayBlocks: number
+  ccaFactoryV110: typeof CCA_FACTORY_V110
+  ccaFactoryV210: typeof CCA_FACTORY_V210
+  /** Factory the arm targets: v2.1.0 everywhere new; v1.1.0 recorded for legacy Base. */
+  targetCcaFactoryVersion: CcaFactoryVersion
+  /** Gate: factory protocolFeeController must yield zero fee (migrate requires swept == currencyRaised). */
+  requireZeroCcaProtocolFee: true
+  /** Uniswap v4 PoolManager on this chain. */
+  poolManagerV4: `0x${string}`
+  /**
+   * Local Chainlink ETH/USD aggregator (post-deploy `setChainlinkFeed`).
+   * Zero address = unknown / unset — operator must pin before launch pricing.
+   * For CREATE2 oracle address parity with Base, ctor may use the Base feed
+   * (or address(0)) then call `setChainlinkFeed` to this local feed.
+   */
+  chainlinkEthUsd: `0x${string}`
+  /**
+   * Optional Chainlink L2 sequencer uptime feed (`setSequencerUptimeFeed`).
+   * Zero on L1 / chains without a published feed.
+   */
+  sequencerUptimeFeed: `0x${string}`
+  /** v2.1.0 factory is not deployed by Uniswap here yet — empty code is expected pre-bootstrap. */
+  ccaFactoryV210ExpectedEmptyPreBootstrap: boolean
+  rpcEnvKey: string
+  defaultRpcUrl: string
+}
+
+/** Zero address sentinel for unset feeds. */
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
+
+export const CCA_LAUNCH_CHAINS = {
+  ethereum: {
+    label: 'Ethereum',
+    chainId: 1,
+    eid: 30_101,
+    lzEndpointV2: LZ_ENDPOINT_V2_CANONICAL,
+    blockTimeSeconds: 12,
+    defaultDurationBlocks: 50_400,
+    launchBlocksPerSecond: 0,
+    launchBlockTimeSeconds: 12,
+    defaultClaimDelayBlocks: 600,
+    defaultSweepDelayBlocks: 2_400,
+    migrationDelayBlocks: 1,
+    ccaFactoryV110: CCA_FACTORY_V110,
+    ccaFactoryV210: CCA_FACTORY_V210,
+    targetCcaFactoryVersion: 'v2.1.0',
+    requireZeroCcaProtocolFee: true,
+    poolManagerV4: '0x000000000004444c5dc75cB358380D2e3dE08A90',
+    // https://data.chain.link/feeds/ethereum/mainnet/eth-usd
+    chainlinkEthUsd: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
+    sequencerUptimeFeed: ZERO_ADDRESS,
+    ccaFactoryV210ExpectedEmptyPreBootstrap: false,
+    rpcEnvKey: 'ETHEREUM_RPC_URL',
+    defaultRpcUrl: 'https://ethereum-rpc.publicnode.com',
+  },
+  base: {
+    label: 'Base',
+    chainId: 8453,
+    eid: 30_184,
+    lzEndpointV2: LZ_ENDPOINT_V2_CANONICAL,
+    blockTimeSeconds: 2,
+    defaultDurationBlocks: 302_400,
+    launchBlocksPerSecond: 0,
+    launchBlockTimeSeconds: 2,
+    defaultClaimDelayBlocks: 3_600,
+    defaultSweepDelayBlocks: 14_400,
+    migrationDelayBlocks: 1,
+    ccaFactoryV110: CCA_FACTORY_V110,
+    ccaFactoryV210: CCA_FACTORY_V210,
+    // Live Base AKITA arm is on v1.1.0. New Base arms should call setCcaFactoryV2(v2.1.0).
+    targetCcaFactoryVersion: 'v1.1.0',
+    requireZeroCcaProtocolFee: true,
+    poolManagerV4: '0x498581fF718922c3f8e6A244956aF099B2652b2b',
+    chainlinkEthUsd: '0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',
+    // https://docs.chain.link/data-feeds/l2-sequencer-feeds
+    sequencerUptimeFeed: '0xBCF85224fc0756B9Fa45aA7892530B47e10b6433',
+    ccaFactoryV210ExpectedEmptyPreBootstrap: false,
+    rpcEnvKey: 'BASE_RPC_URL',
+    defaultRpcUrl: 'https://mainnet.base.org',
+  },
+  unichain: {
+    label: 'Unichain',
+    chainId: 130,
+    eid: 30_320,
+    lzEndpointV2: LZ_ENDPOINT_V2_CANONICAL,
+    blockTimeSeconds: 1,
+    defaultDurationBlocks: 604_800,
+    launchBlocksPerSecond: 0,
+    launchBlockTimeSeconds: 1,
+    defaultClaimDelayBlocks: 7_200,
+    defaultSweepDelayBlocks: 28_800,
+    migrationDelayBlocks: 1,
+    ccaFactoryV110: CCA_FACTORY_V110,
+    ccaFactoryV210: CCA_FACTORY_V210,
+    targetCcaFactoryVersion: 'v2.1.0',
+    requireZeroCcaProtocolFee: true,
+    poolManagerV4: '0x1F98400000000000000000000000000000000004',
+    // https://data.chain.link/feeds/unichain/unichain/eth-usd-svr (standard proxy)
+    chainlinkEthUsd: '0xBcE7D6328c3132649669528e57F60c7f4F7d8CCa',
+    sequencerUptimeFeed: ZERO_ADDRESS,
+    ccaFactoryV210ExpectedEmptyPreBootstrap: false,
+    rpcEnvKey: 'UNICHAIN_RPC_URL',
+    defaultRpcUrl: 'https://mainnet.unichain.org',
+  },
+  arbitrum: {
+    label: 'Arbitrum',
+    chainId: 42_161,
+    eid: 30_110,
+    lzEndpointV2: LZ_ENDPOINT_V2_CANONICAL,
+    blockTimeSeconds: 0.25,
+    defaultDurationBlocks: 2_419_200,
+    launchBlocksPerSecond: 4,
+    launchBlockTimeSeconds: 0,
+    defaultClaimDelayBlocks: 28_800,
+    defaultSweepDelayBlocks: 115_200,
+    migrationDelayBlocks: 1,
+    ccaFactoryV110: CCA_FACTORY_V110,
+    ccaFactoryV210: CCA_FACTORY_V210,
+    targetCcaFactoryVersion: 'v2.1.0',
+    requireZeroCcaProtocolFee: true,
+    poolManagerV4: '0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32',
+    // https://data.chain.link/feeds/arbitrum/mainnet/eth-usd
+    chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B629db276d',
+    // https://docs.chain.link/data-feeds/l2-sequencer-feeds
+    sequencerUptimeFeed: '0xFdB631F5EE196F0ed6FAa767959853A9F217697D',
+    ccaFactoryV210ExpectedEmptyPreBootstrap: false,
+    rpcEnvKey: 'ARBITRUM_RPC_URL',
+    defaultRpcUrl: 'https://arb1.arbitrum.io/rpc',
+  },
+  robinhood: {
+    label: 'Robinhood',
+    chainId: 4_663,
+    eid: 30_416,
+    lzEndpointV2: LZ_ENDPOINT_V2_ROBINHOOD,
+    blockTimeSeconds: 0.1,
+    defaultDurationBlocks: 6_048_000,
+    launchBlocksPerSecond: 10,
+    launchBlockTimeSeconds: 0,
+    defaultClaimDelayBlocks: 72_000,
+    defaultSweepDelayBlocks: 288_000,
+    migrationDelayBlocks: 1,
+    ccaFactoryV110: CCA_FACTORY_V110,
+    ccaFactoryV210: CCA_FACTORY_V210,
+    targetCcaFactoryVersion: 'v2.1.0',
+    requireZeroCcaProtocolFee: true,
+    poolManagerV4: '0x8366a39CC670B4001A1121B8F6A443A643e40951',
+    // No published Chainlink ETH/USD / sequencer feed pin yet — set before launch.
+    chainlinkEthUsd: ZERO_ADDRESS,
+    sequencerUptimeFeed: ZERO_ADDRESS,
+    // Uniswap has not deployed the v2.1.0 CCA factory on Robinhood Chain; we deploy
+    // it ourselves with protocolFeeController = address(0) during bootstrap.
+    ccaFactoryV210ExpectedEmptyPreBootstrap: true,
+    rpcEnvKey: 'ROBINHOOD_RPC_URL',
+    defaultRpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
+  },
+} as const satisfies Record<string, CcaLaunchChain>
+
+export type CcaLaunchChainKey = keyof typeof CCA_LAUNCH_CHAINS
+
+export const CCA_LAUNCH_CHAIN_KEYS = Object.keys(CCA_LAUNCH_CHAINS) as CcaLaunchChainKey[]
+
+export function getCcaLaunchChain(key: CcaLaunchChainKey) {
+  return CCA_LAUNCH_CHAINS[key]
+}
+
+/** Effective block time used for block-domain scheduling math. */
+export function effectiveLaunchBlockTimeSeconds(chain: CcaLaunchChain): number {
+  return chain.launchBlocksPerSecond > 0
+    ? 1 / chain.launchBlocksPerSecond
+    : chain.launchBlockTimeSeconds
+}

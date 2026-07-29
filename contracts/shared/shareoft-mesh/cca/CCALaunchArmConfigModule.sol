@@ -27,6 +27,12 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     bytes32 private constant CONFIG_ORACLE_MAX_AGE = "launchOracleMaxAge";
     bytes32 private constant CONFIG_POOL_FEE = "poolFeeTier";
     bytes32 private constant CONFIG_POOL_TICK_SPACING = "poolTickSpacing";
+    bytes32 private constant CONFIG_BLOCKS_PER_SECOND = "launchBlocksPerSecond";
+
+    /// @dev ArbSys precompile (address(100)) — mirrors CCALaunchArm's block-domain detection so
+    ///      residual-sweep gates stay in the auction's block domain on Orbit chains.
+    address private constant ARB_SYS_ADDRESS = address(100);
+    bytes4 private constant ARB_BLOCK_NUMBER_SELECTOR = 0xa3b1b31d;
 
     enum LifecyclePhase {
         Idle,
@@ -95,10 +101,16 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     bool public simpleLaunchEnabled;
     /// @dev FIX: AUDIT-2026-07-01-L06 — fee recipient is locked after the first launch.
     bool public feeRecipientLocked;
+    /// @dev Storage append only — must stay slot-aligned with CCALaunchArm.
+    bool public ccaFactoryV2;
+    /// @dev Storage append only — must stay slot-aligned with CCALaunchArm.
+    uint64 public launchBlocksPerSecond;
 
     error FeeRecipientLocked();
 
     address private immutable _self;
+    /// @dev Whether this chain exposes the ArbSys precompile (detected once at construction).
+    bool private immutable _useArbSys;
 
     event ConfigUpdated(bytes32 param, uint256 value);
     event RecipientsUpdated(address fundsRecipient, address tokensRecipient);
@@ -120,6 +132,7 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error InvalidConfig();
     error EthTransferFailed();
+    error BlockNumberishUnavailable();
     error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
     error NotOperator(address caller, address expected);
     error OnlyDelegateCall();
@@ -139,6 +152,22 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
         fundsRecipient = _fundsRecipient;
         tokensRecipient = _tokensRecipient;
         _self = address(this);
+        _useArbSys = _detectArbSys();
+    }
+
+    function _blockNumberish() internal view returns (uint256) {
+        if (!_useArbSys) return block.number;
+        (bool ok, bytes memory data) =
+            ARB_SYS_ADDRESS.staticcall(abi.encodeWithSelector(ARB_BLOCK_NUMBER_SELECTOR));
+        if (!ok || data.length != 32) revert BlockNumberishUnavailable();
+        return abi.decode(data, (uint256));
+    }
+
+    function _detectArbSys() private view returns (bool) {
+        if (ARB_SYS_ADDRESS.code.length == 0) return false;
+        (bool ok, bytes memory data) =
+            ARB_SYS_ADDRESS.staticcall(abi.encodeWithSelector(ARB_BLOCK_NUMBER_SELECTOR));
+        return ok && data.length == 32;
     }
 
     modifier onlyDelegateCall() {
@@ -157,6 +186,16 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
         if (newFactory.code.length == 0) revert InvalidConfig();
         address old = ccaFactory;
         ccaFactory = newFactory;
+        ccaFactoryV2 = false;
+        emit CcaFactoryUpdated(old, newFactory);
+    }
+
+    function setCcaFactoryV2(address newFactory) external onlyDelegateCall onlyOwner {
+        if (newFactory == address(0)) revert ZeroAddress();
+        if (newFactory.code.length == 0) revert InvalidConfig();
+        address old = ccaFactory;
+        ccaFactory = newFactory;
+        ccaFactoryV2 = true;
         emit CcaFactoryUpdated(old, newFactory);
     }
 
@@ -194,7 +233,7 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
 
     function sweepResidualAuctionToken() external onlyDelegateCall {
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
-        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+        if (_blockNumberish() < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, _blockNumberish());
         _requireResidualSweepReady();
 
         uint256 amount = auctionToken.balanceOf(address(this));
@@ -211,7 +250,7 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
 
     function sweepResidualCurrency() external onlyDelegateCall {
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
-        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+        if (_blockNumberish() < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, _blockNumberish());
         _requireResidualSweepReady();
 
         // M-09: currency is fully consumed by seedLpManager — block residual sweep until seeded
@@ -264,6 +303,12 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
         if (_secondsPerBlock == 0) revert InvalidConfig();
         launchBlockTimeSeconds = _secondsPerBlock;
         emit ConfigUpdated(CONFIG_BLOCK_TIME, _secondsPerBlock);
+    }
+
+    function setLaunchBlocksPerSecond(uint64 _blocksPerSecond) external onlyDelegateCall onlyOwner {
+        if (_blocksPerSecond == 0) revert InvalidConfig();
+        launchBlocksPerSecond = _blocksPerSecond;
+        emit ConfigUpdated(CONFIG_BLOCKS_PER_SECOND, _blocksPerSecond);
     }
 
     function setMigrationDelayBlocks(uint64 _delay) external onlyDelegateCall onlyOwner {

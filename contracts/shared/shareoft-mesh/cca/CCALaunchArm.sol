@@ -39,10 +39,23 @@ interface ITaxHook {
 
 /**
  * @title IContinuousClearingAuctionFactory
- * @notice Interface for Uniswap's CCA Factory
+ * @notice Interface for Uniswap's CCA Factory (v1.x entrypoint)
  */
 interface IContinuousClearingAuctionFactory {
     function initializeDistribution(address token, uint256 amount, bytes calldata configData, bytes32 salt)
+        external
+        returns (address);
+}
+
+/**
+ * @title IContinuousClearingAuctionFactoryV2
+ * @notice Interface for Uniswap's CCA Factory v2.x (`create` replaces `initializeDistribution`).
+ * @dev AuctionParameters encoding is unchanged between v1.1.0 and v2.1.0, but v2.x restricts
+ *      sweepCurrency/sweepUnsoldTokens to the configured recipients — launch recipients must
+ *      therefore remain this strategy (the default batcher wiring).
+ */
+interface IContinuousClearingAuctionFactoryV2 {
+    function create(address token, uint256 amount, bytes calldata configData, bytes32 salt)
         external
         returns (address);
 }
@@ -114,6 +127,16 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     /// @notice Uniswap v1.1.0 CCA factory (canonical on Base/Mainnet/Unichain/Sepolia)
     /// @dev See https://github.com/Uniswap/continuous-clearing-auction#deployments
     address public constant UNISWAP_CCA_FACTORY_V110 = 0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5;
+
+    /// @notice Uniswap v2.1.0 CCA factory (recommended production version; includes Arbitrum/Orbit fix)
+    address public constant UNISWAP_CCA_FACTORY_V210 = 0x000000001F26a0044BaA66024e7b6599c61963F8;
+
+    /// @dev ArbSys precompile (address(100)) — present on Arbitrum/Orbit chains (Arbitrum One, Robinhood Chain).
+    ///      Uniswap CCA v2.x schedules auctions against `arbBlockNumber()` on these chains via
+    ///      BlockNumberish, so this strategy must gate its lifecycle in the same block domain.
+    address private constant ARB_SYS_ADDRESS = address(100);
+    /// @dev Function selector for ArbSys.arbBlockNumber() (nitro-precompile-interfaces ArbSys.sol).
+    bytes4 private constant ARB_BLOCK_NUMBER_SELECTOR = 0xa3b1b31d;
 
     /// @notice Milli-basis points constant
     uint24 public constant MPS = 1e7;
@@ -271,7 +294,15 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     bool public simpleLaunchEnabled;
     /// @dev FIX: AUDIT-2026-07-01-L06 — fee recipient is locked after the first launch.
     bool public feeRecipientLocked;
+    /// @notice When true, `ccaFactory` is a Uniswap CCA v2.x deployment called via `create`.
+    /// @dev Storage append only — must stay slot-aligned with CCALaunchArmConfigModule.
+    bool public ccaFactoryV2;
+    /// @notice Blocks per second for Thursday-epoch scheduling on sub-second chains (0 = use seconds-per-block).
+    /// @dev E.g. 4 on Arbitrum (~250ms), 10 on Robinhood Chain (~100ms). Storage append only.
+    uint64 public launchBlocksPerSecond;
     address private immutable _configModule;
+    /// @dev Whether this chain exposes the ArbSys precompile (detected once at construction).
+    bool private immutable _useArbSys;
     CCALaunchArmEncodingHelper private immutable _encodingHelper;
 
     // ================================
@@ -341,6 +372,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     error LaunchOracleStale(uint256 assetTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
     error LaunchFloorTooLow(uint256 rawFloorPriceQ96, uint256 tickSpacingQ96);
     error SimpleLaunchDisabled();
+    /// @dev ArbSys staticcall failed after construction-time detection (should never happen on a live Orbit chain).
+    error BlockNumberishUnavailable();
     error ZeroAddress();
     error ZeroAmount();
     error InvalidConfig();
@@ -378,6 +411,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         currency = _currency;
         fundsRecipient = _fundsRecipient;
         tokensRecipient = _tokensRecipient;
+        _useArbSys = _detectArbSys();
 
         // Default to Uniswap's v1.1.0 factory deployment.
         ccaFactory = UNISWAP_CCA_FACTORY_V110;
@@ -432,8 +466,19 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     /**
      * @notice Update the Uniswap CCA factory address used for deployments.
      * @dev Allows migrating to newer Uniswap factory deployments without redeploying this strategy.
+     *      Marks the factory as v1.x (`initializeDistribution`). Use `setCcaFactoryV2` for v2.x.
      */
     function setCcaFactory(address newFactory) external {
+        newFactory;
+        _delegateConfig();
+    }
+
+    /**
+     * @notice Point this strategy at a Uniswap CCA v2.x factory (called via `create`).
+     * @dev Required for chains where only v2.1.0 is deployed (Arbitrum/Orbit-family), and for
+     *      any self-deployed v2.1.0 factory (e.g. Robinhood Chain bootstrap).
+     */
+    function setCcaFactoryV2(address newFactory) external {
         newFactory;
         _delegateConfig();
     }
@@ -472,6 +517,35 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     function setSimpleLaunchEnabled(bool enabled) external {
         enabled;
         _delegateConfig();
+    }
+
+    /**
+     * @notice Set blocks-per-second for Thursday-epoch scheduling on sub-second (Orbit) chains.
+     * @dev Must be paired with the ArbSys block domain; ignored when zero (seconds-per-block applies).
+     */
+    function setLaunchBlocksPerSecond(uint64 _blocksPerSecond) external {
+        _blocksPerSecond;
+        _delegateConfig();
+    }
+
+    /**
+     * @notice Block domain used by this strategy — ArbSys.arbBlockNumber() on Orbit chains,
+     *         block.number elsewhere. Matches Uniswap CCA v2.x BlockNumberish semantics so the
+     *         strategy lifecycle stays in the same domain as the auction's START/END/CLAIM blocks.
+     */
+    function _blockNumberish() internal view returns (uint256) {
+        if (!_useArbSys) return block.number;
+        (bool ok, bytes memory data) =
+            ARB_SYS_ADDRESS.staticcall(abi.encodeWithSelector(ARB_BLOCK_NUMBER_SELECTOR));
+        if (!ok || data.length != 32) revert BlockNumberishUnavailable();
+        return abi.decode(data, (uint256));
+    }
+
+    function _detectArbSys() private view returns (bool) {
+        if (ARB_SYS_ADDRESS.code.length == 0) return false;
+        (bool ok, bytes memory data) =
+            ARB_SYS_ADDRESS.staticcall(abi.encodeWithSelector(ARB_BLOCK_NUMBER_SELECTOR));
+        return ok && data.length == 32;
     }
 
     // ================================
@@ -521,9 +595,12 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         // Create auction via factory
         // NOTE: Uniswap's verified Base deployment expects a `bytes32 salt` parameter.
         // We derive a deterministic salt from the config to avoid collisions.
+        // v2.x factories expose the same flow under `create` (identical AuctionParameters encoding).
         bytes32 salt = keccak256(abi.encode(address(auctionToken), amount, configData));
-        auction = IContinuousClearingAuctionFactory(ccaFactory)
-            .initializeDistribution(address(auctionToken), amount, configData, salt);
+        auction = ccaFactoryV2
+            ? IContinuousClearingAuctionFactoryV2(ccaFactory).create(address(auctionToken), amount, configData, salt)
+            : IContinuousClearingAuctionFactory(ccaFactory)
+                .initializeDistribution(address(auctionToken), amount, configData, salt);
 
         // CCA requires explicit funding + callback before bids/checkpoints become active.
         auctionToken.safeTransfer(auction, amount);
@@ -549,7 +626,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         _snapshotBackingTelemetry();
         _persistLifecycleSnapshot();
         lastSweepBlock = sweepBlock;
-        _setPhase(block.number < startBlock ? LifecyclePhase.AuctionScheduled : LifecyclePhase.AuctionLive);
+        _setPhase(_blockNumberish() < startBlock ? LifecyclePhase.AuctionScheduled : LifecyclePhase.AuctionLive);
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
         emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, assetUsdPrice, ethUsdPrice);
@@ -658,7 +735,9 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
      */
     function finalizeFailedAuction() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        if (block.number <= currentLaunch.endBlock) revert AuctionStillLive(currentLaunch.endBlock, block.number);
+        if (_blockNumberish() <= currentLaunch.endBlock) {
+            revert AuctionStillLive(currentLaunch.endBlock, _blockNumberish());
+        }
 
         IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
         auction.checkpoint();
@@ -693,8 +772,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         }
         if (currentLaunch.migrated) revert InvalidConfig();
         if (!currentLaunch.currencySwept) revert MigrationConfigMissing();
-        if (block.number < currentLaunch.migrationBlock) {
-            revert MigrationNotReady(currentLaunch.migrationBlock, block.number);
+        if (_blockNumberish() < currentLaunch.migrationBlock) {
+            revert MigrationNotReady(currentLaunch.migrationBlock, _blockNumberish());
         }
 
         address auctionAddr = currentAuction;
@@ -934,9 +1013,9 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         if (launchData.failedFinalized) return LifecyclePhase.LaunchFailed;
         if (launchData.migrated) return LifecyclePhase.PoolLive;
         if (launchData.currencySwept) return LifecyclePhase.ClaimReady;
-        if (block.number < launchData.startBlock) return LifecyclePhase.AuctionScheduled;
+        if (_blockNumberish() < launchData.startBlock) return LifecyclePhase.AuctionScheduled;
         if (isGraduated) return LifecyclePhase.AuctionEndedPending;
-        if (block.number <= launchData.endBlock) return LifecyclePhase.AuctionLive;
+        if (_blockNumberish() <= launchData.endBlock) return LifecyclePhase.AuctionLive;
         return LifecyclePhase.AuctionEndedPending;
     }
 
@@ -956,7 +1035,9 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     }
 
     function _deriveScheduledStartBlock() internal view returns (uint64 startBlock) {
-        return _encodingHelper.deriveScheduledStartBlock(block.number, block.timestamp, launchBlockTimeSeconds);
+        return _encodingHelper.deriveScheduledStartBlock(
+            _blockNumberish(), block.timestamp, launchBlockTimeSeconds, launchBlocksPerSecond
+        );
     }
 
     function _deriveLaunchPricing()
@@ -1240,7 +1321,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
 
         IContinuousClearingAuction cca = IContinuousClearingAuction(auction);
         isGraduated = cca.isGraduated();
-        bool auctionWindowOpen = block.number >= currentLaunch.startBlock && block.number <= currentLaunch.endBlock;
+        uint256 blockNumber = _blockNumberish();
+        bool auctionWindowOpen = blockNumber >= currentLaunch.startBlock && blockNumber <= currentLaunch.endBlock;
         isActive = auctionWindowOpen && !currentLaunch.migrated && !currentLaunch.failedFinalized;
         clearingPrice = cca.clearingPrice();
         currencyRaised = cca.currencyRaised();
@@ -1259,8 +1341,9 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         LaunchLifecycle memory launchData = currentLaunch;
         IContinuousClearingAuction cca = IContinuousClearingAuction(status.auction);
         status.isGraduated = cca.isGraduated();
-        status.auctionWindowOpen = block.number >= launchData.startBlock && block.number <= launchData.endBlock;
-        status.claimOpen = block.number >= launchData.claimBlock;
+        uint256 blockNumber = _blockNumberish();
+        status.auctionWindowOpen = blockNumber >= launchData.startBlock && blockNumber <= launchData.endBlock;
+        status.claimOpen = blockNumber >= launchData.claimBlock;
         status.currencySwept = launchData.currencySwept;
         status.unsoldSwept = launchData.unsoldSwept;
         status.migrated = launchData.migrated;

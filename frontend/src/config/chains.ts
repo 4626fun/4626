@@ -1,8 +1,29 @@
-import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
+import { defineChain } from 'viem'
+import { base, mainnet, arbitrum, optimism, polygon, unichain } from 'wagmi/chains'
 import type { Chain } from 'wagmi/chains'
+import { ROBINHOOD_REMOTE_SHARE_OFT } from './remoteShareOftChains'
 
-export type SupportedChainId = 1 | 8453 | 42161 | 10 | 137
+export type SupportedChainId = 1 | 8453 | 42161 | 10 | 137 | 130 | 4663
 const BASE_CHAIN_LOGO = '/base/base-square-blue.svg'
+
+// Unset token sentinel (fail-closed): pin real WETH/USDC per chain at launch.
+const UNSET_CHAIN_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`
+
+/**
+ * Robinhood Chain (4663) custom viem chain. Meta is sourced from
+ * `remoteShareOftChains.ts` (bridge SSoT) — do not duplicate values here.
+ */
+export const robinhood = defineChain({
+  id: ROBINHOOD_REMOTE_SHARE_OFT.chainId,
+  name: 'Robinhood Chain',
+  nativeCurrency: ROBINHOOD_REMOTE_SHARE_OFT.nativeCurrency,
+  rpcUrls: {
+    default: { http: [ROBINHOOD_REMOTE_SHARE_OFT.defaultRpcUrl] },
+  },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: ROBINHOOD_REMOTE_SHARE_OFT.explorerUrl },
+  },
+})
 
 export interface ChainMeta {
   id: SupportedChainId
@@ -77,6 +98,32 @@ export const SUPPORTED_CHAINS: ChainMeta[] = [
     weth: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
     usdc: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
     color: '#8247E5',
+  },
+  {
+    id: 130,
+    name: 'Unichain',
+    shortName: 'UNI',
+    chain: unichain,
+    nativeCurrency: { symbol: 'ETH', name: 'Ether', decimals: 18 },
+    logoUrl: '',
+    explorerUrl: 'https://unichain.blockscout.com',
+    // TBD at chain launch: pin canonical WETH/USDC before enabling swap/token lists.
+    weth: UNSET_CHAIN_TOKEN,
+    usdc: UNSET_CHAIN_TOKEN,
+    color: '#F50DB4',
+  },
+  {
+    id: 4663,
+    name: 'Robinhood Chain',
+    shortName: 'ROBIN',
+    chain: robinhood,
+    nativeCurrency: ROBINHOOD_REMOTE_SHARE_OFT.nativeCurrency,
+    logoUrl: '',
+    explorerUrl: ROBINHOOD_REMOTE_SHARE_OFT.explorerUrl,
+    // TBD at chain launch: pin canonical WETH/USDC before enabling swap/token lists.
+    weth: UNSET_CHAIN_TOKEN,
+    usdc: UNSET_CHAIN_TOKEN,
+    color: '#00C805',
   },
 ]
 

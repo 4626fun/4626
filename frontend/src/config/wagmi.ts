@@ -1,6 +1,7 @@
 import { http, createConfig, fallback } from 'wagmi'
-import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
+import { base, mainnet, arbitrum, optimism, polygon, unichain } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
+import { robinhood } from '@/config/chains'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/base/baseBuilderCodes'
 import {
   BASE_RPC_PROXY_PATH,
@@ -57,6 +58,8 @@ const MAINNET_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=mainnet' : ''
 const ARBITRUM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=arbitrum' : ''
 const OPTIMISM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=optimism' : ''
 const POLYGON_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=polygon' : ''
+const UNICHAIN_RPC_URL_RAW = (import.meta.env.VITE_UNICHAIN_RPC_URL as string | undefined)?.trim() || ''
+const ROBINHOOD_RPC_URL_RAW = (import.meta.env.VITE_ROBINHOOD_RPC_URL as string | undefined)?.trim() || ''
 const ENABLE_INJECTED_CONNECTOR = injectedConnectorFlag()
 const RPC_PROXY_PREFIX = '/api/rpc?chain='
 
@@ -227,6 +230,23 @@ const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
   ].filter(Boolean),
 )
 
+// New chains have no same-origin RPC proxy support yet (api/_handlers/rpc/_proxy.ts);
+// direct public endpoints are used until the proxy route learns them.
+const UNICHAIN_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    UNICHAIN_RPC_URL_RAW,
+    'https://mainnet.unichain.org',
+    'https://unichain-rpc.publicnode.com',
+  ].filter(Boolean),
+)
+
+const ROBINHOOD_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    ROBINHOOD_RPC_URL_RAW,
+    ...robinhood.rpcUrls.default.http,
+  ].filter(Boolean),
+)
+
 function buildConnectors() {
   const providerCollision = detectEthereumProviderCollision()
 
@@ -295,7 +315,7 @@ function buildConnectors() {
 warnGlobalWagmiDataSuffixBehavior(DATA_SUFFIX)
 
 export const wagmiConfig = createConfig({
-  chains: [base, mainnet, arbitrum, optimism, polygon],
+  chains: [base, mainnet, arbitrum, optimism, polygon, unichain, robinhood],
   connectors: buildConnectors(),
   // Avoid eager EIP-6963 provider discovery on page load.
   // Some extension stacks respond to `requestProvider` by racing to assign
@@ -308,6 +328,8 @@ export const wagmiConfig = createConfig({
     [arbitrum.id]: ARBITRUM_READ_RPC_URLS.length > 0 ? fallback(ARBITRUM_READ_RPC_URLS.map(buildReadTransport)) : http(),
     [optimism.id]: OPTIMISM_READ_RPC_URLS.length > 0 ? fallback(OPTIMISM_READ_RPC_URLS.map(buildReadTransport)) : http(),
     [polygon.id]: POLYGON_READ_RPC_URLS.length > 0 ? fallback(POLYGON_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [unichain.id]: UNICHAIN_READ_RPC_URLS.length > 0 ? fallback(UNICHAIN_READ_RPC_URLS.map(buildReadTransport)) : http(),
+    [robinhood.id]: ROBINHOOD_READ_RPC_URLS.length > 0 ? fallback(ROBINHOOD_READ_RPC_URLS.map(buildReadTransport)) : http(),
   },
 })
 

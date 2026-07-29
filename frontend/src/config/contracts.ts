@@ -5,6 +5,7 @@
 
 import {
   AKITA_DEFAULTS,
+  AKITA_EXPANSION_CHAIN_ENV_SUFFIX,
   BASE_DEFAULTS,
   ERC4626_DEFAULTS,
   normalizeDeploymentBatcherAddress,
@@ -164,6 +165,74 @@ export const AKITA = {
     ajna: envAddress('VITE_AKITA_AJNA_STRATEGY'), // Ajna strategy
   },
 } as const
+
+/**
+ * AKITA stack for one chain.
+ * - Base: full hub stack (vault/wrapper/gauge/oracle/ShareOFT/CCA).
+ * - Expansion spokes: ShareOFT + CCA arm only (hub vault stays on Base).
+ *   Optional vault/wrapper/gauge/oracle/token pins are unused for spoke-minimal.
+ */
+export type AkitaChainStack = {
+  token?: `0x${string}`
+  vault?: `0x${string}`
+  wrapper?: `0x${string}`
+  shareOFT?: `0x${string}`
+  ccaLaunchArm?: `0x${string}`
+  gaugeController?: `0x${string}`
+  oracle?: `0x${string}`
+}
+
+// Expansion-chain AKITA pins are greenfield env-only config: a zero default lets
+// the deployment env pin through in production (see envAddress docs) and
+// resolves to undefined here until the pin exists.
+function envPinnedAkitaAddress(name: string): `0x${string}` | undefined {
+  const pinned = envAddress(name, ZERO_ADDRESS)
+  if (!pinned || isZeroAddress(pinned)) return undefined
+  return pinned
+}
+
+/**
+ * Resolve the AKITA stack for a chain. Base (and no-chain) → live hub stack.
+ * Expansion spokes → `VITE_AKITA_SHARE_OFT_<CHAIN>` + `VITE_AKITA_CCA_STRATEGY_<CHAIN>`
+ * (required). Other `VITE_AKITA_*_<CHAIN>` keys are optional leftovers and unused
+ * for spoke-minimal fan-out. Unknown chains return an empty stack.
+ */
+export function getAkitaChainStack(chainId: number | null | undefined): AkitaChainStack {
+  if (!chainId || chainId === 8453) return AKITA
+  const suffix = AKITA_EXPANSION_CHAIN_ENV_SUFFIX[chainId]
+  if (!suffix) return {}
+  return {
+    shareOFT: envPinnedAkitaAddress(`VITE_AKITA_SHARE_OFT_${suffix}`),
+    ccaLaunchArm: envPinnedAkitaAddress(`VITE_AKITA_CCA_STRATEGY_${suffix}`),
+    // Optional / unused for spoke-minimal — kept for forward-compat only.
+    token: envPinnedAkitaAddress(`VITE_AKITA_TOKEN_${suffix}`),
+    vault: envPinnedAkitaAddress(`VITE_AKITA_VAULT_${suffix}`),
+    wrapper: envPinnedAkitaAddress(`VITE_AKITA_WRAPPER_${suffix}`),
+    gaugeController: envPinnedAkitaAddress(`VITE_AKITA_GAUGE_CONTROLLER_${suffix}`),
+    oracle: envPinnedAkitaAddress(`VITE_AKITA_ORACLE_${suffix}`),
+  }
+}
+
+/**
+ * True when `chainId` is an expansion spoke that must have its own pinned stack
+ * (never silently reuse the live Base AKITA addresses).
+ */
+export function isAkitaExpansionChain(chainId: number | null | undefined): boolean {
+  return !!chainId && chainId !== 8453 && !!AKITA_EXPANSION_CHAIN_ENV_SUFFIX[chainId]
+}
+
+/**
+ * Resolve the AKITA CCA arm for a chain without inventing addresses.
+ * - Base / unset → live Base arm
+ * - Expansion chain with env pin → pinned arm
+ * - Expansion chain without pin → undefined (caller must block UI)
+ */
+export function getAkitaCcaLaunchArmForChain(
+  chainId: number | null | undefined,
+): `0x${string}` | undefined {
+  if (!chainId || chainId === 8453) return AKITA.ccaLaunchArm
+  return getAkitaChainStack(chainId).ccaLaunchArm
+}
 
 // Protocol token (ERC4626)
 export const ERC4626 = {

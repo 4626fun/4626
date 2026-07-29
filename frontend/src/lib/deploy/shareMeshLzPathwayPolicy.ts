@@ -1,5 +1,5 @@
 /**
- * Share-mesh LayerZero pathway policy (Base ↔ Solana).
+ * Share-mesh LayerZero pathway policy (Base ↔ Solana, plus EVM lane EIDs).
  *
  * B2 incident: Pipe A burned on Base but Solana mint stayed 0 because Scan
  * treated source outbound confirmations (10) as below destination inbound (15).
@@ -10,9 +10,21 @@
 export const SHARE_MESH_BASE_EID = 30_184
 export const SHARE_MESH_SOLANA_EID = 30_168
 
+/** EVM share-mesh lane EIDs (Base hub ↔ EVM spokes). */
+export const SHARE_MESH_ETHEREUM_EID = 30_101
+export const SHARE_MESH_ARBITRUM_EID = 30_110
+export const SHARE_MESH_UNICHAIN_EID = 30_320
+export const SHARE_MESH_ROBINHOOD_EID = 30_416
+
 /** Template `layerzero-share-mesh.config.ts`: [evm→solana, solana→evm]. */
 export const EXPECTED_BASE_TO_SOLANA_CONFIRMATIONS = 15n
 export const EXPECTED_SOLANA_TO_BASE_CONFIRMATIONS = 32n
+
+/**
+ * EVM↔EVM lane confirmations, both directions
+ * (template `layerzero-evm-share-mesh.config.ts` uses [15, 15]).
+ */
+export const EXPECTED_EVM_LANE_CONFIRMATIONS = 15n
 
 export const EXPECTED_OPTIONAL_DVN_COUNT = 5
 export const EXPECTED_OPTIONAL_DVN_THRESHOLD = 3
