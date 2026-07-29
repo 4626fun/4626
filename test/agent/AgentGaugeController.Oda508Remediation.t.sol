@@ -365,13 +365,14 @@ contract AgentGaugeControllerOda508RemediationTest is Test {
         gauge.setWrapper(address(wrapper));
         vault.setGaugeController(address(gauge));
 
-        gauge.setAllowedSwapRouter(address(router), true);
+        gauge.setAllowedSwapRouter(address(router), true); // ODA-508-L4: queues
         gauge.setWethFeeKeeper(keeper);
         gauge.setWethProcessingConfig(100 ether, false);
-        gauge.setOracle(address(oracle));
+        gauge.setOracle(address(oracle)); // first-ever set: immediate
         oracle.setAssetPerEth(2e18);
 
-        vm.warp(1 days); // past the default distribution interval for first-cycle tests
+        vm.warp(1 days + 1); // past the default distribution interval for first-cycle tests
+        gauge.executeRouterAllowlist(address(router)); // timelock elapsed → router active
     }
 
     function _fundGaugeOft(uint256 amount) internal {
@@ -867,4 +868,136 @@ contract AgentGaugeControllerOda508RemediationTest is Test {
         );
         gauge.setCoreWiring(address(vault2), address(wrapper2), address(sixDecimal));
     }
+
+    // ---------------- Second-pass lows/info (L-4, L-5 gas half, L-8, I-9) ----------------
+
+    function test_l5_stipendSendKeepsRawEthSweepable() public {
+        StipendSender508 sender = new StipendSender508();
+        vm.deal(address(sender), 1 ether);
+
+        // `.transfer` stipend (2,300 gas): pre-fix this reverted in receive(); now the ETH
+        // is accepted raw (no wrap, no earmark) and recoverable via the native sweep.
+        sender.send(payable(address(gauge)), 1 ether);
+        assertEq(address(gauge).balance, 1 ether, "raw ETH accepted");
+        assertEq(gauge.pendingWETHFees(), 0, "stipend send not earmarked");
+        assertEq(weth.balanceOf(address(gauge)), 0, "stipend send not wrapped");
+
+        // A full-gas send still wraps and credits normally.
+        (bool ok,) = payable(address(gauge)).call{value: 2 ether}("");
+        assertTrue(ok);
+        assertEq(gauge.pendingWETHFees(), 2 ether, "full-gas send wraps + credits");
+
+        gauge.emergencyWithdraw(address(0), 1 ether, protocolTreasury);
+        vm.warp(gauge.pendingEmergencyWithdrawAt());
+        uint256 before = protocolTreasury.balance;
+        gauge.executeEmergencyWithdraw();
+        assertEq(protocolTreasury.balance, before + 1 ether);
+        assertEq(address(gauge).balance, 0);
+    }
+
+    function test_l4_oracleChangeTimelocked() public {
+        // setUp's first set was immediate; later changes must queue.
+        assertTrue(gauge.oracleInitialized());
+        MockOracle508 oracle2 = new MockOracle508();
+
+        gauge.setOracle(address(oracle2));
+        assertEq(address(gauge.oracle()), address(oracle), "change not applied instantly");
+        assertEq(gauge.pendingOracle(), address(oracle2));
+        uint256 executeAfter = gauge.pendingOracleAt();
+        assertGt(executeAfter, block.timestamp);
+
+        vm.expectRevert(abi.encodeWithSelector(AgentGaugeController.OracleUpdateTooEarly.selector, executeAfter));
+        gauge.executeOracleUpdate();
+
+        vm.warp(executeAfter);
+        gauge.executeOracleUpdate();
+        assertEq(address(gauge.oracle()), address(oracle2));
+        assertEq(gauge.pendingOracle(), address(0));
+        assertEq(gauge.pendingOracleAt(), 0);
+
+        // Cancel path.
+        MockOracle508 oracle3 = new MockOracle508();
+        gauge.setOracle(address(oracle3));
+        gauge.cancelOracleUpdate();
+        assertEq(gauge.pendingOracle(), address(0));
+        vm.expectRevert(AgentGaugeController.NoPendingOracleUpdate.selector);
+        gauge.executeOracleUpdate();
+        assertEq(address(gauge.oracle()), address(oracle2), "cancel preserves current oracle");
+    }
+
+    function test_l4_routerAllowlistTimelockedRemovalInstant() public {
+        MockRouter508 router2 = new MockRouter508(WETH_ADDR, address(shareOFT));
+
+        gauge.setAllowedSwapRouter(address(router2), true);
+        assertFalse(gauge.allowedSwapRouters(address(router2)), "addition not applied instantly");
+        uint256 executeAfter = gauge.pendingRouterAllowlist(address(router2));
+        assertGt(executeAfter, block.timestamp);
+
+        vm.expectRevert(abi.encodeWithSelector(AgentGaugeController.RouterAllowlistTooEarly.selector, executeAfter));
+        gauge.executeRouterAllowlist(address(router2));
+
+        vm.warp(executeAfter);
+        gauge.executeRouterAllowlist(address(router2));
+        assertTrue(gauge.allowedSwapRouters(address(router2)));
+        assertEq(gauge.pendingRouterAllowlist(address(router2)), 0);
+
+        // Removal is immediate (kick a compromised router without delay).
+        gauge.setAllowedSwapRouter(address(router2), false);
+        assertFalse(gauge.allowedSwapRouters(address(router2)));
+
+        // Removal also clears a pending addition.
+        gauge.setAllowedSwapRouter(address(router2), true);
+        gauge.setAllowedSwapRouter(address(router2), false);
+        vm.expectRevert(AgentGaugeController.NoPendingRouterAllowlist.selector);
+        gauge.executeRouterAllowlist(address(router2));
+
+        // The router allowlisted in setUp survived untouched.
+        assertTrue(gauge.allowedSwapRouters(address(router)));
+    }
+
+    function test_l8_twoStepOwnershipTransfer() public {
+        address stranger = makeAddr("stranger");
+        gauge.transferOwnership(stranger);
+        assertEq(gauge.owner(), address(this), "mistyped/unaccepted target keeps current owner");
+        assertEq(gauge.pendingOwner(), stranger);
+
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", address(this)));
+        gauge.acceptOwnership();
+
+        vm.prank(stranger);
+        gauge.acceptOwnership();
+        assertEq(gauge.owner(), stranger);
+        assertEq(gauge.pendingOwner(), address(0));
+
+        vm.prank(stranger);
+        vm.expectRevert(AgentGaugeController.OwnershipRenounceDisabled.selector);
+        gauge.renounceOwnership();
+    }
+
+    function test_i9_wrapperPpsMatchesVaultVirtualOffset() public {
+        AgentOVaultWrapper realWrapper = new AgentOVaultWrapper(address(agentToken), address(vault), address(this));
+        agentToken.mint(address(vault), 500 ether); // totalAssets
+        vault.mint(alice, 250 ether); // totalSupply
+
+        uint256 assets = 500 ether;
+        uint256 supply = 250 ether;
+        uint256 expected = ((assets + 1) * 1e18) / (supply + 1000);
+        assertEq(realWrapper.pricePerShare(), expected, "wrapper PPS uses the vault virtual-offset formula");
+        assertLt(expected, (assets * 1e18) / supply, "offset tightens the naive ratio");
+
+        // Empty-vault sentinel unchanged.
+        MockVault508 emptyVault = new MockVault508(address(agentToken));
+        AgentOVaultWrapper emptyWrapper =
+            new AgentOVaultWrapper(address(agentToken), address(emptyVault), address(this));
+        assertEq(emptyWrapper.pricePerShare(), 1e18);
+    }
+}
+
+/// @dev Sends ETH via `.transfer` (2,300-gas stipend) — L-5 gas-stipend repro.
+contract StipendSender508 {
+    function send(address payable to, uint256 amount) external {
+        to.transfer(amount);
+    }
+
+    receive() external payable {}
 }

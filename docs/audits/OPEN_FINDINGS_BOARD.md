@@ -199,3 +199,39 @@ Detail: [2026-07-08-contracts-reaudit/](./2026-07-08-contracts-reaudit/), [arist
 ## 2026-07-17 Phase2 / v1.19.2 delta
 
 See [`phase2-source-delta-security-review-2026-07-17.md`](./phase2-source-delta-security-review-2026-07-17.md).
+
+---
+
+## LeftClaw #508 — AgentGaugeController unified review (closed 2026-07-29)
+
+First pass landed in `f4daaf59d`; second pass (remaining lows/info) annotated `ODA-508-L4/L5/L8/I9`.
+Code annotations are tagged `// FIX: ODA-508-<id>`; regression suites:
+`test/agent/AgentGaugeController.Oda508Remediation.t.sol` (27) + `test/CreatorGaugeController.Oda508.t.sol` (6).
+
+| Finding | Status |
+|---------|--------|
+| **F1 (High)** burn-slice catch diverts to jackpot | **Fixed** — selector-discriminated catch (`BurnSliceDegraded` + retry vs `BurnSliceUnwrapFailed`); batcher whitelists agent gauge on wrapper at deploy; real-wrapper e2e regression |
+| **F2** stranded `pendingWETHFees` | **Fixed** — timelocked owner write-down; fail-closed check gated on `useOracleSlippage` |
+| **F3** lottery-manager timelock bypass | **Fixed both lanes** — one-way `lotteryManagerInitialized` flag |
+| **F4** NAV-priced floor | **Minimal (chosen)** — batcher whitelist removes wrap-fee deduction; NatSpec clarifies `oracleMin` is a mint-parity sanity bound |
+| **F5** wiring deadlock / no registration check | **Fixed** — atomic `setCoreWiring`; `GaugeNotRegisteredOnVault` checks |
+| **F6** no emergency-withdraw timelock | **Fixed** — queue/cancel/execute (1d, `nonReentrant`) + native-ETH sweep |
+| **F7** permissionless cadence defeat | **Fixed** — `distribute()` honors threshold; `MIN_DISTRIBUTION_INTERVAL` + event |
+| **F8** loopable keeper cap | **Fixed** — `wethKeeperCooldown` bounds keeper throughput |
+| **L-1** native refund mid-swap reverts/double-credits | **Fixed** — `_swapInProgress` flag; relaxed consumption check |
+| **L-2** requested-vs-measured intake | **Fixed** — measured-delta crediting on all intake paths |
+| **L-3** voter-slice balance-delta misread | **Fixed** — allowance-based `spent` accounting |
+| **L-4** owner defeats WETH guard via oracle+router pivot | **Fixed both lanes** — oracle changes + router additions timelocked (`CONFIG_UPDATE_TIMELOCK`); first oracle set immediate; removals instant |
+| **L-5** stranded ETH / `receive()` >2,300 gas | **Fixed both lanes** — stipend-aware `receive()` keeps ETH raw; native sweep via emergency path (ported to creator) |
+| **L-6** unit drift in previews/events | **Fixed** — ◆/◇ NatSpec annotations |
+| **L-7** `previewSwap` freshness gap | **Fixed** — `isPriceFresh` gate |
+| **L-8** single-step ownership | **Fixed both lanes** — `Ownable2Step`; batcher nominates, treasury accepts (deploy choreography noted at the handoff) |
+| **L-9** unenforced 18-decimals | **Fixed** — `Non18DecimalAgentToken` assert on `setAgentToken`/`setCoreWiring` |
+| **L-10** jackpot frozen while manager revoked | **Accepted residual** — bounded by F3's timelocked re-set (≤1d self-heal); documented on `payJackpot` |
+| **I-1** parity-claim inaccuracy / missing remediation record | **Fixed** — this section is the in-tree record (audit-branch `REMEDIATIONS.md`/`AUDIT.md` don't exist here) |
+| **I-2/I-3** inert remediation IDs / missing event | **Fixed** — removed `swapFeeTier`/`fallbackMinOutputBps`; `DistributionIntervalUpdated` event added |
+| **I-4** dead code (~150 lines) | **Fixed** — removed (no live agent gauges; zero external refs) |
+| **I-5/I-6** stale interface decls | **Fixed** — `addToJackpot` decl dropped; state retyped to `address` |
+| **I-7** allowance hygiene | **Fixed** — allowances cleared locally after burn |
+| **I-8** NatSpec/PPS misalignment | **Fixed** — `estimatePPSIncrease` uses virtual-offset formula; docblock placement fixed |
+| **I-9** wrapper PPS omits virtual offset | **Fixed** — `AgentOVaultWrapper.pricePerShare` matches the vault formula (gauge already reads the vault's) |

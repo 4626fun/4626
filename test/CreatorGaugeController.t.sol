@@ -228,9 +228,11 @@ contract MockToken is IERC20 {
             gauge.setVault(address(vault));
             gauge.setCreatorCoin(address(creatorCoin));
             gauge.setWrapper(address(wrapper));
-            gauge.setAllowedSwapRouter(address(buybackRouter), true);
+            gauge.setAllowedSwapRouter(address(buybackRouter), true); // ODA-508-L4: queues
             gauge.setWethFeeKeeper(keeper);
             gauge.setWethProcessingConfig(100 ether, false);
+            vm.warp(block.timestamp + 1 days);
+            gauge.executeRouterAllowlist(address(buybackRouter)); // timelock elapsed → active
         }
 
         function _routeCall(uint256 wethAmount) internal pure returns (bytes memory) {
