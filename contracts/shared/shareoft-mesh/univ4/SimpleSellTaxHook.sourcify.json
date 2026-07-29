@@ -1,0 +1,14 @@
+{
+  "source": "sourcify",
+  "chainId": 8453,
+  "address": "0xca975B9dAF772C71161f3648437c3616E5Be0088",
+  "matchId": "6470368",
+  "compiler": "0.8.26+commit.8a97fa7a",
+  "viaIR": true,
+  "optimizer": {
+    "enabled": true,
+    "runs": 200
+  },
+  "evmVersion": "cancun",
+  "fullyQualifiedName": "contracts/SimpleSellTaxHook.sol:SimpleSellTaxHook"
+}

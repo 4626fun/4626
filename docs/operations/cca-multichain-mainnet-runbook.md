@@ -146,6 +146,17 @@ Do **not** `setBackingVault` to a Base vault on a spoke. Spoke `TAX_HOOK=0` is
 intentional: `CCALaunchArm.migrate` allows no-hook V4 pools (Base sell-tax hook
 stays hub-only at `0xca975…`).
 
+Optional spoke sell-tax (same Sourcify source, per-chain PoolManager/WETH):
+
+```bash
+# Pins: frontend/src/config/akitaCcaSpokeTaxHook.ts
+# Mine: forge test --match-contract MineSpokeSellTaxHookSalts -vv
+EXPECTED_CHAIN_ID=<id> POOL_MANAGER=<pm> WRAPPED_NATIVE=<weth> \
+  forge script script/DeploySpokeSellTaxHook.s.sol:DeploySpokeSellTaxHook \
+  --rpc-url $<CHAIN>_RPC_URL --broadcast
+# Then pass TAX_HOOK=<predicted> into DeploySpokeCcaLaunchArm / ConfigureSpokeCcaOracle
+```
+
 ### 7. Pin frontend env (spoke-minimal)
 
 After verify, only:

@@ -156,6 +156,24 @@ describe('ccaLaunchChains', () => {
     }
   })
 
+  it('pins wrappedNative (WETH) on every launch chain', () => {
+    expect(CCA_LAUNCH_CHAINS.ethereum.wrappedNative).toBe(
+      '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    )
+    expect(CCA_LAUNCH_CHAINS.base.wrappedNative).toBe(
+      '0x4200000000000000000000000000000000000006',
+    )
+    expect(CCA_LAUNCH_CHAINS.arbitrum.wrappedNative).toBe(
+      '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+    )
+    expect(CCA_LAUNCH_CHAINS.unichain.wrappedNative).toBe(
+      '0x4200000000000000000000000000000000000006',
+    )
+    expect(CCA_LAUNCH_CHAINS.robinhood.wrappedNative).toBe(
+      '0x4200000000000000000000000000000000000006',
+    )
+  })
+
   it('pins Uniswap v4 PositionManager on every launch chain', () => {
     expect(CCA_LAUNCH_CHAINS.ethereum.positionManagerV4).toBe(
       '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e',

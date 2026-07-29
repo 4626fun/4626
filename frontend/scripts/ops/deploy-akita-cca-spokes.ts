@@ -30,6 +30,10 @@ import {
   ZERO_ADDRESS,
   type CcaLaunchChainKey,
 } from '../../src/config/ccaLaunchChains.ts'
+import {
+  AKITA_CCA_SPOKE_TAX_HOOKS,
+  type AkitaCcaSpokeTaxHookKey,
+} from '../../src/config/akitaCcaSpokeTaxHook.ts'
 import { AKITA_DEFAULTS, AKITA_EXPANSION_CHAIN_ENV_SUFFIX } from '../../src/config/contracts.defaults.ts'
 
 declare const process: {
@@ -87,7 +91,7 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
   process.stdout.write(`# SHARE_OFT_SALT ${akitaShareOftSalt()}\n`)
   process.stdout.write(`# ORACLE_SALT   ${akitaOracleSalt()}\n`)
   process.stdout.write(
-    '# TaxHook spokes = address(0) (no-hook V4 migrate; Base sell-tax hook is hub-only)\n\n',
+    '# TaxHook default = address(0) (no-hook V4 migrate). Optional spoke sell-tax below.\n\n',
   )
 
   for (const key of keys) {
@@ -141,6 +145,17 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
         `WIRE_SIDE=spoke HUB_ORACLE=${hubOracle} SPOKE_ORACLE=<spoke> \\\n` +
         `  forge script script/WireCreatorOracleHubSpokePeers.s.sol --rpc-url ${rpc} --broadcast\n\n`,
     )
+    const taxPin = AKITA_CCA_SPOKE_TAX_HOOKS[key as AkitaCcaSpokeTaxHookKey]
+    if (taxPin) {
+      process.stdout.write(
+        `# Optional sell-tax hook (predicted ${taxPin.predicted}; salt ${Number(taxPin.salt)}):\n` +
+          `EXPECTED_CHAIN_ID=${chain.chainId} POOL_MANAGER=${chain.poolManagerV4} \\\n` +
+          `WRAPPED_NATIVE=${chain.wrappedNative} \\\n` +
+          `  forge script script/DeploySpokeSellTaxHook.s.sol:DeploySpokeSellTaxHook \\\n` +
+          `  --rpc-url ${rpc} --broadcast -vvvv\n` +
+          `# Then TAX_HOOK=${taxPin.predicted} below (default remains 0 for no-hook migrate)\n\n`,
+      )
+    }
     process.stdout.write(
       `EXPECTED_CHAIN_ID=${chain.chainId} SHARE_OFT=<spoke> ORACLE=<spoke-oracle> \\\n` +
         `POOL_MANAGER=${chain.poolManagerV4} POSITION_MANAGER=${chain.positionManagerV4} \\\n` +

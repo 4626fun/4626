@@ -60,6 +60,8 @@ export type CcaLaunchChain = {
   poolManagerV4: `0x${string}`
   /** Uniswap v4 PositionManager for `setMigrationConfig` / post-auction LP mint. */
   positionManagerV4: `0x${string}`
+  /** Canonical wrapped native (WETH) for SimpleSellTaxHook ctor. */
+  wrappedNative: `0x${string}`
   /**
    * Local Chainlink ETH/USD aggregator (post-deploy `setChainlinkFeed`).
    * Zero address = unknown / unset - operator must pin before launch pricing.
@@ -74,8 +76,8 @@ export type CcaLaunchChain = {
   sequencerUptimeFeed: `0x${string}`
   /**
    * Uniswap v4 tax / Zora hook for CCA migrate+grad.
-   * Base: live SimpleSellTaxHook. Spokes: intentionally `address(0)` - no-hook
-   * V4 pools (CCALaunchArm.migrate allows zero taxHook; sell-tax plane stays Base-only).
+   * Base: live SimpleSellTaxHook. Spokes default `address(0)` (no-hook V4 migrate).
+   * Optional spoke fan-out: `script/DeploySpokeSellTaxHook.s.sol` (Sourcify source).
    */
   taxHook: `0x${string}`
   /** v2.1.0 factory is not deployed by Uniswap here yet - empty code is expected pre-bootstrap. */
@@ -106,6 +108,7 @@ export const CCA_LAUNCH_CHAINS = {
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x000000000004444c5dc75cB358380D2e3dE08A90',
     positionManagerV4: '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e',
+    wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     // https://data.chain.link/feeds/ethereum/mainnet/eth-usd
     chainlinkEthUsd: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
     sequencerUptimeFeed: ZERO_ADDRESS,
@@ -133,6 +136,7 @@ export const CCA_LAUNCH_CHAINS = {
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x498581fF718922c3f8e6A244956aF099B2652b2b',
     positionManagerV4: '0x7C5f5A4bBd8fD63184577525326123B519429bDc',
+    wrappedNative: '0x4200000000000000000000000000000000000006',
     chainlinkEthUsd: '0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
     sequencerUptimeFeed: '0xBCF85224fc0756B9Fa45aA7892530B47e10b6433',
@@ -161,6 +165,7 @@ export const CCA_LAUNCH_CHAINS = {
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x1F98400000000000000000000000000000000004',
     positionManagerV4: '0x4529A01c7A0410167c5740C487a8de60232617bf',
+    wrappedNative: '0x4200000000000000000000000000000000000006',
     // Chainlink directory ETH/USD (verified codesize>0; feed decimals=18).
     chainlinkEthUsd: '0xBcE70e194940a157f3A80566505a7E96f5238CCa',
     sequencerUptimeFeed: ZERO_ADDRESS,
@@ -187,6 +192,7 @@ export const CCA_LAUNCH_CHAINS = {
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32',
     positionManagerV4: '0xd88F38F930b7952f2Db2432Cb002E7abbf3DD869',
+    wrappedNative: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
     // Chainlink directory ETH/USD (verified codesize>0 on Arb One).
     chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
@@ -214,6 +220,7 @@ export const CCA_LAUNCH_CHAINS = {
     requireZeroCcaProtocolFee: true,
     poolManagerV4: '0x8366a39CC670B4001A1121B8F6A443A643e40951',
     positionManagerV4: '0x58Daec3116AAe6d93017bAaEA7749052e8A04Fa7',
+    wrappedNative: '0x4200000000000000000000000000000000000006',
     // Chainlink directory ETH/USD on Robinhood mainnet (verified codesize>0).
     chainlinkEthUsd: '0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9',
     sequencerUptimeFeed: ZERO_ADDRESS,
