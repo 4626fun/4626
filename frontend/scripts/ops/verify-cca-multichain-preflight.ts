@@ -116,15 +116,28 @@ async function checkChain(key: CcaLaunchChainKey): Promise<CheckRow[]> {
     return rows
   }
 
-  const factory = (chain.targetCcaFactoryVersion === 'v2.1.0'
-    ? chain.ccaFactoryV210
-    : chain.ccaFactoryV110) as Address
+  // Fee/migrate gate always probes v2.1.0 (new arms + every expansion spoke).
+  // Legacy Base v1.1.0 lacks protocolFeeController — do not use it for the fee probe.
+  const factory = chain.ccaFactoryV210 as Address
 
-  const [factoryCode, poolManagerCode, lzCode] = await Promise.all([
+  const [factoryCode, poolManagerCode, lzCode, legacyFactoryCode] = await Promise.all([
     client.getCode({ address: factory }),
     client.getCode({ address: chain.poolManagerV4 }),
     client.getCode({ address: chain.lzEndpointV2 }),
+    chain.targetCcaFactoryVersion === 'v1.1.0'
+      ? client.getCode({ address: chain.ccaFactoryV110 as Address })
+      : Promise.resolve(undefined),
   ])
+
+  if (chain.targetCcaFactoryVersion === 'v1.1.0') {
+    rows.push({
+      chain: chain.label,
+      status: hasCode(legacyFactoryCode) ? 'PASS' : 'WARN',
+      detail: hasCode(legacyFactoryCode)
+        ? `legacy v1.1.0 factory ${chain.ccaFactoryV110} live (live arm); fee gate uses v2.1.0 below`
+        : `legacy v1.1.0 factory ${chain.ccaFactoryV110} has no code`,
+    })
+  }
 
   if (!hasCode(factoryCode)) {
     if (chain.ccaFactoryV210ExpectedEmptyPreBootstrap) {

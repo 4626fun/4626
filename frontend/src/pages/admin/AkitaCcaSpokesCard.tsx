@@ -71,9 +71,13 @@ export function AkitaCcaSpokesCard() {
       '# After infra + keys are ready, broadcast per runbook:',
       '# docs/operations/cca-multichain-mainnet-runbook.md',
       'pnpm -C frontend ops:deploy-akita-cca-spokes --dry-run',
+      'pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands',
+      '# First automated stage (registry CREATE2 + LZ/hub seed):',
+      'pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry',
       '',
       `# Hub Base ■AKITA ShareOFT: ${AKITA.shareOFT}`,
       `# Hub Base CCA arm: ${AKITA.ccaLaunchArm}`,
+      `# Hub Base oracle: ${AKITA.oracle}`,
     ]
     for (const row of rows) {
       lines.push('')
@@ -82,12 +86,13 @@ export function AkitaCcaSpokesCard() {
       if (row.factoryBootstrapNeeded) {
         lines.push('# BOOTSTRAP: deploy CCA factory v2.1.0 with protocolFeeController=address(0)')
       }
-      lines.push('# 1) DeployRemoteShareOft (EXPECTED_CHAIN_ID=' + row.chainId + ')')
-      lines.push('# 2) Wire Base↔spoke ShareOFT peers (3-of-5 DVN, confirmations [15,15])')
-      lines.push('# 3) DeployRemoteCreatorOracle + WireCreatorOracleHubSpokePeers')
-      lines.push('# 4) Deploy CCALaunchArm only + ConfigureSpokeCcaOracle — no vault stack on spoke')
-      lines.push('# 5) BroadcastCreatorOracleAssetPrice from Base hub oracle')
-      lines.push(`# 6) Pin VITE_AKITA_SHARE_OFT_${row.key.toUpperCase()} + VITE_AKITA_CCA_STRATEGY_${row.key.toUpperCase()}`)
+      lines.push('# 1) EnsureSpokeRegistry (registry + LZ/hub seed)')
+      lines.push('# 2) DeployRemoteShareOft (EXPECTED_CHAIN_ID=' + row.chainId + ')')
+      lines.push('# 3) Wire Base↔spoke ShareOFT peers (3-of-5 DVN, confirmations [15,15])')
+      lines.push('# 4) DeployRemoteCreatorOracle + WireCreatorOracleHubSpokePeers')
+      lines.push('# 5) Deploy CCALaunchArm only + ConfigureSpokeCcaOracle — no vault stack on spoke')
+      lines.push('# 6) BroadcastCreatorOracleAssetPrice from Base hub oracle')
+      lines.push(`# 7) Pin VITE_AKITA_SHARE_OFT_${row.key.toUpperCase()} + VITE_AKITA_CCA_STRATEGY_${row.key.toUpperCase()}`)
     }
     return lines.join('\n')
   }, [rows])

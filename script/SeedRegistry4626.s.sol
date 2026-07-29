@@ -80,7 +80,8 @@ contract SeedRegistry4626 is Script {
     uint256 constant UNICHAIN_CHAIN_ID = 130;
     uint32 constant UNICHAIN_EID = 30320;
     address constant UNICHAIN_WETH = 0x4200000000000000000000000000000000000006;
-    address constant UNICHAIN_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+    // Non-canonical EndpointV2 (same CREATE2 as Robinhood; eid 30320 on Unichain).
+    address constant UNICHAIN_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
 
     // --- Robinhood Chain (remote ShareOFT only; Base remains hub) ---
     uint256 constant ROBINHOOD_CHAIN_ID = 4663;

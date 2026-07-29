@@ -32,8 +32,10 @@ Coordinated ■AKITA CCA launch capability on:
 - **Admin UI:** `/admin` → ■AKITA CCA spokes card (pin status + copyable ops plan).
 - **Plan:** `pnpm -C frontend ops:plan-akita-cca-spokes`
 - **Preflight + checklist:** `pnpm -C frontend ops:deploy-akita-cca-spokes` (dry-run default).
-- Broadcast of remote CREATE2/peer txs remains Foundry scripts below until spoke
-  deployers are fully wired — do not hang this on deploy-session.
+- **Copy-paste forge recipe:** `pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands`
+- **First broadcast stage:** `--broadcast --stage ensure-registry` runs
+  `EnsureSpokeRegistry` (registry CREATE2 if missing + LZ/hub seed). OFT / oracle /
+  arm CREATE2 still need salts/codeIds via Foundry (below) — not deploy-session.
 
 ## Deploy order (per expansion chain)
 
@@ -69,8 +71,19 @@ forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
 ### 3. Spoke registry + LZ endpoints
 
 Spoke `CreatorOracle` ctor reads `Registry4626.getLayerZeroEndpoint(chainId)` and
-`hubChainEid()`. After CREATE2 registry + bytecode infra on the spoke, run
-`SeedRegistry4626` against that spoke RPC (same script seeds all known endpoints).
+`hubChainEid()`. Prefer the combined helper:
+
+```bash
+EXPECTED_CHAIN_ID=<id> forge script script/EnsureSpokeRegistry.s.sol:EnsureSpokeRegistry \
+  --rpc-url $<CHAIN>_RPC_URL --broadcast
+# or:
+pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry --chain <key>
+```
+
+`EnsureSpokeRegistry` CREATE2-deploys if empty (default vanity `0x7776…4626`) then
+seeds hub EID + LZ endpoints (Unichain uses non-canonical
+`0x6F475642a6e85809B1c36Fa62763669b1b48DD5B`). Override `SALT`/`OWNER`/`EXPECTED_ADDRESS`
+only when targeting Base registry address parity (`0xF60a…`).
 
 ### 4. Remote ShareOFT + peers
 

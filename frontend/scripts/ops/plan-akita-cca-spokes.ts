@@ -44,7 +44,9 @@ function main(): void {
     }
     process.stdout.write('- Steps:\n')
     process.stdout.write(`  1. pnpm -C frontend ops:verify-cca-multichain --chain ${key}\n`)
-    process.stdout.write('  2. Spoke registry + LZ endpoints (SeedRegistry4626 on spoke RPC)\n')
+    process.stdout.write(
+      `  2. EnsureSpokeRegistry (EXPECTED_CHAIN_ID=${chain.chainId}) — registry + LZ/hub seed\n`,
+    )
     process.stdout.write(`  3. forge script DeployRemoteShareOft (EXPECTED_CHAIN_ID=${chain.chainId})\n`)
     process.stdout.write('  4. Wire Base↔spoke ShareOFT peers (layerzero-evm-share-mesh; [15,15]; 3-of-5 DVN)\n')
     process.stdout.write('  5. SeedRegistry setRemoteOFTPeer on Base\n')
@@ -58,7 +60,7 @@ function main(): void {
     process.stdout.write('  7. WireCreatorOracleHubSpokePeers hub + spoke (HUB_ORACLE Base AKITA oracle)\n')
     process.stdout.write('  8. Deploy CCALaunchArm only (setCcaFactoryV2 + schedule; fundsRecipient=arm)\n')
     process.stdout.write(
-      `  9. ConfigureSpokeCcaOracle (POOL_MANAGER=${chain.poolManagerV4}; taxHook when ready)\n`,
+      `  9. ConfigureSpokeCcaOracle (POOL_MANAGER=${chain.poolManagerV4}; TAX_HOOK=${chain.taxHook})\n`,
     )
     process.stdout.write(' 10. BroadcastCreatorOracleAssetPrice from Base (DST_EIDS includes this eid)\n')
     process.stdout.write('     Hub vault/wrapper/gauge/Zora token stay on Base — not redeployed per spoke.\n')
@@ -68,8 +70,12 @@ function main(): void {
     process.stdout.write('\n')
   }
 
-  process.stdout.write('Deploy helper (still dry-run by default):\n')
+  process.stdout.write('Deploy helper:\n')
   process.stdout.write('  pnpm -C frontend ops:deploy-akita-cca-spokes --dry-run\n')
+  process.stdout.write('  pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands\n')
+  process.stdout.write(
+    '  pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry\n',
+  )
   process.exit(0)
 }
 

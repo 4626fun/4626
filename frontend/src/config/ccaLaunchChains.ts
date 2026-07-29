@@ -17,10 +17,15 @@
 export const CCA_FACTORY_V110 = '0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5' as const
 export const CCA_FACTORY_V210 = '0x000000001F26a0044BaA66024e7b6599c61963F8' as const
 
-/** Canonical LayerZero EndpointV2 (most EVM chains). */
+/** Canonical LayerZero EndpointV2 (Ethereum / Base / Arbitrum, etc.). */
 export const LZ_ENDPOINT_V2_CANONICAL = '0x1a44076050125825900e736c501f859c50fE728c' as const
-/** Robinhood Chain EndpointV2 (non-canonical deployment). */
-export const LZ_ENDPOINT_V2_ROBINHOOD = '0x6F475642a6e85809B1c36Fa62763669b1b48DD5B' as const
+/**
+ * Non-canonical EndpointV2 CREATE2 (Unichain + Robinhood share this address;
+ * different EIDs — Unichain 30320, Robinhood 30416).
+ */
+export const LZ_ENDPOINT_V2_NONCANONICAL = '0x6F475642a6e85809B1c36Fa62763669b1b48DD5B' as const
+/** @deprecated Prefer LZ_ENDPOINT_V2_NONCANONICAL — same address. */
+export const LZ_ENDPOINT_V2_ROBINHOOD = LZ_ENDPOINT_V2_NONCANONICAL
 
 export const SEVEN_DAYS_SECONDS = 604_800
 
@@ -65,6 +70,11 @@ export type CcaLaunchChain = {
    * Zero on L1 / chains without a published feed.
    */
   sequencerUptimeFeed: `0x${string}`
+  /**
+   * Uniswap v4 tax / Zora hook for CCA migrate+grad. Zero until pinned per chain
+   * (Base live hook is in CONTRACTS.taxHook; spokes TBD).
+   */
+  taxHook: `0x${string}`
   /** v2.1.0 factory is not deployed by Uniswap here yet — empty code is expected pre-bootstrap. */
   ccaFactoryV210ExpectedEmptyPreBootstrap: boolean
   rpcEnvKey: string
@@ -95,6 +105,7 @@ export const CCA_LAUNCH_CHAINS = {
     // https://data.chain.link/feeds/ethereum/mainnet/eth-usd
     chainlinkEthUsd: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
     sequencerUptimeFeed: ZERO_ADDRESS,
+    taxHook: ZERO_ADDRESS,
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'ETHEREUM_RPC_URL',
     defaultRpcUrl: 'https://ethereum-rpc.publicnode.com',
@@ -120,6 +131,8 @@ export const CCA_LAUNCH_CHAINS = {
     chainlinkEthUsd: '0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
     sequencerUptimeFeed: '0xBCF85224fc0756B9Fa45aA7892530B47e10b6433',
+    // Live Base Zora/tax hook (CONTRACTS.taxHook).
+    taxHook: '0xca975B9dAF772C71161f3648437c3616E5Be0088',
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'BASE_RPC_URL',
     defaultRpcUrl: 'https://mainnet.base.org',
@@ -128,7 +141,8 @@ export const CCA_LAUNCH_CHAINS = {
     label: 'Unichain',
     chainId: 130,
     eid: 30_320,
-    lzEndpointV2: LZ_ENDPOINT_V2_CANONICAL,
+    // LayerZero metadata: unichain-mainnet EndpointV2 (not the canonical 0x1a44… address).
+    lzEndpointV2: LZ_ENDPOINT_V2_NONCANONICAL,
     blockTimeSeconds: 1,
     defaultDurationBlocks: 604_800,
     launchBlocksPerSecond: 0,
@@ -144,6 +158,7 @@ export const CCA_LAUNCH_CHAINS = {
     // https://data.chain.link/feeds/unichain/unichain/eth-usd-svr (standard proxy)
     chainlinkEthUsd: '0xBcE7D6328c3132649669528e57F60c7f4F7d8CCa',
     sequencerUptimeFeed: ZERO_ADDRESS,
+    taxHook: ZERO_ADDRESS,
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'UNICHAIN_RPC_URL',
     defaultRpcUrl: 'https://mainnet.unichain.org',
@@ -169,6 +184,7 @@ export const CCA_LAUNCH_CHAINS = {
     chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B629db276d',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
     sequencerUptimeFeed: '0xFdB631F5EE196F0ed6FAa767959853A9F217697D',
+    taxHook: ZERO_ADDRESS,
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'ARBITRUM_RPC_URL',
     defaultRpcUrl: 'https://arb1.arbitrum.io/rpc',
@@ -177,7 +193,7 @@ export const CCA_LAUNCH_CHAINS = {
     label: 'Robinhood',
     chainId: 4_663,
     eid: 30_416,
-    lzEndpointV2: LZ_ENDPOINT_V2_ROBINHOOD,
+    lzEndpointV2: LZ_ENDPOINT_V2_NONCANONICAL,
     blockTimeSeconds: 0.1,
     defaultDurationBlocks: 6_048_000,
     launchBlocksPerSecond: 10,
@@ -193,6 +209,7 @@ export const CCA_LAUNCH_CHAINS = {
     // No published Chainlink ETH/USD / sequencer feed pin yet — set before launch.
     chainlinkEthUsd: ZERO_ADDRESS,
     sequencerUptimeFeed: ZERO_ADDRESS,
+    taxHook: ZERO_ADDRESS,
     // Uniswap has not deployed the v2.1.0 CCA factory on Robinhood Chain; we deploy
     // it ourselves with protocolFeeController = address(0) during bootstrap.
     ccaFactoryV210ExpectedEmptyPreBootstrap: true,

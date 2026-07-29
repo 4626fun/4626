@@ -203,8 +203,8 @@ Vault, wrapper, share OFT, gauge, and oracle addresses are creator-specific and 
 | Base      | 30184       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Ethereum  | 30101       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Arbitrum  | 30110       | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Unichain  | 30320       | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Robinhood | 30416       | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` |
+| Unichain  | 30320       | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` (non-canonical EndpointV2) |
+| Robinhood | 30416       | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` (same CREATE2; different eid) |
 | BSC       | 30102       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Avalanche | 30106       | `0x1a44076050125825900e736c501f859c50fE728c` |
 

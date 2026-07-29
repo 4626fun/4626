@@ -4,6 +4,8 @@ import {
   CCA_FACTORY_V110,
   CCA_FACTORY_V210,
   CCA_LAUNCH_CHAINS,
+  LZ_ENDPOINT_V2_CANONICAL,
+  LZ_ENDPOINT_V2_NONCANONICAL,
   SEVEN_DAYS_SECONDS,
   ZERO_ADDRESS,
   effectiveLaunchBlockTimeSeconds,
@@ -136,5 +138,20 @@ describe('ccaLaunchChains', () => {
     expect(CCA_LAUNCH_CHAINS.arbitrum.sequencerUptimeFeed).not.toBe(ZERO_ADDRESS)
     expect(CCA_LAUNCH_CHAINS.base.sequencerUptimeFeed).not.toBe(ZERO_ADDRESS)
     expect(CCA_LAUNCH_CHAINS.ethereum.sequencerUptimeFeed).toBe(ZERO_ADDRESS)
+  })
+
+  it('uses non-canonical LZ EndpointV2 on Unichain and Robinhood', () => {
+    expect(CCA_LAUNCH_CHAINS.unichain.lzEndpointV2).toBe(LZ_ENDPOINT_V2_NONCANONICAL)
+    expect(CCA_LAUNCH_CHAINS.robinhood.lzEndpointV2).toBe(LZ_ENDPOINT_V2_NONCANONICAL)
+    expect(CCA_LAUNCH_CHAINS.base.lzEndpointV2).toBe(LZ_ENDPOINT_V2_CANONICAL)
+    expect(CCA_LAUNCH_CHAINS.ethereum.lzEndpointV2).toBe(LZ_ENDPOINT_V2_CANONICAL)
+    expect(CCA_LAUNCH_CHAINS.arbitrum.lzEndpointV2).toBe(LZ_ENDPOINT_V2_CANONICAL)
+  })
+
+  it('pins Base taxHook and leaves spoke taxHooks unset until ready', () => {
+    expect(CCA_LAUNCH_CHAINS.base.taxHook).toBe('0xca975B9dAF772C71161f3648437c3616E5Be0088')
+    for (const key of ['ethereum', 'unichain', 'arbitrum', 'robinhood'] as const) {
+      expect(CCA_LAUNCH_CHAINS[key].taxHook).toBe(ZERO_ADDRESS)
+    }
   })
 })
