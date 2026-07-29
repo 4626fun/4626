@@ -7,7 +7,7 @@ sidebar_position: 1
 
 Canonical deployed addresses for 4626 on Base mainnet. Shared infrastructure and new per-creator launches use the **v1.20.0** greenfield stack (hard cutover; no dual-epoch launch lane).
 
-v1.20.0 greenfield infra is live with a fully seeded bytecode store (includes Ajna dust-refund + Phase 3 automation-keeper seal). Prior v1.19.x addresses remain onchain for already-deployed vaults but are **not** supported launch or ops targets. Creator + Agent paid canaries on the new stack remain outstanding. AMOE roots for allowlist epochs 86–88 and ledger epoch 68 are live on router `0xf07D4811…`.
+v1.20.0 greenfield infra is live with a fully seeded bytecode store (includes Ajna dust-refund + Phase 3 automation-keeper seal). Prior v1.19.x addresses remain onchain for already-deployed vaults but are **not** supported launch or ops targets. Creator + Agent paid canaries on the new stack remain outstanding. AMOE still uses live router `0xf07D4811…` until the multi-entry timelock execute (**2026-07-31 17:32:53 UTC** → `0x44d070…`).
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy.
 
@@ -86,7 +86,9 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 
 | Contract / role                                   | Address                                      | Notes                                                                                                                                                                         |
 | ------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` | **Live v1.20.0 router** wired to manager `0x0fC6f30a…`.                                                                                                                       |
+| `LotteryAmoeRouter` (v3, multi-entry)             | `0x44d070C95Da7228BDf316E3DCB81e89FD1D6e338` | **Queued cutover** (no `usedWalletCommit`). Deployed 2026-07-29. Manager `queueAmoeRelayerChange` pending until **2026-07-31 17:32:53 UTC**, then run `amoe/tools/ops/execute-amoe-relayer-cutover.sh`. Do **not** flip `LOTTERY_AMOE_ROUTER` until execute lands. |
+| `AmoePlonkVerifier` (paired with multi-entry)     | `0xcEA9e27cC9baF88Cb50777B5cD23fbE8BF53c229` | Deployed with multi-entry router.                                                                                                                                             |
+| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` | **Still live** until timelock execute. Has once-per-epoch `usedWalletCommit`.                                                                                                  |
 | `LotteryAmoeRouter` (v3, v1.19.1)                 | `0x630c3769Cf1D80c6cb8cCB7c011f5A76904C4C1e` | Deprecated — do not point Vercel here after v1.20.0 greenfield cutover.                                                                                                       |
 | `LotteryAmoeRouter` (v3, v1.18.0)                 | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` | Deprecated — do not point Vercel here after v1.19.1 greenfield cutover.                                                                                                       |
 | `LotteryAmoeRouter` (v3, legacy v1.16.1)          | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | Deprecated — do not point Vercel here after v1.18.0 cutover.                                                                                                                  |
@@ -100,11 +102,21 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 | Allowlist + ledger publisher                      | `0x793ca28123cba3ca3c20b9c6c67f37510c89c145` | Protocol CSW (`PROTOCOL_CSW_ADDRESS`) — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. Operator personal CSW `0xAb6d5…` is no longer the AMOE publisher. |
 | Protocol AMOE creator coin (AKITA)                | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Default target for protocol-entry AMOE flows.                                                                                                                                 |
 
+**Multi-entry cutover (queued 2026-07-29):**
+
+1. Wait until `pendingAmoeRelayerEffectiveAt` (≥ **2026-07-31 17:32:53 UTC**).
+2. Run `amoe/tools/ops/execute-amoe-relayer-cutover.sh` (owner key).
+3. Flip `LOTTERY_AMOE_ROUTER` / `VITE_LOTTERY_AMOE_ROUTER` to
+   `0x44d070C95Da7228BDf316E3DCB81e89FD1D6e338` in local + Vercel.
+4. Confirm publisher cron writes allowlist + ledger roots to the **new** router
+   (publisher EOA unchanged: `0x793c…`).
+5. Smoke: burn-credits → wait snapshot → submit-zk; multi-entry with two burns
+   in the same epoch should both settle.
+
 **Post-cutover verification (production):**
 
-1. Verify `LOTTERY_AMOE_ROUTER` resolves to
-   `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` in production and that the
-   deployed app reports the same router.
+1. Verify `LOTTERY_AMOE_ROUTER` resolves to the **live** router in production
+   (`0x44d070…` after multi-entry execute; `0xf07D48…` until then).
 2. Verify the router points to manager `0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b`,
    that the manager authorizes the router, and that publishers resolve to
    protocol CSW (`0x793c…`).
@@ -130,7 +142,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `DEPLOYMENT_BATCHER`                                         | `VITE_DEPLOYMENT_BATCHER`              | `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` |
 | `DEPLOYMENT_BATCHER_AUTO_HANDOFF`                            | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032` |
 | `VAULT_AUXILIARY_DEPLOY_BATCHER`                             | `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER`  | `0x15eE1D03a5556C28E5079E68763F8231ad68dAdD` |
-| `LOTTERY_AMOE_ROUTER`                                        | —                                      | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` |
+| `LOTTERY_AMOE_ROUTER`                                        | `VITE_LOTTERY_AMOE_ROUTER`             | `0xf07D4811C55DAB360D4aF802FA9756EBca241DAC` (keep until timelock execute; then `0x44d070C95Da7228BDf316E3DCB81e89FD1D6e338`) |
 | —                                                            | `VITE_DEPLOYMENT_VERSION`              | `v1.20.0`                                    |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
@@ -191,8 +203,27 @@ Vault, wrapper, share OFT, gauge, and oracle addresses are creator-specific and 
 | Base      | 30184       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Ethereum  | 30101       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Arbitrum  | 30110       | `0x1a44076050125825900e736c501f859c50fE728c` |
+| Unichain  | 30320       | `0x1a44076050125825900e736c501f859c50fE728c` |
+| Robinhood | 30416       | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` |
 | BSC       | 30102       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Avalanche | 30106       | `0x1a44076050125825900e736c501f859c50fE728c` |
+
+## ■AKITA CCA multi-chain (pending deploy)
+
+Canonical launch parameters live in `frontend/src/config/ccaLaunchChains.ts`.
+Do not invent ShareOFT / arm / oracle addresses — pin via `VITE_AKITA_*_<CHAIN>`
+after each chain's deploy lands. Preflight: `pnpm -C frontend ops:verify-cca-multichain`.
+
+| Chain     | chainId | LZ EID | CCA factory (target) | PoolManager v4 | ■AKITA stack |
+| --------- | ------- | ------ | -------------------- | -------------- | ------------ |
+| Base      | 8453    | 30184  | v1.1.0 live arm `0xCCcc…0bD5`; new arms → v2.1.0 `0x0000…63F8` | `0x4985…2b2b` | Live (see AKITA_DEFAULTS) |
+| Ethereum  | 1       | 30101  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x0000…8A90` | TBD — env pin after deploy |
+| Arbitrum  | 42161   | 30110  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x360E…FB32` | TBD — env pin after deploy |
+| Unichain  | 130     | 30320  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x1F98…0004` | TBD — env pin after deploy |
+| Robinhood | 4663    | 30416  | v2.1.0 — **deploy ourselves** with `protocolFeeController = address(0)` (Uniswap has not shipped CCA here) | `0x8366…0951` | TBD — env pin after deploy |
+
+Hard constraint: factory protocol fee must be zero on every chain
+(`CCALaunchArm.migrate()` requires swept currency == `currencyRaised()`).
 
 ## External Contracts
 
