@@ -153,6 +153,14 @@ contract CCALaunchArmShareMeshSeedTest is Test {
         assertEq(actual, sqrtPriceX96);
     }
 
+    function test_migrate_allowsZeroTaxHook() public {
+        launchArm.setOracleConfig(address(meshOracle), address(poolManager), address(0), address(this));
+        ShareMeshSeedAuction auction = _launchWithReserve();
+        _fundAndSweep(auction);
+        launchArm.migrate();
+        assertTrue(launchArm.getLifecycleStatus().migrated);
+    }
+
     function test_migrate_retainsReserveAndCurrencyWithoutLpMint() public {
         ShareMeshSeedAuction auction = _launchWithReserve();
         _fundAndSweep(auction);

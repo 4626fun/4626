@@ -48,32 +48,37 @@ function main(): void {
     process.stdout.write('- Steps:\n')
     process.stdout.write(`  1. pnpm -C frontend ops:verify-cca-multichain --chain ${key}\n`)
     process.stdout.write(
-      `  2. EnsureSpokeRegistry (EXPECTED_CHAIN_ID=${chain.chainId}) — registry + LZ/hub seed\n`,
+      `  2. EnsureSpokeRegistry (EXPECTED_CHAIN_ID=${chain.chainId}) - registry + LZ/hub seed\n`,
     )
-    process.stdout.write(`  3. forge script DeployRemoteShareOft (EXPECTED_CHAIN_ID=${chain.chainId})\n`)
     process.stdout.write(
-      '  4. WireShareOftHubSpokePeers hub+spoke + layerzero-evm-share-mesh ([15,15]; 3-of-5 DVN)\n',
+      '  3. EnsureSpokeBytecodeInfra (epoch cca-spoke-v1 -> spoke CREATE2 store/deployer + seed)\n',
     )
-    process.stdout.write('  5. (Optional) REGISTRY+CREATOR_TOKEN on hub wire calls setRemoteOFTPeer\n')
     process.stdout.write(
-      `  6. forge script DeployRemoteCreatorOracle (EXPECTED_CHAIN_ID=${chain.chainId})\n` +
+      `  4. DeployRemoteShareOft (EXPECTED_CHAIN_ID=${chain.chainId}; salts in akitaCcaSpokeCreate2)\n`,
+    )
+    process.stdout.write(
+      '  5. WireShareOftHubSpokePeers hub+spoke AFTER spoke ShareOFT live ([15,15]; 3-of-5 DVN)\n',
+    )
+    process.stdout.write('  6. (Optional) REGISTRY+CREATOR_TOKEN on hub wire calls setRemoteOFTPeer\n')
+    process.stdout.write(
+      `  7. DeployRemoteCreatorOracle (EXPECTED_CHAIN_ID=${chain.chainId})\n` +
         `       SET_CHAINLINK_ETH_USD=${chain.chainlinkEthUsd}\n` +
         (chain.sequencerUptimeFeed !== ZERO_ADDRESS
           ? `       SET_SEQUENCER_UPTIME_FEED=${chain.sequencerUptimeFeed}\n`
           : '       (no sequencer feed pin on this chain)\n'),
     )
-    process.stdout.write('  7. WireCreatorOracleHubSpokePeers hub + spoke (HUB_ORACLE Base AKITA oracle)\n')
+    process.stdout.write('  8. WireCreatorOracleHubSpokePeers hub + spoke AFTER spoke oracle live\n')
     process.stdout.write(
-      `  8. DeploySpokeCcaLaunchArm (POOL_MANAGER=${chain.poolManagerV4}; POSITION_MANAGER=${chain.positionManagerV4})\n` +
+      `  9. DeploySpokeCcaLaunchArm (POOL_MANAGER=${chain.poolManagerV4}; POSITION_MANAGER=${chain.positionManagerV4})\n` +
         `       duration=${chain.defaultDurationBlocks} bps=${chain.launchBlocksPerSecond} ` +
-        `blockTime=${chain.launchBlockTimeSeconds} TAX_HOOK=${chain.taxHook}\n`,
+        `blockTime=${chain.launchBlockTimeSeconds} TAX_HOOK=${chain.taxHook} (0 = no-hook migrate)\n`,
     )
-    process.stdout.write('  9. BroadcastCreatorOracleAssetPrice from Base (DST_EIDS includes this eid)\n')
-    process.stdout.write('     Hub vault/wrapper/gauge/Zora token stay on Base — not redeployed per spoke.\n')
+    process.stdout.write(' 10. BroadcastCreatorOracleAssetPrice from Base (DST_EIDS includes this eid)\n')
+    process.stdout.write('     Hub vault/wrapper/gauge/Zora token stay on Base - not redeployed per spoke.\n')
     process.stdout.write(
-      '     TaxHook still TBD on spokes — migrate/grad blocked until TAX_HOOK pinned.\n',
+      '     Spoke taxHook=0 is intentional (no-hook V4 migrate; Base sell-tax stays hub-only).\n',
     )
-    process.stdout.write(' 10. Pin env (spoke-minimal — only these two; oracle stays onchain-wired):\n')
+    process.stdout.write(' 11. Pin env (spoke-minimal - only these two; oracle stays onchain-wired):\n')
     process.stdout.write(`       VITE_AKITA_SHARE_OFT_${suffix}=\n`)
     process.stdout.write(`       VITE_AKITA_CCA_STRATEGY_${suffix}=\n`)
     process.stdout.write('\n')
@@ -84,6 +89,9 @@ function main(): void {
   process.stdout.write('  pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands\n')
   process.stdout.write(
     '  pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry\n',
+  )
+  process.stdout.write(
+    '  pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage bytecode-infra\n',
   )
   process.exit(0)
 }

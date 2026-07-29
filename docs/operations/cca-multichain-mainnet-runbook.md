@@ -33,9 +33,9 @@ Coordinated ■AKITA CCA launch capability on:
 - **Plan:** `pnpm -C frontend ops:plan-akita-cca-spokes`
 - **Preflight + checklist:** `pnpm -C frontend ops:deploy-akita-cca-spokes` (dry-run default).
 - **Copy-paste forge recipe:** `pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands`
-- **First broadcast stage:** `--broadcast --stage ensure-registry` runs
-  `EnsureSpokeRegistry` (registry CREATE2 if missing + LZ/hub seed). OFT / oracle /
-  arm CREATE2 still need salts/codeIds via Foundry (below) — not deploy-session.
+- **Broadcast stages:** `--broadcast --stage ensure-registry` then
+  `--stage bytecode-infra` (`EnsureSpokeBytecodeInfra` at spoke epoch `cca-spoke-v1` (`0x75FA…` / `0x7E38…`)). OFT / oracle / arm CREATE2 salts are filled by
+  `--print-commands` from `akitaCcaSpokeCreate2.ts` — not deploy-session.
 
 ## Deploy order (per expansion chain)
 
@@ -142,8 +142,9 @@ forge script script/DeploySpokeCcaLaunchArm.s.sol:DeploySpokeCcaLaunchArm \
   --rpc-url $<CHAIN>_RPC_URL --broadcast
 ```
 
-Do **not** `setBackingVault` to a Base vault on a spoke. Tax hooks remain per-chain
-TBD (`TAX_HOOK=0` until pinned) — migrate/grad stays blocked without a real hook.
+Do **not** `setBackingVault` to a Base vault on a spoke. Spoke `TAX_HOOK=0` is
+intentional: `CCALaunchArm.migrate` allows no-hook V4 pools (Base sell-tax hook
+stays hub-only at `0xca975…`).
 
 ### 7. Pin frontend env (spoke-minimal)
 
@@ -179,12 +180,16 @@ Thursday-epoch schedule is strategy-enforced. Fast-chain step curves are automat
 
 - **Base registry Unichain LZ** must still be re-seeded on-chain
   (`SeedBaseUnichainLzEndpoint`) — code is ready; broadcast needs registry owner key.
-- **Spoke taxHooks still `address(0)`** — migrate/grad blocked until per-chain hooks.
-- **Hub ShareOFT + hub oracle peers** for 30101/30110/30320/30416 are currently
-  zero on Base — wire after each spoke deploy.
-- **Bytecode infra** (`DeployUniversalBytecodeInfra` + QuoteLib) required before
-  remote OFT/oracle CREATE2; not yet an automated deploy-helper stage.
-- Per-chain tax hook addresses in CompleteAuction (Base-only until pinned).
+- **Hub ShareOFT + hub oracle peers** for 30101/30110/30320/30416 are still zero
+  until each spoke deploys — use `WireShareOftHubSpokePeers` /
+  `WireCreatorOracleHubSpokePeers` from `--print-commands` after addresses exist.
+- **Hub ShareOFT address parity unavailable** — AKITA phase-1 ShareOFT codeId
+  `0x8c9de580…` was purged from the store; spokes use current codeId +
+  `ENFORCE_ADDRESS_PARITY=0`, then peer-wire.
+- Do **not** use `DeployUniversalBytecodeInfra` on spokes (wrong CREATE2 salts).
+  Use `EnsureSpokeBytecodeInfra` / `--stage bytecode-infra` (epoch `cca-spoke-v1`).
+  Base `0x8599`/`0xdffB` infra cannot be reproduced with current bytecode.
+- CompleteAuction tax-hook UI remains Base-oriented (spokes have no sell-tax hook).
 - RPC same-origin proxy for Unichain/Robinhood (browser CORS).
 - Bytecode-store reseed after CCA arm bytecode change (required before CREATE2 batcher deploys of the new arm).
 - EVM-lane peer assessor parity with Solana `verify-share-mesh-lz` (template exists; dedicated verify TBD).

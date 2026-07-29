@@ -108,7 +108,7 @@ contract EnsureSpokeRegistry is Script {
         }
 
         if (skipSeed) {
-            console.log("SKIP_SEED=1 — done");
+            console.log("SKIP_SEED=1 - done");
             return registryAddr;
         }
 

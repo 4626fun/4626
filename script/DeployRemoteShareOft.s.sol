@@ -3,10 +3,9 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
-import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
 import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
 import {UniversalBytecodeStore} from "@4626/shared/deploy/infra/UniversalBytecodeStore.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 interface IRemoteShareOftHubView {
     function isHub() external view returns (bool);
@@ -23,83 +22,63 @@ interface IOFTPeerConfig {
 
 /**
  * @title DeployRemoteShareOft
- * @notice Deploy remote-mode CreatorShareOFT on Robinhood Chain with **Base address parity**.
+ * @notice Deploy remote-mode CreatorShareOFT on an EVM spoke via CREATE2 store.
  *
- * @dev Cross-chain CREATE2 parity requires the same inputs as hub phase-1 finalize:
- *      - `UniversalCreate2DeployerFromStore` (same address on both chains)
- *      - `SHARE_OFT_SALT` from `deriveShareOftSalt(owner, shareSymbolLower, version)`
- *      - Constructor args `(shareName, shareSymbolUpper, oftBootstrapRegistry, deploymentBatcher)`
- *      - Matching bytecode store code ids / initCode for bootstrap + ShareOFT
+ * @dev Current CreatorShareOFT ctor: `(name, symbol, registry, owner)`.
+ *      Registry must already have local LZ endpoint + hubChainEid (EnsureSpokeRegistry).
  *
  * @dev Required env:
- *      - PRIVATE_KEY (protocol treasury on remote chain, or CREATE2 deployer owner)
- *      - CREATE2_DEPLOYER
- *      - SHARE_OFT_SALT
- *      - SHARE_OFT_CODE_ID
- *      - SHARE_NAME
- *      - SHARE_SYMBOL (uppercase ■SYMBOL recommended)
- *      - HUB_SHARE_OFT (Base hub ShareOFT — predicted address must match)
- *      - HUB_GAUGE_RECEIVER
- *      - HUB_LOTTERY_PEER
+ *      - PRIVATE_KEY, CREATE2_DEPLOYER, SHARE_OFT_SALT, SHARE_OFT_CODE_ID
+ *      - SHARE_NAME, SHARE_SYMBOL, REGISTRY
+ *      - HUB_SHARE_OFT, HUB_GAUGE_RECEIVER, HUB_LOTTERY_PEER
  *
- * @dev Optional env:
- *      - SHARE_OFT_CONSTRUCTOR_OWNER (default `0x17163e…` DeploymentBatcher on Base)
- *      - HUB_OFT_BOOTSTRAP_REGISTRY (skip bootstrap deploy; use hub bootstrap address)
- *      - OFT_BOOTSTRAP_CODE_ID (default keccak256(OFTBootstrapRegistry.creationCode))
- *      - BYTECODE_STORE (default: read from CREATE2_DEPLOYER.store())
- *      - HUB_EID (default 30184)
- *      - EXPECTED_CHAIN_ID (default 4663 Robinhood mainnet)
- *      - ENFORCE_ADDRESS_PARITY=0 to skip HUB_SHARE_OFT equality check (not recommended)
+ * @dev Optional:
+ *      - SHARE_OFT_CONSTRUCTOR_OWNER (default AKITA phase-1 batcher 0xa18169…)
+ *      - BYTECODE_STORE, HUB_EID (30184), EXPECTED_CHAIN_ID
+ *      - ENFORCE_ADDRESS_PARITY=1 (default 0 — hub AKITA used purged historical codeId)
  *
- * @dev Seed Robinhood bytecode infra first:
- *      forge script script/DeployUniversalBytecodeInfra.s.sol:DeployUniversalBytecodeInfra \
- *          --rpc-url robinhood --broadcast
+ * @dev Pins: `pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands`
  */
 contract DeployRemoteShareOft is Script {
     uint32 internal constant DEFAULT_HUB_EID = 30184;
     uint256 internal constant DEFAULT_ROBINHOOD_CHAIN_ID = 4663;
-    bytes32 internal constant OFT_BOOTSTRAP_SALT = keccak256("4626:OFTBootstrapRegistry:v1");
     address internal constant DEFAULT_DEPLOYMENT_BATCHER = 0xa18169caf37fa0347285B16aAFC2B09eCB43F145;
 
-    function run() external returns (address shareOft, address bootstrapRegistry) {
+    function run() external returns (address shareOft) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address create2Deployer = vm.envAddress("CREATE2_DEPLOYER");
         bytes32 shareOftSalt = vm.envBytes32("SHARE_OFT_SALT");
         bytes32 shareOftCodeId = vm.envBytes32("SHARE_OFT_CODE_ID");
         string memory shareName = vm.envString("SHARE_NAME");
         string memory shareSymbol = vm.envString("SHARE_SYMBOL");
+        address registry = vm.envAddress("REGISTRY");
         address hubGaugeReceiver = vm.envAddress("HUB_GAUGE_RECEIVER");
         address hubShareOft = vm.envAddress("HUB_SHARE_OFT");
         bytes32 hubLotteryPeer = vm.envBytes32("HUB_LOTTERY_PEER");
         uint32 hubEid = uint32(vm.envOr("HUB_EID", uint256(DEFAULT_HUB_EID)));
         uint256 expectedChainId = vm.envOr("EXPECTED_CHAIN_ID", DEFAULT_ROBINHOOD_CHAIN_ID);
-        bool enforceParity = vm.envOr("ENFORCE_ADDRESS_PARITY", uint256(1)) != 0;
+        bool enforceParity = vm.envOr("ENFORCE_ADDRESS_PARITY", uint256(0)) != 0;
 
         address constructorOwner = vm.envOr("SHARE_OFT_CONSTRUCTOR_OWNER", DEFAULT_DEPLOYMENT_BATCHER);
         address bytecodeStoreAddr =
             vm.envOr("BYTECODE_STORE", address(UniversalCreate2DeployerFromStore(create2Deployer).store()));
-        bytes32 oftBootstrapCodeId = bytes32(
-            vm.envOr("OFT_BOOTSTRAP_CODE_ID", uint256(keccak256(type(OFTBootstrapRegistry).creationCode)))
-        );
 
         require(block.chainid == expectedChainId, "Unexpected chain id for remote ShareOFT deploy");
         require(create2Deployer != address(0), "CREATE2_DEPLOYER required");
         require(shareOftSalt != bytes32(0), "SHARE_OFT_SALT required");
         require(shareOftCodeId != bytes32(0), "SHARE_OFT_CODE_ID required");
+        require(registry != address(0), "REGISTRY required");
+        require(IRegistry4626(registry).getLayerZeroEndpoint(block.chainid) != address(0), "Registry LZ unset");
+        require(IRegistry4626(registry).hubChainEid() != 0, "Registry hubChainEid unset");
 
         console.log("Chain ID:              ", block.chainid);
         console.log("CREATE2 deployer:      ", create2Deployer);
+        console.log("Registry:              ", registry);
         console.log("Constructor owner:     ", constructorOwner);
         console.log("Hub ShareOFT (target): ", hubShareOft);
         console.log("Hub EID:               ", hubEid);
 
-        bootstrapRegistry = vm.envOr("HUB_OFT_BOOTSTRAP_REGISTRY", address(0));
-        if (bootstrapRegistry == address(0)) {
-            bootstrapRegistry = _ensureBootstrapRegistry(create2Deployer, bytecodeStoreAddr, oftBootstrapCodeId);
-        }
-        console.log("OFTBootstrapRegistry:  ", bootstrapRegistry);
-
-        bytes memory shareOftArgs = abi.encode(shareName, shareSymbol, bootstrapRegistry, constructorOwner);
+        bytes memory shareOftArgs = abi.encode(shareName, shareSymbol, registry, constructorOwner);
         bytes32 shareOftInitCodeHash = _initCodeHash(bytecodeStoreAddr, shareOftCodeId, shareOftArgs);
         address predictedShareOft =
             UniversalCreate2DeployerFromStore(create2Deployer).computeAddress(shareOftSalt, shareOftInitCodeHash);
@@ -135,21 +114,6 @@ contract DeployRemoteShareOft is Script {
         require(IRemoteShareOftHubView(shareOft).hubEid() == hubEid, "hubEid mismatch");
         require(IRemoteShareOftHubView(shareOft).hubGaugeReceiver() == hubGaugeReceiver, "hubGaugeReceiver mismatch");
         require(IOFTPeerConfig(shareOft).peers(hubEid) == bytes32(uint256(uint160(hubShareOft))), "hub peer mismatch");
-    }
-
-    function _ensureBootstrapRegistry(address create2Deployer, address bytecodeStoreAddr, bytes32 oftBootstrapCodeId)
-        internal
-        returns (address addr)
-    {
-        bytes memory bootstrapCreation = UniversalBytecodeStore(bytecodeStoreAddr).get(oftBootstrapCodeId);
-        require(bootstrapCreation.length > 0, "OFT bootstrap bytecode missing in store");
-        bytes32 bootstrapInitCodeHash = keccak256(bootstrapCreation);
-        addr = UniversalCreate2DeployerFromStore(create2Deployer).computeAddress(OFT_BOOTSTRAP_SALT, bootstrapInitCodeHash);
-        if (addr.code.length > 0) {
-            return addr;
-        }
-        UniversalCreate2DeployerFromStore(create2Deployer).deploy(OFT_BOOTSTRAP_SALT, oftBootstrapCodeId, bytes(""));
-        require(addr.code.length > 0, "Bootstrap deploy failed");
     }
 
     function _initCodeHash(address bytecodeStoreAddr, bytes32 codeId, bytes memory constructorArgs)

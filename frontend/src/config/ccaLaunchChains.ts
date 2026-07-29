@@ -21,10 +21,10 @@ export const CCA_FACTORY_V210 = '0x000000001F26a0044BaA66024e7b6599c61963F8' as 
 export const LZ_ENDPOINT_V2_CANONICAL = '0x1a44076050125825900e736c501f859c50fE728c' as const
 /**
  * Non-canonical EndpointV2 CREATE2 (Unichain + Robinhood share this address;
- * different EIDs — Unichain 30320, Robinhood 30416).
+ * different EIDs - Unichain 30320, Robinhood 30416).
  */
 export const LZ_ENDPOINT_V2_NONCANONICAL = '0x6F475642a6e85809B1c36Fa62763669b1b48DD5B' as const
-/** @deprecated Prefer LZ_ENDPOINT_V2_NONCANONICAL — same address. */
+/** @deprecated Prefer LZ_ENDPOINT_V2_NONCANONICAL - same address. */
 export const LZ_ENDPOINT_V2_ROBINHOOD = LZ_ENDPOINT_V2_NONCANONICAL
 
 export const SEVEN_DAYS_SECONDS = 604_800
@@ -62,7 +62,7 @@ export type CcaLaunchChain = {
   positionManagerV4: `0x${string}`
   /**
    * Local Chainlink ETH/USD aggregator (post-deploy `setChainlinkFeed`).
-   * Zero address = unknown / unset — operator must pin before launch pricing.
+   * Zero address = unknown / unset - operator must pin before launch pricing.
    * For CREATE2 oracle address parity with Base, ctor may use the Base feed
    * (or address(0)) then call `setChainlinkFeed` to this local feed.
    */
@@ -73,11 +73,12 @@ export type CcaLaunchChain = {
    */
   sequencerUptimeFeed: `0x${string}`
   /**
-   * Uniswap v4 tax / Zora hook for CCA migrate+grad. Zero until pinned per chain
-   * (Base live hook is in CONTRACTS.taxHook; spokes TBD).
+   * Uniswap v4 tax / Zora hook for CCA migrate+grad.
+   * Base: live SimpleSellTaxHook. Spokes: intentionally `address(0)` - no-hook
+   * V4 pools (CCALaunchArm.migrate allows zero taxHook; sell-tax plane stays Base-only).
    */
   taxHook: `0x${string}`
-  /** v2.1.0 factory is not deployed by Uniswap here yet — empty code is expected pre-bootstrap. */
+  /** v2.1.0 factory is not deployed by Uniswap here yet - empty code is expected pre-bootstrap. */
   ccaFactoryV210ExpectedEmptyPreBootstrap: boolean
   rpcEnvKey: string
   defaultRpcUrl: string

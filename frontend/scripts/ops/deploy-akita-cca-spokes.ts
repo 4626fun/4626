@@ -4,17 +4,25 @@
  *
  * Default is dry-run (preflight + checklist).
  * `--print-commands` emits copy-paste forge env blocks with chain pins filled in.
- * `--broadcast --stage ensure-registry` runs EnsureSpokeRegistry per spoke when
- * PRIVATE_KEY is present (still refuses to invent CREATE2 salts / OFT code ids).
+ * `--broadcast --stage ensure-registry|bytecode-infra` runs the matching Foundry script.
+ * CREATE2 salts/codeIds are filled from `akitaCcaSpokeCreate2.ts`.
  *
  *   pnpm -C frontend ops:deploy-akita-cca-spokes
  *   pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands --chain arbitrum
  *   pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry --chain arbitrum
+ *   pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage bytecode-infra --chain arbitrum
  */
 import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  AKITA_CCA_CREATE2,
+  akitaCcaCreate2EnvBlock,
+  akitaOracleSalt,
+  akitaShareOftSalt,
+  hubLotteryPeerBytes32,
+} from '../../src/config/akitaCcaSpokeCreate2.ts'
 import {
   CCA_FACTORY_V210,
   CCA_LAUNCH_CHAINS,
@@ -36,7 +44,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '../..')
 const REPO_ROOT = resolve(FRONTEND_ROOT, '..')
 
-type Stage = 'ensure-registry'
+type Stage = 'ensure-registry' | 'bytecode-infra'
 
 function getArg(name: string, fallback = ''): string {
   const idx = process.argv.indexOf(name)
@@ -70,11 +78,17 @@ function rpcFor(key: CcaLaunchChainKey): string {
 
 function printCommands(keys: CcaLaunchChainKey[]): void {
   const hubOracle = process.env.HUB_ORACLE?.trim() || AKITA_DEFAULTS.oracle
-  process.stdout.write('\n=== Copy-paste forge recipe (fill PRIVATE_KEY + CREATE2 salts/codeIds) ===\n')
+  const create2Env = akitaCcaCreate2EnvBlock()
+  process.stdout.write('\n=== Copy-paste forge recipe (CREATE2 salts filled from akitaCcaSpokeCreate2) ===\n')
   process.stdout.write(`# Hub ShareOFT ${AKITA_DEFAULTS.shareOFT}\n`)
   process.stdout.write(`# Hub CCA     ${AKITA_DEFAULTS.ccaLaunchArm}\n`)
   process.stdout.write(`# Hub oracle  ${hubOracle}\n`)
-  process.stdout.write(`# CCA factory ${CCA_FACTORY_V210}\n\n`)
+  process.stdout.write(`# CCA factory ${CCA_FACTORY_V210}\n`)
+  process.stdout.write(`# SHARE_OFT_SALT ${akitaShareOftSalt()}\n`)
+  process.stdout.write(`# ORACLE_SALT   ${akitaOracleSalt()}\n`)
+  process.stdout.write(
+    '# TaxHook spokes = address(0) (no-hook V4 migrate; Base sell-tax hook is hub-only)\n\n',
+  )
 
   for (const key of keys) {
     const chain = CCA_LAUNCH_CHAINS[key]
@@ -89,20 +103,30 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
         `  --rpc-url ${rpc} --broadcast -vvvv\n\n`,
     )
     process.stdout.write(
-      `# DeployRemoteShareOft (salts/codeIds from Base AKITA phase-1)\n` +
-        `EXPECTED_CHAIN_ID=${chain.chainId} HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} \\\n` +
+      `# Bytecode infra at Base addresses (epoch cca-spoke-v1) + seed OFT/oracle/QuoteLib\n` +
+        `DEPLOYMENT_EPOCH_TAG=${AKITA_CCA_CREATE2.infraEpochTag} \\\n` +
+        `CREATE2_FROM_STORE_OWNER=${AKITA_CCA_CREATE2.create2FromStoreOwner} \\\n` +
+        `  forge script script/EnsureSpokeBytecodeInfra.s.sol:EnsureSpokeBytecodeInfra \\\n` +
+        `  --rpc-url ${rpc} --broadcast -vvvv\n\n`,
+    )
+    process.stdout.write(
+      `${create2Env} \\\n` +
+        `EXPECTED_CHAIN_ID=${chain.chainId} \\\n` +
         `  forge script script/DeployRemoteShareOft.s.sol:DeployRemoteShareOft \\\n` +
         `  --rpc-url ${rpc} --broadcast -vvvv\n\n`,
     )
     process.stdout.write(
-      `WIRE_SIDE=hub SPOKE_EID=${chain.eid} HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} SPOKE_SHARE_OFT=<spoke> \\\n` +
+      `# After spoke ShareOFT is live - wire hub peers on Base, then spoke side:\n` +
+        `WIRE_SIDE=hub SPOKE_EID=${chain.eid} HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} SPOKE_SHARE_OFT=<spoke> \\\n` +
+        `  REGISTRY=${AKITA_CCA_CREATE2.registry} CREATOR_TOKEN=${AKITA_CCA_CREATE2.creatorToken} \\\n` +
         `  forge script script/WireShareOftHubSpokePeers.s.sol --rpc-url $BASE_RPC_URL --broadcast\n` +
         `WIRE_SIDE=spoke HUB_SHARE_OFT=${AKITA_DEFAULTS.shareOFT} SPOKE_SHARE_OFT=<spoke> \\\n` +
         `  forge script script/WireShareOftHubSpokePeers.s.sol --rpc-url ${rpc} --broadcast\n` +
         `# Also apply layerzero-evm-share-mesh DVN config ([15,15], 3-of-5)\n\n`,
     )
     process.stdout.write(
-      `EXPECTED_CHAIN_ID=${chain.chainId} \\\n` +
+      `${create2Env} \\\n` +
+        `EXPECTED_CHAIN_ID=${chain.chainId} \\\n` +
         `SET_CHAINLINK_ETH_USD=${chain.chainlinkEthUsd} \\\n` +
         (chain.sequencerUptimeFeed !== ZERO_ADDRESS
           ? `SET_SEQUENCER_UPTIME_FEED=${chain.sequencerUptimeFeed} \\\n`
@@ -138,11 +162,12 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
       `# Pin VITE_AKITA_SHARE_OFT_${suffix}=… VITE_AKITA_CCA_STRATEGY_${suffix}=…\n\n`,
     )
   }
+  process.stdout.write(`# HUB_LOTTERY_PEER=${hubLotteryPeerBytes32()}\n`)
 }
 
-function broadcastEnsureRegistry(keys: CcaLaunchChainKey[]): number {
+function broadcastStage(stage: Stage, keys: CcaLaunchChainKey[]): number {
   if (!process.env.PRIVATE_KEY?.trim()) {
-    process.stdout.write('ERROR: PRIVATE_KEY required for --broadcast --stage ensure-registry\n')
+    process.stdout.write(`ERROR: PRIVATE_KEY required for --broadcast --stage ${stage}\n`)
     return 1
   }
 
@@ -150,30 +175,28 @@ function broadcastEnsureRegistry(keys: CcaLaunchChainKey[]): number {
   for (const key of keys) {
     const chain = CCA_LAUNCH_CHAINS[key]
     const rpc = rpcFor(key)
-    process.stdout.write(`\n=== BROADCAST ensure-registry: ${chain.label} ===\n`)
-    const result = spawnSync(
-      'forge',
-      [
-        'script',
-        'script/EnsureSpokeRegistry.s.sol:EnsureSpokeRegistry',
-        '--rpc-url',
-        rpc,
-        '--broadcast',
-        '-vvvv',
-      ],
-      {
-        cwd: REPO_ROOT,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          EXPECTED_CHAIN_ID: String(chain.chainId),
-        },
-      },
-    )
+    const script =
+      stage === 'ensure-registry'
+        ? 'script/EnsureSpokeRegistry.s.sol:EnsureSpokeRegistry'
+        : 'script/EnsureSpokeBytecodeInfra.s.sol:EnsureSpokeBytecodeInfra'
+    process.stdout.write(`\n=== BROADCAST ${stage}: ${chain.label} ===\n`)
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      EXPECTED_CHAIN_ID: String(chain.chainId),
+    }
+    if (stage === 'bytecode-infra') {
+      env.DEPLOYMENT_EPOCH_TAG = AKITA_CCA_CREATE2.infraEpochTag
+      env.CREATE2_FROM_STORE_OWNER = AKITA_CCA_CREATE2.create2FromStoreOwner
+    }
+    const result = spawnSync('forge', ['script', script, '--rpc-url', rpc, '--broadcast', '-vvvv'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      env,
+    })
     if (result.stdout) process.stdout.write(result.stdout)
     if (result.stderr) process.stdout.write(result.stderr)
     if ((result.status ?? 1) !== 0) {
-      process.stdout.write(`FAIL ensure-registry on ${chain.label} (exit ${result.status})\n`)
+      process.stdout.write(`FAIL ${stage} on ${chain.label} (exit ${result.status})\n`)
       failed = result.status ?? 1
       break
     }
@@ -201,7 +224,9 @@ function main(): void {
   )
   process.stdout.write(`Hub ShareOFT: ${AKITA_DEFAULTS.shareOFT}\n`)
   process.stdout.write(`Hub CCA arm:  ${AKITA_DEFAULTS.ccaLaunchArm}\n`)
-  process.stdout.write(`Hub oracle:   ${AKITA_DEFAULTS.oracle}\n\n`)
+  process.stdout.write(`Hub oracle:   ${AKITA_DEFAULTS.oracle}\n`)
+  process.stdout.write(`SHARE_OFT_SALT: ${akitaShareOftSalt()}\n`)
+  process.stdout.write(`ORACLE_SALT:   ${akitaOracleSalt()}\n\n`)
 
   process.stdout.write('=== Preflight ===\n')
   const preflightCode = only ? runPreflight(only as CcaLaunchChainKey) : runPreflight()
@@ -218,15 +243,18 @@ function main(): void {
       process.stdout.write('BLOCKER: bootstrap CCA factory v2.1.0 (feeController=0) before OFT/arm deploy.\n')
     }
     process.stdout.write(`NEXT: EnsureSpokeRegistry EXPECTED_CHAIN_ID=${chain.chainId}\n`)
+    process.stdout.write('NEXT: EnsureSpokeBytecodeInfra (epoch cca-spoke-v1 spoke CREATE2 address parity)\n')
     process.stdout.write(`NEXT: DeployRemoteShareOft EXPECTED_CHAIN_ID=${chain.chainId}\n`)
-    process.stdout.write('NEXT: Wire Base↔spoke ShareOFT peers ([15,15], 3-of-5)\n')
+    process.stdout.write(
+      `NEXT: WireShareOftHubSpokePeers hub(Base eid ${chain.eid}) + spoke - after SPOKE_SHARE_OFT known\n`,
+    )
     process.stdout.write(
       `NEXT: DeployRemoteCreatorOracle EXPECTED_CHAIN_ID=${chain.chainId}` +
         ` SET_CHAINLINK_ETH_USD=${chain.chainlinkEthUsd}\n`,
     )
     process.stdout.write(`NEXT: WireCreatorOracleHubSpokePeers (hub Base + spoke eid ${chain.eid})\n`)
     process.stdout.write(
-      `NEXT: DeploySpokeCcaLaunchArm POOL_MANAGER=${chain.poolManagerV4} POSITION_MANAGER=${chain.positionManagerV4}\n`,
+      `NEXT: DeploySpokeCcaLaunchArm TAX_HOOK=${chain.taxHook} (0 = no-hook migrate) POOL_MANAGER=${chain.poolManagerV4}\n`,
     )
     process.stdout.write(`NEXT: BroadcastCreatorOracleAssetPrice DST_EIDS+=${chain.eid}\n`)
     process.stdout.write(`NEXT: Pin VITE_AKITA_SHARE_OFT_${suffix} + VITE_AKITA_CCA_STRATEGY_${suffix}\n`)
@@ -242,18 +270,17 @@ function main(): void {
       '\nDRY-RUN complete. Next:\n' +
         '  pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands\n' +
         '  pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry [--chain …]\n' +
-        'Full CREATE2 OFT/oracle/arm still needs salts/codeIds — see runbook.\n',
+        '  pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage bytecode-infra [--chain …]\n',
     )
     process.exit(0)
   }
 
-  if (stage === 'ensure-registry') {
-    const code = broadcastEnsureRegistry(keys)
-    process.exit(code)
+  if (stage === 'ensure-registry' || stage === 'bytecode-infra') {
+    process.exit(broadcastStage(stage, keys))
   }
 
   process.stdout.write(
-    'ERROR: --broadcast requires --stage ensure-registry (OFT/oracle/arm CREATE2 not auto-wired — use --print-commands).\n',
+    'ERROR: --broadcast requires --stage ensure-registry|bytecode-infra (OFT/oracle/arm use --print-commands).\n',
   )
   process.exit(1)
 }

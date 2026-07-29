@@ -29,7 +29,7 @@ interface IUniversalBytecodeStoreSeed {
 
 contract SeedUniversalBytecodeStore is Script {
     // Live Base mainnet UniversalBytecodeStoreV2 (see test/current-release-target-guard.sh).
-    address constant DEFAULT_BYTECODE_STORE = 0xF9622613682a12E46b914c7498716F42E44c4d36;
+    address constant DEFAULT_BYTECODE_STORE = 0x8599CA87b28320158941C59CB3cd9a3f12083530;
     address constant EIP2470 = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {

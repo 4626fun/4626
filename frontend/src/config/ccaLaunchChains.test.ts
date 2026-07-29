@@ -149,7 +149,7 @@ describe('ccaLaunchChains', () => {
     expect(CCA_LAUNCH_CHAINS.arbitrum.lzEndpointV2).toBe(LZ_ENDPOINT_V2_CANONICAL)
   })
 
-  it('pins Base taxHook and leaves spoke taxHooks unset until ready', () => {
+  it('pins Base taxHook and leaves spoke taxHooks at zero for no-hook migrate', () => {
     expect(CCA_LAUNCH_CHAINS.base.taxHook).toBe('0xca975B9dAF772C71161f3648437c3616E5Be0088')
     for (const key of ['ethereum', 'unichain', 'arbitrum', 'robinhood'] as const) {
       expect(CCA_LAUNCH_CHAINS[key].taxHook).toBe(ZERO_ADDRESS)

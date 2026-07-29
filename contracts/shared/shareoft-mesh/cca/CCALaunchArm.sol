@@ -767,7 +767,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
      */
     function migrate() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        if (address(poolManager) == address(0) || taxHook == address(0)) {
+        // taxHook may be address(0) for spoke no-hook V4 pools (Base sell-tax hook is hub-only).
+        if (address(poolManager) == address(0)) {
             revert MigrationConfigMissing();
         }
         if (currentLaunch.migrated) revert InvalidConfig();
@@ -862,7 +863,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
      * @dev Called automatically on graduation if oracle is set
      */
     function _configureOracleV4Pool() internal {
-        if (oracle == address(0) || address(poolManager) == address(0) || taxHook == address(0)) revert ZeroAddress();
+        if (oracle == address(0) || address(poolManager) == address(0)) revert ZeroAddress();
         PoolKey memory poolKey = _buildPoolKey();
 
         // Configure oracle (Chainlink-style price uses V4 TWAP × Chainlink ETH/USD)
