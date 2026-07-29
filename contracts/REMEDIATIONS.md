@@ -33,3 +33,14 @@ Historical July 22 (`423e0e3`), July 23 (`413f060`), and July 28 agent-lane (`0c
 - Added strategy interfaces (`IStrategy`, `IStrategyValuation`, `IAjnaPool`) + UniV3/TickMath deps.
 - Added `CreatorPayoutRouter` + `CreatorCoinPolicyController` (absent on agent-lane/oracles pins).
 - Bytecode vs live v1.20.0 seal: pin-ahead-of-live / DIFF for all of the above — source pin review, not live identity claim.
+
+## 2026-07-29 LeftClaw #508 + #509 remediation sync
+
+Synced from private `main` `9045a682a`.
+
+- **#509 agent-lane measured accounting (U-01…U-10):** measured strategy refill with quoted-tax gross-up; measured push with delivered-return semantics; trusted-adapter cooldown registry + inflow materiality threshold; tax-netted `previewDeposit`; mint surface advertises unsupported (`maxMint` 0 / `previewMint` reverts); measured `injectCapital`; donation-untracked `coinBalance` delta writes; post-allocation price-guard ordering + strategy-debt `min(reported, spent)` booking; impairment recovery books delivered amounts; shared offset/virtuals constants in `OVaultModuleConstants`.
+- **#509 unscored leads:** wrapper fee-waiver no longer waives the wrapper cooldown; operator perms fail closed (registered-bit sentinel, view mirrors enforcement); batcher first-seed received-bound for FOT pairs; `totalAssets` idle leg min-clamps to the live balance; burn-to-zero re-seed loses first-deposit exemptions; `maxTotalSupply` doc alignment.
+- **#508 gauge fee-collector remediation:** `AgentGaugeController` / `CreatorGaugeController` per private `main`; lane-parity table in `contracts/README.md`.
+- New pin file: `contracts/agent/interfaces/IAgentTokenV4.sol` (quoted-tax interface used by the measured paths).
+- Also catches the pin up on prior private work: ODA-507 wrapper hot-units cooldown + `forceApprove`, Ajna automation-Safe keeper wiring in `DeploymentBatcher`, README drift.
+- Storage note: `MODULE_STORAGE_VERSION` v5 → v6 (appended `isTrustedAdapter` mapping). Source pin review only — publishing ≠ Base redeploy.
