@@ -36,6 +36,7 @@ export const CURATED_PUBLISH_GLOBS = [
   'legal/privacy.md',
 
   'audits/index.md',
+  'audits/creator-ovault-report.md',
   'audits/aristotle/index.md',
   'audits/aristotle/curve-boost.md',
   'audits/aristotle/base-win-chance.md',

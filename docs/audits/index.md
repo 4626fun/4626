@@ -36,6 +36,15 @@ status: current
   <a class="audit-path__step" href="/audits/fable/transcripts">Transcript archive</a>
 </nav>
 
+<section class="audit-hero" style="margin-top:1.5rem">
+  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Vault curation</span>
+  <h2 class="audit-hero__title" style="font-size:1.5rem">CreatorOVault risk report</h2>
+  <p class="audit-hero__subtitle">Protocol-level funds, control, liquidity, and monitoring note for greenfield CreatorOVaults (qualitative — no numeric score).</p>
+  <div class="home-hero__actions">
+    <a class="home-btn home-btn--primary" href="/audits/creator-ovault-report">Read the report<span class="home-btn__arrow" aria-hidden="true">→</span></a>
+  </div>
+</section>
+
 ## Report structure
 
 Recommended reading order for Report **4626-FABLE-2026-06**:

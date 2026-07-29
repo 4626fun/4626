@@ -35,4 +35,6 @@ After launch, vault CREATOR targets ~**45% Charm · 45% Ajna · 10% idle**. Stra
 2. Pay with **USDC**, **x402**, or **Stripe** (as shown)
 3. Confirm launch bundle is **active**
 
+Risk report: [CreatorOVault risk report](/audits/creator-ovault-report)
+
 Prev: [Launch checklist](/guides/launch-checklist) · Next: [Step 2: Deploy contracts](/guides/launch-token)

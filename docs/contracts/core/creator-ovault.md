@@ -59,4 +59,6 @@ Assumes standard ERC-20 behavior where `transfer`/`transferFrom` move the exact 
 | **Keeper** | Profit reporting, tending |
 | **EmergencyAdmin** | Emergency shutdown only |
 
+Risk report: [CreatorOVault risk report](/audits/creator-ovault-report)
+
 Prev: [Registry4626](/contracts/core/creator-registry) · Next: [CreatorShareOFT](/contracts/core/creator-share-oft)
