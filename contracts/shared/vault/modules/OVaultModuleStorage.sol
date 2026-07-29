@@ -223,6 +223,14 @@ abstract contract OVaultModuleStorage {
     mapping(uint256 => uint8) internal impairmentChallengeCount;
     mapping(uint256 => address) internal impairmentRootChallenger;
     mapping(uint256 => uint256) internal impairmentChallengeBondHeld;
+
+    // ---------------------------------------------------------------------
+    // LeftClaw #509 U-03: trusted-adapter registry (appended; storage v6)
+    // ---------------------------------------------------------------------
+    /// @notice Explicitly administered adapter registry used by the core module's
+    ///         inflow-cooldown policy. Replaces the EIP-7702-vulnerable
+    ///         `whitelist[x] && x.code.length > 0` proxy.
+    mapping(address => bool) internal isTrustedAdapter;
 }
 
 // slither-disable-end uninitialized-state

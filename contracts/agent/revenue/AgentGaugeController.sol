@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -13,8 +14,9 @@ interface IAgentOVault {
     function pricePerShare() external view returns (uint256);
     function totalSupply() external view returns (uint256);
     function totalAssets() external view returns (uint256);
-    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
     function asset() external view returns (address);
+    /// @dev ODA-508-5 — the vault's registered gauge, checked at wire time and before burns.
+    function gaugeController() external view returns (address);
 }
 
 interface IAgentOVaultWrapper {
@@ -24,34 +26,8 @@ interface IAgentOVaultWrapper {
     function previewWrap(uint256 amount, address user) external view returns (uint256);
 }
 
-interface ILotteryManager4626 {
-    function addToJackpot(address token, uint256 amount) external;
-}
-
 interface IWETH {
     function deposit() external payable;
-    function withdraw(uint256) external;
-}
-
-interface ISwapRouter {
-    struct ExactInputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint24 fee;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
-        uint160 sqrtPriceLimitX96;
-    }
-    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
-}
-
-interface Ive4626GaugeVoting {
-    function getVaultWeight(address vault) external view returns (uint256);
-    function getTotalWeight() external view returns (uint256);
-    function getVaultWeightBps(address vault) external view returns (uint256);
-    function currentEpoch() external view returns (uint256);
 }
 
 interface Ive4626VoterRewardsDistributor {
@@ -79,19 +55,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     uint256 public constant MAX_BPS = 10000;
     uint256 public constant LOTTERY_MANAGER_UPDATE_TIMELOCK = 1 days;
 
+    /// @notice Timelock for emergency withdrawals and stranded-WETH write-downs
+    ///         (ODA-508-6 creator-lane parity / ODA-508-2).
+    uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
+
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
-
-    /// @notice Uniswap V3 Router on Base (for WETH → AgentToken swaps)
-    address public constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
-
-    /// @notice Default swap fee tier (0.3%)
-    uint24 public constant DEFAULT_SWAP_FEE = 3000;
-
-    // Uniswap v3 math constants for sqrtPriceLimitX96 bounds.
-    uint256 private constant Q192 = 1 << 192;
-    uint160 private constant MIN_SQRT_RATIO = 4295128739;
-    uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342;
 
     // ================================
     // STATE
@@ -112,19 +81,22 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Vault shares token (same as vault address, but as IERC20)
     IERC20 public vaultShares;
 
-    /// @notice Lottery manager for jackpot
-    ILotteryManager4626 public lotteryManager;
-    ILotteryManager4626 public pendingLotteryManager;
+    /// @notice Lottery manager for jackpot (pull-based: reads the reserve and calls
+    ///         `payJackpot`; no push hook exists on the gauge — ODA-508-I4/I-6)
+    address public lotteryManager;
+    address public pendingLotteryManager;
     uint256 public pendingLotteryManagerAt;
+
+    /// @notice One-way flag: true once a non-zero lottery manager has ever been set.
+    /// @dev FIX: ODA-508-3 — never cleared by the revoke path, so revoke-then-set routes
+    ///      through the timelock instead of the immediate first-set branch.
+    bool public lotteryManagerInitialized;
 
     /// @notice Agent's treasury wallet
     address public agentTreasury;
 
     /// @notice Protocol multisig (4626 treasury)
     address public protocolTreasury;
-
-    /// @notice Swap fee tier for WETH → AgentToken
-    uint24 public swapFeeTier = DEFAULT_SWAP_FEE;
 
     /// @notice Slippage tolerance for swaps (in bps, default 100 = 1%)
     uint256 public swapSlippageBps = 100;
@@ -135,15 +107,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice TWAP duration for oracle price (default 30 min)
     uint32 public oracleTwapDuration = 1800;
 
-    /// @notice Whether to use oracle for slippage (if false, uses 0 minimum)
+    /// @notice Whether to use oracle for slippage (if false, the keeper-supplied
+    ///         `minShareOftOut` is the only floor — ODA-508-2)
     bool public useOracleSlippage = true;
-
-    // FIX: G-12 — fallback minimum output percentage when oracle is disabled/unavailable
-    // Expressed in bps (e.g., 9000 = 90% of input value assumed 1:1 as floor)
-    uint256 public fallbackMinOutputBps = 0;
-
-    /// @notice ve4626GaugeVoting for ve(3,3) probability direction
-    Ive4626GaugeVoting public ve4626GaugeVoting;
 
     /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
     Ive4626VoterRewardsDistributor public ve4626VoterRewardsDistributor;
@@ -173,6 +139,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Pending OFT fees to distribute
     uint256 public pendingFees;
 
+    /// @notice Explicit accounting of how much OFT this contract expects to hold
+    ///         (pendingFees + jackpotReserve); bridged credits sweep the surplus (G-11).
+    uint256 public accountedOFTBalance;
+
     /// @notice Minimum amount before auto-distribution
     uint256 public distributionThreshold = 100e18; // 100 OFT tokens
 
@@ -187,6 +157,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     uint256 public distributionInterval = 1 hours;
     /// @notice Cap distributionInterval to avoid `lastDistribution + interval` overflow brick (ODA-467-5).
     uint256 public constant MAX_DISTRIBUTION_INTERVAL = 30 days;
+    /// @notice Floor for distributionInterval — 0 removed all rate limiting and enabled a
+    ///      dust-fee leak loop through the wrapper's unwrapFee (ODA-508-7).
+    uint256 public constant MIN_DISTRIBUTION_INTERVAL = 5 minutes;
     /// @notice Minimum oracle TWAP window (ODA-467-4).
     uint32 public constant MIN_ORACLE_TWAP_DURATION = 1800;
     /// @notice Maximum oracle TWAP window.
@@ -203,7 +176,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // LIFETIME STATS
     // ================================
 
-    /// @notice Total vault shares burned (lifetime)
+    /// @notice Total vault shares burned (lifetime) — ◇ vault-share units, NOT ShareOFT ◆
+    ///         (ODA-508-L6: differs 1000× from the ◆ burn slice; see `previewDistribution`)
     uint256 public totalSharesBurned;
 
     /// @notice Total distributed to lottery (lifetime)
@@ -236,11 +210,23 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @dev Storage name preserved for ABI compatibility with prior permissionless cap.
     uint256 public maxPermissionlessWethProcess;
 
-    /// @notice Deprecated: auto-swap on intake is permanently disabled (MEV). Kept for storage/ABI layout.
-    bool public autoProcessWethFees;
-
     /// @notice Allowlisted routers for keeper WETH→◆ buyback calldata.
     mapping(address => bool) public allowedSwapRouters;
+
+    /// @notice Minimum seconds between keeper `processWETHFeesWithRoute` calls (0 = no cooldown).
+    /// @dev FIX: ODA-508-8 — the per-call cap alone was loopable within one transaction; this
+    ///      bounds keeper throughput over time. Owner calls are never gated.
+    uint256 public wethKeeperCooldown = 1 hours;
+
+    /// @notice Pending owner write-down of the stranded WETH earmark (ODA-508-2).
+    uint256 public pendingWethWriteDownAmount;
+    uint256 public pendingWethWriteDownAt;
+
+    /// @dev FIX: ODA-508-L1 — set around the router call so `receive()` skips the WETH
+    ///      earmark credit for mid-swap native-ETH refunds (Universal Router UNWRAP_WETH /
+    ///      SWEEP). Without this, a refund deterministically reverted the buyback at the
+    ///      exact-consumption check — and would otherwise have double-credited the refund.
+    bool private _swapInProgress;
 
     // ================================
     // EVENTS
@@ -248,6 +234,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     event FeesReceived(address indexed from, uint256 oftAmount);
     event WETHFeesReceived(address indexed from, uint256 wethAmount);
+    /// @dev ODA-508-L6 unit note: `sharesBurned` is vault shares (◇); `toLottery`,
+    ///      `toTreasury`, `toProtocol` are ShareOFT (◆) — a 1000× normalization apart.
     event FeesDistributed(
         uint256 sharesBurned, uint256 toLottery, uint256 toTreasury, uint256 toProtocol, uint256 newPricePerShare
     );
@@ -264,14 +252,31 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     event ProtocolTreasurySet(address indexed treasury);
     event AgentTokenSet(address indexed coin);
     event ThresholdUpdated(uint256 newThreshold);
-    event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
+    event SwapConfigUpdated(uint256 slippageBps);
     event OracleSet(address indexed oracle);
     event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
-    event ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
     event ve4626VoterRewardsDistributorUpdated(address indexed distributor);
 
     event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
+
+    // ODA-508 remediation events
+    /// @notice Burn-slice unwrap degraded to a next-cycle retry (bridged-accounting only). ODA-508-1.
+    event BurnSliceDegraded(uint256 oftAmount);
+    /// @notice I-3: `setDistributionInterval` previously emitted nothing. ODA-508-7.
+    event DistributionIntervalUpdated(uint256 newInterval);
+    /// @notice ODA-508-8.
+    event WethKeeperCooldownUpdated(uint256 newCooldown);
+    /// @notice ODA-508-6 (creator-lane parity).
+    event EmergencyWithdrawQueued(address indexed token, uint256 amount, address indexed to, uint256 executeAfter);
+    /// @notice ODA-508-6 (creator-lane parity).
+    event EmergencyWithdrawCancelled(address indexed token, uint256 amount, address indexed to);
+    /// @notice ODA-508-2.
+    event PendingWethFeesWriteDownQueued(uint256 amount, uint256 executeAfter);
+    /// @notice ODA-508-2.
+    event PendingWethFeesWriteDownCancelled(uint256 amount);
+    /// @notice ODA-508-2.
+    event PendingWethFeesWrittenDown(uint256 amount);
 
     // ================================
     // ERRORS
@@ -282,7 +287,6 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error TooSoon();
     error VaultNotSet();
     error WrapperNotSet();
-    error AgentTokenNotSet();
     error InsufficientJackpot();
     error OnlyLotteryManager();
     error SwapFailed();
@@ -293,17 +297,32 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error InvalidVaultAssetBinding();
     error InvalidWrapperVaultBinding();
     error JackpotReserveProtected();
-    error PendingOftFeesProtected();
     error PendingWethFeesProtected();
     error NoPendingLotteryManager();
     error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
-    error FallbackMinOutputDisabled();
     error OwnershipRenounceDisabled();
-    error InvalidFeeTier();
     error InvalidDistributionInterval();
     error InvalidTwapDuration();
     error RouterNotAllowed();
     error RoutedSwapRequired();
+    /// @dev ODA-508-1 — burn-slice unwrap reverted for a non-bridged reason; distribution
+    ///      must fail loudly rather than divert the slice to jackpot.
+    error BurnSliceUnwrapFailed(bytes reason);
+    /// @dev ODA-508-5 — vault does not recognise this gauge as its registered controller.
+    error GaugeNotRegisteredOnVault();
+    error ZeroAmount();
+    error NoPendingEmergencyWithdraw();
+    error EmergencyWithdrawTooEarly(uint256 executeAfter);
+    /// @dev ODA-508-L5 — native-ETH sweep transfer failed.
+    error NativeSweepFailed();
+    error NoPendingWethWriteDown();
+    error WethWriteDownTooEarly(uint256 executeAfter);
+    /// @dev ODA-508-7.
+    error BelowDistributionThreshold();
+    /// @dev ODA-508-8.
+    error KeeperCooldownActive();
+    /// @dev ODA-508-L9 — oracle-floor math assumes 18-decimal units.
+    error Non18DecimalAgentToken(address token, uint8 tokenDecimals);
 
     // ================================
     // CONSTRUCTOR
@@ -322,12 +341,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (_shareOFT == address(0)) revert ZeroAddress();
         if (_protocolTreasury == address(0)) revert ZeroAddress();
 
-        // FIX: L-03 (4626-351) — constant WETH / SWAP_ROUTER addresses above
-        // are hardcoded to Base (chain id 8453). Deploying this controller to
-        // any other chain would silently succeed but every swap path would
-        // target addresses that do not exist on that chain, bricking fee
-        // routing. Assert chain id at construction so misdeployment fails
-        // fast rather than on the first swap attempt.
+        // FIX: L-03 (4626-351) — the constant WETH address above is hardcoded to Base
+        // (chain id 8453). Deploying this controller to any other chain would silently
+        // succeed but every swap path would target an address that does not exist on that
+        // chain, bricking fee routing. Assert chain id at construction so misdeployment
+        // fails fast rather than on the first swap attempt.
         require(block.chainid == 8453, "Only Base supported");
 
         // FIX: G-24 — compile/deploy-time assertion that fee split constants sum to MAX_BPS
@@ -354,14 +372,18 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function receiveFees(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
-        // Pull OFT tokens from sender
+        // FIX: ODA-508-L2 (creator-lane parity) — pull OFT tokens and account only what arrived.
+        uint256 balBefore = shareOFT.balanceOf(address(this));
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
-        pendingFees += amount;
-        // FIX: G-11 — track OFT balance
-        accountedOFTBalance += amount;
-        totalFeesReceived += amount;
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit FeesReceived(msg.sender, amount);
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
 
         // Auto-distribute if above threshold and enough time has passed
         if (pendingFees >= distributionThreshold && block.timestamp >= lastDistribution + distributionInterval) {
@@ -375,13 +397,18 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
+        // FIX: ODA-508-L2 (creator-lane parity) — account only what arrived.
+        uint256 balBefore = shareOFT.balanceOf(address(this));
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
-        pendingFees += amount;
-        // FIX: G-11 — track OFT balance
-        accountedOFTBalance += amount;
-        totalFeesReceived += amount;
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit FeesReceived(msg.sender, amount);
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
     }
 
     /**
@@ -392,9 +419,6 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      *
      *      Permissionless — anyone can trigger this (keeper, owner, etc.)
      */
-    // FIX: G-11 — track explicitly how much OFT the contract expects to hold
-    uint256 public accountedOFTBalance;
-
     function receiveBridgedFees() external nonReentrant {
         uint256 balance = shareOFT.balanceOf(address(this));
 
@@ -429,12 +453,16 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function receiveWETHFees(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
-        // Pull WETH from sender (the tax hook)
+        // FIX: ODA-508-L2 (creator-lane parity) — pull WETH and account only what arrived.
+        uint256 balBefore = IERC20(WETH).balanceOf(address(this));
         IERC20(WETH).safeTransferFrom(msg.sender, address(this), amount);
-        pendingWETHFees += amount;
-        totalWETHFeesReceived += amount;
+        uint256 received = IERC20(WETH).balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit WETHFeesReceived(msg.sender, amount);
+        pendingWETHFees += received;
+        totalWETHFeesReceived += received;
+
+        emit WETHFeesReceived(msg.sender, received);
         // MEV: never auto-swap on intake. Keepr submits `processWETHFeesWithRoute` privately.
     }
 
@@ -446,6 +474,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
         // Wrap ETH to WETH
         IWETH(WETH).deposit{value: msg.value}();
+        // FIX: ODA-508-L1 — a native-ETH refund arriving mid-swap stays un-earmarked surplus;
+        // crediting it would charge the gauge for WETH it had just paid out of its own balance.
+        if (_swapInProgress) return;
         pendingWETHFees += msg.value;
         totalWETHFeesReceived += msg.value;
 
@@ -491,6 +522,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
         uint256 cap = maxPermissionlessWethProcess;
         if (cap == 0) revert NotAuthorized();
+        // FIX: ODA-508-8 — the per-call cap had no temporal bound: a keeper contract could
+        // loop `ceil(pendingWETHFees / cap)` calls in one transaction. Rate-limit via the
+        // already-written (and previously never-read) `lastWethDistribution`.
+        if (block.timestamp < lastWethDistribution + wethKeeperCooldown) revert KeeperCooldownActive();
         return want > cap ? cap : want;
     }
 
@@ -506,7 +541,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (swapCalldata.length == 0) revert SwapFailed();
 
         uint256 oracleMin = _calculateMinOutput(wethAmount);
-        if (oracleMin == 0) revert MinOutputUnavailable();
+        // FIX: ODA-508-2 — only fail closed when the oracle floor is actually enabled.
+        // `useOracleSlippage == false` is the documented way to disable oracle slippage and
+        // must mean "caller-supplied `minShareOftOut` floor only", not "brick the WETH lane".
+        if (oracleMin == 0 && useOracleSlippage) revert MinOutputUnavailable();
         uint256 minOut = minShareOftOut > oracleMin ? minShareOftOut : oracleMin;
 
         pendingWETHFees -= wethAmount;
@@ -515,12 +553,17 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
 
         IERC20(WETH).forceApprove(router, wethAmount);
+        _swapInProgress = true;
         (bool ok,) = router.call(swapCalldata);
+        _swapInProgress = false;
         IERC20(WETH).forceApprove(router, 0);
         if (!ok) revert SwapFailed();
 
         uint256 wethAfter = IERC20(WETH).balanceOf(address(this));
-        if (wethAfter > wethBefore || wethBefore - wethAfter != wethAmount) revert SwapFailed();
+        // FIX: ODA-508-L1 — allow under-spend and native-ETH refunds (the refund stays
+        // un-earmarked surplus while `_swapInProgress` suppressed the credit); still revert
+        // if the router pulled more WETH than authorised for this call.
+        if (wethBefore > wethAfter && wethBefore - wethAfter > wethAmount) revert SwapFailed();
 
         uint256 oftAfter = shareOFT.balanceOf(address(this));
         if (oftAfter <= oftBefore) revert SwapFailed();
@@ -541,6 +584,14 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @dev `getAssetEthTWAP` returns vault-asset tokens per ETH (IOracle4626), not ShareOFT.
      *      Convert asset → vault shares via `pricePerShare`, then vault shares → ShareOFT via
      *      `wrapper.previewWrap` (NORMALIZATION_FACTOR / wrap fee). Fail closed if unset.
+     *
+     *      ODA-508-4 (documented limitation): this reconstructs MINT PARITY (vault NAV), but
+     *      the buyback swap executes on the ◆/WETH AMM. The two prices are linked only by an
+     *      arbitrage that pays wrap fee + cooldown + the ◆ pool's buyFeeBps, so treat the
+     *      result as a loose sanity bound — the authoritative MEV defence is the keeper's
+     *      own `minShareOftOut` quote plus private submission. `previewWrap` deducts the
+     *      wrap fee unless the gauge is whitelisted; the deploy batcher whitelists the gauge
+     *      (ODA-508-1 operational fix), so deployed gauges do not pay that deduction here.
      */
     function _expectedShareOftFromAssetTwap(uint256 wethAmount, uint256 assetPerEth)
         internal
@@ -562,6 +613,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Calculate minimum ◆ output for WETH → ShareOFT buyback using oracle TWAP
+     * @dev ODA-508-4: the floor is priced off vault NAV (mint parity), not the ◆/WETH
+     *      execution venue — a loose sanity bound, not a tight execution-price floor.
+     *      Returns 0 when the oracle is disabled, stale, or the amount truncates to zero;
+     *      callers treat 0 as "no oracle floor" (fail-closed only when `useOracleSlippage`).
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
         if (!useOracleSlippage || address(oracle) == address(0)) {
@@ -581,39 +636,6 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         } catch {
             return 0;
         }
-    }
-
-    /**
-     * @notice Derive sqrtPriceLimitX96 from an oracle-derived minOut.
-     * @dev Uniswap v3 price is expressed as sqrt(token1/token0) Q64.96, where token0/token1 are sorted by address.
-     *      We compute a limit price from `minAmountOut / amountIn` (or its inverse), scale to Q192, then sqrt.
-     *      - If WETH is token0: swap is token0->token1 (zeroForOne), price decreases, so we enforce a MIN price.
-     *      - If WETH is token1: swap is token1->token0 (oneForZero), price increases, so we enforce a MAX price.
-     */
-    function _sqrtPriceLimitX96(uint256 amountIn, uint256 minAmountOut)
-        internal
-        view
-        returns (uint160 sqrtPriceLimitX96)
-    {
-        if (amountIn == 0 || minAmountOut == 0) return 0;
-
-        address tokenIn = WETH;
-        address tokenOut = address(agentToken);
-        bool tokenInIsToken0 = tokenIn < tokenOut;
-
-        // Uniswap pool bounds require: MIN_SQRT_RATIO < limit < MAX_SQRT_RATIO
-        uint160 minLimit = MIN_SQRT_RATIO + 1;
-        uint160 maxLimit = MAX_SQRT_RATIO - 1;
-
-        uint256 priceX192 = tokenInIsToken0
-            ? Math.mulDiv(minAmountOut, Q192, amountIn)  // token1/token0 (min)
-            : Math.mulDiv(amountIn, Q192, minAmountOut); // token1/token0 (max)
-
-        uint256 sqrtP = tokenInIsToken0 ? Math.sqrt(priceX192, Math.Rounding.Ceil) : Math.sqrt(priceX192);
-
-        if (sqrtP <= minLimit) return minLimit;
-        if (sqrtP >= maxLimit) return maxLimit;
-        return uint160(sqrtP);
     }
 
     // ================================
@@ -644,6 +666,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     function _distribute() internal {
         if (pendingFees == 0) revert NothingToDistribute();
+        // FIX: ODA-508-7 — the permissionless path ignored the threshold: any dust reset
+        // `lastDistribution` (cadence hostage) and `canDistribute()` disagreed with
+        // `distribute()`. Bind the same threshold the auto-distribute paths already check.
+        if (pendingFees < distributionThreshold) revert BelowDistributionThreshold();
         if (block.timestamp < lastDistribution + distributionInterval) revert TooSoon();
 
         _distributeInternal();
@@ -683,61 +709,6 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         emit FeesDistributed(vaultSharesBurned, toLottery, toTreasury, toVoters, vault.pricePerShare());
     }
 
-    /**
-     * @notice Internal function to distribute vault shares from the WETH/tax-hook path
-     * @dev Wraps lottery + voter slices to ShareOFT; burns the burn slice as vault shares.
-     */
-    function _distributeVaultShares(uint256 vaultSharesReceived) internal {
-        if (vaultSharesReceived == 0) return;
-        if (address(vault) == address(0)) revert VaultNotSet();
-
-        lastWethDistribution = block.timestamp;
-
-        uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
-        uint256 toLotteryVs = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
-        uint256 toTreasuryVs = (vaultSharesReceived * treasuryShareBps) / MAX_BPS;
-        uint256 toVotersVs = vaultSharesReceived - toBurn - toLotteryVs - toTreasuryVs;
-
-        uint256 toLotteryOft;
-        uint256 toVotersOft;
-
-        if (toLotteryVs > 0) {
-            toLotteryOft = _wrapVaultSharesToShareOft(toLotteryVs);
-            if (toLotteryOft > 0) {
-                jackpotReserve += toLotteryOft;
-                totalLotteryFunded += toLotteryOft;
-                accountedOFTBalance += toLotteryOft;
-            }
-        }
-
-        if (toTreasuryVs > 0 && agentTreasury != address(0)) {
-            vaultShares.safeTransfer(agentTreasury, toTreasuryVs);
-            totalTreasuryEarned += toTreasuryVs;
-        } else if (toTreasuryVs > 0) {
-            uint256 treasuryOft = _wrapVaultSharesToShareOft(toTreasuryVs);
-            if (treasuryOft > 0) {
-                jackpotReserve += treasuryOft;
-                totalLotteryFunded += treasuryOft;
-                accountedOFTBalance += treasuryOft;
-                toLotteryOft += treasuryOft;
-            }
-        }
-
-        if (toVotersVs > 0) {
-            toVotersOft = _wrapVaultSharesToShareOft(toVotersVs);
-            _routeVoterShareOft(toVotersOft);
-        }
-
-        if (toBurn > 0) {
-            vaultShares.forceApprove(address(vault), toBurn);
-            vault.burnSharesForPriceIncrease(toBurn);
-            totalSharesBurned += toBurn;
-            emit SharesBurned(toBurn, vault.pricePerShare());
-        }
-
-        emit FeesDistributed(toBurn, toLotteryOft, toTreasuryVs, toVotersOft, vault.pricePerShare());
-    }
-
     function _splitShareOftAmount(uint256 oftAmount)
         internal
         pure
@@ -749,47 +720,69 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         toBurnOft = oftAmount - toLottery - toVoters - toTreasury;
     }
 
-    function _wrapVaultSharesToShareOft(uint256 vaultShareAmount) internal returns (uint256 oftOut) {
-        if (vaultShareAmount == 0) return 0;
-        if (address(wrapper) == address(0)) revert WrapperNotSet();
-
-        vaultShares.forceApprove(address(wrapper), vaultShareAmount);
-        oftOut = IAgentOVaultWrapper(address(wrapper)).wrap(vaultShareAmount);
-    }
-
     function _burnShareOftSlice(uint256 oftAmount) internal returns (uint256 vaultSharesBurned) {
         if (oftAmount == 0) return 0;
         if (address(wrapper) == address(0)) revert WrapperNotSet();
 
         // ODA-467-[1] (agent lane parity): bridged ShareOFT has no wrap accounting.
+        // FIX: ODA-508-1 — degrade ONLY for the bridged-accounting reverts this catch was
+        // added for. Any other revert (e.g. an attacker-inducible wrapper cooldown) must not
+        // silently reclassify the burn slice as jackpot; leave the slice in pendingFees for
+        // retry next cycle and emit a distinct event so the degrade is observable.
         shareOFT.forceApprove(address(wrapper), oftAmount);
         try wrapper.unwrap(oftAmount) returns (uint256 unwrapped) {
             vaultSharesBurned = unwrapped;
-        } catch {
+        } catch (bytes memory reason) {
             shareOFT.forceApprove(address(wrapper), 0);
-            jackpotReserve += oftAmount;
-            totalLotteryFunded += oftAmount;
+            if (!_isBridgedAccountingRevert(reason)) revert BurnSliceUnwrapFailed(reason);
+            pendingFees += oftAmount;
             accountedOFTBalance += oftAmount;
+            emit BurnSliceDegraded(oftAmount);
             return 0;
         }
 
+        // FIX: ODA-508-5 — fail with a clear error when the vault no longer recognises this
+        // gauge (vault owner repointed `setGaugeController`), instead of the vault's opaque
+        // `OnlyGaugeController` revert mid-distribution.
+        if (vault.gaugeController() != address(this)) revert GaugeNotRegisteredOnVault();
+
         vaultShares.forceApprove(address(vault), vaultSharesBurned);
         vault.burnSharesForPriceIncrease(vaultSharesBurned);
+        // FIX: ODA-508-I7 — clear allowances locally rather than relying on the counterparty
+        // consuming them exactly (shareOFT was only cleared on the degrade path before).
+        vaultShares.forceApprove(address(vault), 0);
+        shareOFT.forceApprove(address(wrapper), 0);
         totalSharesBurned += vaultSharesBurned;
 
         emit SharesBurned(vaultSharesBurned, vault.pricePerShare());
     }
 
+    /// @dev FIX: ODA-508-1 — only the wrapper's bridged-accounting reverts justify degrading
+    ///      (bridged ShareOFT was LayerZero-minted to this gauge, so wrapper wrap accounting
+    ///      does not cover it). Signatures mirror AgentOVaultWrapper errors; selector match
+    ///      is what matters.
+    function _isBridgedAccountingRevert(bytes memory reason) internal pure returns (bool) {
+        if (reason.length < 4) return false;
+        bytes4 selector = bytes4(reason);
+        return selector == bytes4(keccak256("InsufficientLocked()"))
+            || selector == bytes4(keccak256("BurnExceedsTotalMinted(uint256,uint256)"));
+    }
+
     function _routeVoterShareOft(uint256 toVoters) internal {
         if (toVoters == 0) return;
 
+        // `protocolTreasury` is never zero (constructor + setter forbid it), so the zero-value
+        // jackpot-fallback branches the Creator-audit parity copy carried are removed (I-4).
         if (address(ve4626VoterRewardsDistributor) != address(0)) {
-            uint256 balanceBefore = shareOFT.balanceOf(address(this));
             shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), toVoters);
             try ve4626VoterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
-                uint256 balanceAfter = shareOFT.balanceOf(address(this));
-                uint256 spent = balanceBefore > balanceAfter ? balanceBefore - balanceAfter : 0;
-                if (spent > toVoters) spent = toVoters;
+                // FIX: ODA-508-L3 — measure delivery from the remaining allowance instead of
+                // balance deltas: `balanceBefore` included the entire jackpotReserve, so a ◆
+                // credit landing during `notifyRewards` mis-measured `spent` as 0 and the
+                // gauge paid the voter slice a second time out of jackpot backing. The
+                // allowance was set to exactly `toVoters` and pulls only decrease it.
+                uint256 allowanceLeft = shareOFT.allowance(address(this), address(ve4626VoterRewardsDistributor));
+                uint256 spent = toVoters - allowanceLeft;
 
                 if (spent > 0) {
                     totalProtocolEarned += spent;
@@ -797,36 +790,20 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
                 uint256 remainder = toVoters - spent;
                 if (remainder > 0) {
-                    if (protocolTreasury != address(0)) {
-                        shareOFT.safeTransfer(protocolTreasury, remainder);
-                        totalProtocolEarned += remainder;
-                    } else {
-                        jackpotReserve += remainder;
-                        totalLotteryFunded += remainder;
-                        accountedOFTBalance += remainder;
-                    }
+                    shareOFT.safeTransfer(protocolTreasury, remainder);
+                    totalProtocolEarned += remainder;
                 }
                 // Clear allowance on success too, so a partial-spend distributor
                 // cannot retain stale spend permissions between distributions.
                 shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
             } catch {
                 shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
-                if (protocolTreasury != address(0)) {
-                    shareOFT.safeTransfer(protocolTreasury, toVoters);
-                    totalProtocolEarned += toVoters;
-                } else {
-                    jackpotReserve += toVoters;
-                    totalLotteryFunded += toVoters;
-                    accountedOFTBalance += toVoters;
-                }
+                shareOFT.safeTransfer(protocolTreasury, toVoters);
+                totalProtocolEarned += toVoters;
             }
-        } else if (protocolTreasury != address(0)) {
+        } else {
             shareOFT.safeTransfer(protocolTreasury, toVoters);
             totalProtocolEarned += toVoters;
-        } else {
-            jackpotReserve += toVoters;
-            totalLotteryFunded += toVoters;
-            accountedOFTBalance += toVoters;
         }
     }
 
@@ -848,7 +825,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param amount Amount of ShareOFT to pay
      */
     function payJackpot(address winner, uint256 amount) external nonReentrant {
-        if (msg.sender != address(lotteryManager)) revert OnlyLotteryManager();
+        if (msg.sender != lotteryManager) revert OnlyLotteryManager();
         if (amount > jackpotReserve) revert InsufficientJackpot();
         if (winner == address(0)) revert ZeroAddress();
 
@@ -901,26 +878,55 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Atomically (re)wire vault + wrapper + agent token (owner only).
+     * @dev FIX: ODA-508-5 — the individual setters validate the mixed (new, old) pair, so
+     *      migrating vault/wrapper in either order deadlocked on `InvalidWrapperVaultBinding`
+     *      (the wrapper's vault binding is immutable). Setting the complete triple and
+     *      validating once breaks the deadlock. The registration check catches vault↔gauge
+     *      mis-wiring at wire time; it is deliberately NOT in `_validateCoreWiring` because
+     *      the deploy batcher wires the gauge setters before the vault's `setGaugeController`.
+     */
+    function setCoreWiring(address _vault, address _wrapper, address _agentToken) external onlyOwner {
+        if (_vault == address(0) || _wrapper == address(0) || _agentToken == address(0)) {
+            revert ZeroAddress();
+        }
+        vault = IAgentOVault(_vault);
+        vaultShares = IERC20(_vault); // Vault is also the share token
+        wrapper = IAgentOVaultWrapper(_wrapper);
+        _setAgentToken(_agentToken);
+        _validateCoreWiring();
+        if (vault.gaugeController() != address(this)) revert GaugeNotRegisteredOnVault();
+        emit VaultSet(_vault);
+        emit WrapperSet(_wrapper);
+        emit AgentTokenSet(_agentToken);
+    }
+
+    /**
      * @notice Set the lottery manager
-     * @dev First set is immediate (deploy wiring). Later non-zero reassignments are
-     *      timelocked (ODA-424-M2). ODA-467-2: address(0) revokes immediately and
-     *      cancels any pending update.
+     * @dev First-ever non-zero set is immediate (deploy wiring), gated on a one-way flag
+     *      (ODA-508-3). Later non-zero reassignments are timelocked (ODA-424-M2).
+     *      ODA-467-2: address(0) revokes immediately and cancels any pending update —
+     *      but does not re-arm the immediate path.
      * @param _lotteryManager Lottery manager address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
         if (_lotteryManager == address(0)) {
-            pendingLotteryManager = ILotteryManager4626(address(0));
+            pendingLotteryManager = address(0);
             pendingLotteryManagerAt = 0;
-            lotteryManager = ILotteryManager4626(address(0));
+            lotteryManager = address(0);
             emit LotteryManagerSet(address(0));
             return;
         }
-        if (address(lotteryManager) == address(0)) {
-            lotteryManager = ILotteryManager4626(_lotteryManager);
+        // FIX: ODA-508-3 — `lotteryManager == address(0)` is a reachable runtime state via
+        // the revoke branch above, so the old guard let an owner bypass the timelock with
+        // revoke-then-set (instant jackpot drain). The one-way flag closes that composition.
+        if (!lotteryManagerInitialized) {
+            lotteryManagerInitialized = true;
+            lotteryManager = _lotteryManager;
             emit LotteryManagerSet(_lotteryManager);
             return;
         }
-        pendingLotteryManager = ILotteryManager4626(_lotteryManager);
+        pendingLotteryManager = _lotteryManager;
         pendingLotteryManagerAt = block.timestamp + LOTTERY_MANAGER_UPDATE_TIMELOCK;
         emit LotteryManagerUpdateQueued(_lotteryManager, pendingLotteryManagerAt);
     }
@@ -930,11 +936,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (executeAfter == 0) revert NoPendingLotteryManager();
         if (block.timestamp < executeAfter) revert LotteryManagerUpdateTimelockActive(executeAfter);
 
-        ILotteryManager4626 next = pendingLotteryManager;
-        pendingLotteryManager = ILotteryManager4626(address(0));
+        address next = pendingLotteryManager;
+        pendingLotteryManager = address(0);
         pendingLotteryManagerAt = 0;
         lotteryManager = next;
-        emit LotteryManagerSet(address(next));
+        emit LotteryManagerSet(next);
     }
 
     /**
@@ -963,25 +969,34 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      */
     function setAgentToken(address _agentToken) external onlyOwner {
         if (_agentToken == address(0)) revert ZeroAddress();
-        agentToken = IERC20(_agentToken);
+        _setAgentToken(_agentToken);
         _validateCoreWiring();
         emit AgentTokenSet(_agentToken);
     }
 
+    /// @dev FIX: ODA-508-L9 — the oracle-floor math hardcodes 1e18 scaling (correct only for
+    ///      18-decimal assets/shares, and nothing else enforced it). Reject a non-18-decimal
+    ///      agent token at wire time; tokens without `decimals()` are left to the vault's
+    ///      own asset binding check.
+    function _setAgentToken(address _agentToken) internal {
+        try IERC20Metadata(_agentToken).decimals() returns (uint8 tokenDecimals) {
+            if (tokenDecimals != 18) revert Non18DecimalAgentToken(_agentToken, tokenDecimals);
+        } catch {}
+        agentToken = IERC20(_agentToken);
+    }
+
     /**
-     * @notice Set swap configuration for WETH → AgentToken
-     * @param _feeTier Uniswap fee tier (100, 500, 3000, 10000)
+     * @notice Set swap configuration for the WETH → ShareOFT buyback
+     * @dev ODA-508-I2/I4: the inert `_feeTier` parameter was removed — routing is entirely
+     *      determined by keeper-supplied `swapCalldata` + the `allowedSwapRouters` allowlist;
+     *      the stored fee tier was never read and implied an on-chain price bound that does
+     *      not exist. `_slippageBps` remains live (scales the oracle sanity floor).
      * @param _slippageBps Slippage tolerance in basis points
      */
-    function setSwapConfig(uint24 _feeTier, uint256 _slippageBps) external onlyOwner {
+    function setSwapConfig(uint256 _slippageBps) external onlyOwner {
         if (_slippageBps > 1000) revert InvalidSlippage(); // Max 10% slippage
-        // ODA-467-6: whitelist Uniswap v3 fee tiers only.
-        if (_feeTier != 100 && _feeTier != 500 && _feeTier != 3000 && _feeTier != 10000) {
-            revert InvalidFeeTier();
-        }
-        swapFeeTier = _feeTier;
         swapSlippageBps = _slippageBps;
-        emit SwapConfigUpdated(_feeTier, _slippageBps);
+        emit SwapConfigUpdated(_slippageBps);
     }
 
     /**
@@ -995,19 +1010,25 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Set the keeper WETH-processing cooldown in seconds (0 disables).
+     * @dev ODA-508-8 — bounds keeper throughput over time; never gates the owner.
+     */
+    function setWethKeeperCooldown(uint256 _cooldown) external onlyOwner {
+        wethKeeperCooldown = _cooldown;
+        emit WethKeeperCooldownUpdated(_cooldown);
+    }
+
+    /**
      * @notice Configure keeper WETH buyback batch cap.
      * @param _maxPermissionlessWethProcess Max WETH per keeper `processWETHFeesWithRoute` (0 disables keeper swaps).
-     * @param _autoProcessWethFees Ignored — auto-process on intake is permanently disabled (MEV).
+     * @param _autoProcessWethFees Ignored — auto-process on intake is permanently disabled (MEV);
+     *        the inert storage flag was removed (ODA-508-I4).
      */
     function setWethProcessingConfig(uint256 _maxPermissionlessWethProcess, bool _autoProcessWethFees)
         external
         onlyOwner
     {
         maxPermissionlessWethProcess = _maxPermissionlessWethProcess;
-        if (_autoProcessWethFees) {
-            // no-op: intake auto-swap removed
-        }
-        autoProcessWethFees = false;
         emit WethProcessingConfigUpdated(_maxPermissionlessWethProcess, false);
     }
 
@@ -1047,29 +1068,14 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         emit OracleConfigUpdated(_twapDuration, _useOracle);
     }
 
-    // ODA-424-M1: unit-mismatched fallback removed; only clearing to 0 is allowed.
-    function setFallbackMinOutputBps(uint256 _bps) external onlyOwner {
-        if (_bps != 0) revert FallbackMinOutputDisabled();
-        fallbackMinOutputBps = 0;
-    }
-
     /// @notice Ownable renounce disabled — bricks config + emergency response (ODA-424-L8).
     function renounceOwnership() public pure override {
         revert OwnershipRenounceDisabled();
     }
 
     /**
-     * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
-     * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
-     */
-    function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
-        ve4626GaugeVoting = Ive4626GaugeVoting(_ve4626GaugeVoting);
-        emit ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
-    }
-
-    /**
      * @notice Set the voter rewards distributor to receive the 21.39% ShareOFT voter slice.
-     * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
+     * @dev If unset, we fall back to protocolTreasury.
      */
     function setve4626VoterRewardsDistributor(address _distributor) external onlyOwner {
         ve4626VoterRewardsDistributor = Ive4626VoterRewardsDistributor(_distributor);
@@ -1090,8 +1096,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param _interval Minimum time between distributions
      */
     function setDistributionInterval(uint256 _interval) external onlyOwner {
-        if (_interval > MAX_DISTRIBUTION_INTERVAL) revert InvalidDistributionInterval();
+        if (_interval < MIN_DISTRIBUTION_INTERVAL || _interval > MAX_DISTRIBUTION_INTERVAL) {
+            revert InvalidDistributionInterval();
+        }
         distributionInterval = _interval;
+        emit DistributionIntervalUpdated(_interval); // I-3: previously emitted nothing
     }
 
     // ================================
@@ -1107,7 +1116,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Preview how pending ShareOFT fees would be distributed
-     * @dev Lottery and voter amounts are ShareOFT (◆); burn preview is approximate vault-share units after unwrap.
+     * @dev FIX: ODA-508-L6 — ALL four return values are ShareOFT (◆) units, including `toBurn`
+     *      (it is derived from `pendingFees`, which is ◆). The actual vault shares (◇) burned
+     *      on execution are the wrapper unwrap output: ~`toBurn * NORMALIZATION_FACTOR` (1000)
+     *      minus `unwrapFee`. Do not compare `toBurn` against `totalSharesBurned` (◇) or feed
+     *      it to `estimatePPSIncrease` (◇) without that conversion.
      */
     function previewDistribution()
         external
@@ -1122,6 +1135,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Get lifetime statistics
+     * @dev ODA-508-L6 unit note: `_totalSharesBurned` is ◇ vault shares; `_totalFeesReceived`,
+     *      `_totalLotteryFunded`, `_totalTreasuryEarned`, `_totalProtocolEarned`,
+     *      `_pendingFees`, `_jackpotReserve` are ◆ ShareOFT; `_totalWETHFeesReceived` and
+     *      `_pendingWETHFees` are WETH.
      */
     function getStats()
         external
@@ -1181,7 +1198,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Estimate PPS increase from burning shares
-     * @param sharesToBurn Amount of shares that would be burned
+     * @param sharesToBurn Amount of shares that would be burned (◇ vault-share units)
      */
     function estimatePPSIncrease(uint256 sharesToBurn) external view returns (uint256 ppsIncrease) {
         if (address(vault) == address(0)) return 0;
@@ -1191,13 +1208,15 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
         if (totalSupply == 0 || totalSupply <= sharesToBurn) return 0;
 
-        // Current PPS
-        uint256 currentPPS = (totalAssets * 1e18) / totalSupply;
+        // FIX: ODA-508-I8 — use the vault's virtual-offset PPS formula
+        // ((assets + 1) * 1e18 / (supply + 1000)) so the preview agrees with
+        // `vault.pricePerShare()` exactly instead of diverging by the offset.
+        uint256 currentPPS = ((totalAssets + 1) * 1e18) / (totalSupply + 1000);
 
         // PPS after burn
-        uint256 newPPS = (totalAssets * 1e18) / (totalSupply - sharesToBurn);
+        uint256 newPPS = ((totalAssets + 1) * 1e18) / (totalSupply - sharesToBurn + 1000);
 
-        ppsIncrease = newPPS - currentPPS;
+        ppsIncrease = newPPS > currentPPS ? newPPS - currentPPS : 0;
     }
 
     /**
@@ -1222,6 +1241,14 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         oracleActive = useOracleSlippage && address(oracle) != address(0);
 
         if (!oracleActive) {
+            return (0, 0, false);
+        }
+
+        // FIX: ODA-508-L7 — gate on freshness like `_calculateMinOutput` does, so the preview
+        // cannot report a usable `minOut` derived from a price the executing path rejects.
+        try oracle.isPriceFresh() returns (bool fresh) {
+            if (!fresh) return (0, 0, false);
+        } catch {
             return (0, 0, false);
         }
 
@@ -1271,33 +1298,126 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // EMERGENCY
     // ================================
 
+    // FIX: ODA-508-6 — creator-lane parity: the agent gauge had dropped the 1-day
+    // queue/cancel/execute timelock and transferred in the same call.
+    address public pendingEmergencyWithdrawToken;
+    uint256 public pendingEmergencyWithdrawAmount;
+    address public pendingEmergencyWithdrawTo;
+    uint256 public pendingEmergencyWithdrawAt;
+
     /**
-     * @notice Emergency withdraw (owner only)
-     * @param token Token to withdraw
+     * @notice Queue an emergency withdraw (owner only, 1-day timelock).
+     * @dev Transfers nothing; `executeEmergencyWithdraw` performs the transfer after
+     *      `EMERGENCY_WITHDRAW_DELAY`. `token == address(0)` sweeps native ETH force-fed
+     *      via SELFDESTRUCT (ODA-508-L5).
+     * @param token Token to withdraw (address(0) = native ETH)
      * @param amount Amount to withdraw
      * @param to Recipient
      */
-    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
+    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        pendingEmergencyWithdrawToken = token;
+        pendingEmergencyWithdrawAmount = amount;
+        pendingEmergencyWithdrawTo = to;
+        pendingEmergencyWithdrawAt = block.timestamp + EMERGENCY_WITHDRAW_DELAY;
+        emit EmergencyWithdrawQueued(token, amount, to, pendingEmergencyWithdrawAt);
+    }
+
+    function cancelEmergencyWithdraw() external onlyOwner nonReentrant {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        if (to == address(0) || amount == 0) revert NoPendingEmergencyWithdraw();
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+        emit EmergencyWithdrawCancelled(token, amount, to);
+    }
+
+    function executeEmergencyWithdraw() external onlyOwner nonReentrant {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        uint256 executeAfter = pendingEmergencyWithdrawAt;
+        if (to == address(0) || amount == 0 || executeAfter == 0) revert NoPendingEmergencyWithdraw();
+        if (block.timestamp < executeAfter) revert EmergencyWithdrawTooEarly(executeAfter);
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+
+        // FIX: ODA-508-L5 — native-ETH sweep for force-fed (SELFDESTRUCT) ETH; `receive()`
+        // wraps everything else, so a raw balance can only arrive via selfdestruct.
+        if (token == address(0)) {
+            (bool ok,) = payable(to).call{value: amount}("");
+            if (!ok) revert NativeSweepFailed();
+            return;
+        }
+
         // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
         if (token == address(shareOFT) && (jackpotReserve > 0 || pendingFees > 0)) {
             revert JackpotReserveProtected();
         }
         if (token == address(shareOFT)) {
-            if (pendingFees > 0) revert PendingOftFeesProtected();
             if (amount >= accountedOFTBalance) {
                 accountedOFTBalance = 0;
             } else {
                 accountedOFTBalance -= amount;
             }
         }
-        // ODA-424-L3: protect only earmarked pending WETH; surplus remains withdrawable.
+        // ODA-424-L3: protect only earmarked pending WETH fees. Owner may withdraw
+        // surplus WETH (donations / dust) so griefers cannot block rescue by
+        // donating 1 wei via `receive()` after the timelock elapses.
         if (token == WETH) {
             uint256 bal = IERC20(WETH).balanceOf(address(this));
             uint256 free = bal > pendingWETHFees ? bal - pendingWETHFees : 0;
             if (amount > free) revert PendingWethFeesProtected();
         }
         IERC20(token).safeTransfer(to, amount);
+    }
+
+    /**
+     * @notice Queue a write-down of the stranded WETH earmark (owner only, 1-day timelock).
+     * @dev FIX: ODA-508-2 — when the sole WETH exit fails closed (oracle unavailable), the
+     *      earmark is otherwise unreachable: the emergency path refuses protected WETH.
+     *      Writing the earmark down converts it to surplus, which `executeEmergencyWithdraw`
+     *      can then withdraw (itself behind the same delay — rescue takes two timelocks).
+     * @param amount Amount of `pendingWETHFees` to write down (capped at current earmark)
+     */
+    function queueWriteDownPendingWETHFees(uint256 amount) external onlyOwner nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        if (amount > pendingWETHFees) amount = pendingWETHFees;
+        pendingWethWriteDownAmount = amount;
+        pendingWethWriteDownAt = block.timestamp + EMERGENCY_WITHDRAW_DELAY;
+        emit PendingWethFeesWriteDownQueued(amount, pendingWethWriteDownAt);
+    }
+
+    function cancelWriteDownPendingWETHFees() external onlyOwner nonReentrant {
+        uint256 amount = pendingWethWriteDownAmount;
+        if (amount == 0) revert NoPendingWethWriteDown();
+        pendingWethWriteDownAmount = 0;
+        pendingWethWriteDownAt = 0;
+        emit PendingWethFeesWriteDownCancelled(amount);
+    }
+
+    function executeWriteDownPendingWETHFees() external onlyOwner nonReentrant {
+        uint256 amount = pendingWethWriteDownAmount;
+        uint256 executeAfter = pendingWethWriteDownAt;
+        if (amount == 0 || executeAfter == 0) revert NoPendingWethWriteDown();
+        if (block.timestamp < executeAfter) revert WethWriteDownTooEarly(executeAfter);
+
+        pendingWethWriteDownAmount = 0;
+        pendingWethWriteDownAt = 0;
+
+        // Re-cap: the earmark may have shrunk (partial processing) since queueing.
+        if (amount > pendingWETHFees) amount = pendingWETHFees;
+        pendingWETHFees -= amount;
+        emit PendingWethFeesWrittenDown(amount);
     }
 
     function _validateCoreWiring() internal view {

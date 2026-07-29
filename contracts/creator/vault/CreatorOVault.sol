@@ -451,6 +451,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     mapping(uint256 => address) public impairmentRootChallenger;
     mapping(uint256 => uint256) public impairmentChallengeBondHeld;
 
+    // LeftClaw #509 U-03: trusted-adapter registry (appended; storage v6).
+    /// @notice Protocol adapters (wrapper / activation batcher) whose pooled self-deposits
+    ///         skip the withdraw-cooldown stamp. Explicitly administered — adapter-ness is a
+    ///         deployment fact, NOT inferred from `code.length` (EIP-7702 gives EOAs code).
+    mapping(address => bool) public isTrustedAdapter;
+
     // =================================
     // EVENTS
     // =================================
@@ -1023,8 +1029,17 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function totalAssets() public view override returns (uint256) {
         // FIX: L-06 — use tracked coinBalance instead of live balanceOf to prevent
-        // donation-based fee extraction via direct token transfers
-        uint256 total = coinBalance;
+        // donation-based fee extraction via direct token transfers.
+        // LeftClaw #509 (rebase-down lead): clamp the idle leg DOWN to the live
+        // balance when it falls below the tracked ledger — a rebase-down would
+        // otherwise price early exits off a stale-high figure and socialize the
+        // shortfall onto the last holders. min() never lets donations inflate NAV:
+        // when live > tracked the tracked figure wins (L-06 preserved).
+        uint256 idle = coinBalance;
+        uint256 live = CREATOR_COIN.balanceOf(address(this));
+        if (live < idle) idle = live;
+
+        uint256 total = idle;
 
         // Add strategy holdings
         uint256 len = strategyList.length;
@@ -1373,8 +1388,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     /**
      * @notice Max mint (standard ERC4626)
+     * @dev `virtual` so the agent lane can advertise 0 (LeftClaw #509 U-05: mint is
+     *      unsupported for taxed assets).
      */
-    function maxMint(address receiver) public view override returns (uint256) {
+    function maxMint(address receiver) public view virtual override returns (uint256) {
         if (vaultMode != VaultMode.Normal) return 0;
         if (_isCcaAuctionLive()) return 0;
         if (paused || isShutdown) return 0;
@@ -2008,31 +2025,52 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_adminModule);
     }
 
+    /// @notice LeftClaw #509 U-03: register protocol adapters (wrapper / activation
+    ///         batcher) whose pooled self-deposits skip the withdraw-cooldown stamp.
+    function setTrustedAdapter(address _account, bool _status) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
     // =================================
     // OPERATOR AUTHORIZATION (EXECUTION WALLETS)
     // =================================
 
     /**
      * @notice Get operator permissions for the current epoch
+     * @dev Returns the perm bits only — the internal OPERATOR_REGISTERED_BIT sentinel
+     *      (LeftClaw #509) is masked out so off-chain readers see the granted set.
      */
     function operatorPerms(address exec) public view returns (uint256) {
-        return _operatorPerms[operatorEpoch][exec];
+        return _operatorPerms[operatorEpoch][exec] & ~OVaultModuleConstants.OPERATOR_REGISTERED_BIT;
     }
 
     /**
      * @notice Set operator permissions for an execution wallet (current epoch)
-     * @dev Setting perms to 0 revokes the operator
+     * @dev LeftClaw #509: every grant — including 0 perms — stamps the registration
+     *      sentinel, so setting perms to 0 FREEZES the operator (deny all, fail closed)
+     *      instead of silently restoring the permissionless baseline. Use
+     *      `clearOperatorPerms` to restore baseline access.
      */
     function setOperatorPerms(address exec, uint256 perms) external onlyOwner {
         if (exec == address(0)) revert ZeroAddress();
-        _operatorPerms[operatorEpoch][exec] = perms;
+        _operatorPerms[operatorEpoch][exec] = perms | OVaultModuleConstants.OPERATOR_REGISTERED_BIT;
         emit OperatorPermsSet(operatorEpoch, exec, perms);
+    }
+
+    /**
+     * @notice Fully remove an operator registration, restoring the permissionless baseline.
+     */
+    function clearOperatorPerms(address exec) external onlyOwner {
+        if (exec == address(0)) revert ZeroAddress();
+        delete _operatorPerms[operatorEpoch][exec];
+        emit OperatorPermsSet(operatorEpoch, exec, 0);
     }
 
     /**
      * @notice Permit-based operator grant (EIP-712)
      * @dev Signature MUST be produced by the current `owner()` (canonical identity).
-     *      The domain binds `chainId` + `verifyingContract` (this vault).
+     *      The domain binds `chainId` + `verifyingContract` (this vault). Grants stamp
+     *      the registration sentinel like `setOperatorPerms` (fail-closed semantics).
      */
     function permitOperator(address exec, uint256 perms, uint256 deadline, bytes calldata sig) external {
         if (exec == address(0)) revert ZeroAddress();
@@ -2045,18 +2083,23 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         if (!SignatureChecker.isValidSignatureNow(owner(), digest, sig)) revert InvalidOperatorSignature();
 
         operatorNonce = nonce + 1;
-        _operatorPerms[operatorEpoch][exec] = perms;
+        _operatorPerms[operatorEpoch][exec] = perms | OVaultModuleConstants.OPERATOR_REGISTERED_BIT;
 
         emit OperatorPermitted(operatorEpoch, exec, perms, nonce, deadline);
     }
 
     /**
      * @notice Check whether an execution wallet is authorized for a specific permission
-     * @dev The owner is always authorized.
+     * @dev The owner is always authorized. LeftClaw #509: mirrors
+     *      `_enforceOperatorPermIfGranted` — unregistered addresses get the
+     *      permissionless baseline (true); registered operators need the perm bit
+     *      (the old view reported the inverse of actual enforcement).
      */
     function isAuthorizedOperator(address exec, uint256 perm) public view returns (bool) {
         if (exec == owner()) return true;
-        return (_operatorPerms[operatorEpoch][exec] & perm) != 0;
+        uint256 granted = _operatorPerms[operatorEpoch][exec];
+        if ((granted & OVaultModuleConstants.OPERATOR_REGISTERED_BIT) == 0) return true;
+        return (granted & perm) != 0;
     }
 
     /**
@@ -2341,7 +2384,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * Reference: https://blog.openzeppelin.com/a-novel-defense-against-erc4626-inflation-attacks
      */
     function _decimalsOffset() internal pure override returns (uint8) {
-        return 3; // 10^3 = 1000 virtual shares
+        // 10^3 = 1000 virtual shares. LeftClaw #509 U-10: intentionally NOT virtual —
+        // no lane subclass can drift it. Must stay in sync with
+        // OVaultModuleConstants.DECIMALS_OFFSET, from which all module offset math derives.
+        return 3;
     }
 }
 
