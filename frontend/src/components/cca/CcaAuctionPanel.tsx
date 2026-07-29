@@ -210,7 +210,13 @@ export function CcaAuctionPanel({
     let cancelled = false
     ;(async () => {
       try {
-        const res = await apiFetch(`/api/v1/auction/status?ccaLaunchArm=${ccaLaunchArm}`)
+        const chainQs =
+          typeof walletChainId === 'number' && Number.isFinite(walletChainId)
+            ? `&chainId=${walletChainId}`
+            : ''
+        const res = await apiFetch(
+          `/api/v1/auction/status?ccaLaunchArm=${ccaLaunchArm}${chainQs}`,
+        )
         if (!res.ok) return
         const json = (await res.json()) as {
           data?: {

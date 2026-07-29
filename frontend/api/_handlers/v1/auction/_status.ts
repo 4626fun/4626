@@ -9,8 +9,11 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 
-
 import { auctionTokenDisplaySymbol } from '../../../../server/_lib/auction/auctionTokenDisplaySymbol.js'
+import {
+  getCcaLaunchReadRpcUrls,
+  resolveCcaLaunchRpcChain,
+} from '../../../../server/_lib/cca/ccaLaunchRpc.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -24,14 +27,16 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 2}`)
 }
 
-function getReadRpcUrls(): string[] {
-  const urls = [
-    (process.env.BASE_READ_RPC_URL ?? '').trim(),
-    (process.env.BASE_RPC_URL ?? '').trim(),
-    (process.env.BASE_RPC_URL_FALLBACK ?? '').trim(),
-    'https://mainnet.base.org',
-  ].filter((entry): entry is string => Boolean(entry))
-  return Array.from(new Set(urls))
+function getChainIdParam(req: VercelRequest): number {
+  const raw =
+    typeof req.query?.chainId === 'string'
+      ? req.query.chainId
+      : typeof req.query?.chain === 'string'
+        ? req.query.chain
+        : ''
+  const n = Number(String(raw).trim())
+  if (Number.isFinite(n) && n > 0) return Math.trunc(n)
+  return 8453
 }
 
 function isRpcRateLimitError(error: unknown): boolean {
@@ -182,11 +187,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ccaLaunchArm) return res.status(400).json({ success: false, error: 'ccaLaunchArm is required' })
   if (!isAddressLike(ccaLaunchArm)) return res.status(400).json({ success: false, error: 'Invalid ccaLaunchArm address' })
 
-  try {
-    const { createPublicClient, http, isAddress } = await import('viem')
-    const { base } = await import('viem/chains')
+  const chainId = getChainIdParam(req)
+  if (!resolveCcaLaunchRpcChain(chainId)) {
+    return res.status(400).json({
+      success: false,
+      error: `Unsupported chainId ${chainId} (expected one of CCA launch chains)`,
+    })
+  }
 
-    const rpcUrls = getReadRpcUrls()
+  try {
+    const { createPublicClient, http, isAddress, defineChain } = await import('viem')
+
+    const rpcUrls = getCcaLaunchReadRpcUrls(chainId, process.env)
+    if (rpcUrls.length === 0) {
+      return res.status(500).json({ success: false, error: `No RPC configured for chainId ${chainId}` })
+    }
+
+    const chainMeta = resolveCcaLaunchRpcChain(chainId)!
+    const viemChain = defineChain({
+      id: chainId,
+      name: chainMeta.label,
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: { default: { http: [...rpcUrls] } },
+    })
+
     let status: unknown = null
     let currency: unknown = null
     let auctionToken: unknown = null
@@ -199,7 +223,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rpcUrl = rpcUrls[index]
       try {
         const client = createPublicClient({
-          chain: base,
+          chain: viemChain,
           transport: http(rpcUrl, { timeout: 20_000 }),
         })
         const response = await Promise.all([
@@ -272,12 +296,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenImagePath = staticShareIcon
       ? staticShareIcon
       : tokenAddressLower
-        ? `/api/v1/token/${tokenAddressLower}/image?chain=8453&format=png`
+        ? `/api/v1/token/${tokenAddressLower}/image?chain=${chainId}&format=png`
         : null
     const tokenImageCanonicalPath = staticShareIcon
       ? staticShareIcon
       : tokenAddressLower
-        ? `/v1/token/${tokenAddressLower}/image?chain=8453&format=png`
+        ? `/v1/token/${tokenAddressLower}/image?chain=${chainId}&format=png`
         : null
     const canonicalApiOrigin = getCanonicalApiOrigin()
     // For curated static icons, always use the public app origin (4626.fun), never API_HOST.
@@ -287,7 +311,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${canonicalApiOrigin}${tokenImageCanonicalPath}`
         : tokenImagePath
     const metadataClient = createPublicClient({
-      chain: base,
+      chain: viemChain,
       transport: http(resolvedRpcUrl ?? rpcUrls[0], { timeout: 20_000 }),
     })
     const [tokenDecimals, tokenSymbolRaw, currencyDecimals] = await Promise.all([
@@ -319,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
-        chainId: 8453,
+        chainId,
         generatedAt: new Date().toISOString(),
         ccaLaunchArm: ccaLaunchArm.toLowerCase(),
         auction: auctionAddrNorm && auctionAddrNorm !== ZERO_ADDRESS ? auctionAddrNorm : null,

@@ -118,10 +118,15 @@ function printCommands(keys: CcaLaunchChainKey[]): void {
         `  forge script script/WireCreatorOracleHubSpokePeers.s.sol --rpc-url ${rpc} --broadcast\n\n`,
     )
     process.stdout.write(
-      `# Deploy CCALaunchArm (setCcaFactoryV2 + schedule), then:\n` +
-        `CCA_ARM=<spoke-arm> ORACLE=<spoke-oracle> POOL_MANAGER=${chain.poolManagerV4} \\\n` +
-        `TAX_HOOK=${chain.taxHook} EXPECTED_CHAIN_ID=${chain.chainId} \\\n` +
-        `  forge script script/ConfigureSpokeCcaOracle.s.sol:ConfigureSpokeCcaOracle \\\n` +
+      `EXPECTED_CHAIN_ID=${chain.chainId} SHARE_OFT=<spoke> ORACLE=<spoke-oracle> \\\n` +
+        `POOL_MANAGER=${chain.poolManagerV4} POSITION_MANAGER=${chain.positionManagerV4} \\\n` +
+        `TAX_HOOK=${chain.taxHook} DEFAULT_DURATION_BLOCKS=${chain.defaultDurationBlocks} \\\n` +
+        `CLAIM_DELAY_BLOCKS=${chain.defaultClaimDelayBlocks} SWEEP_DELAY_BLOCKS=${chain.defaultSweepDelayBlocks} \\\n` +
+        `MIGRATION_DELAY_BLOCKS=${chain.migrationDelayBlocks} \\\n` +
+        (chain.launchBlocksPerSecond > 0
+          ? `LAUNCH_BLOCKS_PER_SECOND=${chain.launchBlocksPerSecond} \\\n`
+          : `LAUNCH_BLOCK_TIME_SECONDS=${chain.launchBlockTimeSeconds} \\\n`) +
+        `  forge script script/DeploySpokeCcaLaunchArm.s.sol:DeploySpokeCcaLaunchArm \\\n` +
         `  --rpc-url ${rpc} --broadcast -vvvv\n\n`,
     )
     process.stdout.write(
@@ -220,9 +225,8 @@ function main(): void {
         ` SET_CHAINLINK_ETH_USD=${chain.chainlinkEthUsd}\n`,
     )
     process.stdout.write(`NEXT: WireCreatorOracleHubSpokePeers (hub Base + spoke eid ${chain.eid})\n`)
-    process.stdout.write('NEXT: Deploy CCALaunchArm only (no vault/wrapper/gauge/token on spoke)\n')
     process.stdout.write(
-      `NEXT: ConfigureSpokeCcaOracle POOL_MANAGER=${chain.poolManagerV4} TAX_HOOK=${chain.taxHook}\n`,
+      `NEXT: DeploySpokeCcaLaunchArm POOL_MANAGER=${chain.poolManagerV4} POSITION_MANAGER=${chain.positionManagerV4}\n`,
     )
     process.stdout.write(`NEXT: BroadcastCreatorOracleAssetPrice DST_EIDS+=${chain.eid}\n`)
     process.stdout.write(`NEXT: Pin VITE_AKITA_SHARE_OFT_${suffix} + VITE_AKITA_CCA_STRATEGY_${suffix}\n`)

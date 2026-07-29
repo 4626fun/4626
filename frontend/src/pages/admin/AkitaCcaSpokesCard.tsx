@@ -74,6 +74,8 @@ export function AkitaCcaSpokesCard() {
       'pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands',
       '# First automated stage (registry CREATE2 + LZ/hub seed):',
       'pnpm -C frontend ops:deploy-akita-cca-spokes --broadcast --stage ensure-registry',
+      '# Fix Base hub Unichain LZ mapping (registry owner key):',
+      'forge script script/SeedBaseUnichainLzEndpoint.s.sol --rpc-url $BASE_RPC_URL --broadcast',
       '',
       `# Hub Base ■AKITA ShareOFT: ${AKITA.shareOFT}`,
       `# Hub Base CCA arm: ${AKITA.ccaLaunchArm}`,
@@ -90,7 +92,7 @@ export function AkitaCcaSpokesCard() {
       lines.push('# 2) DeployRemoteShareOft (EXPECTED_CHAIN_ID=' + row.chainId + ')')
       lines.push('# 3) Wire Base↔spoke ShareOFT peers (3-of-5 DVN, confirmations [15,15])')
       lines.push('# 4) DeployRemoteCreatorOracle + WireCreatorOracleHubSpokePeers')
-      lines.push('# 5) Deploy CCALaunchArm only + ConfigureSpokeCcaOracle — no vault stack on spoke')
+      lines.push('# 5) DeploySpokeCcaLaunchArm (schedule + oracle + PositionManager migration config)')
       lines.push('# 6) BroadcastCreatorOracleAssetPrice from Base hub oracle')
       lines.push(`# 7) Pin VITE_AKITA_SHARE_OFT_${row.key.toUpperCase()} + VITE_AKITA_CCA_STRATEGY_${row.key.toUpperCase()}`)
     }

@@ -120,14 +120,16 @@ async function checkChain(key: CcaLaunchChainKey): Promise<CheckRow[]> {
   // Legacy Base v1.1.0 lacks protocolFeeController — do not use it for the fee probe.
   const factory = chain.ccaFactoryV210 as Address
 
-  const [factoryCode, poolManagerCode, lzCode, legacyFactoryCode] = await Promise.all([
-    client.getCode({ address: factory }),
-    client.getCode({ address: chain.poolManagerV4 }),
-    client.getCode({ address: chain.lzEndpointV2 }),
-    chain.targetCcaFactoryVersion === 'v1.1.0'
-      ? client.getCode({ address: chain.ccaFactoryV110 as Address })
-      : Promise.resolve(undefined),
-  ])
+  const [factoryCode, poolManagerCode, positionManagerCode, lzCode, legacyFactoryCode] =
+    await Promise.all([
+      client.getCode({ address: factory }),
+      client.getCode({ address: chain.poolManagerV4 }),
+      client.getCode({ address: chain.positionManagerV4 }),
+      client.getCode({ address: chain.lzEndpointV2 }),
+      chain.targetCcaFactoryVersion === 'v1.1.0'
+        ? client.getCode({ address: chain.ccaFactoryV110 as Address })
+        : Promise.resolve(undefined),
+    ])
 
   if (chain.targetCcaFactoryVersion === 'v1.1.0') {
     rows.push({
@@ -204,6 +206,14 @@ async function checkChain(key: CcaLaunchChainKey): Promise<CheckRow[]> {
     detail: hasCode(poolManagerCode)
       ? `v4 PoolManager ${chain.poolManagerV4} live`
       : `v4 PoolManager ${chain.poolManagerV4} has no code`,
+  })
+
+  rows.push({
+    chain: chain.label,
+    status: hasCode(positionManagerCode) ? 'PASS' : 'FAIL',
+    detail: hasCode(positionManagerCode)
+      ? `v4 PositionManager ${chain.positionManagerV4} live`
+      : `v4 PositionManager ${chain.positionManagerV4} has no code`,
   })
 
   rows.push({

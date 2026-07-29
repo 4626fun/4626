@@ -35,14 +35,11 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('viem/chains', () => ({
-  base: { id: 8453 },
-}))
-
 vi.mock('viem', async () => {
   const actual = await vi.importActual<typeof import('viem')>('viem')
   return {
     ...actual,
+    defineChain: vi.fn((cfg: { id: number; name: string }) => cfg),
     createPublicClient: vi.fn(() => ({
       readContract: mocks.readContract,
     })),
@@ -215,6 +212,7 @@ describe('v1 auction status handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
+      chainId: 8453,
       ccaLaunchArm: CCA_STRATEGY.toLowerCase(),
       auction: AUCTION.toLowerCase(),
       auctionToken: AUCTION_TOKEN.toLowerCase(),
@@ -233,6 +231,35 @@ describe('v1 auction status handler', () => {
       auctionTokenImagePath: `/api/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
       auctionTokenImageUrl: `https://api.4626.fun/v1/token/${AUCTION_TOKEN.toLowerCase()}/image?chain=8453&format=png`,
     })
+  })
+
+  it('reads spoke chain RPCs when chainId is provided', async () => {
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaLaunchArm: CCA_STRATEGY, chainId: '42161' },
+      headers: { host: 'app.4626.fun' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.chainId).toBe(42_161)
+    expect(res.body?.data?.auctionTokenImagePath).toContain('chain=42161')
+  })
+
+  it('rejects unsupported chainId', async () => {
+    const mod = await import('../_handlers/v1/auction/_status.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaLaunchArm: CCA_STRATEGY, chainId: '999' },
+      headers: { host: 'app.4626.fun' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toMatch(/Unsupported chainId/)
   })
 
   it('maps ws-prefixed on-chain auction token symbols to ■-prefixed share display', async () => {

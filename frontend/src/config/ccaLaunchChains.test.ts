@@ -155,4 +155,22 @@ describe('ccaLaunchChains', () => {
       expect(CCA_LAUNCH_CHAINS[key].taxHook).toBe(ZERO_ADDRESS)
     }
   })
+
+  it('pins Uniswap v4 PositionManager on every launch chain', () => {
+    expect(CCA_LAUNCH_CHAINS.ethereum.positionManagerV4).toBe(
+      '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e',
+    )
+    expect(CCA_LAUNCH_CHAINS.base.positionManagerV4).toBe(
+      '0x7C5f5A4bBd8fD63184577525326123B519429bDc',
+    )
+    expect(CCA_LAUNCH_CHAINS.unichain.positionManagerV4).toBe(
+      '0x4529A01c7A0410167c5740C487a8de60232617bf',
+    )
+    expect(CCA_LAUNCH_CHAINS.arbitrum.positionManagerV4).toBe(
+      '0xd88F38F930b7952f2Db2432Cb002E7abbf3DD869',
+    )
+    expect(CCA_LAUNCH_CHAINS.robinhood.positionManagerV4).toBe(
+      '0x58Daec3116AAe6d93017bAaEA7749052e8A04Fa7',
+    )
+  })
 })

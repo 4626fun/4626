@@ -240,6 +240,16 @@ Chainlink ETH/USD (spoke oracle `setChainlinkFeed`; verified codesize on 2026-07
 | Unichain  | `0xBcE70e194940a157f3A80566505a7E96f5238CCa`   | n/a (decimals=18)                         |
 | Robinhood | `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9`   | n/a                                       |
 
+Uniswap v4 PositionManager (spoke `setMigrationConfig`; Uniswap deployments docs):
+
+| Chain     | PositionManager                                |
+| --------- | ---------------------------------------------- |
+| Ethereum  | `0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e`   |
+| Base      | `0x7C5f5A4bBd8fD63184577525326123B519429bDc`   |
+| Unichain  | `0x4529A01c7A0410167c5740C487a8de60232617bf`   |
+| Arbitrum  | `0xd88F38F930b7952f2Db2432Cb002E7abbf3DD869`   |
+| Robinhood | `0x58Daec3116AAe6d93017bAaEA7749052e8A04Fa7`   |
+
 **Ops note:** Base hub registry must be re-seeded so chainId 130 maps to Unichain
 LZ `0x6F47…DD5B` / EID 30320 (live registry still had canonical `0x1a44…` + eid 0).
 

@@ -26,6 +26,9 @@ function main(): void {
   process.stdout.write(`Hub ShareOFT: ${AKITA_DEFAULTS.shareOFT}\n`)
   process.stdout.write(`Hub CCA arm:  ${AKITA_DEFAULTS.ccaLaunchArm}\n\n`)
   process.stdout.write('Preflight: pnpm -C frontend ops:verify-cca-multichain\n')
+  process.stdout.write(
+    'Hub first: forge script script/SeedBaseUnichainLzEndpoint.s.sol --rpc-url $BASE_RPC_URL --broadcast\n',
+  )
   process.stdout.write('Runbook:   docs/operations/cca-multichain-mainnet-runbook.md\n\n')
 
   for (const key of spokes) {
@@ -60,13 +63,17 @@ function main(): void {
           : '       (no sequencer feed pin on this chain)\n'),
     )
     process.stdout.write('  7. WireCreatorOracleHubSpokePeers hub + spoke (HUB_ORACLE Base AKITA oracle)\n')
-    process.stdout.write('  8. Deploy CCALaunchArm only (setCcaFactoryV2 + schedule; fundsRecipient=arm)\n')
     process.stdout.write(
-      `  9. ConfigureSpokeCcaOracle (POOL_MANAGER=${chain.poolManagerV4}; TAX_HOOK=${chain.taxHook})\n`,
+      `  8. DeploySpokeCcaLaunchArm (POOL_MANAGER=${chain.poolManagerV4}; POSITION_MANAGER=${chain.positionManagerV4})\n` +
+        `       duration=${chain.defaultDurationBlocks} bps=${chain.launchBlocksPerSecond} ` +
+        `blockTime=${chain.launchBlockTimeSeconds} TAX_HOOK=${chain.taxHook}\n`,
     )
-    process.stdout.write(' 10. BroadcastCreatorOracleAssetPrice from Base (DST_EIDS includes this eid)\n')
+    process.stdout.write('  9. BroadcastCreatorOracleAssetPrice from Base (DST_EIDS includes this eid)\n')
     process.stdout.write('     Hub vault/wrapper/gauge/Zora token stay on Base — not redeployed per spoke.\n')
-    process.stdout.write(' 11. Pin env (spoke-minimal — only these two; oracle stays onchain-wired):\n')
+    process.stdout.write(
+      '     TaxHook still TBD on spokes — migrate/grad blocked until TAX_HOOK pinned.\n',
+    )
+    process.stdout.write(' 10. Pin env (spoke-minimal — only these two; oracle stays onchain-wired):\n')
     process.stdout.write(`       VITE_AKITA_SHARE_OFT_${suffix}=\n`)
     process.stdout.write(`       VITE_AKITA_CCA_STRATEGY_${suffix}=\n`)
     process.stdout.write('\n')

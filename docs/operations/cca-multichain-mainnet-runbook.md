@@ -64,8 +64,10 @@ address `0x1a44…` which has **no code on Unichain**. Re-seed so Unichain uses
 `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` and EID `30320`:
 
 ```bash
-forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
+# Focused fix (preferred):
+forge script script/SeedBaseUnichainLzEndpoint.s.sol:SeedBaseUnichainLzEndpoint \
   --rpc-url $BASE_RPC_URL --broadcast
+# Or full SeedRegistry4626 if you are re-seeding everything.
 # Verify:
 # cast call $REGISTRY "getLayerZeroEndpoint(uint256)(address)" 130 --rpc-url $BASE_RPC_URL
 # expect 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B
@@ -132,23 +134,16 @@ identical salt/codeId/ctor args; prefer `CHAINLINK_ETH_USD_CTOR=address(0)` then
 
 ### 6. Deploy CCALaunchArm on the spoke
 
-Ctor: `(shareOFT, address(0) /* ETH */, armPlaceholder, armPlaceholder, owner)` then
-immediately `setRecipients(arm, arm)` so v2.x recipient-gated sweeps work.
+Use the combined helper (ctor + v2 factory + schedule + oracle + migration):
 
-```text
-setCcaFactoryV2(CCA_FACTORY_V210)
-setLaunchBlocksPerSecond(N)      # Arb=4, Robinhood=10; skip on ETH/Unichain
-setLaunchBlockTimeSeconds(S)     # ETH=12, Unichain=1
-setDefaultDuration(D)            # from ccaLaunchChains
-setDefaultClaimDelay / setDefaultSweepDelayBlocks / setMigrationDelayBlocks
-# Wire local oracle cache (script/ConfigureSpokeCcaOracle.s.sol):
-setOracleConfig(spokeOracle, poolManager, taxHook, feeRecipient)
-setMigrationConfig(positionManager, treasury, treasury, 1, sweepDelay)
-# Do NOT setBackingVault to a Base vault address on a spoke chain.
+```bash
+# Env values from `pnpm -C frontend ops:deploy-akita-cca-spokes --print-commands`
+forge script script/DeploySpokeCcaLaunchArm.s.sol:DeploySpokeCcaLaunchArm \
+  --rpc-url $<CHAIN>_RPC_URL --broadcast
 ```
 
-Tax hooks remain per-chain TBD (Base-only until pinned). Foundry/AA on the spoke
-RPC. Do not use Base `DeploymentBatcher` Phase 1 for spokes.
+Do **not** `setBackingVault` to a Base vault on a spoke. Tax hooks remain per-chain
+TBD (`TAX_HOOK=0` until pinned) — migrate/grad stays blocked without a real hook.
 
 ### 7. Pin frontend env (spoke-minimal)
 
@@ -182,17 +177,13 @@ Thursday-epoch schedule is strategy-enforced. Fast-chain step curves are automat
 
 ## Known gaps (do not treat as ready for Thursday launch)
 
-- **No spoke `CCALaunchArm` deploy script** — ctor + `setCcaFactoryV2` + schedule
-  still manual Foundry/AA.
-- **No `setMigrationConfig` / PositionManager pins** per spoke — migrate blocked
-  until wired.
+- **Base registry Unichain LZ** must still be re-seeded on-chain
+  (`SeedBaseUnichainLzEndpoint`) — code is ready; broadcast needs registry owner key.
 - **Spoke taxHooks still `address(0)`** — migrate/grad blocked until per-chain hooks.
 - **Hub ShareOFT + hub oracle peers** for 30101/30110/30320/30416 are currently
   zero on Base — wire after each spoke deploy.
 - **Bytecode infra** (`DeployUniversalBytecodeInfra` + QuoteLib) required before
   remote OFT/oracle CREATE2; not yet an automated deploy-helper stage.
-- **`/api/v1/auction/status` is Base-RPC-only** — spoke auction UI must not rely
-  on it for lifecycle until chainId-aware.
 - Per-chain tax hook addresses in CompleteAuction (Base-only until pinned).
 - RPC same-origin proxy for Unichain/Robinhood (browser CORS).
 - Bytecode-store reseed after CCA arm bytecode change (required before CREATE2 batcher deploys of the new arm).
