@@ -121,6 +121,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     ILotteryManager4626 public pendingLotteryManager;
     uint256 public pendingLotteryManagerAt;
 
+    /// @notice One-way flag: true once a non-zero lottery manager has ever been set.
+    /// @dev FIX: ODA-508-3 — never cleared by the revoke path, so revoke-then-set routes
+    ///      through the timelock instead of the immediate first-set branch.
+    bool public lotteryManagerInitialized;
+
     /// @notice Creator's treasury wallet
     address public creatorTreasury;
 
@@ -940,11 +945,12 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the lottery manager
-     * @dev First set is immediate (deploy wiring). Later non-zero reassignments are
-     *      timelocked (ODA-424-M2) so jackpot custody cannot be drained via
-     *      instant `setLotteryManager` → `payJackpot` without the delay that
-     *      `executeEmergencyWithdraw` already enforces.
-     *      ODA-467-2: address(0) revokes immediately and cancels any pending update.
+     * @dev First-ever non-zero set is immediate (deploy wiring), gated on a one-way flag
+     *      (ODA-508-3). Later non-zero reassignments are timelocked (ODA-424-M2) so jackpot
+     *      custody cannot be drained via instant `setLotteryManager` → `payJackpot` without
+     *      the delay that `executeEmergencyWithdraw` already enforces.
+     *      ODA-467-2: address(0) revokes immediately and cancels any pending update —
+     *      but does not re-arm the immediate path.
      * @param _lotteryManager Lottery manager address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
@@ -955,7 +961,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
             emit LotteryManagerSet(address(0));
             return;
         }
-        if (address(lotteryManager) == address(0)) {
+        // FIX: ODA-508-3 — `lotteryManager == address(0)` is a reachable runtime state via
+        // the revoke branch above, so the old guard let an owner bypass the timelock with
+        // revoke-then-set (instant jackpot drain). The one-way flag closes that composition.
+        if (!lotteryManagerInitialized) {
+            lotteryManagerInitialized = true;
             lotteryManager = ILotteryManager4626(_lotteryManager);
             emit LotteryManagerSet(_lotteryManager);
             return;

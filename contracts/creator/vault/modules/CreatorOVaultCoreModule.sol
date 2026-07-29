@@ -71,6 +71,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     uint256 internal constant OP_DEPOSIT = 1 << 0;
     uint256 internal constant OP_WITHDRAW = 1 << 1;
 
+    // LeftClaw #509 U-10: virtual-offset math derives from the shared constants
+    // (must match the vault's `_decimalsOffset()`; see OVaultModuleConstants).
+    uint8 internal constant DECIMALS_OFFSET = OVaultModuleConstants.DECIMALS_OFFSET;
+    uint256 internal constant VIRTUAL_SHARES_UNITS = OVaultModuleConstants.VIRTUAL_SHARES_UNITS;
+    uint256 internal constant VIRTUAL_ASSETS_UNITS = OVaultModuleConstants.VIRTUAL_ASSETS_UNITS;
+
     error OperatorPermissionDenied(address operator, uint256 requiredPerm);
 
     // ---- events (must match vault signatures) ----
@@ -386,12 +392,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         _pullCreatorCoinExact(msg.sender, assets);
         // ODA-480-[3] + Codex flash-loan fix: refresh cooldown for untrusted
-        // self-deposits and first-time third-party receivers. Whitelisted *contract*
-        // adapters enforce their own per-user cooldown; stamping their pooled balance
+        // self-deposits and material third-party inflows. Registered adapters
+        // enforce their own per-user cooldown; stamping their pooled balance
         // would let one user freeze every other user's exit.
         uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
-        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore)) {
+        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore, shares)) {
             lastDepositBlock[receiver] = block.number;
         }
 
@@ -442,7 +448,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         // ODA-480-[3] + Codex flash-loan fix: mirror deposit policy.
         uint256 receiverSharesBefore = _balances[receiver];
         _sharesUpdate(address(0), receiver, shares);
-        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore)) {
+        if (_shouldStampInflowCooldown(receiver, receiverSharesBefore, shares)) {
             lastDepositBlock[receiver] = block.number;
         }
 
@@ -456,19 +462,26 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         emit Deposit(msg.sender, receiver, assets, shares);
     }
 
-    /// @dev Trusted protocol adapters (wrapper / activation batcher) are contracts
-    ///      that deploy wiring places on `whitelist`. Skip pooled cooldown only for
-    ///      those contract self-deposits — admission-gated EOAs share the same
-    ///      mapping when `whitelistEnabled` is on and must still arm the delay.
-    function _shouldStampInflowCooldown(address receiver, uint256 receiverSharesBefore)
+    /// @dev LeftClaw #509 U-03. Adapter-ness is a deployment fact, not a bytecode
+    ///      fact: EIP-7702 lets EOAs carry code, so the old
+    ///      `whitelist[x] && x.code.length > 0` proxy silently self-granted the
+    ///      contract-only exemption to every whitelisted 7702-upgraded EOA. Trusted
+    ///      protocol adapters (wrapper / activation batcher) are now explicitly
+    ///      registered via `setTrustedAdapter`; only their pooled self-deposits skip
+    ///      the stamp, because adapters enforce their own per-user cooldown.
+    ///      Third-party inflows stamp whenever they are MATERIAL (>= 1% of the
+    ///      receiver's existing shares): a warm receiver can no longer absorb a large
+    ///      deposit→redeem sandwich on a stale stamp, while the dust-griefing
+    ///      carve-out survives (tiny third-party inflows never re-arm the delay).
+    function _shouldStampInflowCooldown(address receiver, uint256 receiverSharesBefore, uint256 shares)
         internal
         view
         returns (bool)
     {
         if (receiver == msg.sender) {
-            return !(whitelist[msg.sender] && msg.sender.code.length > 0);
+            return !isTrustedAdapter[msg.sender];
         }
-        return receiverSharesBefore == 0;
+        return shares * 100 >= receiverSharesBefore;
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {
@@ -497,7 +510,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
         _ensureCoin(assets);
-        _pushCreatorCoinExact(receiver, assets);
+        // Delivered amount drives the return value and event so agent-lane slippage
+        // checks observe what the receiver actually got (identity on the creator lane).
+        assets = _pushCreatorCoinExact(receiver, assets);
 
         // ODA-497-4: decrement report baseline by cost basis, not market value.
         _decreaseReportBaselineForShareBurn(shares, supplyBefore);
@@ -537,12 +552,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
         _ensureCoin(assets);
-        _pushCreatorCoinExact(receiver, assets);
+        uint256 delivered = _pushCreatorCoinExact(receiver, assets);
 
         // ODA-497-4: decrement report baseline by cost basis, not market value.
         _decreaseReportBaselineForShareBurn(shares, supplyBefore);
 
-        emit Withdraw(msg.sender, receiver, owner_, assets, shares);
+        // Event reports the delivered amount (identity on the creator lane).
+        emit Withdraw(msg.sender, receiver, owner_, delivered, shares);
     }
 
     /// @dev Uncapped conversion of queued shares reserved against totalAssets (parity with previewRedeem).
@@ -619,7 +635,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         _sharesUpdate(address(this), address(0), shares);
 
         _ensureCoin(assets);
-        _pushCreatorCoinExact(receiver, assets);
+        // Delivered amount drives the return value and event (identity on the creator lane).
+        assets = _pushCreatorCoinExact(receiver, assets);
         // ODA-497-4: decrement report baseline by cost basis, not market value.
         _decreaseReportBaselineForShareBurn(shares, supplyBefore);
 
@@ -657,8 +674,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 remainingShares = maxTotalSupply - currentSupply;
         uint256 supply = _totalSupply;
         // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
-        // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
-        if (supply == 0) return remainingShares / 1000;
+        // shares = assets * 10^_decimalsOffset() (U-10: shared virtual-offset constant)
+        if (supply == 0) return remainingShares / VIRTUAL_SHARES_UNITS;
 
         return (remainingShares * totalAssets()) / supply;
     }
@@ -711,10 +728,16 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         return liquidityShares > userShares ? userShares : liquidityShares;
     }
 
+    /// @dev LeftClaw #509 (operator-perm lead): registration is now explicit via the
+    ///      OPERATOR_REGISTERED_BIT sentinel stamped by the vault's grant functions.
+    ///      Unregistered addresses keep the permissionless baseline; a registered
+    ///      operator missing the required perm fails CLOSED (the old `granted == 0 →
+    ///      unrestricted` check silently restored full access when governance believed
+    ///      it was revoking authority). `clearOperatorPerms` restores the baseline.
     function _enforceOperatorPermIfGranted(uint256 perm) internal view {
         if (msg.sender == Ownable(address(this)).owner()) return;
         uint256 granted = _operatorPerms[operatorEpoch][msg.sender];
-        if (granted == 0) return;
+        if ((granted & OVaultModuleConstants.OPERATOR_REGISTERED_BIT) == 0) return;
         if ((granted & perm) == 0) revert OperatorPermissionDenied(msg.sender, perm);
     }
 
@@ -736,10 +759,17 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 received = afterBal - beforeBal;
         if (received != amount) revert TransferAmountMismatch(amount, received);
-        coinBalance = afterBal;
+        // U-07: move the tracked ledger only by what this inflow booked; an untracked
+        // surplus must stay untracked until governance recognises it (syncBalances()).
+        coinBalance += received;
     }
 
-    function _pushCreatorCoinExact(address to, uint256 amount) internal {
+    /// @dev Exact-transfer push: the vault must be debited by precisely `amount`.
+    ///      Returns the amount delivered to the receiver — always `amount` here, so
+    ///      creator-lane callers observe identity semantics. AgentOVaultCoreModule
+    ///      overrides this with a measured push that tolerates a receiver-side tax
+    ///      and returns what the receiver actually got (LeftClaw #509 U-02).
+    function _pushCreatorCoinExact(address to, uint256 amount) internal virtual returns (uint256 delivered) {
         IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransfer(to, amount);
@@ -747,10 +777,16 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 spent = beforeBal - afterBal;
         if (spent != amount) revert TransferAmountMismatch(amount, spent);
-        coinBalance = afterBal;
+        // U-07: move the tracked ledger by the booked outflow; an untracked surplus
+        // stays untracked until recognised via `_syncCoinBalance` / `syncBalances()`.
+        coinBalance -= spent;
+        delivered = spent;
     }
 
-    function _ensureCoin(uint256 coinNeeded) internal {
+    /// @dev Exact refill: requests precisely the deficit once. Virtual so the agent
+    ///      lane can substitute a measured refill that closes a taxed strategy→vault
+    ///      gap (LeftClaw #509 U-01). Do not relax this base implementation.
+    function _ensureCoin(uint256 coinNeeded) internal virtual {
         uint256 available = _syncCoinBalance();
         if (available >= coinNeeded) return;
 
@@ -814,8 +850,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     function pricePerShare() public view onlyDelegateCall returns (uint256) {
         uint256 supply = _totalSupply;
         if (supply == 0) return 1e18;
-        // FIX: L-03 — align with ERC-4626 virtual shares offset (_decimalsOffset() = 3)
-        return ((totalAssets() + 1) * 1e18) / (supply + 1000);
+        // FIX: L-03 — align with ERC-4626 virtual shares offset (U-10: shared constants)
+        return ((totalAssets() + VIRTUAL_ASSETS_UNITS) * 1e18) / (supply + VIRTUAL_SHARES_UNITS);
     }
 
     // =================================
@@ -1030,7 +1066,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         emit SharesBurnedForPrice(sender, shares, pricePerShare());
     }
 
-    function injectCapital(uint256 amount) external onlyDelegateCall {
+    /// @dev Virtual so the agent lane can substitute a measured-pull injection
+    ///      (LeftClaw #509 U-06). Do not relax the exact-transfer pull here.
+    function injectCapital(uint256 amount) external virtual onlyDelegateCall {
         _enforceOperatorPermIfGranted(OP_DEPOSIT);
         if (amount == 0) revert ZeroAmount();
 
@@ -1353,7 +1391,10 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             // FIX H-1: a raw safeTransfer of the creator coin desyncs the
             // cached coinBalance used by totalAssets(), leaving the recovered
             // amount double-counted (escrow + vault book) until the next sync.
-            _pushCreatorCoinExact(impairmentRecoveryEscrow, amount);
+            // LeftClaw #509 U-09: book what the ESCROW actually received — on a taxed
+            // leg the vault is debited `amount` but the escrow gets less, and booking
+            // the nominal figure over-subscribes claims and strands late claimants.
+            amount = _pushCreatorCoinExact(impairmentRecoveryEscrow, amount);
             // ODA-427-F7: keep report baseline symmetric with other principal outflows.
             _decreaseReportBaselineForPrincipalOutflow(amount);
         } else {

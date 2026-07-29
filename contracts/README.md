@@ -124,7 +124,7 @@ The two lane folders are **intentionally not identical**. The creator lane is th
    |---|---|---|
    | `agent/vault/AgentShareOFT.sol` | `creator/vault/CreatorShareOFT.sol` | Cooldown hook arity, mint/owner auth, hub lottery peer callback rules |
    | `agent/vault/AgentOVaultWrapper.sol` | `creator/vault/CreatorOVaultWrapper.sol` | `propagateCooldownOnTransfer` amount parameter |
-   | `agent/revenue/AgentGaugeController.sol` | `creator/revenue/CreatorGaugeController.sol` | Lottery-manager timelock, receiveFees accounting, emergency path |
+   | `agent/revenue/AgentGaugeController.sol` | `creator/revenue/CreatorGaugeController.sol` | Agent-only `setCoreWiring`/`_validateCoreWiring`, WETH write-down + keeper cooldown (intake accounting, emergency timelock, lottery-manager init merged to parity, ODA-508) |
    | `agent/revenue/AgentRevenueRouter.sol` | `creator/revenue/CreatorPayoutRouter.sol` | Creator-only keeper spend caps and delayed emergency withdraw |
 
    If a pair becomes rename-equivalent again, move it back to the parity `PAIRS` list in `scripts/check-lane-contract-parity.mjs`. Do not paper over intentional differences with rename-map hacks.

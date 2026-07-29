@@ -286,21 +286,26 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
         coinBalance = actual;
     }
 
-    /// @dev Strategy deposit accounting is based on measured vault outflow (`spent`),
-    ///      not strategy-reported values, so fee-on-transfer and partial-spend
-    ///      strategy internals do not brick keeper deploys.
+    /// @dev Strategy deposit accounting is bounded by measured vault outflow (`spent`),
+    ///      and booked from the strategy-side receipt when the strategy reports less,
+    ///      so fee-on-transfer and partial-spend strategy internals do not brick keeper
+    ///      deploys. LeftClaw #509 U-08: a taxed vault→strategy hop delivers less than
+    ///      the vault-side debit; booking `min(reported, spent)` keeps `strategyDebt`
+    ///      aligned with what the strategy actually received instead of the nominal
+    ///      outflow (untaxed lanes: reported == spent, identity). The `spent` bound
+    ///      means a misreporting strategy can only shrink its own debt booking.
     function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited) {
         IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.forceApprove(strategy, amount);
-        IStrategy(strategy).deposit(amount);
+        uint256 reported = IStrategy(strategy).deposit(amount);
         uint256 afterBal = coin.balanceOf(address(this));
 
         if (afterBal > beforeBal) revert TransferAmountMismatch(amount, 0);
         uint256 spent = beforeBal - afterBal;
         if (spent > amount) revert TransferAmountMismatch(amount, spent);
 
-        deposited = spent;
+        deposited = reported < spent ? reported : spent;
         coinBalance = afterBal;
     }
 

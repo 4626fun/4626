@@ -190,9 +190,10 @@ contract AgentOVaultTransferAccountingTest is Test {
     // (e) Outflow + mint policy: explicit, documented limitations
     // -----------------------------------------------------------------
 
-    /// @dev `mint()` stays exact-transfer: with an inbound tax the pre-quoted
-    ///      assets cannot fully arrive, so it reverts instead of minting
-    ///      under-collateralized shares. `deposit()` is the supported inflow.
+    /// @dev LeftClaw #509 U-05: `mint()` is unsupported on this lane — an exact-transfer
+    ///      pull can never work for taxed assets, so `maxMint` advertises 0 and the
+    ///      preview reverts `MintNotSupported` (EIP-4626 permits a preview to revert
+    ///      when the action always reverts). `deposit()` is the supported inflow.
     function test_agentVault_mint_reverts_for_feeOnTransfer_token() public {
         uint256 assets = vault.MINIMUM_FIRST_DEPOSIT();
         uint256 shares = assets * 1000; // supply=0 quote with decimals offset 3
@@ -201,11 +202,9 @@ contract AgentOVaultTransferAccountingTest is Test {
         vm.prank(alice);
         agentToken.approve(address(vault), type(uint256).max);
 
-        uint256 expectedReceived = _afterTax(assets);
+        assertEq(vault.maxMint(alice), 0, "maxMint advertises 0");
+        vm.expectRevert(AgentOVault.MintNotSupported.selector);
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, assets, expectedReceived)
-        );
         vault.mint(shares, alice);
     }
 
@@ -236,20 +235,25 @@ contract AgentOVaultTransferAccountingTest is Test {
         assertEq(agentToken.balanceOf(bob), _afterTax(assetsOut), "receiver gets post-tax amount");
     }
 
+    /// @dev LeftClaw #509 U-02: `redeem` returns the DELIVERED (receiver-side, post-tax)
+    ///      amount. The vault is debited the NOMINAL share-converted amount; the
+    ///      receiver bears the outbound transfer tax on top.
     function test_agentVault_redeem_debits_vault_exactly_receiver_bears_tax() public {
         _seedFirstDeposit(alice);
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
 
         uint256 sharesToRedeem = 100e18 * 1000; // ~100e18 assets at 1:1000 PPS
         uint256 vaultBalBefore = agentToken.balanceOf(address(vault));
+        uint256 nominal = vault.previewRedeem(sharesToRedeem);
 
         vm.prank(alice);
-        uint256 assetsOut = vault.redeem(sharesToRedeem, bob, alice);
+        uint256 delivered = vault.redeem(sharesToRedeem, bob, alice);
 
-        assertGt(assetsOut, 0);
-        assertEq(agentToken.balanceOf(address(vault)), vaultBalBefore - assetsOut, "vault debited exactly");
-        assertEq(vault.coinBalance(), vaultBalBefore - assetsOut, "coinBalance debited exactly");
-        assertEq(agentToken.balanceOf(bob), _afterTax(assetsOut), "receiver gets post-tax amount");
+        assertGt(delivered, 0);
+        assertEq(delivered, _afterTax(nominal), "redeem returns delivered (post-tax) amount");
+        assertEq(agentToken.balanceOf(address(vault)), vaultBalBefore - nominal, "vault debited nominal");
+        assertEq(vault.coinBalance(), vaultBalBefore - nominal, "coinBalance debited nominal");
+        assertEq(agentToken.balanceOf(bob), delivered, "receiver gets delivered amount");
     }
 
     // -----------------------------------------------------------------

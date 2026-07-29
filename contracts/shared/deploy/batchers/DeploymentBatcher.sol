@@ -11,6 +11,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {IAgentGaugeController} from "@4626/agent/interfaces/IAgentGaugeController.sol";
+import {IAgentTokenV4} from "@4626/agent/interfaces/IAgentTokenV4.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {IOVault4626} from "@4626/shared/interfaces/vault/IOVault4626.sol";
 import {IOVaultWrapper4626} from "@4626/shared/interfaces/vault/IOVaultWrapper4626.sol";
@@ -925,8 +926,13 @@ contract DeploymentBatcherPhase1Module {
 
         IOVault4626(out.vault).setWhitelist(out.wrapper, true);
         IOVault4626(out.vault).setWhitelist(address(this), true);
+        // LeftClaw #509 U-03: adapter-ness is explicit — the cooldown exemption no
+        // longer infers it from `code.length` (EIP-7702 gives EOAs code).
+        IOVault4626(out.vault).setTrustedAdapter(out.wrapper, true);
+        IOVault4626(out.vault).setTrustedAdapter(address(this), true);
         if (vaultActivationBatcher != address(0)) {
             IOVault4626(out.vault).setWhitelist(vaultActivationBatcher, true);
+            IOVault4626(out.vault).setTrustedAdapter(vaultActivationBatcher, true);
         }
 
         state.shareOFT = out.shareOFT;
@@ -1205,6 +1211,15 @@ contract DeploymentBatcherPhase2Module {
         ITradeFeeCollector4626(out.gaugeController).setVault(params.vault);
         ITradeFeeCollector4626(out.gaugeController).setWrapper(params.wrapper);
         _wireGaugeAssetToken(out.gaugeController, params.creatorToken, vaultKind);
+        if (vaultKind == DeploymentBatcher.VaultKind.Agent) {
+            // FIX: ODA-508-1 (operational) — whitelist the gauge in the wrapper while the
+            // batcher still owns it: waives the unwrapFee on the gauge's burn-slice unwraps
+            // (and, per current wrapper semantics, the wrapper cooldown). The burn path is
+            // independently dust-poison-safe via the wrapper's amount-scoped hot-balance
+            // accounting (ODA-507-1). Agent lane only; the creator gauge is deliberately
+            // not fee-exempt on its wrapper.
+            IOVaultWrapper4626(params.wrapper).setWhitelist(out.gaugeController, true);
+        }
         if (lotteryManager != address(0)) {
             ITradeFeeCollector4626(out.gaugeController).setLotteryManager(lotteryManager);
         }
@@ -1500,6 +1515,30 @@ contract DeploymentBatcherPhase2Module {
         return (MIN_FIRST_DEPOSIT * upScale, MAX_FIRST_DEPOSIT * upScale);
     }
 
+    /// @dev LeftClaw #509 (launch-seed lead): expected vault-side receipt of the launch
+    ///      seed after the wrapper path's two taxed hops (batcher→wrapper pull,
+    ///      wrapper→vault deposit), netted by the token's quoted worst-case plain-transfer
+    ///      tax. Falls back to the nominal amount when the token exposes no quote.
+    function _expectedSeedReceived(address token, uint256 amount) internal view returns (uint256) {
+        uint256 buyBps;
+        try IAgentTokenV4(token).buyTaxBps() returns (uint16 bps) {
+            buyBps = bps;
+        } catch {
+            return amount;
+        }
+        uint256 sellBps;
+        try IAgentTokenV4(token).sellTaxBps() returns (uint16 bps) {
+            sellBps = bps;
+        } catch {
+            return amount;
+        }
+        uint256 taxBps = sellBps > buyBps ? sellBps : buyBps;
+        if (taxBps == 0) return amount;
+        if (taxBps > 10_000) taxBps = 10_000;
+        uint256 oneHop = (amount * (10_000 - taxBps)) / 10_000;
+        return (oneHop * (10_000 - taxBps)) / 10_000;
+    }
+
     function _validateFinalizePhase2(
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         DeploymentBatcher.Phase1SplitState calldata p1state
@@ -1513,7 +1552,15 @@ contract DeploymentBatcherPhase2Module {
         }
         // ODA-464-F06: scale 18-decimal deposit bounds to the creator token's decimals.
         (uint256 minDeposit, uint256 maxDeposit) = _scaledDepositBounds(params.creatorToken);
-        if (params.depositAmount < minDeposit || params.depositAmount > maxDeposit) {
+        // LeftClaw #509 (launch-seed lead): the FLOOR binds what the vault is expected
+        // to RECEIVE — the wrapper path taxes both hops (batcher→wrapper pull,
+        // wrapper→vault deposit), so a nominal-50M seed silently under-seeds a taxed
+        // lane and can even brick finalization behind the vault's first-deposit
+        // minimum. The CAP stays nominal (it bounds treasury exposure, not receipts).
+        // Tokens without a tax quote (e.g. untaxed creator tokens) keep the legacy
+        // nominal check.
+        uint256 expectedReceived = _expectedSeedReceived(params.creatorToken, params.depositAmount);
+        if (expectedReceived < minDeposit || params.depositAmount > maxDeposit) {
             revert InvalidDepositAmount();
         }
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {

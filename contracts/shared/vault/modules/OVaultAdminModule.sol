@@ -57,6 +57,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     event BalancesSynced(uint256 coinBalance);
     event WhitelistEnabled(bool enabled);
     event WhitelistUpdated(address indexed account, bool status);
+    event TrustedAdapterUpdated(address indexed account, bool status);
     event EmergencyPause(bool paused);
     event VaultShutdown();
     event EmergencyWithdraw(address indexed to, uint256 amount);
@@ -288,6 +289,15 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
             whitelist[_accounts[i]] = _status;
             emit WhitelistUpdated(_accounts[i], _status);
         }
+    }
+
+    /// @notice LeftClaw #509 U-03: administer the trusted-adapter registry used by the
+    ///         core module's inflow-cooldown policy. Replaces the EIP-7702-vulnerable
+    ///         `code.length` proxy — deploy wiring must register adapters explicitly.
+    function setTrustedAdapter(address _account, bool _status) external onlyDelegateCall {
+        if (_account == address(0)) revert ZeroAddress();
+        isTrustedAdapter[_account] = _status;
+        emit TrustedAdapterUpdated(_account, _status);
     }
 
     // =================================
@@ -525,6 +535,12 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     // slither-disable-next-line uninitialized-state
+    /// @notice Set the SHARE-denominated supply cap.
+    /// @dev WARNING (LeftClaw #509 config lead): `maxTotalSupply` is denominated in
+    ///      vault SHARES, not assets — with `_decimalsOffset() = 3`, an intended
+    ///      asset-scale cap of X must be set as X × 1000. The first deposit is exempt
+    ///      from the cap and mints received × 1000 shares, so an asset-scale value set
+    ///      by mistake bricks the vault after exactly one depositor.
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyDelegateCall {
         uint256 current = _totalSupply;
         if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);

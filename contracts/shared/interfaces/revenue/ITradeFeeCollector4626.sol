@@ -11,13 +11,17 @@ pragma solidity ^0.8.20;
  *      - Ongoing treasury getters (`creatorTreasury` vs `agentTreasury`) and BPS
  *        names (`creatorShareBps` vs `treasuryShareBps`). `getFeeSplit()` third
  *        return is the ongoing-treasury slice for both lanes.
- *      - `receiveFees` accounting: Creator credits the observed balance delta;
- *        Agent credits the requested `amount`.
- *      - `setLotteryManager`: both lanes — first set is immediate; later
- *        non-zero updates are 1-day timelocked via `executeLotteryManagerUpdate()`;
- *        address(0) revokes immediately and cancels any pending update.
- *      - WETH fee path fails closed when the oracle is unavailable (no
- *        unit-mismatched raw-input fallback).
+ *      - `receiveFees` accounting: both lanes credit the observed balance delta
+ *        (agent lane brought to parity, ODA-508-L2).
+ *      - `setLotteryManager`: both lanes — first-ever non-zero set is immediate
+ *        (one-way init flag, ODA-508-3); later non-zero updates are 1-day
+ *        timelocked via `executeLotteryManagerUpdate()`; address(0) revokes
+ *        immediately and cancels any pending update without re-arming the
+ *        immediate path.
+ *      - WETH fee path: agent lane fails closed only while `useOracleSlippage`
+ *        is enabled (ODA-508-2); when disabled, the caller-supplied
+ *        `minShareOftOut` is the sole floor (no unit-mismatched raw-input
+ *        fallback).
  */
 interface ITradeFeeCollector4626 {
     function vault() external view returns (address);

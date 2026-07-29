@@ -15,6 +15,7 @@ interface IOVault4626 {
     function setGaugeController(address controller_) external;
     function setCcaLaunchArm(address ccaLaunchArm_) external;
     function setWhitelist(address account, bool status) external;
+    function setTrustedAdapter(address account, bool status) external;
     function setProtocolRescue(address rescue) external;
     function transferOwnership(address newOwner) external;
     function convertToAssets(uint256 shares) external view returns (uint256);

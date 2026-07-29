@@ -119,6 +119,8 @@ contract MockAgentLaneVault {
 
     function setWhitelist(address, bool) external {}
 
+    function setTrustedAdapter(address, bool) external {}
+
     function setGaugeController(address controller) external {
         gaugeController = controller;
     }
@@ -139,6 +141,7 @@ contract MockAgentLaneWrapper {
     address public vault;
     address public owner;
     address public shareOFT;
+    mapping(address => bool) public isWhitelisted;
 
     constructor(address _creatorToken, address _vault, address _owner) {
         creatorToken = _creatorToken;
@@ -148,6 +151,10 @@ contract MockAgentLaneWrapper {
 
     function setShareOFT(address _shareOFT) external {
         shareOFT = _shareOFT;
+    }
+
+    function setWhitelist(address user, bool status) external {
+        isWhitelisted[user] = status;
     }
 
     function deposit(uint256) external pure returns (uint256) {
@@ -541,6 +548,9 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         assertEq(MockAgentLaneShareOFT(p1.shareOFT).gaugeController(), p2.gaugeController);
         assertEq(MockAgentLaneVault(p1.vault).gaugeController(), p2.gaugeController);
         assertEq(MockAgentLaneVault(p1.vault).ccaLaunchArm(), p2.ccaLaunchArm);
+        // ODA-508-1 (operational): agent gauge is wrapper-whitelisted at deploy — skips the
+        // wrapper cooldown and unwrapFee on the gauge's burn-slice unwraps.
+        assertTrue(MockAgentLaneWrapper(p1.wrapper).isWhitelisted(p2.gaugeController), "gauge wrapper-whitelisted");
         assertEq(uint256(registry.getVaultKind(agentToken)), uint256(1), "getVaultKind Agent");
         assertEq(registry.getAgentIntegrationMeta(agentToken).nativeAgentVault, p1.vault, "nativeAgentVault");
     }
@@ -570,6 +580,8 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         MockCreatorLaneGauge gauge = MockCreatorLaneGauge(p2.gaugeController);
         assertEq(gauge.creatorCoin(), agentToken, "creator gauge asset token");
         assertEq(gauge.agentToken(), address(0), "agent setter must not run on creator gauge");
+        // ODA-508-1: creator gauge is deliberately NOT wrapper-whitelisted (fee semantics unchanged).
+        assertFalse(MockAgentLaneWrapper(p1.wrapper).isWhitelisted(p2.gaugeController), "creator gauge not whitelisted");
         assertEq(uint256(registry.getVaultKind(agentToken)), uint256(0), "getVaultKind Creator");
     }
 

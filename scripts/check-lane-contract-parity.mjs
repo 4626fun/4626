@@ -16,8 +16,9 @@
  * Intentionally divergent justifications (see also contracts/README.md):
  *   ShareOFT / OVaultWrapper — Agent cooldown hook takes amount; Creator does not.
  *     Agent also differs on remote-peer lottery callback authority and mint auth.
- *   GaugeController — Agent lottery-manager timelock + direct fee accounting;
- *     Creator balance-delta fee accounting + emergency withdraw path.
+ *   GaugeController — shared: balance-delta fee accounting, emergency-withdraw
+ *     timelock, one-way lottery-manager init (ODA-508 parity merge). Agent-only:
+ *     setCoreWiring/_validateCoreWiring, WETH write-down, keeper cooldown.
  *   RevenueRouter / PayoutRouter — Creator-only keeper spend caps and delayed
  *     emergency withdraw; Agent omits those creator-custody controls.
  *
@@ -82,7 +83,7 @@ const INTENTIONALLY_DIVERGENT = [
     agent: 'contracts/agent/revenue/AgentGaugeController.sol',
     creator: 'contracts/creator/revenue/CreatorGaugeController.sol',
     reason:
-      'Agent lottery-manager timelock + direct receiveFees accounting; Creator balance-delta fees + emergency withdraw. Shared surface is ITradeFeeCollector4626.',
+      'Shared: balance-delta receiveFees, emergency-withdraw timelock, one-way lottery init (ODA-508). Agent-only: setCoreWiring validation, WETH write-down, keeper cooldown. Shared surface is ITradeFeeCollector4626.',
   },
   {
     name: 'RevenueRouter/PayoutRouter',

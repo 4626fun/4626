@@ -94,10 +94,10 @@ contract ODA480AgentCooldownParityTest is Test {
         (MockAgentTokenV4 coin, AgentOVault vault) = _deploy();
 
         uint256 bootstrap = _bootstrapNominal(vault);
-        uint256 smallDeposit = 10e18;
+        uint256 smallDeposit = 10e18; // <1% of the victim's bootstrap position — LeftClaw #509 U-03 materiality floor
 
         _fund(coin, vault, attacker, bootstrap + smallDeposit);
-        _fund(coin, vault, victim, smallDeposit);
+        _fund(coin, vault, victim, bootstrap);
 
         vm.prank(attacker);
         vault.deposit(bootstrap, attacker);
@@ -105,7 +105,7 @@ contract ODA480AgentCooldownParityTest is Test {
         // Victim's cooldown is tied to their own activity.
         vm.roll(block.number + 1);
         vm.prank(victim);
-        vault.deposit(smallDeposit, victim);
+        vault.deposit(bootstrap, victim);
         uint256 victimLastDeposit = vault.lastDepositBlock(victim);
         assertGt(vault.balanceOf(victim), 0, "victim must already hold shares");
 
@@ -113,11 +113,35 @@ contract ODA480AgentCooldownParityTest is Test {
         vm.prank(attacker);
         vault.deposit(smallDeposit, victim);
 
-        assertEq(vault.lastDepositBlock(victim), victimLastDeposit, "third-party deposit-to must not grief cooldown");
+        assertEq(vault.lastDepositBlock(victim), victimLastDeposit, "third-party dust deposit-to must not grief cooldown");
 
         // Cooldown was not extended, so the victim can still exit.
         vm.prank(victim);
         vault.withdraw(1e18, victim, victim);
+    }
+
+    /// LeftClaw #509 U-03: a MATERIAL third-party inflow (>= 1% of the receiver's
+    /// shares) stamps the cooldown on the agent lane too — only dust stays exempt.
+    function test_agentLane_depositToVictim_materialInflow_stampsCooldown() external {
+        (MockAgentTokenV4 coin, AgentOVault vault) = _deploy();
+
+        uint256 bootstrap = _bootstrapNominal(vault);
+        _fund(coin, vault, attacker, bootstrap * 2);
+        _fund(coin, vault, victim, bootstrap);
+
+        vm.prank(attacker);
+        vault.deposit(bootstrap, attacker);
+
+        vm.roll(block.number + 1);
+        vm.prank(victim);
+        vault.deposit(bootstrap, victim);
+        uint256 victimLastDeposit = vault.lastDepositBlock(victim);
+
+        vm.roll(block.number + vault.withdrawDelayBlocks());
+        vm.prank(attacker);
+        vault.deposit(bootstrap / 2, victim); // ~50% of victim's position — material
+
+        assertGt(vault.lastDepositBlock(victim), victimLastDeposit, "material third-party inflow must stamp cooldown");
     }
 
     /// Self-deposit must stamp the cooldown (flash-loan / same-block exit guard).
@@ -183,8 +207,8 @@ contract ODA480AgentCooldownParityTest is Test {
     }
 
     /// Trusted activation adapters must be able to deposit and wrap/transfer the
-    /// resulting shares atomically. Their vault whitelist is also the explicit
-    /// trust marker for bypassing the pooled-address cooldown.
+    /// resulting shares atomically. LeftClaw #509 U-03: the explicit trusted-adapter
+    /// registry — not the whitelist or code length — marks the cooldown exemption.
     function test_agentLane_whitelistedActivator_canTransferDepositInSameTransaction() external {
         (MockAgentTokenV4 coin, AgentOVault vault) = _deploy();
         ODA480TrustedActivator activator = new ODA480TrustedActivator();
@@ -192,6 +216,7 @@ contract ODA480AgentCooldownParityTest is Test {
         uint256 amount = _bootstrapNominal(vault);
 
         vault.setWhitelist(address(activator), true);
+        vault.setTrustedAdapter(address(activator), true);
         coin.mint(address(activator), amount);
 
         activator.depositAndTransfer(coin, vault, amount, recipient);
@@ -213,6 +238,7 @@ contract ODA480AgentCooldownParityTest is Test {
         wrapper.setShareOFT(address(share));
         registry.setRouting(address(coin), address(vault), address(wrapper));
         vault.setWhitelist(address(batcher), true);
+        vault.setTrustedAdapter(address(batcher), true); // LeftClaw #509 U-03: explicit adapter marker
         coin.mint(attacker, amount);
 
         vm.prank(attacker);
@@ -233,6 +259,7 @@ contract ODA480AgentCooldownParityTest is Test {
         ODA480MockAgentShare share = new ODA480MockAgentShare();
         wrapper.setShareOFT(address(share));
         vault.setWhitelist(address(wrapper), true);
+        vault.setTrustedAdapter(address(wrapper), true); // LeftClaw #509 U-03: explicit adapter marker
 
         address alice = makeAddr("wrapperAlice");
         address bob = makeAddr("wrapperBob");

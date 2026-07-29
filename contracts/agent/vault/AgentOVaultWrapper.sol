@@ -7,6 +7,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {IAgentTokenV4} from "@4626/agent/interfaces/IAgentTokenV4.sol";
+
 interface IShareOFT is IERC20 {
     function mint(address to, uint256 amount) external;
     function burn(address from, uint256 amount) external;
@@ -578,18 +580,47 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice Preview how much ShareOFT you'll get for depositing Agent token
+     * @dev LeftClaw #509 U-04: models BOTH taxed hops — the user→wrapper pull is netted
+     *      here, the wrapper→vault hop inside the vault's own tax-aware preview — so a
+     *      `minOut` sized from this quote no longer guarantees SlippageExceeded.
      */
     function previewDeposit(uint256 agentTokenAmount) external view returns (uint256) {
-        uint256 vaultShareAmount = vault.previewDeposit(agentTokenAmount);
+        uint256 received = _netOfQuotedTax(agentTokenAmount);
+        uint256 vaultShareAmount = vault.previewDeposit(received);
         return _previewWrap(vaultShareAmount, msg.sender);
     }
 
     /**
      * @notice Preview how much Agent token you'll get for withdrawing ShareOFT
+     * @dev LeftClaw #509 U-04: nets the vault→user outflow tax so the quote matches
+     *      the delivered amount (which `redeem` now returns and `minOut` compares).
      */
     function previewWithdraw(uint256 shareOFTAmount) external view returns (uint256) {
         uint256 vaultShareAmount = _previewUnwrap(shareOFTAmount, msg.sender);
-        return vault.previewRedeem(vaultShareAmount);
+        return _netOfQuotedTax(vault.previewRedeem(vaultShareAmount));
+    }
+
+    /// @dev Worst-case quoted transfer tax (bps) — AgentTokenV4 taxes plain transfers
+    ///      at max(buy, sell). Falls back to 0 when the token exposes no quote.
+    function _quotedMaxTaxBps() internal view returns (uint256 taxBps) {
+        uint256 buyBps;
+        try IAgentTokenV4(address(agentToken)).buyTaxBps() returns (uint16 bps) {
+            buyBps = bps;
+        } catch {
+            return 0;
+        }
+        try IAgentTokenV4(address(agentToken)).sellTaxBps() returns (uint16 bps) {
+            taxBps = bps > buyBps ? bps : buyBps;
+        } catch {
+            taxBps = buyBps;
+        }
+        if (taxBps > BASIS_POINTS) taxBps = BASIS_POINTS;
+    }
+
+    /// @dev Amount expected to arrive after one quoted-tax hop (floor — conservative).
+    function _netOfQuotedTax(uint256 amount) internal view returns (uint256) {
+        uint256 taxBps = _quotedMaxTaxBps();
+        return taxBps == 0 ? amount : (amount * (BASIS_POINTS - taxBps)) / BASIS_POINTS;
     }
 
     /**
@@ -792,7 +823,11 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     // FIX: M-01 / ODA-507-1 — permit cooled units to exit while retaining the delay on hot units.
     function _requireWrapperCooldown(address user, uint256 amount) internal view {
-        if (isWhitelisted[user] || isBeneficiaryOperator[user]) return;
+        // LeftClaw #509 lead: the fee whitelist is a COMMERCIAL waiver only — it must
+        // not also waive the wrapper's per-user flash-loan cooldown (a fee waiver
+        // granted for commercial reasons silently removed both cooldown layers).
+        // Only explicitly designated beneficiary operators keep the exemption.
+        if (isBeneficiaryOperator[user]) return;
         uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
         if (block.number >= requiredBlock) return;
 

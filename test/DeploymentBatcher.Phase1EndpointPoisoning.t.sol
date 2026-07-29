@@ -55,6 +55,8 @@ contract MockVault {
 
     function setWhitelist(address, bool) external {}
 
+    function setTrustedAdapter(address, bool) external {}
+
     function setModulesOnce(address, address, address) external {}
 }
 

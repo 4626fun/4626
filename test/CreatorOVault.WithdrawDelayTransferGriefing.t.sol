@@ -106,6 +106,8 @@ contract CreatorOVaultWithdrawDelayTransferGriefingTest is Test {
     }
 
     /// ODA-480-[3]: `deposit(assets, victim)` by a third party must not refresh victim cooldown.
+    /// LeftClaw #509 U-03: the exemption is limited to DUST (< 1% of the receiver's
+    /// shares); the victim here holds a bootstrap-sized position so 10e18 is dust.
     function test_depositToVictim_doesNotRefreshVictimLastDepositBlock() external {
         (MockCreatorCoinCooldown coin, CreatorOVault vault) = _deploy();
 
@@ -113,7 +115,7 @@ contract CreatorOVaultWithdrawDelayTransferGriefingTest is Test {
         uint256 smallDeposit = 10e18;
 
         coin.mint(attacker, bootstrap + smallDeposit);
-        coin.mint(victim, smallDeposit);
+        coin.mint(victim, bootstrap);
         _approve(attacker, coin, address(vault));
         _approve(victim, coin, address(vault));
 
@@ -122,16 +124,43 @@ contract CreatorOVaultWithdrawDelayTransferGriefingTest is Test {
 
         vm.roll(block.number + 1);
         vm.prank(victim);
-        vault.deposit(smallDeposit, victim);
+        vault.deposit(bootstrap, victim);
         uint256 victimLastDeposit = vault.lastDepositBlock(victim);
 
         vm.roll(block.number + vault.withdrawDelayBlocks());
         vm.prank(attacker);
         vault.deposit(smallDeposit, victim);
 
-        assertEq(vault.lastDepositBlock(victim), victimLastDeposit, "third-party deposit-to must not grief cooldown");
+        assertEq(vault.lastDepositBlock(victim), victimLastDeposit, "third-party dust deposit-to must not grief cooldown");
         vm.prank(victim);
         vault.withdraw(1e18, victim, victim);
+    }
+
+    /// LeftClaw #509 U-03: a MATERIAL third-party inflow (>= 1% of the receiver's
+    /// shares) stamps the cooldown — only dust griefing stays exempt.
+    function test_depositToVictim_materialInflow_stampsCooldown() external {
+        (MockCreatorCoinCooldown coin, CreatorOVault vault) = _deploy();
+
+        uint256 bootstrap = vault.MINIMUM_FIRST_DEPOSIT();
+
+        coin.mint(attacker, bootstrap * 2);
+        coin.mint(victim, bootstrap);
+        _approve(attacker, coin, address(vault));
+        _approve(victim, coin, address(vault));
+
+        vm.prank(attacker);
+        vault.deposit(bootstrap, attacker);
+
+        vm.roll(block.number + 1);
+        vm.prank(victim);
+        vault.deposit(bootstrap, victim);
+        uint256 victimLastDeposit = vault.lastDepositBlock(victim);
+
+        vm.roll(block.number + vault.withdrawDelayBlocks());
+        vm.prank(attacker);
+        vault.deposit(bootstrap / 2, victim); // ~50% of victim's position — material
+
+        assertGt(vault.lastDepositBlock(victim), victimLastDeposit, "material third-party inflow must stamp cooldown");
     }
 
     /// Codex: deposit-to an empty receiver must stamp cooldown (anti flash-loan).
