@@ -101,7 +101,7 @@ export function WaitlistJoinPanel({
         variants={item}
         className="text-center text-[11px] leading-relaxed text-zinc-600"
       >
-        Built on Base — one email to join, no spam, leave anytime.
+        Creator vaults on Base.
       </motion.p>
     </motion.div>
   )
