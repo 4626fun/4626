@@ -457,11 +457,27 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     ///         deployment fact, NOT inferred from `code.length` (EIP-7702 gives EOAs code).
     mapping(address => bool) public isTrustedAdapter;
 
+    // ---------------------------------------------------------------------
+    // Yearn-parity vault primitives (appended; storage v7)
+    // ---------------------------------------------------------------------
+    /// @notice Asset-denominated deposit ceiling. 0 == uncapped (back-compat).
+    uint256 public depositLimit;
+    /// @notice Default maxLoss (bps) for ERC-4626 3-arg withdraw/redeem. 0 == 10_000.
+    uint16 public defaultMaxLossBps;
+    /// @notice Transient maxLoss for the active withdraw/redeem call. 0 == use defaultMaxLossBps.
+    uint256 internal activeWithdrawMaxLossBps;
+    /// @notice Per-strategy absolute debt ceiling for updateDebt. 0 == no additional ceiling.
+    mapping(address => uint256) public strategyMaxDebt;
+
     // =================================
     // EVENTS
     // =================================
 
     event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
+    event DepositLimitUpdated(uint256 depositLimit);
+    event DefaultMaxLossBpsUpdated(uint16 defaultMaxLossBps);
+    event StrategyMaxDebtUpdated(address indexed strategy, uint256 maxDebt);
+    event DebtTargetUpdated(address indexed strategy, uint256 previousDebt, uint256 targetDebt, uint256 newDebt);
     event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
     event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
     event ImpairmentChallengeWindowUpdated(uint64 newWindow);
@@ -1207,6 +1223,31 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         shares = abi.decode(ret, (uint256));
     }
 
+    /**
+     * @notice Redeem with Yearn-style maxLoss (bps of requested assets).
+     * @dev Reverts StrategyHasUnrealisedLosses when assessed unrealised loss exceeds maxLoss.
+     */
+    function redeem(uint256 shares, address receiver, address owner_, uint256 maxLoss)
+        external
+        nonReentrant
+        returns (uint256 assets)
+    {
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        assets = abi.decode(ret, (uint256));
+    }
+
+    /**
+     * @notice Withdraw with Yearn-style maxLoss (bps of requested assets).
+     */
+    function withdraw(uint256 assets, address receiver, address owner_, uint256 maxLoss)
+        external
+        nonReentrant
+        returns (uint256 shares)
+    {
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        shares = abi.decode(ret, (uint256));
+    }
+
     // =================================
     // LARGE WITHDRAWAL QUEUE (MEV Protection)
     // =================================
@@ -1377,13 +1418,20 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
 
-        uint256 remainingShares = maxTotalSupply - currentSupply;
-        uint256 supply = totalSupply();
-        // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
-        // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
-        if (supply == 0) return remainingShares / (10 ** _decimalsOffset());
-
-        return (remainingShares * totalAssets()) / supply;
+        uint256 byShares = type(uint256).max;
+        if (maxTotalSupply != type(uint256).max) {
+            uint256 remainingShares = maxTotalSupply - currentSupply;
+            uint256 supply = totalSupply();
+            // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
+            // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
+            if (supply == 0) {
+                byShares = remainingShares / (10 ** _decimalsOffset());
+            } else {
+                byShares = (remainingShares * totalAssets()) / supply;
+            }
+        }
+        uint256 byAssets = _remainingDepositAssets();
+        return byShares < byAssets ? byShares : byAssets;
     }
 
     /**
@@ -1399,7 +1447,20 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
-        return maxTotalSupply - currentSupply;
+        uint256 byShares = maxTotalSupply == type(uint256).max ? type(uint256).max : maxTotalSupply - currentSupply;
+        uint256 remainingAssets = _remainingDepositAssets();
+        if (remainingAssets == type(uint256).max) return byShares;
+        if (remainingAssets == 0) return 0;
+        uint256 byAssets = convertToShares(remainingAssets);
+        return byShares < byAssets ? byShares : byAssets;
+    }
+
+    function _remainingDepositAssets() internal view returns (uint256) {
+        uint256 limit = depositLimit;
+        if (limit == 0) return type(uint256).max;
+        uint256 ta = totalAssets();
+        if (ta >= limit) return 0;
+        return limit - ta;
     }
 
     /**
@@ -1727,6 +1788,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
         uint256 remaining = amountNeeded;
+        uint256 maxLossBps = defaultMaxLossBps == 0 ? MAX_BPS : uint256(defaultMaxLossBps);
+        uint256 totalAssessedLoss;
 
         // Yearn V3: Use default queue for withdrawal order
         address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
@@ -1746,6 +1809,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
                     // Yearn V3: Assess unrealized losses before withdrawal
                     uint256 unrealizedLoss = _assessUnrealisedLoss(strategy, currentDebt, toWithdraw);
                     if (unrealizedLoss > 0) {
+                        totalAssessedLoss += unrealizedLoss;
+                        if (amountNeeded > 0 && (totalAssessedLoss * MAX_BPS) / amountNeeded > maxLossBps) {
+                            revert StrategyHasUnrealisedLosses(strategy, unrealizedLoss);
+                        }
                         emit UnrealisedLossAssessed(strategy, unrealizedLoss);
                     }
 
@@ -1854,6 +1921,22 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @param minDeviationBps Minimum overweight drift (bps of target) before withdrawing excess.
      */
     function rebalanceStrategies(uint256 minDeviationBps) external nonReentrant onlyKeepers {
+        _delegateAndReturn(_strategiesModule);
+    }
+
+    /// @notice Yearn-style absolute debt target for one strategy.
+    function updateDebt(address strategy, uint256 targetDebt)
+        external
+        nonReentrant
+        onlyKeepers
+        returns (uint256 newDebt)
+    {
+        bytes memory ret = _delegateAndReturn(_strategiesModule);
+        newDebt = abi.decode(ret, (uint256));
+    }
+
+    /// @notice Optional absolute debt ceiling for updateDebt. 0 == no additional ceiling.
+    function setStrategyMaxDebt(address strategy, uint256 maxDebt) external onlyManagement {
         _delegateAndReturn(_strategiesModule);
     }
 
@@ -2241,6 +2324,16 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_adminModule);
     }
 
+    /// @notice Asset-denominated deposit ceiling. 0 == uncapped.
+    function setDepositLimit(uint256 _depositLimit) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    /// @notice Default maxLoss (bps) for 3-arg withdraw/redeem. 0 == 10_000.
+    function setDefaultMaxLossBps(uint16 _defaultMaxLossBps) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
     /**
      * @notice Set the governance-enforced asset cap for a strategy.
      * @dev 0 == uncapped. Non-zero clamps strategy contribution to `totalAssets()`.
@@ -2347,6 +2440,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // =================================
     // VIEW FUNCTIONS
     // =================================
+
+    /// @notice Yearn-style API version for UI/registry filtering.
+    string public constant VAULT_VERSION = "1.20.0";
+
+    /// @dev Mirrors Yearn's `apiVersion()` so existing yearn-style UIs can
+    ///      discover the vault generation without a custom adapter.
+    function apiVersion() external pure returns (string memory) {
+        return VAULT_VERSION;
+    }
 
     function strategyCount() external view returns (uint256) {
         return strategyList.length;
