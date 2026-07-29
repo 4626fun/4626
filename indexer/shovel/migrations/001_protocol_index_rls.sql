@@ -7,7 +7,7 @@
 -- or Railway deferred applier `scripts/apply-protocol-index-rls.sh` (retries after
 -- shovel-main creates tables).
 --
--- Freshness view is built dynamically from tables that exist so disabled
+-- Freshness view is built dynamically from tables that exist so optional
 -- integrations do not break apply on greenfield deploys.
 
 do $$
@@ -15,16 +15,12 @@ declare
   t text;
   parts text[] := array[]::text[];
   view_sql text;
+  -- Only currently-enabled product integrations (see render-config.mjs).
   protocol_tables text[] := array[
     'protocol_phase1_deployed',
-    'protocol_phase2_launched',
-    'protocol_share_bridge_solana',
     'protocol_lottery_winners',
     'protocol_lottery_multi_jackpot',
     'protocol_lottery_entries',
-    'protocol_vault_burn_stream_set',
-    'protocol_burn_stream_dripped',
-    'protocol_share_oft_transfers',
     'protocol_share_oft_buy_fees'
   ];
   required_enabled text[] := array[
