@@ -37,6 +37,7 @@ import {
   isBaseAppDirectXmtpPath,
   resolveBaseAppDirectXmtpIdentity,
 } from '@/lib/xmtp/baseAppDirectXmtp'
+import { shouldPromptNativeConfirmForXmtpInstallationReset } from '@/lib/xmtp/xmtpInstallationReset'
 import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 import {
   buildNotRegisteredDmMessage,
@@ -2920,7 +2921,10 @@ export function XmtpChatProvider({
       })
       const toRevoke = sorted.slice(0, revokeCount).map((i) => i.bytes)
 
-      if (typeof window !== 'undefined') {
+      // Base App / wallet webviews suppress window.confirm (often as cancel), which
+      // previously left users stuck at 10/10 with a false "XMTP reset cancelled."
+      // The Reset button is already an explicit action; only prompt on desktop browsers.
+      if (shouldPromptNativeConfirmForXmtpInstallationReset()) {
         const ok = window.confirm(
           `XMTP inbox ${targetInboxId} has ${installs.length} installation(s) (max 10). ` +
             `This will revoke ${toRevoke.length} installation(s) to free a slot.\n\n` +

@@ -15,6 +15,7 @@ import {
 } from '@/lib/xmtp/xmtpOpfsLockRecovery'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { useChatIdentity } from './useChatIdentity'
 import { useResolvedDmPeer } from './useResolvedDmPeer'
@@ -150,6 +151,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
     accountContext.activeAccountType === 'SMART_WALLET'
       ? 'Connected as Smart Wallet'
       : 'Connected as User Wallet'
+  const inBaseApp = isBaseAppInAppContext()
   const isOpfsLockError = isXmtpLocalDatabaseLockError(error)
 
   const totalUnread = useMemo(
@@ -373,6 +375,9 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                 <>
                   <div className="text-[11px] text-amber-200/80 leading-relaxed">
                     You hit XMTP’s 10-installation limit. Resetting revokes older installations to free a slot.
+                    {inBaseApp
+                      ? ' Approve the Smart Wallet signature when prompted — Base App does not show a browser confirm dialog.'
+                      : null}{' '}
                     If you want more control, use{' '}
                     <a
                       className="underline hover:text-amber-100"
@@ -402,7 +407,13 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <div className="flex flex-col items-center gap-3 px-4 py-8">
               <LoadingInline
                 intent="session"
-                labelOverride={status === 'signing' ? 'Sign to enable messaging...' : 'Connecting to XMTP...'}
+                labelOverride={
+                  status === 'signing'
+                    ? installationLimitInboxId
+                      ? 'Approve Smart Wallet signature to free an XMTP slot...'
+                      : 'Sign to enable messaging...'
+                    : 'Connecting to XMTP...'
+                }
               />
             </div>
           )}
