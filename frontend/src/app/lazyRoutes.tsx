@@ -145,6 +145,7 @@ export function LazyGuardedOutlet(props: { guard: LazyRouteComponent }) {
 export const SmartWalletsRouteProvider = SmartWalletsRouteProviderComponent
 
 export const Vault = lazyNamed(() => import('../pages/Vault'), 'Vault')
+export const VaultCurationReport = lazyNamed(() => import('../pages/VaultCurationReport'), 'VaultCurationReport')
 export const CompleteAuction = lazyNamed(() => import('../pages/auction/CompleteAuction'), 'CompleteAuction')
 export const AuctionBid = lazyNamed(() => import('../pages/auction/AuctionBid'), 'AuctionBid')
 export const Deploy = lazyNamed(() => import('../pages/deploy/Deploy'), 'Deploy')

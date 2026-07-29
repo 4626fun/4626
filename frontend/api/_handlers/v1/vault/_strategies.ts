@@ -9,6 +9,8 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 
+import { readVaultStrategyList } from './_readStrategyList.js'
+
 
 
 declare const process: { env: Record<string, string | undefined> }
@@ -44,19 +46,6 @@ function getVaultParam(req: VercelRequest): string {
   return v
 }
 
-const VAULT_STRATS_ABI = [
-  {
-    type: 'function',
-    name: 'getStrategies',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'strategies', type: 'address[]' },
-      { name: 'weights', type: 'uint256[]' },
-      { name: 'assets', type: 'uint256[]' },
-    ],
-  },
-] as const
 
 const STRATEGY_BASE_ABI = [
   { type: 'function', name: 'isActive', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
@@ -103,6 +92,7 @@ const SOLANA_STRATEGY_ABI = [
 type StrategyInfo = {
   address: `0x${string}`
   weight: string
+  debt: string | null
   isActive: boolean | null
   owner: `0x${string}` | null
   asset: `0x${string}` | null
@@ -166,21 +156,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http(getReadRpcUrl(), { timeout: 20_000 }),
     })
 
-    const stratsTuple = (await client.readContract({
-      address: vault as `0x${string}`,
-      abi: VAULT_STRATS_ABI,
-      functionName: 'getStrategies',
-      args: [],
-    })) as any
-
-    const strategies = (stratsTuple?.[0] ?? []) as `0x${string}`[]
-    const weights = (stratsTuple?.[1] ?? []) as bigint[]
+    const rows = await readVaultStrategyList(client as any, vault as `0x${string}`)
 
     const out: StrategyInfo[] = []
 
-    for (let i = 0; i < strategies.length; i++) {
-      const s = strategies[i]
-      const weight = (weights[i] ?? 0n).toString()
+    for (const row of rows) {
+      const s = row.address
+      const weight = row.weight.toString()
       if (!s || !isAddress(s)) continue
 
       const calls = await client.multicall({
@@ -297,6 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const info: StrategyInfo = {
         address: s,
         weight,
+        debt: row.debt === null ? null : row.debt.toString(),
         isActive: typeof isActive === 'boolean' ? isActive : null,
         owner: owner && isAddressLike(owner) ? (owner as any) : null,
         asset: asset && isAddressLike(asset) ? (asset as any) : null,

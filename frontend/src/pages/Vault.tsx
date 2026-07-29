@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Clock,
+  FileText,
   ShieldCheck,
 } from 'lucide-react'
 import { Alert } from '@/components/ui/Alert'
@@ -650,6 +651,15 @@ export function Vault() {
                     >
                       View wrapper <ExternalLink className="w-3 h-3" />
                     </a>
+                  ) : null}
+                  {vaultAddress ? (
+                    <Link
+                      to={`/vault/${vaultAddress}/report`}
+                      className="inline-flex items-center gap-1.5 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                      title="Vault curation report"
+                    >
+                      Vault report <FileText className="w-3 h-3 text-zinc-500" />
+                    </Link>
                   ) : null}
                   {vaultAddress ? (
                     <Link

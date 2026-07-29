@@ -58,6 +58,10 @@ export const PAGE_META = {
     title: `${symbol} Vault`,
     description: `Deposit and manage ${symbol} in 4626.`,
   }),
+  vaultReport: (symbol: string) => ({
+    title: `${symbol} Vault Report`,
+    description: `Live CreatorOVault snapshot for ${symbol}: allocation, fees, control, and links to the protocol risk report.`,
+  }),
   creator: (name: string) => ({
     title: name,
     description: `${name}'s creator vault and earnings on 4626.`,

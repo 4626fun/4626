@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { readVaultStrategyList } from '../v1/vault/_readStrategyList.js'
 import { handleOptions, setCors } from '@4626/server-core'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -78,17 +79,6 @@ const VAULT_VIEW_ABI = [
   { type: 'function', name: 'CREATOR_COIN', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'gaugeController', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'whitelist', stateMutability: 'view', inputs: [{ name: '_account', type: 'address' }], outputs: [{ type: 'bool' }] },
-  {
-    type: 'function',
-    name: 'getStrategies',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'strategies', type: 'address[]' },
-      { name: 'weights', type: 'uint256[]' },
-      { name: 'assets', type: 'uint256[]' },
-    ],
-  },
 ] as const
 
 // Some older vault versions used different getter names (or no public getter at all).
@@ -424,13 +414,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let wrapperWhitelisted: boolean | null = null
     let strategies: readonly `0x${string}`[] = []
     let weights: readonly bigint[] = []
+    const strategySummaries: Array<{
+      address: `0x${string}`
+      weight: string
+      kind: 'ajna' | 'charm' | 'solana' | 'unknown'
+      label: string
+    }> = []
     const extraCalls: any[] = []
     if (addrOk(wrapperAddress)) {
       extraCalls.push({ address: vaultAddress, abi: VAULT_WHITELIST_COMPAT_ABI, functionName: 'whitelist', args: [wrapperAddress] })
       extraCalls.push({ address: vaultAddress, abi: VAULT_WHITELIST_COMPAT_ABI, functionName: 'whitelisted', args: [wrapperAddress] })
       extraCalls.push({ address: vaultAddress, abi: VAULT_WHITELIST_COMPAT_ABI, functionName: 'isWhitelisted', args: [wrapperAddress] })
     }
-    extraCalls.push({ address: vaultAddress, abi: VAULT_VIEW_ABI, functionName: 'getStrategies' })
     const extraRes = await safeMulticall(client, extraCalls)
     if (any429(extraRes)) {
       setRpcRateLimitHeaders(res)
@@ -443,11 +438,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pickResult<boolean>(extraRes[2]) ??
         null
     }
-    const tuple = pickResult<any>(extraRes[addrOk(wrapperAddress) ? 3 : 0])
-    if (tuple) {
-      strategies = (tuple[0] ?? []) as readonly `0x${string}`[]
-      weights = (tuple[1] ?? []) as readonly bigint[]
-    }
+    const strategyRows = await readVaultStrategyList(client, vaultAddress)
+    strategies = strategyRows.map((r) => r.address)
+    weights = strategyRows.map((r) => r.weight)
 
     // Strategy details (best-effort)
     const strategyChecks: Check[] = []
@@ -609,6 +602,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status,
           details: extras.join(' · '),
           href: basescanAddressHref(s),
+        })
+        strategySummaries.push({
+          address: s,
+          weight: w.toString(),
+          kind: isNestedAjna ? 'ajna' : charmVault ? 'charm' : hasLegacySolanaStrategyBridge ? 'solana' : 'unknown',
+          label: flavor,
         })
 
         // Capture nested Ajna adapter context for pricing + fix actions.
@@ -986,6 +985,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sections,
         context: {
           vault: vaultAddress,
+          strategies: strategySummaries,
           owner,
           vaultOwner: owner,
           creatorToken,
