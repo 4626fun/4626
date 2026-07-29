@@ -159,9 +159,9 @@ contract AgentOVaultLeftClaw509RemediationTest is Test {
         vault.addStrategy(address(strat), 10_000, true);
         vault.setAutoAllocate(true);
 
-        _seedFirstDeposit(alice); // everything auto-allocates into the taxed strategy
+        _seedFirstDeposit(alice); // everything above minIdle auto-allocates into the taxed strategy
         assertGt(strat.trackedAssets(), 0, "deposit must auto-allocate");
-        assertEq(agentToken.balanceOf(address(vault)), 0, "idle must be fully allocated");
+        assertLe(agentToken.balanceOf(address(vault)), 10_000e18, "only minIdle may remain");
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
 
         uint256 shares = vault.balanceOf(alice) / 2;
@@ -323,8 +323,13 @@ contract AgentOVaultLeftClaw509RemediationTest is Test {
         agentToken.mint(bob, nominal);
         vm.startPrank(bob);
         agentToken.approve(address(vault), type(uint256).max);
-        vm.expectRevert(CreatorOVault.PriceChangeExceedsLimit.selector);
-        vault.deposit(nominal, bob);
+        // try/catch instead of expectRevert(bytes4): the guard's revert carries args,
+        // and this foundry build only prefix-matches on exact-length revert data.
+        try vault.deposit(nominal, bob) {
+            revert("under-reporting allocation must trip the guard");
+        } catch (bytes memory reason) {
+            assertEq(bytes4(reason), CreatorOVault.PriceChangeExceedsLimit.selector, "post-allocation guard must trip");
+        }
         vm.stopPrank();
     }
 
@@ -472,8 +477,9 @@ contract AgentOVaultLeftClaw509RemediationTest is Test {
         _seedFirstDeposit(alice);
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
 
+        uint256 aliceShares = vault.balanceOf(alice); // read before prank: view calls consume it
         vm.prank(alice);
-        vault.redeem(vault.balanceOf(alice), alice, alice);
+        vault.redeem(aliceShares, alice, alice);
         assertEq(vault.totalSupply(), 0, "supply burned to zero");
         uint256 residualAssets = vault.totalAssets();
         if (residualAssets == 0) return; // exact-zero exit: nothing to prove here
