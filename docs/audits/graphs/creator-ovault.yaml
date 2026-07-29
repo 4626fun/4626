@@ -1,0 +1,302 @@
+slug: creator-ovault
+title: CreatorOVault — Contract Dependency Graph
+chain: base
+report: /audits/creator-ovault-report
+updated: "2026-07-28"
+note: Protocol-level template for greenfield CreatorOVaults (v1.20.0). Per-creator vault/wrapper/ShareOFT/strategy addresses are emitted at deploy — verify onchain.
+
+categories:
+  - id: vault
+    label: Vault / Token
+  - id: strategy
+    label: Strategy (leg)
+  - id: governance
+    label: Governance
+  - id: infra
+    label: Protocol Infra
+  - id: dependency
+    label: External Dependency
+  - id: arm
+    label: ShareOFT Arm (not a leg)
+
+nodes:
+  # === Vault / token layer (per-creator templates) ===
+  - id: creator-ovault
+    label: CreatorOVault (▢)
+    category: vault
+    note: Per-creator ERC-4626 deposit/redeem surface; Yearn V3-style roles/report/strategies
+  - id: wrapper
+    label: CreatorOVaultWrapper
+    category: vault
+    note: Per-creator wrap of ▢ to ■; not alone the CREATOR NAV redeem path
+  - id: share-oft
+    label: CreatorShareOFT (■)
+    category: vault
+    note: Per-creator LayerZero OFT; DEX + bridge surface
+
+  # === Legs (CREATOR yield) ===
+  - id: charm-strategy
+    label: CreatorCharmStrategy
+    category: strategy
+    note: Per-creator Charm / Uniswap LP leg; ~45% launch target
+  - id: ajna-adapter
+    label: ERC4626StrategyAdapter
+    category: strategy
+    note: Only Ajna-facing strategy the outer vault sees; ~45% launch target
+  - id: ajna-vault
+    label: AjnaERC4626Vault
+    category: strategy
+    note: Nested Ajna sleeve (per-creator)
+  - id: ajna-auth
+    label: AjnaVaultAuth
+    category: strategy
+    note: Pause / auth for nested Ajna vault
+  - id: ajna-buffer
+    label: AjnaVaultBuffer
+    category: strategy
+    note: Buffer / bucket policy inside Ajna sleeve
+  - id: idle
+    label: Idle CREATOR
+    category: strategy
+    note: Unallocated creator-coin buffer; ~10% launch target
+
+  # === Arms (ShareOFT domain — not addStrategy) ===
+  - id: cca-arm
+    label: CCALaunchArm
+    category: arm
+    note: Primary market for ■; not a vault yield leg
+  - id: mesh-lp
+    label: OVaultLPManager
+    category: arm
+    note: Post-CCA V4 mesh LP for ■
+  - id: solana-mesh
+    label: Solana OVault mesh
+    category: arm
+    note: ~30% of ■ bridged at finalize (Pipe A); arm not leg
+
+  # === Governance ===
+  - id: treasury-safe
+    label: Protocol treasury Safe
+    address: "0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3"
+    category: governance
+    note: Cold custody; strategy adapter ownership; wires batcher helpers
+  - id: automation-safe
+    label: Protocol automation Safe
+    address: "0x08f0875E40781578F902998b2b831cc48d838eBE"
+    category: governance
+    note: Hot lane — Charm manager + Ajna admin on Phase 3 deploys
+  - id: vault-roles
+    label: Vault roles (per instance)
+    category: governance
+    note: owner / management / keeper / emergencyAdmin / impairmentGuardian — bound per vault
+
+  # === Protocol infra (v1.20.0 shared) ===
+  - id: registry
+    label: Registry4626
+    address: "0xF60a1490C4129f2b6ae540734D3C2C8C6111824e"
+    category: infra
+  - id: factory
+    label: OVaultFactory4626
+    address: "0x29AB55092F4009aa3F3603f32b11A6B02e6F0eb5"
+    category: infra
+  - id: batcher
+    label: DeploymentBatcher
+    address: "0x83A9b2481E3e6d3a8fA12F6eB072253AAc518032"
+    category: infra
+    note: Slim shell; phase helpers wired post-deploy
+  - id: activation-batcher
+    label: VaultActivationBatcher
+    address: "0x37A9136dcD3e3245E4E992a1302dfEBD3d8673B3"
+    category: infra
+  - id: bytecode-store
+    label: UniversalBytecodeStoreV2
+    address: "0x8599CA87b28320158941C59CB3cd9a3f12083530"
+    category: infra
+  - id: create2
+    label: UniversalCreate2DeployerFromStore
+    address: "0xdffB25505F5050E15B3602296330Ef352127d1Ef"
+    category: infra
+  - id: core-module
+    label: CreatorOVaultCoreModule
+    address: "0xD6B862783Fd362ccF0d39d86E6384D8770e78833"
+    category: infra
+  - id: strategies-module
+    label: CreatorOVaultStrategiesModule
+    address: "0x968b8233053B64A93a4Cde044fFf4f43ea6D3c60"
+    category: infra
+  - id: admin-module
+    label: CreatorOVaultAdminModule
+    address: "0x5bC4d71dB82081fCCF3647F1C094BEB202C0DB50"
+    category: infra
+  - id: lottery-manager
+    label: LotteryManager4626
+    address: "0x0fC6f30adFD9e82097895Bb166536FdFD8EaC97b"
+    category: infra
+    note: Adjacent ■ fee/lottery domain
+  - id: vrf-consumer
+    label: VRFConsumer4626
+    address: "0x56E2453Bf8Cf2C3FC33E7D18Edc2310297f2a251"
+    category: infra
+
+  # === External dependencies ===
+  - id: creator-coin
+    label: Zora creator coin
+    category: dependency
+    note: Vault ERC-20 asset; per creator
+  - id: charm-uni
+    label: Charm / Uniswap liquidity
+    category: dependency
+    note: LP venue for Charm leg
+  - id: ajna-protocol
+    label: Ajna
+    category: dependency
+    note: Lending protocol under nested sleeve
+  - id: layerzero
+    label: LayerZero V2 OFT
+    category: dependency
+    note: ■ bridging; remote ■ is not remote vault redeem
+  - id: creator-oracle
+    label: Creator oracle / TWAP
+    category: dependency
+    note: Pricing guards for vault limits and mesh rebalance
+  - id: chainlink-vrf
+    label: Chainlink VRF
+    category: dependency
+    note: Lottery randomness (adjacent to vault NAV)
+
+edges:
+  # === Deploy / infra ===
+  - from: treasury-safe
+    to: batcher
+    kind: controls
+    label: wires helpers / phase1 module
+  - from: batcher
+    to: create2
+    kind: routes-through
+    label: CREATE2 deploy
+  - from: create2
+    to: bytecode-store
+    kind: routes-through
+    label: seeded bytecode
+  - from: factory
+    to: registry
+    kind: manages
+    label: registers vault stack
+  - from: batcher
+    to: creator-ovault
+    kind: deploys
+    label: Phase 1-3 greenfield
+  - from: core-module
+    to: creator-ovault
+    kind: manages
+    label: delegatecall core
+  - from: strategies-module
+    to: creator-ovault
+    kind: manages
+    label: delegatecall strategies
+  - from: admin-module
+    to: creator-ovault
+    kind: manages
+    label: delegatecall admin
+  - from: activation-batcher
+    to: creator-ovault
+    kind: manages
+    label: activation / finalize
+
+  # === Governance / roles ===
+  - from: vault-roles
+    to: creator-ovault
+    kind: holds-role
+    label: owner management keeper emergency
+  - from: treasury-safe
+    to: charm-strategy
+    kind: controls
+    label: adapter ownership (typical)
+  - from: automation-safe
+    to: charm-strategy
+    kind: holds-role
+    label: Charm manager
+  - from: automation-safe
+    to: ajna-vault
+    kind: holds-role
+    label: Ajna admin
+
+  # === Vault asset + allocation (legs) ===
+  - from: creator-coin
+    to: creator-ovault
+    kind: deposits-into
+    label: deposit asset
+  - from: creator-ovault
+    to: charm-strategy
+    kind: allocates-to
+    label: "~45% Charm"
+  - from: creator-ovault
+    to: ajna-adapter
+    kind: allocates-to
+    label: "~45% Ajna"
+  - from: creator-ovault
+    to: idle
+    kind: allocates-to
+    label: "~10% idle"
+  - from: ajna-adapter
+    to: ajna-vault
+    kind: deposits-into
+    label: nested ERC-4626
+  - from: ajna-auth
+    to: ajna-vault
+    kind: manages
+    label: pause / auth
+  - from: ajna-buffer
+    to: ajna-vault
+    kind: manages
+    label: buffer / buckets
+  - from: charm-strategy
+    to: charm-uni
+    kind: deposits-into
+    label: LP inventory
+  - from: ajna-vault
+    to: ajna-protocol
+    kind: deposits-into
+    label: lending sleeve
+
+  # === Wrap / arms (ShareOFT — not CREATOR legs) ===
+  - from: creator-ovault
+    to: wrapper
+    kind: routes-through
+    label: wrap ▢
+  - from: wrapper
+    to: share-oft
+    kind: deploys
+    label: mint ■
+  - from: share-oft
+    to: cca-arm
+    kind: routes-through
+    label: primary market
+  - from: share-oft
+    to: mesh-lp
+    kind: routes-through
+    label: V4 mesh
+  - from: share-oft
+    to: solana-mesh
+    kind: routes-through
+    label: "~30% ■ at finalize"
+  - from: share-oft
+    to: layerzero
+    kind: routes-through
+    label: OFT bridge
+  - from: mesh-lp
+    to: creator-oracle
+    kind: routes-through
+    label: TWAP guards
+  - from: share-oft
+    to: lottery-manager
+    kind: routes-through
+    label: trade-fee / jackpot
+  - from: lottery-manager
+    to: vrf-consumer
+    kind: routes-through
+    label: VRF
+  - from: vrf-consumer
+    to: chainlink-vrf
+    kind: routes-through
+    label: randomness

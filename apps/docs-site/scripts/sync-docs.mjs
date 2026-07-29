@@ -73,7 +73,7 @@ const SOURCES = {
   manual: {
     dir: path.join(REPO_ROOT, 'docs'),
     destPrefix: '',
-    include: ['**/*.md', '**/*.mdx', '**/_category_.json'],
+    include: ['**/*.md', '**/*.mdx', '**/_category_.json', 'audits/graphs/**/*.yaml'],
     exclude: [
       '_generated/**',
       '_archive/**',

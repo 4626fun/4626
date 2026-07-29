@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'audits/index'},
       items: [
         'audits/creator-ovault-report',
+        'audits/creator-ovault-graph',
         {
           type: 'category',
           label: 'Aristotle',

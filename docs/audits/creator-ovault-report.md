@@ -29,6 +29,8 @@ status: current
 
 Related: [CreatorOVault contract](/contracts/core/creator-ovault) · [Strategy bundle](/guides/strategy-bundle) · [Impairment disclosures](/reference/impairment-v1-disclosures) · [Security & audits](/audits) · [Addresses](/reference/addresses)
 
+[View dependency graph →](/audits/creator-ovault-graph)
+
 ---
 
 ## Overview

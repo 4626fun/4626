@@ -37,6 +37,8 @@ export const CURATED_PUBLISH_GLOBS = [
 
   'audits/index.md',
   'audits/creator-ovault-report.md',
+  'audits/creator-ovault-graph.md',
+  'audits/graphs/**',
   'audits/aristotle/index.md',
   'audits/aristotle/curve-boost.md',
   'audits/aristotle/base-win-chance.md',
