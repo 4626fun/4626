@@ -268,5 +268,46 @@ contract CreatorOVaultWrapperShareOFTValidationTest is Test {
         wrapper.withdraw(bootstrapShares);
         vm.stopPrank();
     }
+
+    function test_unwrap_registeredGauge_bypassesAsyncGate() public {
+        (MockCreatorCoin coin, CreatorOVault vault, CreatorOVaultWrapper wrapper) = _deploySystem();
+
+        GoodShareOFT share = new GoodShareOFT();
+        wrapper.setShareOFT(address(share));
+        share.setMinter(address(wrapper), true);
+
+        uint256 bootstrapAmount = vault.MINIMUM_FIRST_DEPOSIT();
+        coin.mint(alice, bootstrapAmount);
+
+        vm.startPrank(alice);
+        coin.approve(address(wrapper), type(uint256).max);
+        uint256 bootstrapShares = wrapper.deposit(bootstrapAmount);
+        vm.stopPrank();
+
+        vm.roll(block.number + 2);
+
+        // Hoisted: an intermediate staticcall would consume the next vm.prank.
+        uint256 threshold = vault.largeWithdrawalThreshold();
+
+        // Non-gauge large unwrap still reverts (ODA-498-4 behavior preserved).
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVaultWrapper.AsyncRedemptionRequired.selector, bootstrapAmount, threshold)
+        );
+        wrapper.unwrap(bootstrapShares);
+
+        // The vault-registered gauge unwraps the same size — it burns the released shares
+        // via burnSharesForPriceIncrease, so the redemption gate must not brick it.
+        address gauge = makeAddr("gauge");
+        vault.setGaugeController(gauge);
+        share.setMinter(address(this), true);
+        share.mint(gauge, bootstrapShares);
+
+        vm.prank(gauge);
+        uint256 amountOut = wrapper.unwrap(bootstrapShares);
+
+        assertEq(amountOut, bootstrapShares * 1000, "denormalized vault shares released");
+        assertEq(vault.balanceOf(gauge), bootstrapShares * 1000);
+    }
 }
 

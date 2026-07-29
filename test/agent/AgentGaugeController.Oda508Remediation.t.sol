@@ -105,6 +105,7 @@ contract MockVault508 is MockToken508 {
     IERC20 public immutable assetToken;
     uint256 public pps = 1e18;
     address public gaugeController;
+    uint256 public largeWithdrawalThreshold;
 
     constructor(address _asset) MockToken508("Mock Vault Share", "mVS") {
         assetToken = IERC20(_asset);
@@ -116,6 +117,14 @@ contract MockVault508 is MockToken508 {
 
     function setPricePerShare(uint256 _pps) external {
         pps = _pps;
+    }
+
+    function setLargeWithdrawalThreshold(uint256 t) external {
+        largeWithdrawalThreshold = t;
+    }
+
+    function previewRedeem(uint256 shares) external view returns (uint256) {
+        return (shares * pps) / 1e18;
     }
 
     function pricePerShare() external view returns (uint256) {
@@ -476,6 +485,52 @@ contract AgentGaugeControllerOda508RemediationTest is Test {
         realGauge.forceDistribute(); // owner path: threshold raised above, interval irrelevant
 
         assertEq(realGauge.totalSharesBurned(), toBurnOft * 1000, "burn executed despite hot dust");
+        assertEq(realGauge.pendingFees(), 0, "no degrade re-queue");
+    }
+
+    function test_f1_realWrapper_registeredGauge_bypassesAsyncGate_forBurnSlice() public {
+        // Same real-stack harness as the hot-dust test, but the mock vault advertises a
+        // largeWithdrawalThreshold, so the wrapper's async-redemption gate is ACTIVE.
+        MockShareOftHook508 realShare = new MockShareOftHook508();
+        AgentOVaultWrapper realWrapper = new AgentOVaultWrapper(address(agentToken), address(vault), address(this));
+        realWrapper.setShareOFT(address(realShare));
+        realShare.setWrapper(address(realWrapper));
+
+        AgentGaugeController realGauge =
+            new AgentGaugeController(address(realShare), agentTreasury, protocolTreasury, address(this));
+        realGauge.setVault(address(vault));
+        realGauge.setAgentToken(address(agentToken));
+        realGauge.setWrapper(address(realWrapper));
+        vault.setGaugeController(address(realGauge));
+        realGauge.setDistributionThreshold(1000 ether);
+
+        // Any unwrap whose previewRedeem meets 1 ether of assets is "large"...
+        vault.setLargeWithdrawalThreshold(1 ether);
+
+        uint256 wrapShares = 300_000 ether;
+        vault.mint(alice, wrapShares);
+        vm.startPrank(alice);
+        vault.approve(address(realWrapper), wrapShares);
+        realWrapper.wrap(wrapShares); // 300 ether ◆ → alice
+        vm.stopPrank();
+
+        // ...so a NON-gauge large unwrap reverts (ODA-498-4 behavior preserved).
+        vm.roll(block.number + 2); // default wrapper delay = 1 block
+        uint256 aliceOft = realShare.balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(AgentOVaultWrapper.AsyncRedemptionRequired.selector, aliceOft * 1000, 1 ether)
+        );
+        realWrapper.unwrap(aliceOft);
+
+        // The registered gauge's burn slice still unwraps and burns — no redemption occurs.
+        uint256 bridged = 200 ether;
+        realShare.mint(address(realGauge), bridged);
+        realGauge.receiveBridgedFees();
+        (,, uint256 toBurnOft) = _split200(bridged);
+        realGauge.forceDistribute();
+
+        assertEq(realGauge.totalSharesBurned(), toBurnOft * 1000, "gauge burn slice exempt from async gate");
         assertEq(realGauge.pendingFees(), 0, "no degrade re-queue");
     }
 

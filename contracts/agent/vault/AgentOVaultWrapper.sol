@@ -16,6 +16,7 @@ interface IShareOFT is IERC20 {
 
 interface IQueueAwareVault {
     function largeWithdrawalThreshold() external view returns (uint256);
+    function gaugeController() external view returns (address);
 }
 
 /**
@@ -437,7 +438,12 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);
         // ODA-498-4 parity: large unwraps must not bypass the async redemption gate.
-        _requireSynchronousRedemption(amountOut);
+        // The vault-registered gauge is exempt: it unwraps its burn slice only to call
+        // burnSharesForPriceIncrease (no underlying redemption), so gating it would let a
+        // large fee cycle brick distribute() permanently.
+        if (msg.sender != _registeredGaugeController()) {
+            _requireSynchronousRedemption(amountOut);
+        }
 
         // Transfer vault shares to user
         IERC20(address(vault)).safeTransfer(msg.sender, amountOut);
@@ -906,5 +912,14 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (previewAssets >= threshold) {
             revert AsyncRedemptionRequired(previewAssets, threshold);
         }
+    }
+
+    /// @dev Fail-safe: an unreadable gaugeController never qualifies for the gate exemption.
+    function _registeredGaugeController() internal view returns (address gauge) {
+        (bool success, bytes memory data) = address(vault).staticcall(
+            abi.encodeWithSelector(IQueueAwareVault.gaugeController.selector)
+        );
+        if (!success || data.length < 32) return address(0);
+        gauge = abi.decode(data, (address));
     }
 }
