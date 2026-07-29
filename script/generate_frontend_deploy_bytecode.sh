@@ -12,6 +12,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_FILE="$ROOT_DIR/frontend/src/deploy/bytecode.generated.ts"
 
+# shellcheck source=script/lib/resolve_foundry_artifact.sh
+source "$ROOT_DIR/script/lib/resolve_foundry_artifact.sh"
+
 cd "$ROOT_DIR"
 
 echo "Generating deploy bytecode → frontend/src/deploy/bytecode.generated.ts"
@@ -24,33 +27,23 @@ forge build --skip test --skip script >/dev/null
 
 artifact_path() {
   local contract="$1"
+  local sol_dir
   case "$contract" in
     DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherShareMeshHelper|DeploymentBatcherUtilsHelper)
-      printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
-      ;;
-    ApprovedV4HooksRegistry|OVaultLPManager)
-      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
+      sol_dir="$ROOT_DIR/out/DeploymentBatcher.sol"
       ;;
     CreatorOracleQuoteLib)
-      # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; prefer unversioned then newest.
-      # Use version sort (`sort -V`): lex sort prefers 0.8.9 over 0.8.34 and wrong CREATE2 links.
-      local dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
-      if [[ -f "$dir/CreatorOracleQuoteLib.json" ]]; then
-        printf "%s/CreatorOracleQuoteLib.json" "$dir"
-      else
-        local newest
-        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort -V | tail -1 || true)"
-        if [[ -z "$newest" ]]; then
-          printf "%s/CreatorOracleQuoteLib.json" "$dir"
-        else
-          printf "%s" "$newest"
-        fi
-      fi
+      # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; the shared resolver
+      # prefers the bare artifact then newest via sort -V (lex sort ranks 0.8.9
+      # above 0.8.34 and wrong CREATE2 links).
+      sol_dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
       ;;
     *)
-      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
+      sol_dir="$ROOT_DIR/out/${contract}.sol"
       ;;
   esac
+  # Print resolved path even when missing (caller errors with the expected path).
+  resolve_foundry_artifact "$sol_dir" "$contract" || true
 }
 
 bytecode() {
@@ -61,11 +54,28 @@ bytecode() {
   artifact="$(artifact_path "$contract")"
   if [[ ! -f "$artifact" ]]; then
     echo "Missing artifact: $artifact (run forge build --skip test --skip script first)" >&2
-    exit 1
+    return 1
   fi
   # Fully link external libraries (Foundry CREATE2 salt 0 @ EIP-2470).
   # Do NOT truncate at `__$...$__` placeholders — that yields broken initcode.
   python3 "$ROOT_DIR/script/lib/extract_linked_bytecode.py" "$artifact" "$ROOT_DIR"
+}
+
+# IMPORTANT: do not embed `$(bytecode …)` directly inside `printf` args.
+# With `set -e`, a failing command substitution in that position does not abort
+# the script — it silently writes empty creation bytecode into DEPLOY_BYTECODE.
+append_deploy_bytecode() {
+  local name="$1"
+  local hex
+  hex="$(bytecode "$name")" || {
+    echo "Failed to extract creation bytecode for ${name}" >&2
+    exit 1
+  }
+  if [[ -z "$hex" || ! "$hex" =~ ^[0-9a-fA-F]+$ ]]; then
+    echo "Invalid/empty creation bytecode for ${name} (refusing to write DEPLOY_BYTECODE)" >&2
+    exit 1
+  fi
+  printf "  %s: '0x' + '%s',\n" "$name" "$hex" >>"$OUT_FILE"
 }
 
 cat >"$OUT_FILE" <<'EOF'
@@ -77,32 +87,32 @@ cat >"$OUT_FILE" <<'EOF'
 export const DEPLOY_BYTECODE = {
 EOF
 
-printf "  CreatorOVault: '0x' + '%s',\n" "$(bytecode CreatorOVault)" >>"$OUT_FILE"
-printf "  AgentOVault: '0x' + '%s',\n" "$(bytecode AgentOVault)" >>"$OUT_FILE"
-printf "  CreatorOVaultWrapper: '0x' + '%s',\n" "$(bytecode CreatorOVaultWrapper)" >>"$OUT_FILE"
-printf "  AgentOVaultWrapper: '0x' + '%s',\n" "$(bytecode AgentOVaultWrapper)" >>"$OUT_FILE"
-printf "  CreatorShareOFT: '0x' + '%s',\n" "$(bytecode CreatorShareOFT)" >>"$OUT_FILE"
-printf "  AgentShareOFT: '0x' + '%s',\n" "$(bytecode AgentShareOFT)" >>"$OUT_FILE"
-printf "  OFTBootstrapRegistry: '0x' + '%s',\n" "$(bytecode OFTBootstrapRegistry)" >>"$OUT_FILE"
-printf "  CreatorGaugeController: '0x' + '%s',\n" "$(bytecode CreatorGaugeController)" >>"$OUT_FILE"
-printf "  AgentGaugeController: '0x' + '%s',\n" "$(bytecode AgentGaugeController)" >>"$OUT_FILE"
-printf "  CCALaunchArm: '0x' + '%s',\n" "$(bytecode CCALaunchArm)" >>"$OUT_FILE"
-printf "  CreatorOracleQuoteLib: '0x' + '%s',\n" "$(bytecode CreatorOracleQuoteLib)" >>"$OUT_FILE"
-printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FILE"
-printf "  AgentOracle: '0x' + '%s',\n" "$(bytecode AgentOracle)" >>"$OUT_FILE"
-printf "  CreatorPayoutRouter: '0x' + '%s',\n" "$(bytecode CreatorPayoutRouter)" >>"$OUT_FILE"
-printf "  AgentRevenueRouter: '0x' + '%s',\n" "$(bytecode AgentRevenueRouter)" >>"$OUT_FILE"
-printf "  VaultShareBurnStream: '0x' + '%s',\n" "$(bytecode VaultShareBurnStream)" >>"$OUT_FILE"
-printf "  CreatorCoinPolicyController: '0x' + '%s',\n" "$(bytecode CreatorCoinPolicyController)" >>"$OUT_FILE"
-printf "  AgentRevenuePolicyController: '0x' + '%s',\n" "$(bytecode AgentRevenuePolicyController)" >>"$OUT_FILE"
-printf "  CharmStrategy4626: '0x' + '%s',\n" "$(bytecode CharmStrategy4626)" >>"$OUT_FILE"
-printf "  AjnaVaultAuth: '0x' + '%s',\n" "$(bytecode AjnaVaultAuth)" >>"$OUT_FILE"
-printf "  AjnaERC4626Vault: '0x' + '%s',\n" "$(bytecode AjnaERC4626Vault)" >>"$OUT_FILE"
-printf "  ERC4626StrategyAdapter: '0x' + '%s',\n" "$(bytecode ERC4626StrategyAdapter)" >>"$OUT_FILE"
-printf "  ApprovedV4HooksRegistry: '0x' + '%s',\n" "$(bytecode ApprovedV4HooksRegistry)" >>"$OUT_FILE"
-printf "  OVaultLPManager: '0x' + '%s',\n" "$(bytecode OVaultLPManager)" >>"$OUT_FILE"
-printf "  OVaultImpairmentClaims: '0x' + '%s',\n" "$(bytecode OVaultImpairmentClaims)" >>"$OUT_FILE"
-printf "  OVaultRecoveryEscrow: '0x' + '%s',\n" "$(bytecode OVaultRecoveryEscrow)" >>"$OUT_FILE"
+append_deploy_bytecode CreatorOVault
+append_deploy_bytecode AgentOVault
+append_deploy_bytecode CreatorOVaultWrapper
+append_deploy_bytecode AgentOVaultWrapper
+append_deploy_bytecode CreatorShareOFT
+append_deploy_bytecode AgentShareOFT
+append_deploy_bytecode OFTBootstrapRegistry
+append_deploy_bytecode CreatorGaugeController
+append_deploy_bytecode AgentGaugeController
+append_deploy_bytecode CCALaunchArm
+append_deploy_bytecode CreatorOracleQuoteLib
+append_deploy_bytecode CreatorOracle
+append_deploy_bytecode AgentOracle
+append_deploy_bytecode CreatorPayoutRouter
+append_deploy_bytecode AgentRevenueRouter
+append_deploy_bytecode VaultShareBurnStream
+append_deploy_bytecode CreatorCoinPolicyController
+append_deploy_bytecode AgentRevenuePolicyController
+append_deploy_bytecode CharmStrategy4626
+append_deploy_bytecode AjnaVaultAuth
+append_deploy_bytecode AjnaERC4626Vault
+append_deploy_bytecode ERC4626StrategyAdapter
+append_deploy_bytecode ApprovedV4HooksRegistry
+append_deploy_bytecode OVaultLPManager
+append_deploy_bytecode OVaultImpairmentClaims
+append_deploy_bytecode OVaultRecoveryEscrow
 
 cat >>"$OUT_FILE" <<'EOF'
 } as const;

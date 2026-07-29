@@ -118,7 +118,7 @@ def _resolve_library_artifact(root: Path, source_path: str, lib_name: str) -> Pa
     if len(matches) == 1:
         return matches[0]
     if matches:
-        # Prefer exact file stem match
+        # Prefer exact file stem match, then newest semver among remaining.
         for m in matches:
             if m.parent.name == file_name:
                 return m

@@ -17,6 +17,9 @@ fi
 OUT_FILE="${BYTECODE_MANIFEST_OUT:-$ROOT_DIR/deployments/base/${RELEASE_TAG}-bytecode-manifest.json}"
 mkdir -p "$(dirname "$OUT_FILE")"
 
+# shellcheck source=script/lib/resolve_foundry_artifact.sh
+source "$ROOT_DIR/script/lib/resolve_foundry_artifact.sh"
+
 cd "$ROOT_DIR"
 
 echo "Generating bytecode manifest → ${OUT_FILE}"
@@ -75,51 +78,49 @@ contracts=(
 
 artifact_path() {
   local contract="$1"
+  local sol_dir
   case "$contract" in
     DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherShareMeshHelper|DeploymentBatcherUtilsHelper)
-      printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
+      sol_dir="$ROOT_DIR/out/DeploymentBatcher.sol"
       ;;
-    LotteryManager4626|LotteryManager4626AdminModule|LotteryManager4626PricingLib)
+    LotteryManager4626|LotteryManager4626AdminModule)
       # LM + Admin share LotteryManager4626.sol; PricingLib is its own file.
-      if [[ "$contract" == "LotteryManager4626PricingLib" ]]; then
-        printf "%s/out/LotteryManager4626PricingLib.sol/%s.json" "$ROOT_DIR" "$contract"
-      else
-        printf "%s/out/LotteryManager4626.sol/%s.json" "$ROOT_DIR" "$contract"
-      fi
+      sol_dir="$ROOT_DIR/out/LotteryManager4626.sol"
+      ;;
+    LotteryManager4626PricingLib)
+      sol_dir="$ROOT_DIR/out/LotteryManager4626PricingLib.sol"
       ;;
     CreatorOracleQuoteLib)
-      # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; prefer unversioned then newest.
-      # Use version sort (`sort -V`): lex sort prefers 0.8.9 over 0.8.34 and wrong CREATE2 links.
-      local dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
-      if [[ -f "$dir/CreatorOracleQuoteLib.json" ]]; then
-        printf "%s/CreatorOracleQuoteLib.json" "$dir"
-      else
-        local newest
-        newest="$(ls -1 "$dir"/CreatorOracleQuoteLib.*.json 2>/dev/null | sort -V | tail -1 || true)"
-        if [[ -z "$newest" ]]; then
-          printf "%s/CreatorOracleQuoteLib.json" "$dir"
-        else
-          printf "%s" "$newest"
-        fi
-      fi
+      # Multi-solc emits CreatorOracleQuoteLib.<solc>.json; the shared resolver
+      # prefers the bare artifact then newest via sort -V (lex sort ranks 0.8.9
+      # above 0.8.34 and wrong CREATE2 links).
+      sol_dir="$ROOT_DIR/out/CreatorOracleQuoteLib.sol"
       ;;
     *)
-      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
+      sol_dir="$ROOT_DIR/out/${contract}.sol"
       ;;
   esac
+  # Print resolved path even when missing (caller errors with the expected path).
+  resolve_foundry_artifact "$sol_dir" "$contract" || true
 }
 
 bytecode() {
   local contract="$1"
   local artifact
+  local hex
   artifact="$(artifact_path "$contract")"
   if [[ ! -f "$artifact" ]]; then
     echo "Missing artifact: $artifact (run forge build --skip test --skip script first)" >&2
-    exit 1
+    return 1
   fi
   # Fully link external libraries (Foundry CREATE2 salt 0 @ EIP-2470).
   # Do NOT truncate at `__$...$__` placeholders — that yields broken initcode.
-  python3 "$ROOT_DIR/script/lib/extract_linked_bytecode.py" "$artifact" "$ROOT_DIR"
+  hex="$(python3 "$ROOT_DIR/script/lib/extract_linked_bytecode.py" "$artifact" "$ROOT_DIR")" || return 1
+  if [[ -z "$hex" || ! "$hex" =~ ^[0-9a-fA-F]+$ ]]; then
+    echo "Invalid/empty creation bytecode for ${contract} from ${artifact}" >&2
+    return 1
+  fi
+  printf '%s' "$hex"
 }
 
 json_escape() {
