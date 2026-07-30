@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Registry4626GuardLib} from "@4626/shared/core/Registry4626GuardLib.sol";
 import {Registry4626ViewLib} from "@4626/shared/core/Registry4626ViewLib.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
@@ -55,11 +56,18 @@ contract Registry4626 is IRegistry4626, Ownable {
     mapping(address => bytes32) public approvedFactoryCodehashes;
 
     error FactoryCodehashMismatch(address factory, bytes32 expected, bytes32 actual);
+    /// @notice ODA-430-F12 — address and bytes32 peer flavors are mutually exclusive per (token, eid).
+    error RemoteOFTPeerFlavorConflict(address token, uint32 chainEid);
 
     /// @notice When false (default), per-token vault/shareOFT/wrapper/oracle/gauge bindings
     ///         are one-shot: first non-zero set sticks. Owner may enable rebind for emergency
     ///         migration only (audit M-08).
+    /// @dev Prefer `liveRebindEnabledFor[token]` (ODA-430-F7) so remediation does not expose
+    ///      every token. Global flag remains for fleet-wide emergencies.
     bool public liveRebindEnabled;
+
+    /// @notice ODA-430-F7 — per-token live rebind (scoped emergency migration).
+    mapping(address => bool) public liveRebindEnabledFor;
 
     // =================================
     // REMOTE OFT PEER TRACKING (Hub-Centric)
@@ -155,6 +163,7 @@ contract Registry4626 is IRegistry4626, Ownable {
     event FactoryAuthorized(address indexed factory, bool status);
     event HubChainSet(uint256 chainId, uint32 eid);
     event LiveRebindEnabledUpdated(bool enabled);
+    event LiveRebindEnabledForUpdated(address indexed token, bool enabled);
     event TokenBindingUpdated(address indexed token, bytes32 indexed field, address oldValue, address newValue);
     event CreatorUpdated(address indexed token, address indexed previous, address indexed next);
 
@@ -206,8 +215,8 @@ contract Registry4626 is IRegistry4626, Ownable {
     modifier onlyAuthorizedOrOwner() {
         if (msg.sender != owner()) {
             if (!authorizedFactories[msg.sender]) revert NotAuthorized();
-            // ODA-465-6: re-check codehash pin at call time (not only at authorization).
-            _requireFactoryCodehash(msg.sender);
+            // ODA-465-6 / ODA-430-F6: re-check codehash pin at call time.
+            Registry4626GuardLib.requireFactoryCodehash(approvedFactoryCodehashes, msg.sender);
         }
         _;
     }
@@ -238,19 +247,21 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     /**
      * @notice Authorize a factory to register tokens
+     * @dev ODA-430-F6: authorizing auto-pins the live `extcodehash` when unset, then
+     *      re-checks the pin. Do **not** authorize upgradeable/proxy factories — the pin
+     *      covers the proxy shell only and will not detect implementation swaps.
      */
     function setAuthorizedFactory(address _factory, bool _authorized) external onlyOwner {
-        if (_factory == address(0)) revert ZeroAddress();
-        // ODA-495-M02: pin-check only when granting. A factory whose live bytecode has
-        // diverged from its pin is exactly the one that must stay revocable, so enforcing
-        // the check on de-authorization would block its own removal.
-        if (_authorized) _requireFactoryCodehash(_factory);
-        authorizedFactories[_factory] = _authorized;
-        emit FactoryAuthorized(_factory, _authorized);
+        // ODA-495-M02: pin-check only when granting (handled inside GuardLib.authorizeFactory).
+        Registry4626GuardLib.authorizeFactory(authorizedFactories, approvedFactoryCodehashes, _factory, _authorized);
     }
 
     function approveFactoryCodehash(address factory, bytes32 codehash) external onlyOwner {
         if (factory == address(0)) revert ZeroAddress();
+        // ODA-430-F6: clearing the pin while authorized would skip call-time verification.
+        if (codehash == bytes32(0) && authorizedFactories[factory]) {
+            revert FactoryCodehashMismatch(factory, bytes32(uint256(1)), bytes32(0));
+        }
         approvedFactoryCodehashes[factory] = codehash;
     }
 
@@ -331,18 +342,32 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     /**
-     * @notice Enable/disable live rebind of per-token core bindings (M-08).
-     * @dev Default false. When true, only the owner may replace an already-set binding.
+     * @notice Enable/disable live rebind of per-token core bindings (M-08) for **all** tokens.
+     * @dev Prefer `setLiveRebindEnabledFor` (ODA-430-F7). When true, only the owner may
+     *      replace an already-set binding.
      */
     function setLiveRebindEnabled(bool enabled) external onlyOwner {
         liveRebindEnabled = enabled;
         emit LiveRebindEnabledUpdated(enabled);
     }
 
-    /// @dev First set is always allowed. Replacing a non-zero binding requires owner + liveRebindEnabled.
+    /**
+     * @notice ODA-430-F7 — enable/disable live rebind for a single registered token.
+     */
+    function setLiveRebindEnabledFor(address token, bool enabled) external onlyOwner {
+        if (tokenInfos[token].token == address(0)) revert TokenNotRegistered(token);
+        liveRebindEnabledFor[token] = enabled;
+        emit LiveRebindEnabledForUpdated(token, enabled);
+    }
+
+    function _liveRebindAllowed(address token) internal view returns (bool) {
+        return liveRebindEnabled || liveRebindEnabledFor[token];
+    }
+
+    /// @dev First set always allowed; replace needs owner + global/per-token live rebind (ODA-430-F7).
     function _requireBindingWritable(address token, address existing, address next) internal view {
         if (existing == address(0) || existing == next) return;
-        if (!liveRebindEnabled) revert BindingAlreadySet(token, existing);
+        if (!_liveRebindAllowed(token)) revert BindingAlreadySet(token, existing);
         if (msg.sender != owner()) revert LiveRebindOwnerOnly();
     }
 
@@ -473,7 +498,7 @@ contract Registry4626 is IRegistry4626, Ownable {
                 && current.assetMeshToken == _cfg.assetMeshToken && current.shareMeshToken == _cfg.shareMeshToken
                 && current.solanaAssetMint == _cfg.solanaAssetMint && current.enabled == _cfg.enabled;
             if (!alreadyMatches) {
-                if (!liveRebindEnabled) revert BindingAlreadySet(_token, current.hubComposer);
+                if (!_liveRebindAllowed(_token)) revert BindingAlreadySet(_token, current.hubComposer);
                 if (msg.sender != owner()) revert LiveRebindOwnerOnly();
             }
         }
@@ -521,61 +546,30 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_chainEid == 0) revert InvalidChainEid();
-        if (_remoteOFT == address(0)) revert ZeroAddress();
-
-        address oldRemoteOFT = remoteOFTPeers[_token][_chainEid];
-        // ODA-430-F8 / 422-F3: one-shot peer per (token, eid); owner+liveRebind to replace.
-        _requireBindingWritable(_token, oldRemoteOFT, _remoteOFT);
-        if (oldRemoteOFT == _remoteOFT) return;
-
-        // Clear old reverse mapping if exists
-        if (oldRemoteOFT != address(0)) {
-            // FIX: F-11 — only delete reverse mapping if it points to the expected token,
-            // and no other EID for this token still references it (ODA-430-F2 / 422-F4).
-            if (remoteOFTToToken[oldRemoteOFT] == _token && !_remoteOFTStillReferenced(_token, oldRemoteOFT, _chainEid))
-            {
-                delete remoteOFTToToken[oldRemoteOFT];
-            }
-        } else {
-            // New chain — track it
-            _trackRemoteOFTChain(remoteOFTChains[_token], _chainEid);
-        }
-
-        // M-NEW-03: reverse map is single-valued — block remapping to a different token.
-        address reverseOwner = remoteOFTToToken[_remoteOFT];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingConflict(_remoteOFT, reverseOwner, _token);
-        }
-
-
-        remoteOFTPeers[_token][_chainEid] = _remoteOFT;
-        remoteOFTToToken[_remoteOFT] = _token;
-
-        emit RemoteOFTPeerSet(_token, _chainEid, _remoteOFT);
+        // ODA-430-F8 / F12 — one-shot + address/bytes32 flavor exclusivity (GuardLib).
+        Registry4626GuardLib.setRemoteOFTPeer(
+            tokenInfos,
+            remoteOFTPeers,
+            remoteOFTPeersBytes32,
+            remoteOFTChains,
+            remoteOFTToToken,
+            liveRebindEnabled,
+            liveRebindEnabledFor,
+            owner(),
+            msg.sender,
+            _token,
+            _chainEid,
+            _remoteOFT
+        );
     }
 
     /**
      * @notice Remove a remote OFT peer for a creator coin
      */
     function removeRemoteOFTPeer(address _token, uint32 _chainEid) external override onlyOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-
-        address remoteOFT = remoteOFTPeers[_token][_chainEid];
-        if (remoteOFT == address(0)) return;
-
-        delete remoteOFTPeers[_token][_chainEid];
-
-        // Remove from chain list (swap-and-pop)
-        _untrackRemoteOFTChain(remoteOFTChains[_token], _chainEid);
-
-        // ODA-430-F2 / 422-F4: keep reverse map when another EID still points at this OFT.
-        if (!_remoteOFTStillReferenced(_token, remoteOFT, 0)) {
-            delete remoteOFTToToken[remoteOFT];
-        }
-
-        emit RemoteOFTPeerRemoved(_token, _chainEid);
+        Registry4626GuardLib.removeRemoteOFTPeer(
+            tokenInfos, remoteOFTPeers, remoteOFTChains, remoteOFTToToken, _token, _chainEid
+        );
     }
 
     /**
@@ -623,59 +617,30 @@ contract Registry4626 is IRegistry4626, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_chainEid == 0) revert InvalidChainEid();
-        if (_remoteOFT == bytes32(0)) revert ZeroBytes32();
-
-        bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
-        // ODA-430-F8 / 422-F3: one-shot peer per (token, eid); owner+liveRebind to replace.
-        if (oldPeer != bytes32(0) && oldPeer != _remoteOFT) {
-            if (!liveRebindEnabled) {
-                revert BindingAlreadySet(_token, address(uint160(uint256(oldPeer))));
-            }
-            if (msg.sender != owner()) revert LiveRebindOwnerOnly();
-        }
-        if (oldPeer == _remoteOFT) return;
-
-        if (oldPeer == bytes32(0)) {
-            _trackRemoteOFTChain(remoteOFTChainsBytes32[_token], _chainEid);
-        } else if (
-            remoteOFTBytes32ToToken[oldPeer] == _token
-                && !_remoteOFTBytes32StillReferenced(_token, oldPeer, _chainEid)
-        ) {
-            delete remoteOFTBytes32ToToken[oldPeer];
-        }
-
-        address reverseOwner = remoteOFTBytes32ToToken[_remoteOFT];
-        if (reverseOwner != address(0) && reverseOwner != _token) {
-            revert ReverseMappingBytes32Conflict(_remoteOFT, reverseOwner, _token);
-        }
-
-
-        remoteOFTPeersBytes32[_token][_chainEid] = _remoteOFT;
-        remoteOFTBytes32ToToken[_remoteOFT] = _token;
-        emit RemoteOFTPeerBytes32Set(_token, _chainEid, _remoteOFT);
+        // ODA-430-F8 / F12 — one-shot + address/bytes32 flavor exclusivity (GuardLib).
+        Registry4626GuardLib.setRemoteOFTPeerBytes32(
+            tokenInfos,
+            remoteOFTPeers,
+            remoteOFTPeersBytes32,
+            remoteOFTChainsBytes32,
+            remoteOFTBytes32ToToken,
+            liveRebindEnabled,
+            liveRebindEnabledFor,
+            owner(),
+            msg.sender,
+            _token,
+            _chainEid,
+            _remoteOFT
+        );
     }
 
     /**
      * @notice Removes non-EVM remote OFT peer mapping.
      */
     function removeRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external override onlyOwner {
-        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
-        if (_chainEid == 0) revert InvalidChainEid();
-
-        bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
-        if (oldPeer == bytes32(0)) return;
-
-        delete remoteOFTPeersBytes32[_token][_chainEid];
-
-        _untrackRemoteOFTChain(remoteOFTChainsBytes32[_token], _chainEid);
-
-        if (!_remoteOFTBytes32StillReferenced(_token, oldPeer, 0)) {
-            delete remoteOFTBytes32ToToken[oldPeer];
-        }
-
-        emit RemoteOFTPeerBytes32Removed(_token, _chainEid);
+        Registry4626GuardLib.removeRemoteOFTPeerBytes32(
+            tokenInfos, remoteOFTPeersBytes32, remoteOFTChainsBytes32, remoteOFTBytes32ToToken, _token, _chainEid
+        );
     }
 
     /**
@@ -1095,9 +1060,9 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (tokenInfos[token].token == address(0)) revert TokenNotRegistered(token);
         // SCAN-M3: one-shot like vault/shareOFT bindings — Phase2 must not overwrite
         // vaultKind / nativeAgentVault for a live token while core bindings stay put.
-        // First write always allowed; replace requires owner + liveRebindEnabled.
+        // First write always allowed; replace requires owner + live rebind (global or per-token).
         if (agentIntegrationMetaSet[token]) {
-            if (!liveRebindEnabled) {
+            if (!_liveRebindAllowed(token)) {
                 address existingMarker = agentIntegrationMetas[token].nativeAgentVault;
                 if (existingMarker == address(0)) existingMarker = address(uint160(1));
                 revert BindingAlreadySet(token, existingMarker);
@@ -1123,150 +1088,22 @@ contract Registry4626 is IRegistry4626, Ownable {
     // INTERNAL HELPERS
     // =================================
 
-    /// @dev True if any EID for `_token` (other than `skipEid`) still maps to `_remoteOFT`.
-    ///      Pass `skipEid = 0` to consider every remaining entry (0 is never a valid EID).
-    function _remoteOFTStillReferenced(address _token, address _remoteOFT, uint32 skipEid)
-        internal
-        view
-        returns (bool)
-    {
-        uint32[] storage chains = remoteOFTChains[_token];
-        for (uint256 i; i < chains.length;) {
-            uint32 eid = chains[i];
-            if (eid != skipEid && remoteOFTPeers[_token][eid] == _remoteOFT) {
-                return true;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
-    }
-
-    function _remoteOFTBytes32StillReferenced(address _token, bytes32 _remoteOFT, uint32 skipEid)
-        internal
-        view
-        returns (bool)
-    {
-        uint32[] storage chains = remoteOFTChainsBytes32[_token];
-        for (uint256 i; i < chains.length;) {
-            uint32 eid = chains[i];
-            if (eid != skipEid && remoteOFTPeersBytes32[_token][eid] == _remoteOFT) {
-                return true;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
-    }
-
-    function _requireFactoryCodehash(address factory) internal view {
-        bytes32 expected = approvedFactoryCodehashes[factory];
-        if (expected == bytes32(0)) return;
-
-        bytes32 actual;
-        assembly {
-            actual := extcodehash(factory)
-        }
-        if (actual != expected) revert FactoryCodehashMismatch(factory, expected, actual);
-    }
-
     function _setTokenBinding(address token, address next, BindingKind kind) internal {
-        TokenInfo storage info = tokenInfos[token];
-        if (info.token == address(0)) revert TokenNotRegistered(token);
-        if (next == address(0)) revert ZeroAddress();
-
-        address previous;
-        address reverseOwner;
-        bytes32 field;
-
-        if (kind == BindingKind.Vault) {
-            previous = info.vault;
-            field = "vault";
-        } else if (kind == BindingKind.ShareOFT) {
-            previous = info.shareOFT;
-            field = "shareOFT";
-        } else if (kind == BindingKind.Wrapper) {
-            previous = info.wrapper;
-            field = "wrapper";
-        } else if (kind == BindingKind.Oracle) {
-            previous = info.oracle;
-            field = "oracle";
-        } else {
-            previous = info.gaugeController;
-            field = "gaugeController";
-        }
-
-        _requireBindingWritable(token, previous, next);
-        if (previous == next) return;
-
-        if (kind == BindingKind.Vault) {
-            reverseOwner = vaultToToken[next];
-        } else if (kind == BindingKind.ShareOFT) {
-            reverseOwner = shareOFTToToken[next];
-        } else if (kind == BindingKind.Wrapper) {
-            reverseOwner = wrapperToToken[next];
-        } else if (kind == BindingKind.Oracle) {
-            reverseOwner = oracleToToken[next];
-        } else {
-            reverseOwner = gaugeControllerToToken[next];
-        }
-        if (reverseOwner != address(0) && reverseOwner != token) {
-            revert ReverseMappingConflict(next, reverseOwner, token);
-        }
-
-        if (previous != address(0)) {
-            if (kind == BindingKind.Vault) {
-                delete vaultToToken[previous];
-            } else if (kind == BindingKind.ShareOFT) {
-                delete shareOFTToToken[previous];
-            } else if (kind == BindingKind.Wrapper) {
-                delete wrapperToToken[previous];
-            } else if (kind == BindingKind.Oracle) {
-                delete oracleToToken[previous];
-            } else {
-                delete gaugeControllerToToken[previous];
-            }
-        }
-
-        if (kind == BindingKind.Vault) {
-            info.vault = next;
-            vaultToToken[next] = token;
-        } else if (kind == BindingKind.ShareOFT) {
-            info.shareOFT = next;
-            shareOFTToToken[next] = token;
-        } else if (kind == BindingKind.Wrapper) {
-            info.wrapper = next;
-            wrapperToToken[next] = token;
-        } else if (kind == BindingKind.Oracle) {
-            info.oracle = next;
-            oracleToToken[next] = token;
-        } else {
-            info.gaugeController = next;
-            gaugeControllerToToken[next] = token;
-        }
-
-        emit TokenBindingUpdated(token, field, previous, next);
-        emit TokenUpdated(token);
-    }
-
-    function _trackRemoteOFTChain(uint32[] storage chains, uint32 chainEid) internal {
-        if (chains.length >= MAX_REMOTE_OFT_CHAINS_PER_TOKEN) revert TooManyRemoteOftChains();
-        chains.push(chainEid);
-    }
-
-    function _untrackRemoteOFTChain(uint32[] storage chains, uint32 chainEid) internal {
-        for (uint256 i; i < chains.length;) {
-            if (chains[i] == chainEid) {
-                chains[i] = chains[chains.length - 1];
-                chains.pop();
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
+        Registry4626GuardLib.setTokenBinding(
+            tokenInfos,
+            vaultToToken,
+            shareOFTToToken,
+            wrapperToToken,
+            oracleToToken,
+            gaugeControllerToToken,
+            liveRebindEnabled,
+            liveRebindEnabledFor,
+            owner(),
+            msg.sender,
+            token,
+            next,
+            uint8(kind)
+        );
     }
 
     function _getLayerZeroEndpointOrCommon(uint256 chainId) internal view returns (address endpoint) {

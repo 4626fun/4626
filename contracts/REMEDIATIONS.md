@@ -45,3 +45,11 @@ Synced from private `main` `9045a682a`.
 - Also catches the pin up on prior private work: ODA-507 wrapper hot-units cooldown + `forceApprove`, Ajna automation-Safe keeper wiring in `DeploymentBatcher`, README drift.
 - Storage note: `MODULE_STORAGE_VERSION` v5 → v6 (appended `isTrustedAdapter` mapping). Source pin review only — publishing ≠ Base redeploy.
 - **Bugbot follow-up (post-sync, private `c6a56263b`):** the vault-registered gauge's burn-slice `unwrap` is exempt from the wrapper async-redemption gate on both lanes — a large fee cycle could otherwise brick `distribute()` permanently (`AsyncRedemptionRequired` is not a bridged-accounting revert, and the creator lane would silently fold the slice into jackpot every cycle). Gate unchanged for all other callers (ODA-498-4 preserved).
+
+## 2026-07-30 ODA-430 Registry second pass + catch-up log
+
+Synced from private `main` `b6ce81ce4`.
+
+- **ODA-430 F6/F7/F12 (`b50c9230f`):** `Registry4626GuardLib` extracted for EIP-170 headroom — factory authorize auto-pins the live `extcodehash` (unset only) and call-site verification re-checks the pin; clearing a pin while authorized reverts. Per-token `liveRebindEnabledFor` scoped live rebind (global flag retained for fleet-wide emergencies). `RemoteOFTPeerFlavorConflict`: address and bytes32 peer flavors are mutually exclusive per (token, eid). New pin file: `contracts/shared/core/Registry4626GuardLib.sol`.
+- **Peer hardening (`906260676`):** GuardLib blocks the bytes32-peer one-shot bypass via address truncation.
+- Catch-up log for files already resynced in pin `1e61fb3b8` (no log entry at the time): LeftClaw **#508 second pass** L-4/L-5/L-8/L-10/I-1/I-9 (`AgentGaugeController`, `CreatorGaugeController`, `AgentOVaultWrapper`, `DeploymentBatcher`; private #924); impaired `buyDebt` claim-book credit fix in `OVaultStrategiesModule`; Yearn-parity display surface via pin PRs #2–#4 (`apiVersion`, PPS checkpoint ring + `apyBps`, `positionOf`/`withdrawalEta`; `MODULE_STORAGE_VERSION` v6 → v8).
