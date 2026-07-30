@@ -18,7 +18,7 @@ import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModule
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IOVaultStrategiesModuleInternal {
-    function __withdrawFromStrategies(uint256 amountNeeded, uint256 maxLossBps)
+    function __withdrawFromStrategies(uint256 amountNeeded, uint256 maxLossBps, uint256 lossBasisAssets)
         external
         returns (uint256 totalWithdrawn);
     function __autoAllocateToStrategy() external;
@@ -868,13 +868,15 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         if (available >= coinNeeded) return;
 
         uint256 deficit = coinNeeded - available;
-        _withdrawFromStrategies(deficit);
+        // Yearn: maxLoss is bps of the user's full withdraw/redeem assets, not the
+        // strategy-refill deficit (idle can make deficit << user amount).
+        _withdrawFromStrategies(deficit, coinNeeded);
 
         available = _syncCoinBalance();
         if (available < coinNeeded) revert InsufficientBalance();
     }
 
-    function _withdrawFromStrategies(uint256 amountNeeded) internal {
+    function _withdrawFromStrategies(uint256 amountNeeded, uint256 lossBasisAssets) internal {
         address module = _strategiesModule;
         if (module == address(0)) revert ModulesNotSet();
 
@@ -884,7 +886,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             abi.encodeWithSelector(
                 IOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector,
                 amountNeeded,
-                _resolveMaxLossBps()
+                _resolveMaxLossBps(),
+                lossBasisAssets
             )
         );
         if (!ok) _revertBytes(ret);

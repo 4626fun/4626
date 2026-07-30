@@ -1646,8 +1646,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
         uint256 deficit = coinNeeded - available;
 
-        // Withdraw from strategies
-        _withdrawFromStrategies(deficit);
+        // Withdraw from strategies; maxLoss basis is the full user request.
+        _withdrawFromStrategies(deficit, coinNeeded);
 
         available = _syncCoinBalance();
         if (available < coinNeeded) {
@@ -1806,9 +1806,19 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Withdraw from strategies
      */
     function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
+        // Legacy non-module path: no separate user-assets basis is available here, so
+        // maxLoss is evaluated against `amountNeeded` (same as the refill deficit).
+        return _withdrawFromStrategies(amountNeeded, amountNeeded);
+    }
+
+    function _withdrawFromStrategies(uint256 amountNeeded, uint256 lossBasisAssets)
+        internal
+        returns (uint256 totalWithdrawn)
+    {
         uint256 remaining = amountNeeded;
         uint256 maxLossBps = defaultMaxLossBps == 0 ? MAX_BPS : uint256(defaultMaxLossBps);
         uint256 totalAssessedLoss;
+        uint256 lossBasis = lossBasisAssets == 0 ? amountNeeded : lossBasisAssets;
 
         // Yearn V3: Use default queue for withdrawal order
         address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
@@ -1829,7 +1839,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
                     uint256 unrealizedLoss = _assessUnrealisedLoss(strategy, currentDebt, toWithdraw);
                     if (unrealizedLoss > 0) {
                         totalAssessedLoss += unrealizedLoss;
-                        if (amountNeeded > 0 && (totalAssessedLoss * MAX_BPS) / amountNeeded > maxLossBps) {
+                        if (lossBasis > 0 && (totalAssessedLoss * MAX_BPS) / lossBasis > maxLossBps) {
                             revert StrategyHasUnrealisedLosses(strategy, unrealizedLoss);
                         }
                         emit UnrealisedLossAssessed(strategy, unrealizedLoss);
@@ -2278,7 +2288,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_adminModule);
     }
 
-    /// @dev When `riskConfigDelay > 0`, use `scheduleSetPerformanceFee` + `executePendingRiskConfig`.
+    /// @dev Fee changes always schedule under `riskConfigDelay` (post-init floor of 1 day,
+    ///      gap-analysis G-2); follow with `executePendingRiskConfig` after the delay.
     function setPerformanceFee(uint16 _performanceFee) external onlyManagement {
         _delegate(_adminModule);
     }

@@ -101,6 +101,9 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
         shares = Math.mulDiv(received, supplyBefore + VIRTUAL_SHARES_UNITS, assetsBefore + VIRTUAL_ASSETS_UNITS);
         if (shares == 0) revert ZeroShares();
         if (!isFirstDeposit && supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
+        // Yearn-parity depositLimit (storage v7): measured receipt must fit remaining capacity.
+        // The creator-lane base deposit enforces this; this override must not skip it.
+        if (received > _remainingDepositAssets()) revert InvalidAmount();
 
         if (!isFirstDeposit && shares > received * 10_000) {
             revert InflationAttackDetected(received, shares);
@@ -195,7 +198,8 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
                 request = (deficit * MAX_BPS + (MAX_BPS - taxBps - 1)) / (MAX_BPS - taxBps);
             }
             uint256 before = available;
-            _withdrawFromStrategies(request);
+            // lossBasis = full user coinNeeded (Yearn maxLoss is vs requested assets).
+            _withdrawFromStrategies(request, coinNeeded);
             available = _syncCoinBalance();
             if (available == before) break; // no progress — stop rather than spin
         }
