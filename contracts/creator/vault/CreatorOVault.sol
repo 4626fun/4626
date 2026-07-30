@@ -135,6 +135,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
     bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
+    uint64 internal constant PPS_CHECKPOINT_CAPACITY = OVaultModuleConstants.PPS_CHECKPOINT_CAPACITY;
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("OVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("OVaultModule.admin");
@@ -468,6 +469,24 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     uint256 internal activeWithdrawMaxLossBps;
     /// @notice Per-strategy absolute debt ceiling for updateDebt. 0 == no additional ceiling.
     mapping(address => uint256) public strategyMaxDebt;
+
+    // ---------------------------------------------------------------------
+    // On-chain PPS checkpoints for UI APY display (appended; storage v8)
+    // ---------------------------------------------------------------------
+    /// @dev Mirror of OVaultModuleStorage.PpsCheckpoint — keep in sync (slot-packed).
+    struct PpsCheckpoint {
+        uint40 timestamp;
+        uint216 pps;
+    }
+
+
+    /// @notice Chronological ring of pricePerShare samples, written by `report()`
+    ///         (throttled to PPS_CHECKPOINT_MIN_INTERVAL). Index is
+    ///         `write % PPS_CHECKPOINT_CAPACITY`; `ppsCheckpointWrites` is monotonic.
+    ///         Mapping ring so the capacity constant stays single-sourced (state-var
+    ///         array lengths can't reference library constants).
+    mapping(uint64 => PpsCheckpoint) public ppsCheckpoints;
+    uint64 public ppsCheckpointWrites;
 
     // =================================
     // EVENTS
@@ -2448,6 +2467,41 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     ///      discover the vault generation without a custom adapter.
     function apiVersion() external pure returns (string memory) {
         return VAULT_VERSION;
+    }
+
+    /// @notice Newest PPS checkpoint at or before `timestamp` (ring scan, newest first).
+    function ppsCheckpointAtOrBefore(uint40 timestamp) public view returns (bool found, uint40 ts, uint216 pps) {
+        uint64 writes = ppsCheckpointWrites;
+        uint64 count = writes > PPS_CHECKPOINT_CAPACITY ? PPS_CHECKPOINT_CAPACITY : writes;
+        for (uint64 k = 0; k < count; k++) {
+            uint64 idx = (writes - 1 - k) % PPS_CHECKPOINT_CAPACITY;
+            PpsCheckpoint storage c = ppsCheckpoints[idx];
+            if (c.timestamp <= timestamp) return (true, c.timestamp, c.pps);
+        }
+        return (false, 0, 0);
+    }
+
+    /// @notice Linear-annualized APY in signed basis points, measured from the newest
+    ///         checkpoint at or before `windowSeconds` ago to the CURRENT pricePerShare.
+    ///         `available` is false until checkpoint history spans the requested window.
+    ///         Simple-rate annualization over the actual elapsed span (SECONDS_PER_YEAR),
+    ///         not compounded — matches how yearn-style UIs present PPS-delta yield.
+    ///         Signed: impairment losses report negative APY.
+    /// @dev Tracks the vault's REALIZED pricePerShare: profit-unlock share burns are
+    ///      lazy (processed by any deposit/withdraw/report), so freshly reported profit
+    ///      enters the APY after the next state transition — identical to how the
+    ///      vault's own pricePerShare behaves.
+    function apyBps(uint64 windowSeconds) external view returns (bool available, int256 apy) {
+        if (windowSeconds == 0) revert InvalidAmount();
+        uint40 target = block.timestamp > windowSeconds ? uint40(block.timestamp - windowSeconds) : 0;
+        (bool found, uint40 ts, uint216 ppsThen) = ppsCheckpointAtOrBefore(target);
+        if (!found || ppsThen == 0 || block.timestamp <= ts) return (false, 0);
+
+        uint256 ppsNow = pricePerShare();
+        uint256 elapsed = block.timestamp - ts;
+        int256 diff = int256(ppsNow) - int256(uint256(ppsThen));
+        apy = (diff * int256(SECONDS_PER_YEAR) * 10_000) / (int256(uint256(ppsThen)) * int256(elapsed));
+        return (true, apy);
     }
 
     function strategyCount() external view returns (uint256) {

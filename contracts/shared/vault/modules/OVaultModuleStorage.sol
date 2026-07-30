@@ -231,6 +231,33 @@ abstract contract OVaultModuleStorage {
     ///         inflow-cooldown policy. Replaces the EIP-7702-vulnerable
     ///         `whitelist[x] && x.code.length > 0` proxy.
     mapping(address => bool) internal isTrustedAdapter;
+
+    // ---------------------------------------------------------------------
+    // Yearn-parity vault primitives (appended; storage v7)
+    // ---------------------------------------------------------------------
+    /// @notice Asset-denominated deposit ceiling. 0 == uncapped (back-compat for existing vaults).
+    uint256 internal depositLimit;
+    /// @notice Default maxLoss (bps) for ERC-4626 3-arg withdraw/redeem. 0 == 10_000 (allow all).
+    uint16 internal defaultMaxLossBps;
+    /// @notice Transient maxLoss for the active withdraw/redeem call. 0 == use defaultMaxLossBps.
+    uint256 internal activeWithdrawMaxLossBps;
+    /// @notice Per-strategy absolute debt ceiling for updateDebt. 0 == no additional ceiling.
+    mapping(address => uint256) internal strategyMaxDebt;
+
+    // ---------------------------------------------------------------------
+    // On-chain PPS checkpoints for UI APY display (appended; storage v8)
+    // ---------------------------------------------------------------------
+    /// @dev Mirror of CreatorOVault.PpsCheckpoint — keep in sync (slot-packed).
+    struct PpsCheckpoint {
+        uint40 timestamp;
+        uint216 pps;
+    }
+    /// @dev Chronological ring of pricePerShare samples, written by the core module's
+    ///      `report()` (throttled to PPS_CHECKPOINT_MIN_INTERVAL). Index is
+    ///      `write % PPS_CHECKPOINT_CAPACITY`. Mapping ring so the capacity constant
+    ///      stays single-sourced (array lengths can't reference library constants).
+    mapping(uint64 => PpsCheckpoint) internal ppsCheckpoints;
+    uint64 internal ppsCheckpointWrites;
 }
 
 // slither-disable-end uninitialized-state

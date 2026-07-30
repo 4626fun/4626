@@ -18,7 +18,9 @@ import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModule
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IOVaultStrategiesModuleInternal {
-    function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint256 totalWithdrawn);
+    function __withdrawFromStrategies(uint256 amountNeeded, uint256 maxLossBps)
+        external
+        returns (uint256 totalWithdrawn);
     function __autoAllocateToStrategy() external;
     function __ejectDisabledStrategy(address strategy) external;
 }
@@ -76,6 +78,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     uint8 internal constant DECIMALS_OFFSET = OVaultModuleConstants.DECIMALS_OFFSET;
     uint256 internal constant VIRTUAL_SHARES_UNITS = OVaultModuleConstants.VIRTUAL_SHARES_UNITS;
     uint256 internal constant VIRTUAL_ASSETS_UNITS = OVaultModuleConstants.VIRTUAL_ASSETS_UNITS;
+    uint64 internal constant PPS_CHECKPOINT_CAPACITY = OVaultModuleConstants.PPS_CHECKPOINT_CAPACITY;
+    uint40 internal constant PPS_CHECKPOINT_MIN_INTERVAL = OVaultModuleConstants.PPS_CHECKPOINT_MIN_INTERVAL;
 
     error OperatorPermissionDenied(address operator, uint256 requiredPerm);
 
@@ -355,6 +359,29 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         }
     }
 
+
+    function _defaultMaxLossBps() internal view returns (uint256) {
+        uint16 configured = defaultMaxLossBps;
+        return configured == 0 ? MAX_BPS : uint256(configured);
+    }
+
+    /// @dev Encoded in `activeWithdrawMaxLossBps` as maxLoss+1 so 0 means "use default"
+    ///      and callers can still request maxLoss=0 (no unrealised loss allowed).
+    function _resolveMaxLossBps() internal view returns (uint256) {
+        uint256 active = activeWithdrawMaxLossBps;
+        if (active != 0) return active - 1;
+        return _defaultMaxLossBps();
+    }
+
+    /// @notice Remaining asset capacity under `depositLimit`. type(uint256).max when uncapped (0).
+    function _remainingDepositAssets() internal view returns (uint256) {
+        uint256 limit = depositLimit;
+        if (limit == 0) return type(uint256).max;
+        uint256 ta = totalAssets();
+        if (ta >= limit) return 0;
+        return limit - ta;
+    }
+
     /// @dev Virtual accounting seam: CreatorOVault keeps strict exact-transfer accounting here
     ///      (fee-on-transfer / rebasing / deflationary tokens revert via `_pullCreatorCoinExact`).
     ///      AgentOVaultCoreModule overrides this with measured-transfer accounting for
@@ -385,6 +412,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         shares = IERC4626(address(this)).previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
         if (!isFirstDeposit && supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
+        if (assets > _remainingDepositAssets()) revert InvalidAmount();
 
         if (!isFirstDeposit && shares > assets * 10_000) {
             revert InflationAttackDetected(assets, shares);
@@ -435,6 +463,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         assets = IERC4626(address(this)).previewMint(shares);
         if (assets == 0) revert ZeroAmount();
         if (!isFirstDeposit && supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
+        if (assets > _remainingDepositAssets()) revert InvalidAmount();
 
         if (isFirstDeposit && assets < MINIMUM_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
@@ -485,6 +514,22 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {
+        assets = _redeem(shares, receiver, owner_, _defaultMaxLossBps());
+    }
+
+    function redeem(uint256 shares, address receiver, address owner_, uint256 maxLoss)
+        external
+        onlyDelegateCall
+        returns (uint256 assets)
+    {
+        if (maxLoss > MAX_BPS) revert InvalidAmount();
+        assets = _redeem(shares, receiver, owner_, maxLoss);
+    }
+
+    function _redeem(uint256 shares, address receiver, address owner_, uint256 maxLossBps)
+        internal
+        returns (uint256 assets)
+    {
         _enforceOperatorPermIfGranted(OP_WITHDRAW);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on redeem to align with maxWithdraw/maxRedeem returning 0
@@ -509,7 +554,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
+        activeWithdrawMaxLossBps = maxLossBps + 1;
         _ensureCoin(assets);
+        activeWithdrawMaxLossBps = 0;
         // Delivered amount drives the return value and event so agent-lane slippage
         // checks observe what the receiver actually got (identity on the creator lane).
         assets = _pushCreatorCoinExact(receiver, assets);
@@ -521,6 +568,22 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function withdraw(uint256 assets, address receiver, address owner_) external onlyDelegateCall returns (uint256 shares) {
+        shares = _withdraw(assets, receiver, owner_, _defaultMaxLossBps());
+    }
+
+    function withdraw(uint256 assets, address receiver, address owner_, uint256 maxLoss)
+        external
+        onlyDelegateCall
+        returns (uint256 shares)
+    {
+        if (maxLoss > MAX_BPS) revert InvalidAmount();
+        shares = _withdraw(assets, receiver, owner_, maxLoss);
+    }
+
+    function _withdraw(uint256 assets, address receiver, address owner_, uint256 maxLossBps)
+        internal
+        returns (uint256 shares)
+    {
         _enforceOperatorPermIfGranted(OP_WITHDRAW);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on withdraw to align with maxWithdraw/maxRedeem returning 0
@@ -551,7 +614,9 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 supplyBefore = _totalSupply;
         _sharesUpdate(owner_, address(0), shares);
+        activeWithdrawMaxLossBps = maxLossBps + 1;
         _ensureCoin(assets);
+        activeWithdrawMaxLossBps = 0;
         uint256 delivered = _pushCreatorCoinExact(receiver, assets);
 
         // ODA-497-4: decrement report baseline by cost basis, not market value.
@@ -671,13 +736,20 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 currentSupply = _totalSupply;
         if (currentSupply >= maxTotalSupply) return 0;
 
-        uint256 remainingShares = maxTotalSupply - currentSupply;
-        uint256 supply = _totalSupply;
-        // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
-        // shares = assets * 10^_decimalsOffset() (U-10: shared virtual-offset constant)
-        if (supply == 0) return remainingShares / VIRTUAL_SHARES_UNITS;
-
-        return (remainingShares * totalAssets()) / supply;
+        uint256 byShares = type(uint256).max;
+        if (maxTotalSupply != type(uint256).max) {
+            uint256 remainingShares = maxTotalSupply - currentSupply;
+            uint256 supply = _totalSupply;
+            // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
+            // shares = assets * 10^_decimalsOffset() (U-10: shared virtual-offset constant)
+            if (supply == 0) {
+                byShares = remainingShares / VIRTUAL_SHARES_UNITS;
+            } else {
+                byShares = (remainingShares * totalAssets()) / supply;
+            }
+        }
+        uint256 byAssets = _remainingDepositAssets();
+        return byShares < byAssets ? byShares : byAssets;
     }
 
     function maxMint(address receiver) external view onlyDelegateCall returns (uint256) {
@@ -689,7 +761,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 currentSupply = _totalSupply;
         if (currentSupply >= maxTotalSupply) return 0;
-        return maxTotalSupply - currentSupply;
+        uint256 byShares = maxTotalSupply == type(uint256).max ? type(uint256).max : maxTotalSupply - currentSupply;
+        uint256 remainingAssets = _remainingDepositAssets();
+        if (remainingAssets == type(uint256).max) return byShares;
+        if (remainingAssets == 0) return 0;
+        uint256 byAssets = IERC4626(address(this)).convertToShares(remainingAssets);
+        return byShares < byAssets ? byShares : byAssets;
     }
 
     function maxWithdraw(address owner_) external view onlyDelegateCall returns (uint256) {
@@ -803,8 +880,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         // Delegatecall is intentional: strategies module shares the same vault storage layout.
         // `_strategiesModule` is set by owner-gated module wiring and verified before use.
-        (bool ok, bytes memory ret) =
-            module.delegatecall(abi.encodeWithSelector(IOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector, amountNeeded));
+        (bool ok, bytes memory ret) = module.delegatecall(
+            abi.encodeWithSelector(
+                IOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector,
+                amountNeeded,
+                _resolveMaxLossBps()
+            )
+        );
         if (!ok) _revertBytes(ret);
     }
 
@@ -875,6 +957,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             lastReport = uint96(block.timestamp);
             totalAssetsAtLastReport = currentTotalAssets;
             trustedPpsCheckpoint = pricePerShare();
+            _recordPpsCheckpoint();
             emit Reported(0, 0, 0, currentTotalAssets);
             return (0, 0);
         }
@@ -885,6 +968,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             lastReport = uint96(block.timestamp);
             totalAssetsAtLastReport = currentTotalAssets;
             trustedPpsCheckpoint = pricePerShare();
+            _recordPpsCheckpoint();
             emit Reported(0, 0, 0, currentTotalAssets);
             return (0, 0);
         }
@@ -952,6 +1036,22 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         lastReport = uint96(block.timestamp);
         totalAssetsAtLastReport = totalAssets();
         trustedPpsCheckpoint = pricePerShare();
+        _recordPpsCheckpoint();
+    }
+
+    /// @dev On-chain APY display: append a pricePerShare sample to the v8 ring,
+    ///      throttled to PPS_CHECKPOINT_MIN_INTERVAL so a full 64-entry ring always
+    ///      spans >= 32 days. Called from every `report()` path alongside
+    ///      `trustedPpsCheckpoint` — keeper-paid; user flows never touch the ring.
+    function _recordPpsCheckpoint() internal {
+        uint64 writes = ppsCheckpointWrites;
+        if (writes > 0) {
+            uint40 lastTs = ppsCheckpoints[(writes - 1) % PPS_CHECKPOINT_CAPACITY].timestamp;
+            if (block.timestamp < lastTs + PPS_CHECKPOINT_MIN_INTERVAL) return;
+        }
+        ppsCheckpoints[writes % PPS_CHECKPOINT_CAPACITY] =
+            PpsCheckpoint(uint40(block.timestamp), uint216(pricePerShare()));
+        ppsCheckpointWrites = writes + 1;
     }
 
     function _accrueManagementFee(uint256 currentTotalAssets) internal {
