@@ -208,7 +208,7 @@ Vault, wrapper, share OFT, gauge, and oracle addresses are creator-specific and 
 | BSC       | 30102       | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Avalanche | 30106       | `0x1a44076050125825900e736c501f859c50fE728c` |
 
-## ■AKITA CCA multi-chain (pending deploy)
+## ■AKITA CCA multi-chain
 
 Canonical launch parameters live in `frontend/src/config/ccaLaunchChains.ts`.
 Do not invent ShareOFT / arm / oracle addresses — pin via `VITE_AKITA_*_<CHAIN>`
@@ -223,9 +223,34 @@ Chainlink ETH/USD + sequencer feeds: `frontend/src/config/ccaLaunchChains.ts`.
 | --------- | ------- | ------ | -------------------- | -------------- | -------------------- |
 | Base      | 8453    | 30184  | v1.1.0 live arm `0xCCcc…0bD5`; new arms → v2.1.0 `0x0000…63F8` | `0x4985…2b2b` | Full hub (AKITA_DEFAULTS) |
 | Ethereum  | 1       | 30101  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x0000…8A90` | ShareOFT + oracle + CCA TBD |
-| Arbitrum  | 42161   | 30110  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x360E…FB32` | ShareOFT + oracle + CCA TBD |
+| Arbitrum  | 42161   | 30110  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x360E…FB32` | **live** (pins below) |
 | Unichain  | 130     | 30320  | v2.1.0 `0x000000001F26a0044BaA66024e7b6599c61963F8` | `0x1F98…0004` | ShareOFT + oracle + CCA TBD |
 | Robinhood | 4663    | 30416  | v2.1.0 — **deploy ourselves** with `protocolFeeController = address(0)` | `0x8366…0951` | ShareOFT + oracle + CCA TBD |
+
+### Arbitrum spoke (live 2026-07-29)
+
+| Role | Address |
+| ---- | ------- |
+| Registry4626 (spoke; not Base vanity) | `0xd83bBE25D7d2B45E48a218B541Ca2Aeb2a46627c` |
+| Bytecode store / CREATE2 deployer | `0x75FA60e7…117E` / `0x7E3898Eb…a2D6` (epoch `cca-spoke-v1`) |
+| ShareOFT (v1.20.0 codeId `0x9ea810ff…`) | `0x6423F4034519ae0bE6A004832EcB14eF6a6c5740` |
+| CreatorOracle | `0x248A05BBFE106a976417b5f3258992187B749E11` |
+| CCALaunchArm | `0xf1403ab635a9882e4957924bb301c13455e14469` |
+| SimpleSellTaxHook | `0xb7971A3038CA0508D086C7e1917544EDf1Ee4088` |
+
+Env pins: `VITE_AKITA_SHARE_OFT_ARBITRUM`, `VITE_AKITA_CCA_STRATEGY_ARBITRUM`.
+Hub ShareOFT + hub oracle peers for EID 30110 are wired (treasury Safe).
+**Still open:** LayerZero EVM DVN/`setConfig` for Base↔Arb `[15,15]` 3-of-5;
+hub→spoke oracle price broadcast; remaining spokes (ETH / Uni / RH).
+
+**Ops:** `EnsureSpokeBytecodeInfra` seeds *current* forge `CreatorShareOFT` creation
+code, which can exceed EIP-170 (CREATE reverts with `DeployFailed`). For spokes,
+re-seed ShareOFT + CreatorOracle creation bytecode from Base store using v1.20.0
+manifest codeIds (`0x9ea810ff…`, `0x00d8de27…`) before `DeployRemoteShareOft` /
+`DeployRemoteCreatorOracle`. Constructor owner on spokes = deployer EOA when hub
+batcher key is unavailable (`ENFORCE_ADDRESS_PARITY=0`). `DeploySpokeCcaLaunchArm`
+forge sim can fail on Arb (ArbSys `0xfe` stub); deploy arm via `cast send --create`
+then configure with the script's post-deploy calls.
 
 Hard constraint: factory protocol fee must be zero on every chain
 (`CCALaunchArm.migrate()` requires swept currency == `currencyRaised()`).

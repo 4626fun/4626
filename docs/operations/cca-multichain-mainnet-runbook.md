@@ -189,13 +189,18 @@ Thursday-epoch schedule is strategy-enforced. Fast-chain step curves are automat
 
 ## Known gaps (do not treat as ready for Thursday launch)
 
-- **Base registry Unichain LZ** must still be re-seeded on-chain
-  (`SeedBaseUnichainLzEndpoint`) — code is ready; broadcast needs registry owner key.
-- **Hub ShareOFT + hub oracle peers** for 30101/30110/30320/30416 are still zero
-  until each spoke deploys — use `WireShareOftHubSpokePeers` /
-  `WireCreatorOracleHubSpokePeers` from `--print-commands` after addresses exist.
+- **Arbitrum spoke is live** (ShareOFT / oracle / arm / tax hook) — see
+  `docs/reference/addresses.md`. Still need Base↔Arb LZ DVN `[15,15]` 3-of-5 and
+  hub oracle price broadcast. ETH / Uni / RH spokes still TBD.
+- After `EnsureSpokeBytecodeInfra`, **re-seed ShareOFT + CreatorOracle from Base
+  store** with v1.20.0 manifest codeIds before remote deploy — current forge
+  `CreatorShareOFT` creation code can exceed EIP-170 (`DeployFailed` on CREATE2).
+- **Hub ShareOFT + hub oracle peers** for 30101/30320/30416 are still zero until
+  those spokes deploy — use treasury Safe `setPeer` (hub owner is `0x7d429e…`) or
+  `WireShareOftHubSpokePeers` / `WireCreatorOracleHubSpokePeers` when the signer
+  is the Safe owner. Arb EID 30110 peers are already wired.
 - **Hub ShareOFT address parity unavailable** — AKITA phase-1 ShareOFT codeId
-  `0x8c9de580…` was purged from the store; spokes use current codeId +
+  `0x8c9de580…` was purged from the store; spokes use v1.20.0 codeId +
   `ENFORCE_ADDRESS_PARITY=0`, then peer-wire.
 - Do **not** use `DeployUniversalBytecodeInfra` on spokes (wrong CREATE2 salts).
   Use `EnsureSpokeBytecodeInfra` / `--stage bytecode-infra` (epoch `cca-spoke-v1`).
