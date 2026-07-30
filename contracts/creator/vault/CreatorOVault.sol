@@ -12,23 +12,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
-import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 import {OVaultLiquidityLib} from "@4626/shared/libraries/vault/OVaultLiquidityLib.sol";
+import {OVaultViewLib} from "@4626/shared/libraries/vault/OVaultViewLib.sol";
 import {OVaultModuleConstants} from "@4626/shared/vault/modules/OVaultModuleConstants.sol";
-
-struct CcaLifecycleStatus {
-    uint8 phase;
-}
-
-interface ICCALifecycleStatusReader {
-    function getLifecycleStatus() external view returns (CcaLifecycleStatus memory status);
-}
-
-interface ICCAPhaseReader {
-    function phase() external view returns (uint8);
-}
 
 /**
  * @title CreatorOVault
@@ -96,23 +83,23 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // =================================
 
     /// @notice Maximum performance fee (20%)
-    uint16 public constant MAX_FEE = 2_000;
+    uint16 internal constant MAX_FEE = 2_000;
 
     /// @notice Maximum management (TVL) fee (5% annualized bps charge in report)
-    uint16 public constant MAX_MANAGEMENT_FEE = 500;
+    uint16 internal constant MAX_MANAGEMENT_FEE = 500;
 
     /// @notice Risk timelock bounds
-    uint64 public constant MIN_RISK_CONFIG_DELAY = 1 days;
-    uint64 public constant MAX_RISK_CONFIG_DELAY = 30 days;
+    uint64 internal constant MIN_RISK_CONFIG_DELAY = 1 days;
+    uint64 internal constant MAX_RISK_CONFIG_DELAY = 30 days;
 
     /// @notice Bounds for `maxImpairmentTripDuration`, the liveness cap on Suspect mode
     ///         (FIX: M-2, docs/audits/CreatorOVault_aristotle).
-    uint64 public constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
-    uint64 public constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
+    uint64 internal constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
+    uint64 internal constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
 
     /// @notice Bounds for `impairmentChallengeWindow` (SCAN-L3).
-    uint64 public constant MIN_IMPAIRMENT_CHALLENGE_WINDOW = 1 hours;
-    uint64 public constant MAX_IMPAIRMENT_CHALLENGE_WINDOW = 30 days;
+    uint64 internal constant MIN_IMPAIRMENT_CHALLENGE_WINDOW = 1 hours;
+    uint64 internal constant MAX_IMPAIRMENT_CHALLENGE_WINDOW = 30 days;
 
     uint8 internal constant RISK_KIND_NONE = 0;
     uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
@@ -133,13 +120,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     uint256 internal constant SECONDS_PER_YEAR = OVaultModuleConstants.SECONDS_PER_YEAR;
 
     /// @notice Maximum strategies
-    uint256 public constant MAX_STRATEGIES = 5;
+    uint256 internal constant MAX_STRATEGIES = 5;
     bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
     uint64 internal constant PPS_CHECKPOINT_CAPACITY = OVaultModuleConstants.PPS_CHECKPOINT_CAPACITY;
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("OVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("OVaultModule.admin");
-    uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
 
     // =================================
     // ANTI-INFLATION ATTACK CONSTANTS
@@ -171,7 +157,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @dev Prevents catastrophic single-tx price manipulation
      * @custom:security Limits impact of any oracle/accounting manipulation
      */
-    uint256 public constant MAX_PRICE_CHANGE_BPS = 1000; // 10% max change per tx
+    uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000; // 10% max change per tx
 
     // =================================
     // STATE VARIABLES
@@ -305,9 +291,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // =================================
 
     /// @notice Minimum allowed rescue delay
-    uint64 public constant MIN_RESCUE_DELAY = 1 days;
+    uint64 internal constant MIN_RESCUE_DELAY = 1 days;
     /// @notice Maximum allowed rescue delay
-    uint64 public constant MAX_RESCUE_DELAY = 30 days;
+    uint64 internal constant MAX_RESCUE_DELAY = 30 days;
 
     /// @notice Protocol rescue authority (typically a multisig). Settable by owner (opt-out by setting to 0).
     address public protocolRescue;
@@ -366,7 +352,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address[] public defaultQueue;
 
     /// @notice Maximum queue size
-    uint256 public constant MAX_QUEUE = 10;
+    uint256 internal constant MAX_QUEUE = 10;
 
     /// @notice Force use of default queue (ignore custom queue in withdrawals)
     bool public useDefaultQueue;
@@ -488,6 +474,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     mapping(uint64 => PpsCheckpoint) public ppsCheckpoints;
     uint64 public ppsCheckpointWrites;
 
+    // ---------------------------------------------------------------------
+    // Rebalance NAV envelope (appended; storage v9) — gap-analysis G-4
+    // ---------------------------------------------------------------------
+    /// @notice Max |Δ totalAssets| (bps) allowed across tend/rebalance. 0 == disabled.
+    uint16 public maxRebalanceDeviationBps;
+
     // =================================
     // EVENTS
     // =================================
@@ -495,6 +487,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
     event DepositLimitUpdated(uint256 depositLimit);
     event DefaultMaxLossBpsUpdated(uint16 defaultMaxLossBps);
+    event MaxRebalanceDeviationBpsUpdated(uint16 maxRebalanceDeviationBps);
     event StrategyMaxDebtUpdated(address indexed strategy, uint256 maxDebt);
     event DebtTargetUpdated(address indexed strategy, uint256 previousDebt, uint256 targetDebt, uint256 newDebt);
     event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
@@ -640,8 +633,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     // Yearn V3 inspired errors
     error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
+    error RebalanceDeviationExceeded(uint256 navBefore, uint256 navAfter, uint16 maxBps);
     /// @notice Strategy explicitly reports valuation inputs are unhealthy (oracle stale/unavailable).
-    error StrategyValuationNotReady(address strategy);
     error InsufficientIdleForWithdrawal(uint256 requested, uint256 available);
     error QueueTooLong(uint256 length, uint256 maxLength);
     error StrategyNotInQueue(address strategy);
@@ -949,40 +942,16 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @dev Shows matured shares since last unlock processing checkpoint
      */
     function unlockedShares() public view returns (uint256) {
-        uint256 locked = totalLockedShares;
-        if (locked == 0) return 0;
-
-        uint256 unlockDate = fullProfitUnlockDate;
-        if (unlockDate == 0) return 0;
-
-        uint256 checkpoint = lastProfitUnlockUpdate;
-        uint256 currentTime = block.timestamp;
-        if (currentTime <= checkpoint) return 0;
-
-        if (currentTime >= unlockDate) {
-            return locked;
-        }
-
-        uint256 elapsed = currentTime - checkpoint;
-        uint256 unlockedAmount = (profitUnlockingRate * elapsed) / MAX_BPS_EXTENDED;
-        return unlockedAmount > locked ? locked : unlockedAmount;
+        return OVaultViewLib.unlockedShares(address(this));
     }
 
     /**
      * @notice Get locked (not yet unlocked) shares
      */
     function lockedShares() public view returns (uint256) {
-        return totalLockedShares - unlockedShares();
-    }
-
-    /**
-     * @notice Profit shares available on vault balance (excludes queued withdrawals)
-     */
-    function _availableProfitShares() internal view returns (uint256) {
-        uint256 vaultBalance = balanceOf(address(this));
-        uint256 queued = totalQueuedWithdrawalShares;
-        if (vaultBalance <= queued) return 0;
-        return vaultBalance - queued;
+        uint256 locked = totalLockedShares;
+        uint256 unlocked = unlockedShares();
+        return locked > unlocked ? locked - unlocked : 0;
     }
 
     /**
@@ -1006,54 +975,6 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         totalAssetsAtLastReport = assets >= previousTotalAssets ? 0 : previousTotalAssets - assets;
     }
 
-    /**
-     * @notice Burn matured profit-lock shares to realize unlock progression
-     */
-    function _processProfitUnlock() internal {
-        uint256 locked = totalLockedShares;
-        if (locked == 0) {
-            if (profitUnlockingRate != 0) profitUnlockingRate = 0;
-            if (fullProfitUnlockDate != 0) fullProfitUnlockDate = 0;
-            lastProfitUnlockUpdate = uint96(block.timestamp);
-            return;
-        }
-
-        uint256 unlockDate = fullProfitUnlockDate;
-        if (unlockDate == 0) return;
-
-        uint256 checkpoint = lastProfitUnlockUpdate;
-        uint256 currentTime = block.timestamp;
-        if (currentTime <= checkpoint) return;
-
-        uint256 targetTime = currentTime < unlockDate ? currentTime : unlockDate;
-        uint256 elapsed = targetTime - checkpoint;
-        if (elapsed == 0) return;
-
-        uint256 matured = (profitUnlockingRate * elapsed) / MAX_BPS_EXTENDED;
-        if (targetTime == unlockDate || matured > locked) {
-            matured = locked;
-        }
-        if (matured == 0) return;
-
-        uint256 availableProfit = _availableProfitShares();
-        uint256 sharesToBurn = matured > availableProfit ? availableProfit : matured;
-        if (sharesToBurn == 0) return;
-
-        _burn(address(this), sharesToBurn);
-        totalLockedShares = locked - sharesToBurn;
-
-        uint256 consumedElapsed =
-            sharesToBurn == matured ? elapsed : (sharesToBurn * MAX_BPS_EXTENDED) / profitUnlockingRate;
-        if (consumedElapsed == 0) consumedElapsed = 1;
-        if (consumedElapsed > elapsed) consumedElapsed = elapsed;
-        lastProfitUnlockUpdate = uint96(checkpoint + consumedElapsed);
-
-        if (totalLockedShares == 0) {
-            profitUnlockingRate = 0;
-            fullProfitUnlockDate = 0;
-        }
-    }
-
     // =================================
     // ERC4626 OVERRIDES
     // =================================
@@ -1063,113 +984,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @dev Includes idle balance + strategy deployments
      */
     function totalAssets() public view override returns (uint256) {
-        // FIX: L-06 — use tracked coinBalance instead of live balanceOf to prevent
-        // donation-based fee extraction via direct token transfers.
-        // LeftClaw #509 (rebase-down lead): clamp the idle leg DOWN to the live
-        // balance when it falls below the tracked ledger — a rebase-down would
-        // otherwise price early exits off a stale-high figure and socialize the
-        // shortfall onto the last holders. min() never lets donations inflate NAV:
-        // when live > tracked the tracked figure wins (L-06 preserved).
-        uint256 idle = coinBalance;
-        uint256 live = CREATOR_COIN.balanceOf(address(this));
-        if (live < idle) idle = live;
-
-        uint256 total = idle;
-
-        // Add strategy holdings
-        uint256 len = strategyList.length;
-        for (uint256 i; i < len; i++) {
-            if (activeStrategies[strategyList[i]] && !strategyImpaired[strategyList[i]]) {
-                total += _getStrategyAssetsSafe(strategyList[i]);
-            }
-        }
-
-        return total;
+        // L-06 idle clamp + strategy valuation lives in OVaultViewLib (EIP-170).
+        return OVaultViewLib.totalAssets(address(this));
     }
 
-    /**
-     * @notice Read strategy assets without allowing a single faulty strategy to brick the vault.
-     * @dev Returns tracked `strategyDebt` when strategy valuation reverts.
-     */
-    function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
-        try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
-            assets = reportedAssets;
-        } catch {
-            // If valuation is unavailable, fall back to vault-side accounting so:
-            // - `totalAssets()` remains usable for ERC-4626 previews
-            // - withdrawals can still attempt to pull liquidity
-            assets = strategyDebt[strategy];
-        }
-
-        // Governance cap: clamp recognised assets so a strategy reporting an
-        // inflated valuation cannot push `totalAssets()` past the approved cap.
-        // M-02: cap == 0 is no longer uncapped — only trust strategyDebt until set.
-        uint256 cap = strategyMaxAssets[strategy];
-        if (cap == 0) {
-            uint256 debt = strategyDebt[strategy];
-            if (assets > debt) assets = debt;
-        } else if (assets > cap) {
-            assets = cap;
-        }
-    }
-
-    /**
-     * @notice Find the first active strategy explicitly reporting unhealthy valuation.
-     * @dev Strategies MUST implement `IStrategyValuation` and MUST NOT revert in valuation
-     *      reads. Missing interfaces or any reverts are treated as NOT ready to prevent
-     *      ERC-4626 share dilution when `totalAssets()` would be under-reported.
-     */
-    function _firstStrategyValuationNotReady() internal view returns (address bad) {
-        uint256 len = strategyList.length;
-        for (uint256 i; i < len; i++) {
-            address strategy = strategyList[i];
-            if (!activeStrategies[strategy] || strategyImpaired[strategy]) continue;
-
-            try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
-                if (!ok) return strategy;
-            } catch {
-                // Missing `IStrategyValuation` support or misbehaving implementation.
-                return strategy;
-            }
-
-            // Even when readiness returns true, do not proceed if valuation reads revert.
-            // If a strategy valuation reverts, `totalAssets()` would treat it as 0 via
-            // `_getStrategyAssetsSafe()`, which enables ERC-4626 share inflation.
-            try IStrategy(strategy).getTotalAssets() returns (
-                uint256 /* reportedAssets */
-            ) {
-            // ok
-            }
-            catch {
-                return strategy;
-            }
-        }
-
-        return address(0);
-    }
-
-    function _requireStrategyValuationsReady() internal view {
-        address bad = _firstStrategyValuationNotReady();
-        if (bad != address(0)) revert StrategyValuationNotReady(bad);
-    }
-
-    function _isCcaAuctionLive() internal view returns (bool) {
-        address strategy = ccaLaunchArm;
-        if (strategy == address(0)) return false;
-
-        try ICCALifecycleStatusReader(strategy).getLifecycleStatus() returns (CcaLifecycleStatus memory status) {
-            return status.phase == CCA_PHASE_AUCTION_LIVE;
-        } catch {
-            // Fallback for stale/legacy strategy wiring that does not expose lifecycle snapshots.
-            try ICCAPhaseReader(strategy).phase() returns (uint8 phaseValue) {
-                return phaseValue == CCA_PHASE_AUCTION_LIVE;
-            } catch {
-                // Fail closed: when a strategy is configured but lifecycle reads fail,
-                // disable deposits/mints until wiring is corrected.
-                return true;
-            }
-        }
-    }
 
     /**
      * @notice Deposit Creator Coin into vault
@@ -1417,40 +1235,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      *      when totalQueuedWithdrawalShares > 0 (those shares claim assets at redemption).
      */
     function previewRedeem(uint256 shares) public view override returns (uint256) {
-        uint256 assets = super.previewRedeem(shares);
-        // Cap at available liquid assets not reserved for queued withdrawals
-        uint256 liquid = totalAssets();
-        uint256 reserved = super.previewRedeem(totalQueuedWithdrawalShares);
-        uint256 available = liquid > reserved ? liquid - reserved : 0;
-        return assets > available ? available : assets;
+        return OVaultViewLib.previewRedeem(address(this), shares, super.previewRedeem(shares));
     }
 
     /**
      * @notice Max deposit (standard ERC4626)
      */
     function maxDeposit(address receiver) public view override returns (uint256) {
-        if (vaultMode != VaultMode.Normal) return 0;
-        if (_isCcaAuctionLive()) return 0;
-        if (paused || isShutdown) return 0;
-        if (whitelistEnabled && !whitelist[receiver]) return 0;
-        if (_firstStrategyValuationNotReady() != address(0)) return 0;
-        uint256 currentSupply = totalSupply();
-        if (currentSupply >= maxTotalSupply) return 0;
-
-        uint256 byShares = type(uint256).max;
-        if (maxTotalSupply != type(uint256).max) {
-            uint256 remainingShares = maxTotalSupply - currentSupply;
-            uint256 supply = totalSupply();
-            // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
-            // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
-            if (supply == 0) {
-                byShares = remainingShares / (10 ** _decimalsOffset());
-            } else {
-                byShares = (remainingShares * totalAssets()) / supply;
-            }
-        }
-        uint256 byAssets = _remainingDepositAssets();
-        return byShares < byAssets ? byShares : byAssets;
+        return OVaultViewLib.maxDeposit(address(this), receiver);
     }
 
     /**
@@ -1459,225 +1251,32 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      *      unsupported for taxed assets).
      */
     function maxMint(address receiver) public view virtual override returns (uint256) {
-        if (vaultMode != VaultMode.Normal) return 0;
-        if (_isCcaAuctionLive()) return 0;
-        if (paused || isShutdown) return 0;
-        if (whitelistEnabled && !whitelist[receiver]) return 0;
-        if (_firstStrategyValuationNotReady() != address(0)) return 0;
-        uint256 currentSupply = totalSupply();
-        if (currentSupply >= maxTotalSupply) return 0;
-        uint256 byShares = maxTotalSupply == type(uint256).max ? type(uint256).max : maxTotalSupply - currentSupply;
-        uint256 remainingAssets = _remainingDepositAssets();
-        if (remainingAssets == type(uint256).max) return byShares;
-        if (remainingAssets == 0) return 0;
-        uint256 byAssets = convertToShares(remainingAssets);
-        return byShares < byAssets ? byShares : byAssets;
-    }
-
-    function _remainingDepositAssets() internal view returns (uint256) {
-        uint256 limit = depositLimit;
-        if (limit == 0) return type(uint256).max;
-        uint256 ta = totalAssets();
-        if (ta >= limit) return 0;
-        return limit - ta;
+        return OVaultViewLib.maxMint(address(this), receiver);
     }
 
     /**
      * @notice Max withdraw (standard ERC4626)
      */
     function maxWithdraw(address owner_) public view override returns (uint256) {
-        if (vaultMode != VaultMode.Normal) return 0;
-        if (paused) return 0;
-        uint256 userShares = balanceOf(owner_);
-        if (userShares == 0) return 0;
-        uint256 assetsFromShares = previewRedeem(userShares);
-        // ODA-427-F4: do not advertise sync withdraw above queue-reserved liquidity.
-        // Enforcement lives in CoreModule.withdraw (revert); previewWithdraw stays
-        // exact so shares burned always match the requested asset amount.
-        uint256 liquid = totalAssets();
-        uint256 reserved = super.previewRedeem(totalQueuedWithdrawalShares);
-        uint256 available = liquid > reserved ? liquid - reserved : 0;
-        if (assetsFromShares > available) assetsFromShares = available;
-        if (largeWithdrawalThreshold == 0) return assetsFromShares;
-        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
-        return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;
+        // G-5 withdrawable liquidity lives in OVaultViewLib (EIP-170).
+        return OVaultViewLib.maxWithdraw(address(this), owner_);
     }
 
     /**
      * @notice Max redeem (standard ERC4626)
      */
     function maxRedeem(address owner_) public view override returns (uint256) {
-        if (vaultMode != VaultMode.Normal) return 0;
-        if (paused) return 0;
-        uint256 userShares = balanceOf(owner_);
-        if (userShares == 0) return 0;
-        if (largeWithdrawalThreshold == 0) return userShares;
+        return OVaultViewLib.maxRedeem(address(this), owner_);
+    }
 
-        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
-        uint256 syncShares = previewWithdraw(maxSyncAssets);
-        return syncShares > userShares ? userShares : syncShares;
+    /// @dev Uncapped OZ preview for ViewLib liquidity reservation math.
+    function erc4626PreviewRedeem(uint256 shares) external view returns (uint256) {
+        return super.previewRedeem(shares);
     }
 
     // =================================
     // ENSURE COIN HELPER
     // =================================
-
-    /**
-     * @notice Synchronize internal `coinBalance` to the real token balance.
-     * @dev `coinBalance` is used for operational decisions; we keep it strict and synced
-     *      to prevent share pricing / solvency issues with non-standard ERC-20 behavior.
-     */
-    function _syncCoinBalance() internal returns (uint256 actual) {
-        actual = CREATOR_COIN.balanceOf(address(this));
-        coinBalance = actual;
-    }
-
-    /**
-     * @notice Pull creator coin and require exact receipt.
-     * @dev Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
-     *      that the vault's balance increases by exactly `amount`.
-     */
-    function _pullCreatorCoinExact(uint256 amount) internal returns (uint256 received) {
-        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-
-        received = afterBal - beforeBal;
-        if (received != amount) revert TransferAmountMismatch(amount, received);
-
-        // Keep internal accounting synchronized with the actual balance.
-        coinBalance = afterBal;
-    }
-
-    /**
-     * @notice Push creator coin out of vault and require exact vault-side debit.
-     * @dev Enforces that the vault's own balance decreases by exactly `amount`.
-     */
-    function _pushCreatorCoinExact(address to, uint256 amount) internal returns (uint256 spent) {
-        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        CREATOR_COIN.safeTransfer(to, amount);
-        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-
-        spent = beforeBal - afterBal;
-        if (spent != amount) revert TransferAmountMismatch(amount, spent);
-
-        coinBalance = afterBal;
-    }
-
-    /**
-     * @notice Deploy creator coin into a strategy using measured vault outflow.
-     * @dev Uses vault-side balance delta (`spent`) as canonical accounting input so
-     *      fee-on-transfer / partial-spend strategy internals do not revert keeper deploys.
-     */
-    function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited) {
-        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        CREATOR_COIN.forceApprove(strategy, amount);
-        IStrategy(strategy).deposit(amount);
-        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-
-        if (afterBal > beforeBal) revert TransferAmountMismatch(amount, 0);
-        uint256 spent = beforeBal - afterBal;
-        if (spent > amount) revert TransferAmountMismatch(amount, spent);
-
-        deposited = spent;
-        coinBalance = afterBal;
-    }
-
-    /**
-     * @notice Withdraw from strategy and validate returned amount against balance delta.
-     */
-    function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
-        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        withdrawn = IStrategy(strategy).withdraw(amount);
-        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-
-        uint256 received = afterBal - beforeBal;
-        if (received != withdrawn) revert TransferAmountMismatch(withdrawn, received);
-
-        coinBalance = afterBal;
-    }
-
-    /**
-     * @notice Best-effort strategy withdrawal for user redemptions.
-     * @dev Never reverts on strategy failure; returns the measured amount received by the vault.
-     */
-    function _withdrawFromStrategyBestEffort(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
-        if (amount == 0) return 0;
-
-        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-
-        try IStrategy(strategy).withdraw(amount) returns (uint256 reported) {
-            uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-
-            // Defensive: a withdraw should never decrease the vault balance.
-            if (afterBal < beforeBal) {
-                _syncCoinBalance();
-                emit StrategyWithdrawFailed(strategy, amount, bytes("NEGATIVE_BALANCE_DELTA"));
-                return 0;
-            }
-
-            uint256 received = afterBal - beforeBal;
-
-            // Keep internal accounting synchronized with the actual balance.
-            coinBalance = afterBal;
-
-            // If the strategy return value doesn't match reality, emit and trust the balance delta.
-            if (received != reported) {
-                emit StrategyWithdrawFailed(
-                    strategy, amount, abi.encodeWithSelector(TransferAmountMismatch.selector, reported, received)
-                );
-            }
-
-            return received;
-        } catch (bytes memory err) {
-            _syncCoinBalance();
-            emit StrategyWithdrawFailed(strategy, amount, err);
-            return 0;
-        }
-    }
-
-    /**
-     * @notice Ensure vault has enough Creator Coin for redemptions
-     * @dev Withdraws from strategies if needed
-     */
-    function _ensureCoin(uint256 coinNeeded) internal {
-        uint256 available = _syncCoinBalance();
-        if (available >= coinNeeded) return;
-
-        uint256 deficit = coinNeeded - available;
-
-        // Withdraw from strategies; maxLoss basis is the full user request.
-        _withdrawFromStrategies(deficit, coinNeeded);
-
-        available = _syncCoinBalance();
-        if (available < coinNeeded) {
-            revert InsufficientBalance();
-        }
-    }
-
-    /**
-     * @notice Check that price change is within acceptable bounds
-     * @dev Prevents catastrophic single-tx price manipulation
-     * @custom:security Key defense against yTUSD-style cascading failures
-     * @param priceBefore Price per share before operation
-     * @param priceAfter Price per share after operation
-     */
-    function _checkPriceChange(uint256 priceBefore, uint256 priceAfter) internal pure {
-        if (priceBefore == 0) return; // First deposit, no check needed
-
-        uint256 priceDiff;
-        if (priceAfter > priceBefore) {
-            priceDiff = priceAfter - priceBefore;
-        } else {
-            priceDiff = priceBefore - priceAfter;
-        }
-
-        // Check if change exceeds MAX_PRICE_CHANGE_BPS (default 10%)
-        uint256 maxAllowedChange = (priceBefore * MAX_PRICE_CHANGE_BPS) / MAX_BPS;
-        if (priceDiff > maxAllowedChange) {
-            revert PriceChangeExceedsLimit(priceBefore, priceAfter, MAX_PRICE_CHANGE_BPS);
-        }
-    }
 
     // =================================
     // STRATEGY MANAGEMENT
@@ -1724,22 +1323,6 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     /**
-     * @notice Remove a strategy from the default queue
-     * @dev Internal helper based on Yearn V3 pattern
-     */
-    function _removeFromQueue(address strategy) internal {
-        uint256 queueLength = defaultQueue.length;
-        for (uint256 i = 0; i < queueLength; i++) {
-            if (defaultQueue[i] == strategy) {
-                defaultQueue[i] = defaultQueue[queueLength - 1];
-                defaultQueue.pop();
-                emit UpdateDefaultQueue(defaultQueue);
-                break;
-            }
-        }
-    }
-
-    /**
      * @notice Update strategy weight
      */
     // FIX: L-04 — add nonReentrant to prevent reentrancy during strategy weight update
@@ -1759,170 +1342,6 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function forceDeployToStrategies() external nonReentrant onlyManagement {
         _delegateAndReturn(_strategiesModule);
-    }
-
-    /**
-     * @notice Internal deploy logic
-     */
-    function _deployToStrategies() internal {
-        if (totalStrategyWeight == 0) return;
-
-        // Keep coinBalance aligned to real idle balance before computing deployable amounts.
-        uint256 idleBalance = _syncCoinBalance();
-
-        // Yearn V3: Use minimumTotalIdle instead of deploymentThreshold
-        uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        uint256 deployable = idleBalance > minIdle ? idleBalance - minIdle : 0;
-
-        if (deployable == 0) return;
-
-        uint256 length = strategyList.length;
-        for (uint256 i = 0; i < length; i++) {
-            address strategy = strategyList[i];
-            if (activeStrategies[strategy] && strategyWeights[strategy] > 0) {
-                uint256 amount = (deployable * strategyWeights[strategy]) / totalStrategyWeight;
-
-                if (amount > coinBalance) amount = coinBalance;
-
-                if (amount > 0) {
-                    uint256 currentDebt = strategyDebt[strategy];
-                    uint256 deposited = _depositIntoStrategyMeasured(strategy, amount);
-
-                    // Yearn V3: Track strategy debt
-                    uint256 newDebt = currentDebt + deposited;
-                    strategyDebt[strategy] = newDebt;
-                    totalDebt += deposited;
-
-                    emit DebtUpdated(strategy, currentDebt, newDebt);
-                    emit StrategyDeployed(strategy, deposited);
-                }
-            }
-        }
-
-        lastDeployment = block.timestamp;
-    }
-
-    /**
-     * @notice Withdraw from strategies
-     */
-    function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
-        // Legacy non-module path: no separate user-assets basis is available here, so
-        // maxLoss is evaluated against `amountNeeded` (same as the refill deficit).
-        return _withdrawFromStrategies(amountNeeded, amountNeeded);
-    }
-
-    function _withdrawFromStrategies(uint256 amountNeeded, uint256 lossBasisAssets)
-        internal
-        returns (uint256 totalWithdrawn)
-    {
-        uint256 remaining = amountNeeded;
-        uint256 maxLossBps = defaultMaxLossBps == 0 ? MAX_BPS : uint256(defaultMaxLossBps);
-        uint256 totalAssessedLoss;
-        uint256 lossBasis = lossBasisAssets == 0 ? amountNeeded : lossBasisAssets;
-
-        // Yearn V3: Use default queue for withdrawal order
-        address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
-        uint256 length = queue.length;
-
-        for (uint256 i = 0; i < length && remaining > 0; i++) {
-            address strategy = queue[i];
-            // ODA-427-F8: skip impaired/side-pocketed strategies (parity with totalAssets /
-            // OVaultStrategiesModule).
-            if (activeStrategies[strategy] && !strategyImpaired[strategy]) {
-                uint256 currentDebt = strategyDebt[strategy];
-                uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
-
-                if (strategyAssets > 0) {
-                    uint256 toWithdraw = remaining > strategyAssets ? strategyAssets : remaining;
-
-                    // Yearn V3: Assess unrealized losses before withdrawal
-                    uint256 unrealizedLoss = _assessUnrealisedLoss(strategy, currentDebt, toWithdraw);
-                    if (unrealizedLoss > 0) {
-                        totalAssessedLoss += unrealizedLoss;
-                        if (lossBasis > 0 && (totalAssessedLoss * MAX_BPS) / lossBasis > maxLossBps) {
-                            revert StrategyHasUnrealisedLosses(strategy, unrealizedLoss);
-                        }
-                        emit UnrealisedLossAssessed(strategy, unrealizedLoss);
-                    }
-
-                    uint256 withdrawn = _withdrawFromStrategyBestEffort(strategy, toWithdraw);
-                    if (withdrawn == 0) continue;
-                    totalWithdrawn += withdrawn;
-                    remaining = remaining > withdrawn ? remaining - withdrawn : 0;
-
-                    // Yearn V3: Update debt tracking
-                    uint256 debtReduction = withdrawn > currentDebt ? currentDebt : withdrawn;
-                    uint256 newDebt = currentDebt - debtReduction;
-                    strategyDebt[strategy] = newDebt;
-                    totalDebt -= debtReduction;
-
-                    emit DebtUpdated(strategy, currentDebt, newDebt);
-                    emit StrategyWithdrawn(strategy, withdrawn);
-                }
-            }
-        }
-    }
-
-    /**
-     * @notice Assess unrealized losses for a strategy
-     * @dev Based on Yearn V3: _assess_share_of_unrealised_losses pattern
-     * @param strategy The strategy to assess
-     * @param currentDebt What vault thinks strategy should have
-     * @param assetsNeeded Amount being withdrawn
-     * @return Loss share of unrealized losses
-     */
-    function _assessUnrealisedLoss(address strategy, uint256 currentDebt, uint256 assetsNeeded)
-        internal
-        view
-        returns (uint256)
-    {
-        uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
-
-        // If no losses, return 0
-        if (strategyAssets >= currentDebt || currentDebt == 0) {
-            return 0;
-        }
-
-        // User takes proportional share of losses
-        uint256 numerator = assetsNeeded * strategyAssets;
-        uint256 lossShare = assetsNeeded - (numerator / currentDebt);
-
-        // Round up
-        if (numerator % currentDebt != 0) {
-            lossShare += 1;
-        }
-
-        return lossShare;
-    }
-
-    /**
-     * @notice Auto-allocate idle funds to first strategy in queue
-     * @dev Based on Yearn V3: auto_allocate pattern
-     */
-    function _autoAllocateToStrategy() internal {
-        if (defaultQueue.length == 0) return;
-
-        address firstStrategy = defaultQueue[0];
-        if (!activeStrategies[firstStrategy]) return;
-
-        uint256 idleBalance = _syncCoinBalance();
-
-        uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        if (idleBalance <= minIdle) return;
-
-        uint256 toAllocate = idleBalance - minIdle;
-        if (toAllocate == 0) return;
-
-        uint256 currentDebt = strategyDebt[firstStrategy];
-
-        uint256 deposited = _depositIntoStrategyMeasured(firstStrategy, toAllocate);
-
-        uint256 newDebt = currentDebt + deposited;
-        strategyDebt[firstStrategy] = newDebt;
-        totalDebt += deposited;
-
-        emit DebtUpdated(firstStrategy, currentDebt, newDebt);
-        emit AutoAllocated(firstStrategy, deposited);
     }
 
     // =================================
@@ -2059,7 +1478,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function assessUnrealisedLosses(address strategy, uint256 assetsNeeded) external view returns (uint256) {
         uint256 currentDebt = strategyDebt[strategy];
-        return _assessUnrealisedLoss(strategy, currentDebt, assetsNeeded);
+        return OVaultViewLib.assessUnrealisedLoss(address(this), strategy, currentDebt, assetsNeeded);
     }
 
     // =================================
@@ -2364,6 +1783,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_adminModule);
     }
 
+    /// @notice Gap-analysis G-4: optional NAV envelope for keeper tend/rebalance. 0 == off.
+    function setMaxRebalanceDeviationBps(uint16 _maxRebalanceDeviationBps) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
     /**
      * @notice Set the governance-enforced asset cap for a strategy.
      * @dev 0 == uncapped. Non-zero clamps strategy contribution to `totalAssets()`.
@@ -2472,7 +1896,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // =================================
 
     /// @notice Yearn-style API version for UI/registry filtering.
-    string public constant VAULT_VERSION = "1.20.0";
+    string internal constant VAULT_VERSION = "1.21.0";
 
     /// @dev Mirrors Yearn's `apiVersion()` so existing yearn-style UIs can
     ///      discover the vault generation without a custom adapter.
@@ -2480,100 +1904,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         return VAULT_VERSION;
     }
 
-    /// @notice One-call position card for UIs: everything a vault page needs about a
-    ///         user, in a single RPC call. `cooldownEndBlock` and `queuedUnlockBlock`
-    ///         are raw block numbers — compare against `block.number` client-side.
-    ///         `maxWithdrawNow` is liquidity/threshold capacity only; it does NOT
-    ///         reflect the cooldown gate (pair with cooldownEndBlock).
-    struct VaultPosition {
-        uint256 shares;
-        uint256 assets;
-        uint256 maxWithdrawNow;
-        uint256 queuedShares;
-        uint256 queuedAssetsEst;
-        uint256 queuedUnlockBlock;
-        uint256 cooldownEndBlock;
-        bool claimableNow;
+    /// @dev Fat view bodies live in `OVaultViewLib` (EIP-170 headroom).
+    function positionOf(address user) external view returns (OVaultViewLib.VaultPosition memory) {
+        return OVaultViewLib.positionOf(address(this), user);
     }
 
-    /// @notice Best-effort ETA for turning `shares` into assets, honoring the actual
-    ///         gate order: cooldown → (sync | queue+delay). `available=false` while
-    ///         paused or non-Normal (gates closed indefinitely). Liquidity is NOT
-    ///         modeled for the sync path — pair with `maxWithdraw`.
-    struct WithdrawalEta {
-        bool available;
-        bool requiresAsync;
-        uint256 cooldownEndBlock;
-        uint256 earliestClaimBlock;
+    function withdrawalEta(address user, uint256 shares) external view returns (OVaultViewLib.WithdrawalEta memory) {
+        return OVaultViewLib.withdrawalEta(address(this), user, shares);
     }
 
-    function positionOf(address user) external view returns (VaultPosition memory p) {
-        p.shares = balanceOf(user);
-        p.assets = p.shares == 0 ? 0 : previewRedeem(p.shares);
-        p.maxWithdrawNow = maxWithdraw(user);
-        QueuedWithdrawal storage q = queuedWithdrawals[user];
-        p.queuedShares = q.shares;
-        p.queuedAssetsEst = q.shares == 0 ? 0 : convertToAssets(q.shares);
-        p.queuedUnlockBlock = q.unlockBlock;
-        p.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
-        p.claimableNow =
-            q.shares > 0 && block.number >= q.unlockBlock && !paused && vaultMode == VaultMode.Normal;
-    }
-
-    function withdrawalEta(address user, uint256 shares) external view returns (WithdrawalEta memory eta) {
-        if (shares == 0) revert InvalidAmount();
-        eta.available = !paused && vaultMode == VaultMode.Normal;
-        eta.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
-        uint256 startBlock = block.number > eta.cooldownEndBlock ? block.number : eta.cooldownEndBlock;
-
-        // Same classification the queue enforces (uncapped conversion, >= threshold).
-        eta.requiresAsync =
-            largeWithdrawalThreshold != 0 && convertToAssets(shares) >= largeWithdrawalThreshold;
-        if (!eta.requiresAsync) {
-            eta.earliestClaimBlock = startBlock;
-            return eta;
-        }
-
-        // Queue path: request at startBlock, claim after largeWithdrawalDelayBlocks.
-        // An existing queued slot never regresses its unlock (max rule), so model the merge.
-        uint256 unlock = startBlock + largeWithdrawalDelayBlocks;
-        uint256 existingUnlock = queuedWithdrawals[user].unlockBlock;
-        eta.earliestClaimBlock = existingUnlock > unlock ? existingUnlock : unlock;
-    }
-
-    /// @notice Newest PPS checkpoint at or before `timestamp` (ring scan, newest first).
     function ppsCheckpointAtOrBefore(uint40 timestamp) public view returns (bool found, uint40 ts, uint216 pps) {
-        uint64 writes = ppsCheckpointWrites;
-        uint64 count = writes > PPS_CHECKPOINT_CAPACITY ? PPS_CHECKPOINT_CAPACITY : writes;
-        for (uint64 k = 0; k < count; k++) {
-            uint64 idx = (writes - 1 - k) % PPS_CHECKPOINT_CAPACITY;
-            PpsCheckpoint storage c = ppsCheckpoints[idx];
-            if (c.timestamp <= timestamp) return (true, c.timestamp, c.pps);
-        }
-        return (false, 0, 0);
+        return OVaultViewLib.ppsCheckpointAtOrBefore(address(this), timestamp);
     }
 
-    /// @notice Linear-annualized APY in signed basis points, measured from the newest
-    ///         checkpoint at or before `windowSeconds` ago to the CURRENT pricePerShare.
-    ///         `available` is false until checkpoint history spans the requested window.
-    ///         Simple-rate annualization over the actual elapsed span (SECONDS_PER_YEAR),
-    ///         not compounded — matches how yearn-style UIs present PPS-delta yield.
-    ///         Signed: impairment losses report negative APY.
-    /// @dev Tracks the vault's REALIZED pricePerShare: profit-unlock share burns are
-    ///      lazy (processed by any deposit/withdraw/report), so freshly reported profit
-    ///      enters the APY after the next state transition — identical to how the
-    ///      vault's own pricePerShare behaves.
     function apyBps(uint64 windowSeconds) external view returns (bool available, int256 apy) {
-        if (windowSeconds == 0) revert InvalidAmount();
-        uint40 target = block.timestamp > windowSeconds ? uint40(block.timestamp - windowSeconds) : 0;
-        (bool found, uint40 ts, uint216 ppsThen) = ppsCheckpointAtOrBefore(target);
-        if (!found || ppsThen == 0 || block.timestamp <= ts) return (false, 0);
-
-        uint256 ppsNow = pricePerShare();
-        uint256 elapsed = block.timestamp - ts;
-        int256 diff = int256(ppsNow) - int256(uint256(ppsThen));
-        apy = (diff * int256(SECONDS_PER_YEAR) * 10_000) / (int256(uint256(ppsThen)) * int256(elapsed));
-        return (true, apy);
+        return OVaultViewLib.apyBps(address(this), windowSeconds);
     }
 
     function strategyCount() external view returns (uint256) {

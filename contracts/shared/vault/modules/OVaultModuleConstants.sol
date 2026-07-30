@@ -8,7 +8,8 @@ library OVaultModuleConstants {
     ///      Bumped to v6 for LeftClaw #509 U-03 (isTrustedAdapter registry appended).
     ///      Bumped to v7 for Yearn-parity vault primitives (depositLimit, maxLoss, strategyMaxDebt).
     ///      Bumped to v8 for on-chain PPS checkpoints (APY display ring buffer).
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v8");
+    ///      Bumped to v9 for optional maxRebalanceDeviationBps (gap-analysis G-4).
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v9");
 
     /// @dev Tropical year in seconds, used consistently across fee/unlock math.
     uint256 internal constant SECONDS_PER_YEAR = 31_556_952;

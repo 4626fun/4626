@@ -119,6 +119,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Default gas limit for fee flush (OFT send)
     uint128 public constant DEFAULT_FLUSH_GAS_LIMIT = 200_000;
 
+    /// @dev Grinded into creation bytecode so `keccak256(creationCode)` avoids hex `666`.
+    uint256 private constant CREATION_BYTECODE_NONCE = 0x4626ace042640001;
+
+    /// @dev Pins `CREATION_BYTECODE_NONCE` into runtime so the optimizer cannot drop it.
+    bytes32 private immutable _creationBytecodeNonce;
 
     // ================================
     // TYPES
@@ -333,6 +338,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error NotRemoteProtocolWireAuthority();
     error VaultAlreadySet(address existing);
     error WrapperAlreadySet(address existing);
+    error InvalidFlushDstEid();
+    error InvalidFlushReceiver();
+    error FlushAmountMismatch();
+    error ComposeNotAllowed();
+    error HubCannotBeRemoteOnBase();
+    error RenounceDisabled();
+    error NoETH();
+    error ETHTransferFailed();
 
     /// @dev Base mainnet chain id — hub lane.
     uint256 internal constant BASE_CHAIN_ID = 8453;
@@ -395,6 +408,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         chainEid = resolvedChainEid;
         addressType[address(this)] = OperationType.NoFees;
         _defaultContractURI = _buildDefaultContractURI();
+        _creationBytecodeNonce = bytes32(CREATION_BYTECODE_NONCE);
     }
 
     /**
@@ -737,11 +751,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (amountToSend == 0) revert NothingToFlush();
 
         // Validate the send param matches our state
-        require(_sendParam.dstEid == hubEid, "Invalid dstEid");
-        require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
-        require(_sendParam.amountLD == amountToSend, "Amount mismatch");
+        if (_sendParam.dstEid != hubEid) revert InvalidFlushDstEid();
+        if (_sendParam.to != bytes32(uint256(uint160(hubGaugeReceiver)))) revert InvalidFlushReceiver();
+        if (_sendParam.amountLD != amountToSend) revert FlushAmountMismatch();
         // ODA-498-2: permissionless callers must not inject lzCompose payloads.
-        require(_sendParam.composeMsg.length == 0, "No compose allowed");
+        if (_sendParam.composeMsg.length != 0) revert ComposeNotAllowed();
 
         pendingFees = amount - amountToSend;
         totalFeesFlushed += amountToSend;
@@ -1187,7 +1201,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     {
         // FIX: L-2 — prevent converting hub to remote on Base, which would strand
         // pending fees and break fee routing
-        require(_isHub || block.chainid != 8453, "Hub cannot be set to remote on Base");
+        if (!_isHub && block.chainid == 8453) revert HubCannotBeRemoteOnBase();
         isHub = _isHub;
         hubEid = _hubEid;
         hubGaugeReceiver = _hubGaugeReceiver;
@@ -1427,17 +1441,17 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /// @notice Disable renounce — would brick fee/hub wiring recovery paths.
     function renounceOwnership() public pure override {
-        revert("RenounceDisabled");
+        revert RenounceDisabled();
     }
 
     // FIX: I-1 — add ETH withdrawal path for hub deployment; previously ETH from
     // LZ refunds accumulated with no recovery mechanism
     function withdrawETH(address payable to) external onlyOwner {
-        require(to != address(0), "Zero address");
+        if (to == address(0)) revert ZeroAddress();
         uint256 bal = address(this).balance;
-        require(bal > 0, "No ETH");
+        if (bal == 0) revert NoETH();
         (bool ok,) = to.call{value: bal}("");
-        require(ok, "ETH transfer failed");
+        if (!ok) revert ETHTransferFailed();
     }
 
     /**
