@@ -1646,8 +1646,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
         uint256 deficit = coinNeeded - available;
 
-        // Withdraw from strategies
-        _withdrawFromStrategies(deficit);
+        // Withdraw from strategies; maxLoss basis is the full user request.
+        _withdrawFromStrategies(deficit, coinNeeded);
 
         available = _syncCoinBalance();
         if (available < coinNeeded) {
@@ -1806,9 +1806,19 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @notice Withdraw from strategies
      */
     function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
+        // Legacy non-module path: no separate user-assets basis is available here, so
+        // maxLoss is evaluated against `amountNeeded` (same as the refill deficit).
+        return _withdrawFromStrategies(amountNeeded, amountNeeded);
+    }
+
+    function _withdrawFromStrategies(uint256 amountNeeded, uint256 lossBasisAssets)
+        internal
+        returns (uint256 totalWithdrawn)
+    {
         uint256 remaining = amountNeeded;
         uint256 maxLossBps = defaultMaxLossBps == 0 ? MAX_BPS : uint256(defaultMaxLossBps);
         uint256 totalAssessedLoss;
+        uint256 lossBasis = lossBasisAssets == 0 ? amountNeeded : lossBasisAssets;
 
         // Yearn V3: Use default queue for withdrawal order
         address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
@@ -1829,7 +1839,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
                     uint256 unrealizedLoss = _assessUnrealisedLoss(strategy, currentDebt, toWithdraw);
                     if (unrealizedLoss > 0) {
                         totalAssessedLoss += unrealizedLoss;
-                        if (amountNeeded > 0 && (totalAssessedLoss * MAX_BPS) / amountNeeded > maxLossBps) {
+                        if (lossBasis > 0 && (totalAssessedLoss * MAX_BPS) / lossBasis > maxLossBps) {
                             revert StrategyHasUnrealisedLosses(strategy, unrealizedLoss);
                         }
                         emit UnrealisedLossAssessed(strategy, unrealizedLoss);
@@ -2278,7 +2288,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_adminModule);
     }
 
-    /// @dev When `riskConfigDelay > 0`, use `scheduleSetPerformanceFee` + `executePendingRiskConfig`.
+    /// @dev Fee changes always schedule under `riskConfigDelay` (post-init floor of 1 day,
+    ///      gap-analysis G-2); follow with `executePendingRiskConfig` after the delay.
     function setPerformanceFee(uint16 _performanceFee) external onlyManagement {
         _delegate(_adminModule);
     }
@@ -2467,6 +2478,67 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     ///      discover the vault generation without a custom adapter.
     function apiVersion() external pure returns (string memory) {
         return VAULT_VERSION;
+    }
+
+    /// @notice One-call position card for UIs: everything a vault page needs about a
+    ///         user, in a single RPC call. `cooldownEndBlock` and `queuedUnlockBlock`
+    ///         are raw block numbers — compare against `block.number` client-side.
+    ///         `maxWithdrawNow` is liquidity/threshold capacity only; it does NOT
+    ///         reflect the cooldown gate (pair with cooldownEndBlock).
+    struct VaultPosition {
+        uint256 shares;
+        uint256 assets;
+        uint256 maxWithdrawNow;
+        uint256 queuedShares;
+        uint256 queuedAssetsEst;
+        uint256 queuedUnlockBlock;
+        uint256 cooldownEndBlock;
+        bool claimableNow;
+    }
+
+    /// @notice Best-effort ETA for turning `shares` into assets, honoring the actual
+    ///         gate order: cooldown → (sync | queue+delay). `available=false` while
+    ///         paused or non-Normal (gates closed indefinitely). Liquidity is NOT
+    ///         modeled for the sync path — pair with `maxWithdraw`.
+    struct WithdrawalEta {
+        bool available;
+        bool requiresAsync;
+        uint256 cooldownEndBlock;
+        uint256 earliestClaimBlock;
+    }
+
+    function positionOf(address user) external view returns (VaultPosition memory p) {
+        p.shares = balanceOf(user);
+        p.assets = p.shares == 0 ? 0 : previewRedeem(p.shares);
+        p.maxWithdrawNow = maxWithdraw(user);
+        QueuedWithdrawal storage q = queuedWithdrawals[user];
+        p.queuedShares = q.shares;
+        p.queuedAssetsEst = q.shares == 0 ? 0 : convertToAssets(q.shares);
+        p.queuedUnlockBlock = q.unlockBlock;
+        p.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
+        p.claimableNow =
+            q.shares > 0 && block.number >= q.unlockBlock && !paused && vaultMode == VaultMode.Normal;
+    }
+
+    function withdrawalEta(address user, uint256 shares) external view returns (WithdrawalEta memory eta) {
+        if (shares == 0) revert InvalidAmount();
+        eta.available = !paused && vaultMode == VaultMode.Normal;
+        eta.cooldownEndBlock = lastDepositBlock[user] + withdrawDelayBlocks;
+        uint256 startBlock = block.number > eta.cooldownEndBlock ? block.number : eta.cooldownEndBlock;
+
+        // Same classification the queue enforces (uncapped conversion, >= threshold).
+        eta.requiresAsync =
+            largeWithdrawalThreshold != 0 && convertToAssets(shares) >= largeWithdrawalThreshold;
+        if (!eta.requiresAsync) {
+            eta.earliestClaimBlock = startBlock;
+            return eta;
+        }
+
+        // Queue path: request at startBlock, claim after largeWithdrawalDelayBlocks.
+        // An existing queued slot never regresses its unlock (max rule), so model the merge.
+        uint256 unlock = startBlock + largeWithdrawalDelayBlocks;
+        uint256 existingUnlock = queuedWithdrawals[user].unlockBlock;
+        eta.earliestClaimBlock = existingUnlock > unlock ? existingUnlock : unlock;
     }
 
     /// @notice Newest PPS checkpoint at or before `timestamp` (ring scan, newest first).
