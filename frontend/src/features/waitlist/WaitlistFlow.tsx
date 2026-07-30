@@ -1830,7 +1830,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
               >
               <WaitlistJoinPanel
                 referralCode={landingReferralCode}
-                socialProof={<div className="text-center">{renderSocialProof(true)}</div>}
                 returningWallet={
                   (showEmailSignupForm && step === 'email') || walletSignInPending ? (
                     <WaitlistReturningWalletSignIn
