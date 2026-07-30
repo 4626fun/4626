@@ -149,12 +149,12 @@ describe('ccaLaunchChains', () => {
     expect(CCA_LAUNCH_CHAINS.arbitrum.lzEndpointV2).toBe(LZ_ENDPOINT_V2_CANONICAL)
   })
 
-  it('pins Base taxHook and live spoke taxHooks (Robinhood still zero pending fund)', () => {
+  it('pins Base taxHook and live spoke taxHooks on every expansion chain', () => {
     expect(CCA_LAUNCH_CHAINS.base.taxHook).toBe('0xca975B9dAF772C71161f3648437c3616E5Be0088')
     expect(CCA_LAUNCH_CHAINS.ethereum.taxHook).toBe('0x58247bf5ff3cb780258e4C13A0d6768c7fff8088')
     expect(CCA_LAUNCH_CHAINS.arbitrum.taxHook).toBe('0xb7971A3038CA0508D086C7e1917544EDf1Ee4088')
     expect(CCA_LAUNCH_CHAINS.unichain.taxHook).toBe('0xd00b3DC54e7144ec10522334F351D818D572c088')
-    expect(CCA_LAUNCH_CHAINS.robinhood.taxHook).toBe(ZERO_ADDRESS)
+    expect(CCA_LAUNCH_CHAINS.robinhood.taxHook).toBe('0xBfeaB2b1E53d626b9faD4057AC42b74706204088')
   })
 
   it('pins wrappedNative (WETH) on every launch chain', () => {

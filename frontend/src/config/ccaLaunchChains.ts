@@ -76,7 +76,7 @@ export type CcaLaunchChain = {
   sequencerUptimeFeed: `0x${string}`
   /**
    * Uniswap v4 tax / Zora hook for CCA migrate+grad.
-   * Base + ETH/Arb/Uni: live SimpleSellTaxHook. Robinhood: `address(0)` until funded.
+   * Base + all CCA spokes: live SimpleSellTaxHook.
    * Deploy: `script/DeploySpokeSellTaxHook.s.sol` (pins in akitaCcaSpokeTaxHook.ts).
    */
   taxHook: `0x${string}`
@@ -227,7 +227,8 @@ export const CCA_LAUNCH_CHAINS = {
     // Chainlink directory ETH/USD on Robinhood mainnet (verified codesize>0).
     chainlinkEthUsd: '0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9',
     sequencerUptimeFeed: ZERO_ADDRESS,
-    taxHook: ZERO_ADDRESS,
+    // Live SimpleSellTaxHook (CREATE2; see akitaCcaSpokeTaxHook.ts).
+    taxHook: '0xBfeaB2b1E53d626b9faD4057AC42b74706204088',
     // Factory v2.1.0 already live with protocolFeeController=0 (2026-07-29 probe).
     // Keep false; preflight WARN only if code disappears.
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,

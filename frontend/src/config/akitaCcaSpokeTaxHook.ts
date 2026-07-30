@@ -7,8 +7,7 @@
  * Deployer: HookMiner CREATE2 proxy `0x4e59b44847b379578588920cA78FbF26c0B4956C`.
  * Flags: BEFORE_SWAP | BEFORE_SWAP_RETURNS_DELTA (address & 0x3fff == 0x88).
  *
- * Live CREATE2 deploys (2026-07-30) on Ethereum / Arbitrum / Unichain.
- * Robinhood predicted only until gas is funded (Across fill may lag).
+ * Live CREATE2 deploys (2026-07-30) on Ethereum / Arbitrum / Unichain / Robinhood.
  *
  * Salts mined: `forge test --match-contract MineSpokeSellTaxHookSalts -vv`
  */
@@ -64,7 +63,7 @@ export const AKITA_CCA_SPOKE_TAX_HOOKS = {
     wrappedNative: '0x4200000000000000000000000000000000000006',
     salt: saltHex(482),
     predicted: '0xBfeaB2b1E53d626b9faD4057AC42b74706204088',
-    live: false,
+    live: true,
   },
 } as const satisfies Record<string, SpokeTaxHookPin>
 

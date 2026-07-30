@@ -29,10 +29,9 @@ describe('akitaCcaSpokeTaxHook', () => {
     }
   })
 
-  it('marks ethereum/arbitrum/unichain live and robinhood pending', () => {
-    expect(AKITA_CCA_SPOKE_TAX_HOOKS.ethereum.live).toBe(true)
-    expect(AKITA_CCA_SPOKE_TAX_HOOKS.arbitrum.live).toBe(true)
-    expect(AKITA_CCA_SPOKE_TAX_HOOKS.unichain.live).toBe(true)
-    expect(AKITA_CCA_SPOKE_TAX_HOOKS.robinhood.live).toBe(false)
+  it('marks every spoke taxHook pin live', () => {
+    for (const pin of Object.values(AKITA_CCA_SPOKE_TAX_HOOKS)) {
+      expect(pin.live).toBe(true)
+    }
   })
 })
