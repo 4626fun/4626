@@ -46,7 +46,7 @@ export function WaitlistJoinPanel({
       initial={reduceMotion ? false : 'hidden'}
       animate={reduceMotion ? undefined : 'show'}
     >
-      <motion.div variants={item} className="flex justify-center">
+      <motion.div variants={item} className="flex flex-col items-center text-center">
         <a
           href={getMarketingBaseUrl()}
           aria-label="Back to 4626.fun"
@@ -62,12 +62,10 @@ export function WaitlistJoinPanel({
             className="size-full scale-[1.316] select-none object-contain"
           />
         </a>
-      </motion.div>
-
-      <motion.div variants={item} className="text-center">
-        <h1 className="headline text-4xl leading-[1.05] tracking-[-0.03em] sm:text-5xl">
-          Join the waitlist
+        <h1 className="headline mt-5 text-4xl leading-[1.05] tracking-[-0.03em] sm:text-5xl">
+          4626.fun
         </h1>
+        <p className="mt-2 text-lg text-zinc-400">Join the waitlist</p>
       </motion.div>
 
       <motion.div variants={item} className="space-y-3">
