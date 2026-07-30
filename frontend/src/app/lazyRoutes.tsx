@@ -166,6 +166,11 @@ export const CreatorStrategyFeatures = lazyNamed(
 )
 export const Faq = lazyNamed(() => import('../pages/Faq'), 'Faq')
 export const FaqHowItWorks = lazyNamed(() => import('../pages/FaqHowItWorks'), 'FaqHowItWorks')
+export const SimHub = lazyNamed(() => import('../pages/sim/SimHub'), 'SimHub')
+export const CreatorVaultSimPage = lazyNamed(
+  () => import('../pages/sim/CreatorVaultSimPage'),
+  'CreatorVaultSimPage',
+)
 export const Arena = lazyNamed(() => import('../pages/Arena'), 'Arena')
 export const ArenaIntroductionPage = lazyNamed(() => import('../pages/Arena'), 'ArenaIntroductionPage')
 export const ArenaGettingStartedPage = lazyNamed(() => import('../pages/Arena'), 'ArenaGettingStartedPage')

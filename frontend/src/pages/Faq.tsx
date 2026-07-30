@@ -770,6 +770,13 @@ export function Faq() {
                     </div>
                     <ArrowRight className="w-4 h-4 text-zinc-600" />
                   </Link>
+                  <Link to="/sim/creator-vault" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors">
+                    <div className="space-y-1">
+                      <div className="text-white font-light">Creator Vault simulation</div>
+                      <div className="text-xs text-zinc-600 font-light">Interactive flywheel — edit parameters</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-zinc-600" />
+                  </Link>
                   <Link to="/status" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors">
                     <div className="space-y-1">
                       <div className="text-white font-light">Status & fixes</div>

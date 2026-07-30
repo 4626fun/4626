@@ -369,6 +369,12 @@ export function FaqHowItWorks() {
                   </Link>
                 </Button>
                 <Link
+                  to="/sim/creator-vault"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-5 py-3 text-sm text-zinc-400 hover:text-white hover:border-white/12 transition-colors whitespace-nowrap"
+                >
+                  Try the interactive sim <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
                   to="/faq"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-5 py-3 text-sm text-zinc-400 hover:text-white hover:border-white/12 transition-colors whitespace-nowrap"
                 >

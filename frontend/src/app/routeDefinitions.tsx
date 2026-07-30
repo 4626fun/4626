@@ -52,6 +52,8 @@ import {
   ExploreVaults,
   Faq,
   FaqHowItWorks,
+  SimHub,
+  CreatorVaultSimPage,
   GaugeVoting,
   Positions,
   RemoveOwnerPage,
@@ -89,6 +91,8 @@ export function renderPathRoutes(
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
+  { path: '/sim', element: <SimHub /> },
+  { path: '/sim/creator-vault', element: <CreatorVaultSimPage /> },
   { path: '/positions', element: <Positions /> },
   { path: '/area/positions', element: <Navigate to="/arena/positions" replace /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
