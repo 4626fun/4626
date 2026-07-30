@@ -153,7 +153,7 @@ describe('WaitlistJoinPanel', () => {
     )
 
     expect(screen.getByTestId('waitlist-join-panel')).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 1, name: '4626.fun' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('4626.fun')
     expect(screen.getByText('Join the waitlist')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to 4626.fun' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /join with email/i })).toBeTruthy()

@@ -62,8 +62,8 @@ export function WaitlistJoinPanel({
             className="size-full scale-[1.316] select-none object-contain"
           />
         </a>
-        <h1 className="headline mt-5 text-4xl leading-[1.05] tracking-[-0.03em] sm:text-5xl">
-          4626.fun
+        <h1 className="headline mt-4 text-2xl leading-[1.05] tracking-[-0.02em] sm:text-3xl">
+          4626<span className="text-[rgb(var(--brand-gold))]">.</span>fun
         </h1>
         <p className="mt-2 text-lg text-zinc-400">Join the waitlist</p>
       </motion.div>
