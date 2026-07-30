@@ -28,4 +28,11 @@ describe('akitaCcaSpokeTaxHook', () => {
       expect(chain.wrappedNative.toLowerCase()).toBe(pin.wrappedNative.toLowerCase())
     }
   })
+
+  it('marks ethereum/arbitrum/unichain live and robinhood pending', () => {
+    expect(AKITA_CCA_SPOKE_TAX_HOOKS.ethereum.live).toBe(true)
+    expect(AKITA_CCA_SPOKE_TAX_HOOKS.arbitrum.live).toBe(true)
+    expect(AKITA_CCA_SPOKE_TAX_HOOKS.unichain.live).toBe(true)
+    expect(AKITA_CCA_SPOKE_TAX_HOOKS.robinhood.live).toBe(false)
+  })
 })

@@ -76,8 +76,8 @@ export type CcaLaunchChain = {
   sequencerUptimeFeed: `0x${string}`
   /**
    * Uniswap v4 tax / Zora hook for CCA migrate+grad.
-   * Base: live SimpleSellTaxHook. Spokes default `address(0)` (no-hook V4 migrate).
-   * Optional spoke fan-out: `script/DeploySpokeSellTaxHook.s.sol` (Sourcify source).
+   * Base + ETH/Arb/Uni: live SimpleSellTaxHook. Robinhood: `address(0)` until funded.
+   * Deploy: `script/DeploySpokeSellTaxHook.s.sol` (pins in akitaCcaSpokeTaxHook.ts).
    */
   taxHook: `0x${string}`
   /** v2.1.0 factory is not deployed by Uniswap here yet - empty code is expected pre-bootstrap. */
@@ -112,7 +112,8 @@ export const CCA_LAUNCH_CHAINS = {
     // https://data.chain.link/feeds/ethereum/mainnet/eth-usd
     chainlinkEthUsd: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
     sequencerUptimeFeed: ZERO_ADDRESS,
-    taxHook: ZERO_ADDRESS,
+    // Live SimpleSellTaxHook (CREATE2; see akitaCcaSpokeTaxHook.ts).
+    taxHook: '0x58247bf5ff3cb780258e4C13A0d6768c7fff8088',
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'ETHEREUM_RPC_URL',
     defaultRpcUrl: 'https://ethereum-rpc.publicnode.com',
@@ -169,7 +170,8 @@ export const CCA_LAUNCH_CHAINS = {
     // Chainlink directory ETH/USD (verified codesize>0; feed decimals=18).
     chainlinkEthUsd: '0xBcE70e194940a157f3A80566505a7E96f5238CCa',
     sequencerUptimeFeed: ZERO_ADDRESS,
-    taxHook: ZERO_ADDRESS,
+    // Live SimpleSellTaxHook (CREATE2; see akitaCcaSpokeTaxHook.ts).
+    taxHook: '0xd00b3DC54e7144ec10522334F351D818D572c088',
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'UNICHAIN_RPC_URL',
     defaultRpcUrl: 'https://mainnet.unichain.org',
@@ -197,7 +199,8 @@ export const CCA_LAUNCH_CHAINS = {
     chainlinkEthUsd: '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612',
     // https://docs.chain.link/data-feeds/l2-sequencer-feeds
     sequencerUptimeFeed: '0xFdB631F5EE196F0ed6FAa767959853A9F217697D',
-    taxHook: ZERO_ADDRESS,
+    // Live SimpleSellTaxHook (CREATE2; see akitaCcaSpokeTaxHook.ts).
+    taxHook: '0xb7971A3038CA0508D086C7e1917544EDf1Ee4088',
     ccaFactoryV210ExpectedEmptyPreBootstrap: false,
     rpcEnvKey: 'ARBITRUM_RPC_URL',
     defaultRpcUrl: 'https://arb1.arbitrum.io/rpc',

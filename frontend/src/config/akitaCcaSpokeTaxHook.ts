@@ -7,8 +7,8 @@
  * Deployer: HookMiner CREATE2 proxy `0x4e59b44847b379578588920cA78FbF26c0B4956C`.
  * Flags: BEFORE_SWAP | BEFORE_SWAP_RETURNS_DELTA (address & 0x3fff == 0x88).
  *
- * Default CCA spoke migrate keeps `taxHook=address(0)`. Use these only when
- * enabling spoke sell-tax via `script/DeploySpokeSellTaxHook.s.sol`.
+ * Live CREATE2 deploys (2026-07-30) on Ethereum / Arbitrum / Unichain.
+ * Robinhood predicted only until gas is funded (Across fill may lag).
  *
  * Salts mined: `forge test --match-contract MineSpokeSellTaxHookSalts -vv`
  */
@@ -23,8 +23,10 @@ export type SpokeTaxHookPin = {
   wrappedNative: `0x${string}`
   /** uint256 salt as 0x-prefixed 32-byte hex */
   salt: `0x${string}`
-  /** Predicted CREATE2 address (not live until DeploySpokeSellTaxHook broadcast). */
+  /** CREATE2 address (live once `DeploySpokeSellTaxHook` broadcasts). */
   predicted: `0x${string}`
+  /** On-chain codesize>0 after broadcast. */
+  live: boolean
 }
 
 function saltHex(n: number): `0x${string}` {
@@ -38,6 +40,7 @@ export const AKITA_CCA_SPOKE_TAX_HOOKS = {
     wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     salt: saltHex(523),
     predicted: '0x58247bf5ff3cb780258e4C13A0d6768c7fff8088',
+    live: true,
   },
   arbitrum: {
     chainId: 42_161,
@@ -45,6 +48,7 @@ export const AKITA_CCA_SPOKE_TAX_HOOKS = {
     wrappedNative: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
     salt: saltHex(21_319),
     predicted: '0xb7971A3038CA0508D086C7e1917544EDf1Ee4088',
+    live: true,
   },
   unichain: {
     chainId: 130,
@@ -52,6 +56,7 @@ export const AKITA_CCA_SPOKE_TAX_HOOKS = {
     wrappedNative: '0x4200000000000000000000000000000000000006',
     salt: saltHex(23_236),
     predicted: '0xd00b3DC54e7144ec10522334F351D818D572c088',
+    live: true,
   },
   robinhood: {
     chainId: 4_663,
@@ -59,6 +64,7 @@ export const AKITA_CCA_SPOKE_TAX_HOOKS = {
     wrappedNative: '0x4200000000000000000000000000000000000006',
     salt: saltHex(482),
     predicted: '0xBfeaB2b1E53d626b9faD4057AC42b74706204088',
+    live: false,
   },
 } as const satisfies Record<string, SpokeTaxHookPin>
 
