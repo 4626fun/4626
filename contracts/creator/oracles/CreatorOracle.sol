@@ -7,14 +7,15 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol";
-import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol";
 
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+import {CreatorOracleQuoteLib} from "@4626/creator/oracles/CreatorOracleQuoteLib.sol";
 
 /**
  * @title CreatorOracle
@@ -65,6 +66,11 @@ contract CreatorOracle is OApp, IOracle4626 {
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
 
+    /// @notice Minimum Uniswap V3 pool liquidity accepted for oracle configuration.
+    /// @dev Rejects dust / spoof pools (e.g. liquidity == 1) that produce nonsense TWAPs
+    ///      and poison CCA launch floors. Real Base CREATOR/USDC pools are far above this.
+    uint128 public constant MIN_V3_ORACLE_LIQUIDITY = 1e12;
+
     /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
     /// @dev Mitigates L-1 (audit `docs/audits/aristotle/oracle`) — mirrors Chainlink's
     ///      reference sequencer-uptime pattern of not trusting prices for a window
@@ -76,6 +82,7 @@ contract CreatorOracle is OApp, IOracle4626 {
 
     /// @notice Minimum TWAP duration accepted by public price update functions
     uint32 public constant MIN_TWAP_DURATION = 1800; // 30 minutes
+    uint32 public constant MIN_PRICE_UPDATE_COOLDOWN = 30; // ODA-514/513: prevent instant walk
 
     /// @notice Maximum allowed price deviation per update (20%)
     uint256 public constant MAX_PRICE_DEVIATION = 0.2e18;
@@ -90,6 +97,9 @@ contract CreatorOracle is OApp, IOracle4626 {
 
     /// @notice Maximum observations to store
     uint16 public constant MAX_CARDINALITY = 1024;
+
+    /// @notice Delay before post-bootstrap critical config changes can execute.
+    uint48 public constant CRITICAL_CONFIG_DELAY = 1 days;
 
     // ================================
     // STATE - PRICE DATA
@@ -232,6 +242,47 @@ contract CreatorOracle is OApp, IOracle4626 {
     /// @notice Use truncated (manipulation-resistant) tick
     bool public useTruncatedTick = true;
 
+    struct PendingAddressConfig {
+        address value;
+        uint48 executeAfter;
+        bool queued;
+    }
+
+    struct PendingPriceUpdaterConfig {
+        address updater;
+        bool authorized;
+        uint48 executeAfter;
+        bool queued;
+    }
+
+    struct PendingV3PoolConfig {
+        address pool;
+        address creatorToken;
+        address usdToken;
+        uint32 twapDuration;
+        uint48 executeAfter;
+        bool queued;
+    }
+
+    struct PendingV4PoolConfig {
+        address poolManager;
+        address currency0;
+        address currency1;
+        uint24 fee;
+        int24 tickSpacing;
+        address hooks;
+        bool assetIsToken0;
+        uint48 executeAfter;
+        bool queued;
+    }
+
+    PendingAddressConfig public pendingChainlinkFeed;
+    PendingAddressConfig public pendingSequencerUptimeFeed;
+    PendingAddressConfig public pendingQuoteUsdFeed;
+    PendingPriceUpdaterConfig public pendingPriceUpdater;
+    PendingV3PoolConfig private pendingV3Pool;
+    PendingV4PoolConfig private pendingV4Pool;
+
     // ================================
     // CONSTANTS - INTERNAL
     // ================================
@@ -246,7 +297,7 @@ contract CreatorOracle is OApp, IOracle4626 {
     event AssetPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
     event AssetPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
     event AssetPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
-    /// @notice Remote price update skipped or step-clamped (M-06 parity with AgentOracle).
+    /// @notice Remote price update rejected before any state change.
     event RemotePriceUpdateSkipped(uint32 indexed srcEid, int256 candidatePrice, uint256 candidateTimestamp, string reason);
     event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool assetIsToken0);
     event V3PoolConfigured(
@@ -262,6 +313,17 @@ contract CreatorOracle is OApp, IOracle4626 {
     event ReferenceQuoteTokenSet(address indexed token);
     event ReferenceQuoteTokenLocked(address indexed token);
     event QuoteUsdFeedSet(address indexed feed);
+    event ChainlinkFeedQueued(address indexed feed, uint256 executeAfter);
+    event SequencerUptimeFeedQueued(address indexed feed, uint256 executeAfter);
+    event QuoteUsdFeedQueued(address indexed feed, uint256 executeAfter);
+    event V4PoolQueued(PoolId indexed poolId, address indexed poolManager, bool assetIsToken0, uint256 executeAfter);
+    event V3PoolQueued(
+        address indexed pool, address indexed creatorToken, address indexed usdToken, uint32 twapDuration, uint256 executeAfter
+    );
+    event PriceUpdaterQueued(address indexed updater, bool authorized, uint256 executeAfter);
+    event RemotePriceUpdateClamped(
+        uint32 indexed srcEid, int256 candidatePrice, int256 appliedPrice, uint256 candidateTimestamp
+    );
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAssetPriceWithFees.
 
@@ -275,6 +337,7 @@ contract CreatorOracle is OApp, IOracle4626 {
     error V4NotConfigured();
     error V3NotConfigured();
     error InvalidV3Pool();
+    error V3PoolLiquidityTooLow(uint128 liquidity, uint128 minimum);
     error UnsupportedDecimals();
     error NeedMoreObservations();
     error StalePrice();
@@ -299,6 +362,10 @@ contract CreatorOracle is OApp, IOracle4626 {
     error ZeroBroadcastFee();
     error InsufficientBroadcastFee();
     error BroadcastRefundFailed();
+    error InvalidV4Pool();
+    error CriticalConfigNotReady(uint256 executeAfter);
+    error CriticalConfigNotQueued();
+    error RenounceOwnershipDisabled();
 
     // ================================
     // CONSTRUCTOR
@@ -348,16 +415,27 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @param _feed Chainlink feed address
      */
     function setChainlinkFeed(address _feed) external onlyOwner {
-        // FIX: L-3 — reject address(0) to prevent silently disabling price updates
         if (_feed == address(0)) revert ZeroAddress();
-        chainlinkFeed = _feed;
-        emit ChainlinkFeedSet(_feed);
+        if (_feed == chainlinkFeed) return;
+        if (_criticalConfigDelayActive()) {
+            pendingChainlinkFeed =
+                PendingAddressConfig({value: _feed, executeAfter: _criticalConfigExecuteAfter(), queued: true});
+            emit ChainlinkFeedQueued(_feed, pendingChainlinkFeed.executeAfter);
+            return;
+        }
+        _applyChainlinkFeed(_feed);
     }
 
     /// @notice Configure optional Base sequencer uptime feed (fail-closed when down).
     function setSequencerUptimeFeed(address _feed) external onlyOwner {
-        sequencerUptimeFeed = _feed;
-        emit SequencerUptimeFeedSet(_feed);
+        if (_feed == sequencerUptimeFeed) return;
+        if (_criticalConfigDelayActive()) {
+            pendingSequencerUptimeFeed =
+                PendingAddressConfig({value: _feed, executeAfter: _criticalConfigExecuteAfter(), queued: true});
+            emit SequencerUptimeFeedQueued(_feed, pendingSequencerUptimeFeed.executeAfter);
+            return;
+        }
+        _applySequencerUptimeFeed(_feed);
     }
 
     /// @notice Set the required V3 quote token for this oracle lane.
@@ -372,8 +450,14 @@ contract CreatorOracle is OApp, IOracle4626 {
     /// @dev Set to zero address to clear. When cleared, only Base WETH quotes fall
     ///      back to `chainlinkFeed`; other pinned quote lanes fail closed.
     function setQuoteUsdFeed(address _feed) external onlyOwner {
-        quoteUsdFeed = _feed;
-        emit QuoteUsdFeedSet(_feed);
+        if (_feed == quoteUsdFeed) return;
+        if (_criticalConfigDelayActive()) {
+            pendingQuoteUsdFeed =
+                PendingAddressConfig({value: _feed, executeAfter: _criticalConfigExecuteAfter(), queued: true});
+            emit QuoteUsdFeedQueued(_feed, pendingQuoteUsdFeed.executeAfter);
+            return;
+        }
+        _applyQuoteUsdFeed(_feed);
     }
 
     /// @notice Irreversibly lock the current reference quote token.
@@ -391,40 +475,23 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @param _assetIsToken0 Whether creator token is currency0
      */
     function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _assetIsToken0) external onlyOwner {
-        if (_poolManager == address(0)) revert ZeroAddress();
-
-        // FIX: M-5 — only reset observation ring buffer when pool manager changes;
-        // previously every call to setV4Pool reset cardinality to 1, invalidating
-        // TWAP history and causing a price blackout during warmup
-        bool managerChanged = address(poolManager) != _poolManager;
-
-        poolManager = IPoolManager(_poolManager);
-        assetPoolKey = _poolKey;
-        assetIsToken0 = _assetIsToken0;
-        v4PoolConfigured = true;
-
-        // Get initial tick
-        PoolId poolId = _poolKey.toId();
-        (, int24 tick,,) = poolManager.getSlot0(poolId);
-
-        if (managerChanged || observationState.cardinality == 0) {
-            // Initialize first observation only on manager change or first setup
-            observations[0] = Observation({
-                blockTimestamp: uint32(block.timestamp),
-                tickCumulative: 0,
-                tickCumulativeTruncated: 0,
-                secondsPerLiquidityCumulativeX128: 0,
-                prevTruncatedTick: tick,
-                initialized: true
+        if (_criticalConfigDelayActive() && v4PoolConfigured) {
+            (PoolId queuedPoolId,,) = _validateV4PoolConfig(_poolManager, _poolKey, _assetIsToken0);
+            pendingV4Pool = PendingV4PoolConfig({
+                poolManager: _poolManager,
+                currency0: Currency.unwrap(_poolKey.currency0),
+                currency1: Currency.unwrap(_poolKey.currency1),
+                fee: _poolKey.fee,
+                tickSpacing: _poolKey.tickSpacing,
+                hooks: address(_poolKey.hooks),
+                assetIsToken0: _assetIsToken0,
+                executeAfter: _criticalConfigExecuteAfter(),
+                queued: true
             });
-
-            observationState = ObservationState({index: 0, cardinality: 1, cardinalityNext: 1});
+            emit V4PoolQueued(queuedPoolId, _poolManager, _assetIsToken0, pendingV4Pool.executeAfter);
+            return;
         }
-
-        lastObservationTimestamp = uint32(block.timestamp);
-        tickCapState.lastCapUpdate = uint48(block.timestamp);
-
-        emit V4PoolConfigured(poolId, _poolManager, _assetIsToken0);
+        _applyV4Pool(_poolManager, _poolKey, _assetIsToken0);
     }
 
     /**
@@ -438,33 +505,20 @@ contract CreatorOracle is OApp, IOracle4626 {
         external
         onlyOwner
     {
-        if (_pool == address(0) || _creatorToken == address(0) || _usdToken == address(0)) {
-            revert ZeroAddress();
+        if (_criticalConfigDelayActive() && v3PoolConfigured) {
+            _validateV3PoolConfig(_pool, _creatorToken, _usdToken, _twapDuration);
+            pendingV3Pool = PendingV3PoolConfig({
+                pool: _pool,
+                creatorToken: _creatorToken,
+                usdToken: _usdToken,
+                twapDuration: _twapDuration,
+                executeAfter: _criticalConfigExecuteAfter(),
+                queued: true
+            });
+            emit V3PoolQueued(_pool, _creatorToken, _usdToken, _twapDuration, pendingV3Pool.executeAfter);
+            return;
         }
-        address expectedQuoteToken = referenceQuoteToken;
-        if (expectedQuoteToken != address(0) && _usdToken != expectedQuoteToken) {
-            revert InvalidReferenceQuoteToken(expectedQuoteToken, _usdToken);
-        }
-        if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
-
-        address t0 = IUniswapV3Pool(_pool).token0();
-        address t1 = IUniswapV3Pool(_pool).token1();
-        bool ok = (t0 == _creatorToken && t1 == _usdToken) || (t0 == _usdToken && t1 == _creatorToken);
-        if (!ok) revert InvalidV3Pool();
-
-        uint8 creatorDec = IERC20Metadata(_creatorToken).decimals();
-        uint8 usdDec = IERC20Metadata(_usdToken).decimals();
-        if (creatorDec > 18 || usdDec > 18) revert UnsupportedDecimals();
-
-        v3Pool = _pool;
-        v3CreatorToken = _creatorToken;
-        v3UsdToken = _usdToken;
-        v3CreatorDecimals = creatorDec;
-        v3UsdDecimals = usdDec;
-        v3TwapDuration = _twapDuration;
-        v3PoolConfigured = true;
-
-        emit V3PoolConfigured(_pool, _creatorToken, _usdToken, _twapDuration);
+        _applyV3Pool(_pool, _creatorToken, _usdToken, _twapDuration);
     }
 
     /**
@@ -485,8 +539,64 @@ contract CreatorOracle is OApp, IOracle4626 {
      */
     function setPriceUpdater(address updater, bool authorized) external onlyOwner {
         if (updater == address(0)) revert ZeroAddress();
-        isPriceUpdater[updater] = authorized;
-        emit PriceUpdaterSet(updater, authorized);
+        if (isPriceUpdater[updater] == authorized) return;
+        // Revocations apply immediately so a compromised updater can be stopped
+        // without waiting for the critical-config delay. Grants stay delayed.
+        if (_criticalConfigDelayActive() && authorized) {
+            pendingPriceUpdater = PendingPriceUpdaterConfig({
+                updater: updater,
+                authorized: authorized,
+                executeAfter: _criticalConfigExecuteAfter(),
+                queued: true
+            });
+            emit PriceUpdaterQueued(updater, authorized, pendingPriceUpdater.executeAfter);
+            return;
+        }
+        // Clear a stale grant queue when revoking the same updater.
+        if (!authorized && pendingPriceUpdater.queued && pendingPriceUpdater.updater == updater) {
+            delete pendingPriceUpdater;
+        }
+        _applyPriceUpdater(updater, authorized);
+    }
+
+    function executeChainlinkFeedUpdate() external onlyOwner {
+        _applyChainlinkFeed(_consumePendingAddress(pendingChainlinkFeed));
+    }
+
+    function executeSequencerUptimeFeedUpdate() external onlyOwner {
+        _applySequencerUptimeFeed(_consumePendingAddress(pendingSequencerUptimeFeed));
+    }
+
+    function executeQuoteUsdFeedUpdate() external onlyOwner {
+        _applyQuoteUsdFeed(_consumePendingAddress(pendingQuoteUsdFeed));
+    }
+
+    function executeV4PoolUpdate() external onlyOwner {
+        PendingV4PoolConfig memory pending = pendingV4Pool;
+        _requirePendingReady(pending.queued, pending.executeAfter);
+        delete pendingV4Pool;
+        PoolKey memory poolKey = PoolKey({
+            currency0: Currency.wrap(pending.currency0),
+            currency1: Currency.wrap(pending.currency1),
+            fee: pending.fee,
+            tickSpacing: pending.tickSpacing,
+            hooks: IHooks(address(pending.hooks))
+        });
+        _applyV4Pool(pending.poolManager, poolKey, pending.assetIsToken0);
+    }
+
+    function executeV3PoolUpdate() external onlyOwner {
+        PendingV3PoolConfig memory pending = pendingV3Pool;
+        _requirePendingReady(pending.queued, pending.executeAfter);
+        delete pendingV3Pool;
+        _applyV3Pool(pending.pool, pending.creatorToken, pending.usdToken, pending.twapDuration);
+    }
+
+    function executePriceUpdaterUpdate() external onlyOwner {
+        PendingPriceUpdaterConfig memory pending = pendingPriceUpdater;
+        _requirePendingReady(pending.queued, pending.executeAfter);
+        delete pendingPriceUpdater;
+        _applyPriceUpdater(pending.updater, pending.authorized);
     }
 
     /**
@@ -506,7 +616,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @notice Set tick cap policy
      */
     function setTickCapPolicy(int24 _minCap, int24 _maxCap, uint32 _stepBps, uint32 _budgetPpm) external onlyOwner {
-        require(_minCap > 0 && _maxCap > _minCap, "Invalid range");
+        require(_minCap > 0 && _maxCap > _minCap && _maxCap <= 1000, "Invalid range");
         require(_stepBps > 0 && _stepBps <= 10000, "Invalid step");
         require(_budgetPpm > 0 && _budgetPpm <= PPM, "Invalid budget");
 
@@ -527,7 +637,8 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @notice Set price update cooldown
      */
     function setPriceUpdateCooldown(uint32 cooldown) external onlyOwner {
-        require(cooldown <= 300, "Max 5 minutes");
+        // ODA-514: nonzero floor so a compromised updater cannot walk price in one tx via cooldown=0.
+        require(cooldown >= MIN_PRICE_UPDATE_COOLDOWN && cooldown <= 300, "Cooldown out of range");
         priceUpdateCooldown = cooldown;
     }
 
@@ -581,6 +692,10 @@ contract CreatorOracle is OApp, IOracle4626 {
             revert Unauthorized();
         }
         if (_price <= 0) revert InvalidPrice();
+        if (!_sequencerIsUp()) revert SequencerDown();
+        if (assetPriceTimestamp > 0 && block.timestamp - assetPriceTimestamp < priceUpdateCooldown) {
+            revert PriceUpdateCooldown();
+        }
 
         // H-01 / 4626-293: the first write must go through
         // initializeAssetPrice(), which is owner-only and bounded. A 0 price
@@ -717,7 +832,6 @@ contract CreatorOracle is OApp, IOracle4626 {
         }
 
         uint16 newIndex = (observationState.index + 1) % cardinalityNext;
-        bool wasInitialized = observations[newIndex].initialized;
 
         // Write new observation
         observations[newIndex] = Observation({
@@ -730,7 +844,9 @@ contract CreatorOracle is OApp, IOracle4626 {
         });
 
         observationState.index = newIndex;
-        if (!wasInitialized && observationState.cardinality < cardinalityNext) {
+        // Grow while the ring is expanding. Keying on stale `initialized` flags
+        // permanently bricks growth after pool-identity reset.
+        if (observationState.cardinality < cardinalityNext) {
             observationState.cardinality++;
         }
         lastObservationTimestamp = uint32(block.timestamp);
@@ -826,7 +942,8 @@ contract CreatorOracle is OApp, IOracle4626 {
      */
     function getTWAPTick(uint32 duration) public view returns (int24 twapTick) {
         if (observationState.cardinality < 2) revert NeedMoreObservations();
-        if (duration == 0) revert InvalidDuration();
+        if (duration < MIN_TWAP_DURATION) revert InvalidDuration();
+        if (!_hasRecentObservationWindow(duration)) revert StaleObservationWindow();
 
         uint16 currentIndex = observationState.index;
         Observation storage currentObs = observations[currentIndex];
@@ -846,7 +963,10 @@ contract CreatorOracle is OApp, IOracle4626 {
             ? currentObs.tickCumulativeTruncated - oldObs.tickCumulativeTruncated
             : currentObs.tickCumulative - oldObs.tickCumulative;
 
-        twapTick = int24(tickCumulativeDelta / int56(int32(timeDelta)));
+        int56 timeDelta56 = int56(int32(timeDelta));
+        int56 meanTick = tickCumulativeDelta / timeDelta56;
+        if (tickCumulativeDelta < 0 && (tickCumulativeDelta % timeDelta56 != 0)) meanTick--;
+        twapTick = int24(meanTick);
     }
 
     /**
@@ -893,23 +1013,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @return price Price in 1e18 format
      */
     function tickToPrice(int24 tick) public view returns (uint256 price) {
-        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
-        uint256 sqrtPrice = uint256(sqrtPriceX96);
-
-        // price = (sqrtPriceX96 / 2^96)^2, scaled to 1e18.
-        // Use full-precision math to avoid overflow at valid tick bounds.
-        if (sqrtPriceX96 <= type(uint128).max) {
-            uint256 ratioX192 = sqrtPrice * sqrtPrice;
-            price = Math.mulDiv(ratioX192, 1e18, uint256(1) << 192);
-        } else {
-            uint256 ratioX128 = Math.mulDiv(sqrtPrice, sqrtPrice, uint256(1) << 64);
-            price = Math.mulDiv(ratioX128, 1e18, uint256(1) << 128);
-        }
-
-        // Invert if creator is token0
-        if (assetIsToken0 && price > 0) {
-            price = (1e18 * 1e18) / price;
-        }
+        price = CreatorOracleQuoteLib.tickToPrice(tick, assetIsToken0);
     }
 
     /**
@@ -932,21 +1036,9 @@ contract CreatorOracle is OApp, IOracle4626 {
      */
     function getV3TWAPTick(uint32 duration) public view returns (int24 twapTick) {
         if (!v3PoolConfigured) revert V3NotConfigured();
-        if (duration == 0) revert InvalidDuration();
-
-        uint32[] memory secondsAgos = new uint32[](2);
-        secondsAgos[0] = duration;
-        secondsAgos[1] = 0;
-
-        (int56[] memory tickCumulatives,) = IUniswapV3Pool(v3Pool).observe(secondsAgos);
-        int56 tickDelta = tickCumulatives[1] - tickCumulatives[0];
-        int56 timeDelta = int56(uint56(duration));
-
-        int56 meanTick = tickDelta / timeDelta;
-        // Uniswap V3 standard: round toward negative infinity
-        if (tickDelta < 0 && (tickDelta % timeDelta != 0)) meanTick--;
-
-        twapTick = int24(meanTick);
+        if (duration < MIN_TWAP_DURATION) revert InvalidDuration();
+        // Observe-failure reverts with CreatorOracleQuoteLib.NeedMoreObservations (EIP-170 split).
+        twapTick = CreatorOracleQuoteLib.v3TwapTick(v3Pool, duration, 0);
     }
 
     /**
@@ -988,17 +1080,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      *      For our Ajna strategy (quote=CREATOR, collateral=USDC), you want the CREATOR/USDC tick.
      */
     function tickToAjnaBucket(int24 tick) public pure returns (uint256 bucketIndex) {
-        int256 t = int256(tick);
-        int256 q = t / 50;
-        int256 r = t % 50;
-
-        // Solidity rounds toward 0; emulate Math.floor for negatives.
-        if (t < 0 && r != 0) q -= 1;
-
-        int256 idx = 4156 - q;
-        if (idx < 1) idx = 1;
-        if (idx > 7388) idx = 7388;
-        bucketIndex = uint256(idx);
+        bucketIndex = CreatorOracleQuoteLib.tickToAjnaBucket(tick);
     }
 
     /**
@@ -1015,27 +1097,14 @@ contract CreatorOracle is OApp, IOracle4626 {
     }
 
     /**
-     * @dev Minimal `getQuoteAtTick` (Uniswap V3 OracleLibrary-style) without importing v3-core FullMath.
-     *      Uses TickMathCompat + OpenZeppelin Math.mulDiv for full-precision mul/div.
+     * @dev Minimal `getQuoteAtTick` — body lives in CreatorOracleQuoteLib (EIP-170).
      */
     function _getQuoteAtTick(int24 tick, uint128 baseAmount, address baseToken, address quoteToken)
         internal
         pure
         returns (uint256 quoteAmount)
     {
-        uint160 sqrtRatioX96 = TickMathCompat.getSqrtRatioAtTick(tick);
-
-        if (sqrtRatioX96 <= type(uint128).max) {
-            uint256 ratioX192 = uint256(sqrtRatioX96) * uint256(sqrtRatioX96);
-            quoteAmount = baseToken < quoteToken
-                ? Math.mulDiv(ratioX192, baseAmount, uint256(1) << 192)
-                : Math.mulDiv(uint256(1) << 192, baseAmount, ratioX192);
-        } else {
-            uint256 ratioX128 = Math.mulDiv(uint256(sqrtRatioX96), uint256(sqrtRatioX96), uint256(1) << 64);
-            quoteAmount = baseToken < quoteToken
-                ? Math.mulDiv(ratioX128, baseAmount, uint256(1) << 128)
-                : Math.mulDiv(uint256(1) << 128, baseAmount, ratioX128);
-        }
+        quoteAmount = CreatorOracleQuoteLib.getQuoteAtTick(tick, baseAmount, baseToken, quoteToken);
     }
 
     /**
@@ -1204,8 +1273,8 @@ contract CreatorOracle is OApp, IOracle4626 {
 
     /**
      * @notice Broadcast price to other chains with per-destination LayerZero fees
-     * @dev FIX: M-01 (4626-310) — the equal-split `broadcastAssetPrice` variant above
-     *      divides `msg.value / dstEids.length` and uses that as the fee for every
+     * @dev FIX: M-01 (4626-310) — the previous equal-split broadcast variant
+     *      divided `msg.value / dstEids.length` and used that as the fee for every
      *      destination. LayerZero fees differ per destination chain, so any chain whose
      *      real fee exceeds the split amount reverts mid-loop and the broadcast
      *      partially fails. This overload requires the caller to pass a `fees` array
@@ -1293,18 +1362,15 @@ contract CreatorOracle is OApp, IOracle4626 {
             uint256 newP = uint256(price);
             uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
             if (deviation > MAX_PRICE_DEVIATION) {
-                // If still fresh, step-clamp toward hub value; if already stale, accept full hub price.
-                if (block.timestamp - assetPriceTimestamp <= MAX_STALENESS) {
-                    uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
-                    if (maxStep == 0) maxStep = 1;
-                    if (newP > oldP) {
-                        newP = oldP + maxStep;
-                    } else {
-                        newP = oldP > maxStep ? oldP - maxStep : 1;
-                    }
-                    price = int256(newP);
-                    emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "deviation_clamped");
+                uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
+                if (maxStep == 0) maxStep = 1;
+                if (newP > oldP) {
+                    newP = oldP + maxStep;
+                } else {
+                    newP = oldP > maxStep ? oldP - maxStep : 1;
                 }
+                emit RemotePriceUpdateClamped(origin.srcEid, price, int256(newP), safeTimestamp);
+                price = int256(newP);
             }
         }
 
@@ -1366,14 +1432,7 @@ contract CreatorOracle is OApp, IOracle4626 {
     ///      reference sequencer-uptime pattern. This also naturally rejects a future
     ///      `startedAt` (spoofed/misreporting feed), which would otherwise underflow.
     function _sequencerIsUp() internal view returns (bool) {
-        address feed = sequencerUptimeFeed;
-        if (feed == address(0)) return true;
-        (, int256 answer, uint256 startedAt, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
-        if (updatedAt > block.timestamp) return false;
-        if (answer != 0) return false; // sequencer reported down
-        if (startedAt > block.timestamp) return false;
-        if (block.timestamp - startedAt <= SEQUENCER_GRACE_PERIOD) return false;
-        return true;
+        return CreatorOracleQuoteLib.sequencerIsUp(sequencerUptimeFeed, SEQUENCER_GRACE_PERIOD);
     }
 
     /// @notice External wrapper used in try/catch to keep auto-path fail-open.
@@ -1388,6 +1447,7 @@ contract CreatorOracle is OApp, IOracle4626 {
     ///      `referenceQuoteToken` is pinned. A pinned quote token without a feed fails
     ///      closed with `MissingQuoteUsdFeed`.
     function _convertQuoteToUsd18(uint256 amountQuote18, address quoteToken) internal view returns (uint256 usd18) {
+        if (!_sequencerIsUp()) revert SequencerDown();
         address feed = quoteUsdFeed;
         if (feed == address(0) && quoteToken == BASE_WETH) {
             feed = chainlinkFeed;
@@ -1396,7 +1456,6 @@ contract CreatorOracle is OApp, IOracle4626 {
             if (referenceQuoteToken != address(0)) revert MissingQuoteUsdFeed(quoteToken);
             return amountQuote18; // legacy USD-stable quote (e.g. USDC)
         }
-        if (!_sequencerIsUp()) revert SequencerDown();
         (uint256 quoteUsd18, uint256 updatedAt, bool ok) = _readFeedPrice18(feed);
         if (!ok || quoteUsd18 == 0) {
             if (updatedAt != 0 && block.timestamp > updatedAt && block.timestamp - updatedAt > MAX_STALENESS) {
@@ -1407,45 +1466,22 @@ contract CreatorOracle is OApp, IOracle4626 {
         usd18 = Math.mulDiv(amountQuote18, quoteUsd18, 1e18);
     }
 
-    /// @dev Robust Chainlink-style feed read normalized to 1e18. Handles reverting
-    ///      feeds, non-positive answers, staleness (including future timestamps),
-    ///      answeredInRound regressions, and non-8-decimal feeds.
+    /// @dev Robust Chainlink-style feed read normalized to 1e18 (body in QuoteLib).
     function _readFeedPrice18(address feed) internal view returns (uint256 price18, uint256 updatedAt, bool ok) {
-        if (feed == address(0)) return (0, 0, false);
-        uint80 roundId;
-        int256 answer;
-        uint80 answeredInRound;
-        uint256 roundUpdatedAt;
-        try IChainlinkFeed(feed).latestRoundData() returns (
-            uint80 _roundId, int256 _answer, uint256, uint256 _updatedAt, uint80 _answeredInRound
-        ) {
-            roundId = _roundId;
-            answer = _answer;
-            roundUpdatedAt = _updatedAt;
-            answeredInRound = _answeredInRound;
-        } catch {
-            return (0, 0, false);
-        }
-        if (answer <= 0) return (0, roundUpdatedAt, false);
-        if (roundUpdatedAt > block.timestamp) return (0, roundUpdatedAt, false);
-        if (block.timestamp - roundUpdatedAt > MAX_STALENESS) return (0, roundUpdatedAt, false);
-        if (answeredInRound < roundId) return (0, roundUpdatedAt, false);
+        return CreatorOracleQuoteLib.readFeedPrice18(feed, MAX_STALENESS);
+    }
 
-        uint8 feedDecimals;
-        try IChainlinkFeed(feed).decimals() returns (uint8 d) {
-            feedDecimals = d;
-        } catch {
-            return (0, roundUpdatedAt, false);
-        }
-        if (feedDecimals > 18) return (0, roundUpdatedAt, false);
+    function _requirePendingReady(bool queued, uint48 executeAfter) internal view {
+        if (!queued) revert CriticalConfigNotQueued();
+        if (block.timestamp < executeAfter) revert CriticalConfigNotReady(executeAfter);
+    }
 
-        uint256 unsignedAnswer = uint256(answer);
-        if (feedDecimals < 18) {
-            price18 = Math.mulDiv(unsignedAnswer, 10 ** uint256(18 - feedDecimals), 1);
-        } else {
-            price18 = unsignedAnswer;
-        }
-        return (price18, roundUpdatedAt, true);
+    function _consumePendingAddress(PendingAddressConfig storage pending) internal returns (address value) {
+        _requirePendingReady(pending.queued, pending.executeAfter);
+        value = pending.value;
+        pending.value = address(0);
+        pending.executeAfter = 0;
+        pending.queued = false;
     }
 
     function _hasRecentObservationWindow(uint32 duration) internal view returns (bool) {
@@ -1461,7 +1497,7 @@ contract CreatorOracle is OApp, IOracle4626 {
         // The latest observation must be reasonably fresh relative to the requested window.
         if (block.timestamp - currentTs > duration) return false;
 
-        uint32 targetTime = currentTs > duration ? currentTs - duration : 0;
+        uint32 targetTime = uint32(block.timestamp) - duration;
         uint16 oldIndex = _findObservationBefore(targetTime);
         Observation storage oldObs = observations[oldIndex];
         if (!oldObs.initialized) return false;
@@ -1469,15 +1505,151 @@ contract CreatorOracle is OApp, IOracle4626 {
         uint32 realizedWindow = currentTs - oldObs.blockTimestamp;
         return realizedWindow >= MIN_TWAP_DURATION;
     }
-}
 
-/**
- * @notice Chainlink feed interface
- */
-interface IChainlinkFeed {
-    function decimals() external view returns (uint8);
-    function latestRoundData()
-        external
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceOwnershipDisabled();
+    }
+
+    function _criticalConfigDelayActive() internal view returns (bool) {
+        return assetPriceUSD > 0;
+    }
+
+    function _criticalConfigExecuteAfter() internal view returns (uint48) {
+        return uint48(block.timestamp + CRITICAL_CONFIG_DELAY);
+    }
+
+    function _applyChainlinkFeed(address _feed) internal {
+        if (_feed == address(0)) revert ZeroAddress();
+        chainlinkFeed = _feed;
+        emit ChainlinkFeedSet(_feed);
+    }
+
+    function _applySequencerUptimeFeed(address _feed) internal {
+        sequencerUptimeFeed = _feed;
+        emit SequencerUptimeFeedSet(_feed);
+    }
+
+    function _applyQuoteUsdFeed(address _feed) internal {
+        quoteUsdFeed = _feed;
+        emit QuoteUsdFeedSet(_feed);
+    }
+
+    function _applyPriceUpdater(address updater, bool authorized) internal {
+        if (updater == address(0)) revert ZeroAddress();
+        isPriceUpdater[updater] = authorized;
+        emit PriceUpdaterSet(updater, authorized);
+    }
+
+    function _applyV3Pool(address _pool, address _creatorToken, address _usdToken, uint32 _twapDuration) internal {
+        (uint8 creatorDec, uint8 usdDec) = _validateV3PoolConfig(_pool, _creatorToken, _usdToken, _twapDuration);
+
+        v3Pool = _pool;
+        v3CreatorToken = _creatorToken;
+        v3UsdToken = _usdToken;
+        v3CreatorDecimals = creatorDec;
+        v3UsdDecimals = usdDec;
+        v3TwapDuration = _twapDuration;
+        v3PoolConfigured = true;
+
+        emit V3PoolConfigured(_pool, _creatorToken, _usdToken, _twapDuration);
+    }
+
+    function _applyV4Pool(address _poolManager, PoolKey memory _poolKey, bool _assetIsToken0) internal {
+        (PoolId poolId, int24 tick, bool derivedAssetIsToken0) = _validateV4PoolConfig(_poolManager, _poolKey, _assetIsToken0);
+        IPoolManager newPoolManager = IPoolManager(_poolManager);
+
+        bool poolIdentityChanged = !v4PoolConfigured || address(poolManager) != _poolManager
+            || PoolId.unwrap(assetPoolKey.toId()) != PoolId.unwrap(poolId) || assetIsToken0 != derivedAssetIsToken0;
+
+        poolManager = newPoolManager;
+        assetPoolKey = _poolKey;
+        assetIsToken0 = derivedAssetIsToken0;
+        v4PoolConfigured = true;
+
+        if (poolIdentityChanged || observationState.cardinality == 0) {
+            // Clear prior-generation ring slots before shrinking cardinalityNext. Otherwise
+            // leftover `initialized=true` flags make `_recordObservation` skip cardinality
+            // growth forever (wasInitialized stays true for every reused index).
+            uint16 oldCardinalityNext = observationState.cardinalityNext;
+            for (uint16 i = 1; i < oldCardinalityNext;) {
+                delete observations[i];
+                unchecked {
+                    ++i;
+                }
+            }
+
+            observations[0] = Observation({
+                blockTimestamp: uint32(block.timestamp),
+                tickCumulative: 0,
+                tickCumulativeTruncated: 0,
+                secondsPerLiquidityCumulativeX128: 0,
+                prevTruncatedTick: tick,
+                initialized: true
+            });
+
+            observationState = ObservationState({index: 0, cardinality: 1, cardinalityNext: 1});
+        }
+
+        lastObservationTimestamp = uint32(block.timestamp);
+        tickCapState.lastCapUpdate = uint48(block.timestamp);
+
+        emit V4PoolConfigured(poolId, _poolManager, derivedAssetIsToken0);
+    }
+
+    function _validateV3PoolConfig(address _pool, address _creatorToken, address _usdToken, uint32 _twapDuration)
+        internal
         view
-        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+        returns (uint8 creatorDec, uint8 usdDec)
+    {
+        if (_pool == address(0) || _creatorToken == address(0) || _usdToken == address(0)) {
+            revert ZeroAddress();
+        }
+        address expectedQuoteToken = referenceQuoteToken;
+        if (expectedQuoteToken != address(0) && _usdToken != expectedQuoteToken) {
+            revert InvalidReferenceQuoteToken(expectedQuoteToken, _usdToken);
+        }
+        if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
+
+        address t0 = IUniswapV3Pool(_pool).token0();
+        address t1 = IUniswapV3Pool(_pool).token1();
+        bool ok = (t0 == _creatorToken && t1 == _usdToken) || (t0 == _usdToken && t1 == _creatorToken);
+        if (!ok) revert InvalidV3Pool();
+
+        uint128 poolLiquidity = IUniswapV3Pool(_pool).liquidity();
+        if (poolLiquidity < MIN_V3_ORACLE_LIQUIDITY) {
+            revert V3PoolLiquidityTooLow(poolLiquidity, MIN_V3_ORACLE_LIQUIDITY);
+        }
+
+        creatorDec = IERC20Metadata(_creatorToken).decimals();
+        usdDec = IERC20Metadata(_usdToken).decimals();
+        if (creatorDec > 18 || usdDec > 18) revert UnsupportedDecimals();
+    }
+
+    function _validateV4PoolConfig(address _poolManager, PoolKey memory _poolKey, bool _assetIsToken0)
+        internal
+        view
+        returns (PoolId poolId, int24 tick, bool derivedAssetIsToken0)
+    {
+        if (_poolManager == address(0)) revert ZeroAddress();
+
+        poolId = _poolKey.toId();
+
+        address c0 = Currency.unwrap(_poolKey.currency0);
+        address c1 = Currency.unwrap(_poolKey.currency1);
+        bool token0IsEthQuote = c0 == address(0) || c0 == BASE_WETH;
+        bool token1IsEthQuote = c1 == address(0) || c1 == BASE_WETH;
+        if (token0IsEthQuote == token1IsEthQuote) revert InvalidV4Pool();
+
+        derivedAssetIsToken0 = !token0IsEthQuote;
+        if (_assetIsToken0 != derivedAssetIsToken0) revert InvalidV4Pool();
+
+        address creatorToken = derivedAssetIsToken0 ? c0 : c1;
+        if (creatorToken == address(0) || creatorToken == BASE_WETH) revert InvalidV4Pool();
+        if (IERC20Metadata(creatorToken).decimals() > 18) revert UnsupportedDecimals();
+
+        IPoolManager newPoolManager = IPoolManager(_poolManager);
+        (uint160 sqrtPriceX96, int24 poolTick,,) = newPoolManager.getSlot0(poolId);
+        if (sqrtPriceX96 == 0 || newPoolManager.getLiquidity(poolId) == 0) revert InvalidV4Pool();
+        tick = poolTick;
+    }
 }

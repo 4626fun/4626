@@ -24,6 +24,7 @@ contract AjnaVaultAuth {
     error InvalidMinBucketIndex();
     // FIX: F-04 — two-step admin transfer errors
     error NotPendingAdmin();
+    error NotPendingSwapper();
     error NoPendingTollUpdate();
     error NoPendingTaxUpdate();
     error FeeUpdateTimelockActive(uint256 executeAfter);
@@ -31,6 +32,7 @@ contract AjnaVaultAuth {
     event AdminSet(address indexed admin);
     // FIX: F-04 — event for pending admin nomination
     event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
+    event SwapperTransferStarted(address indexed currentSwapper, address indexed pendingSwapper);
     event SwapperSet(address indexed swapper);
     event KeeperSet(address indexed keeper, bool isKeeper);
     event Paused();
@@ -41,6 +43,8 @@ contract AjnaVaultAuth {
     event TaxSet(uint256 taxBps);
     event TollUpdateQueued(uint256 tollBps, uint256 executeAfter);
     event TaxUpdateQueued(uint256 taxBps, uint256 executeAfter);
+    event TollUpdateExpired(uint256 expiredAt);
+    event TaxUpdateExpired(uint256 expiredAt);
     event MinBucketIndexSet(uint256 minBucketIndex);
 
     address public admin;
@@ -57,12 +61,16 @@ contract AjnaVaultAuth {
 
     /// @notice ODA-423-M08: after initial bootstrap, toll/tax changes are 24h-timelocked.
     uint256 public constant FEE_UPDATE_TIMELOCK = 24 hours;
+    /// @notice ODA-519-17: queued fee updates expire if not executed.
+    uint256 public constant FEE_UPDATE_EXPIRY = 7 days;
     bool public tollArmed;
     bool public taxArmed;
     uint256 public pendingToll;
     uint256 public pendingTax;
     uint256 public pendingTollAt;
     uint256 public pendingTaxAt;
+    /// @notice ODA-519-6: two-step swapper rotation (mirror admin transfer).
+    address public pendingSwapper;
 
     modifier onlyAdmin() {
         if (msg.sender != admin) revert NotAuthorized();
@@ -72,6 +80,9 @@ contract AjnaVaultAuth {
     constructor(address initialAdmin) {
         if (initialAdmin == address(0)) revert ZeroAddress();
         admin = initialAdmin;
+        // ODA-519-17: arm fee levers at deploy so toll/tax=0 cannot be front-run without timelock.
+        tollArmed = true;
+        taxArmed = true;
     }
 
     function isAdmin(address account) external view returns (bool) {
@@ -108,11 +119,26 @@ contract AjnaVaultAuth {
         emit AdminSet(admin);
     }
 
+    /// @notice Set or nominate the swapper (ODA-519-6).
+    /// @dev First assignment (`swapper == 0`) is instant for CREATE2/factory wiring.
+    ///      Rotations are two-step: nominate here, then `acceptSwapper()` from the nominee.
     function setSwapper(address nextSwapper) external onlyAdmin {
         // FIX: F-09 — prevent setting swapper to zero which would lock withdraw/redeem
         if (nextSwapper == address(0)) revert ZeroAddress();
-        swapper = nextSwapper;
-        emit SwapperSet(nextSwapper);
+        if (swapper == address(0)) {
+            swapper = nextSwapper;
+            emit SwapperSet(nextSwapper);
+            return;
+        }
+        pendingSwapper = nextSwapper;
+        emit SwapperTransferStarted(swapper, nextSwapper);
+    }
+
+    function acceptSwapper() external {
+        if (msg.sender != pendingSwapper) revert NotPendingSwapper();
+        swapper = pendingSwapper;
+        pendingSwapper = address(0);
+        emit SwapperSet(swapper);
     }
 
     function setKeeper(address keeper, bool isKeeper_) external onlyAdmin {
@@ -151,7 +177,7 @@ contract AjnaVaultAuth {
 
     function setToll(uint256 nextToll) external onlyAdmin {
         if (nextToll > 1_000) revert FeeTooHigh();
-        // ODA-423-M08: first set instant (deploy bootstrap); rewires cannot front-run flows.
+        // ODA-519-17 / ODA-423-M08: always queue behind timelock (armed at construction).
         if (!tollArmed) {
             toll = nextToll;
             tollArmed = true;
@@ -167,6 +193,14 @@ contract AjnaVaultAuth {
         uint256 executeAfter = pendingTollAt;
         if (executeAfter == 0) revert NoPendingTollUpdate();
         if (block.timestamp < executeAfter) revert FeeUpdateTimelockActive(executeAfter);
+        uint256 expiresAt = executeAfter + FEE_UPDATE_EXPIRY;
+        // Clear without reverting — a revert would roll back the clear.
+        if (block.timestamp > expiresAt) {
+            pendingToll = 0;
+            pendingTollAt = 0;
+            emit TollUpdateExpired(expiresAt);
+            return;
+        }
         uint256 next = pendingToll;
         pendingToll = 0;
         pendingTollAt = 0;
@@ -191,6 +225,14 @@ contract AjnaVaultAuth {
         uint256 executeAfter = pendingTaxAt;
         if (executeAfter == 0) revert NoPendingTaxUpdate();
         if (block.timestamp < executeAfter) revert FeeUpdateTimelockActive(executeAfter);
+        uint256 expiresAt = executeAfter + FEE_UPDATE_EXPIRY;
+        // Clear without reverting — a revert would roll back the clear.
+        if (block.timestamp > expiresAt) {
+            pendingTax = 0;
+            pendingTaxAt = 0;
+            emit TaxUpdateExpired(expiresAt);
+            return;
+        }
         uint256 next = pendingTax;
         pendingTax = 0;
         pendingTaxAt = 0;

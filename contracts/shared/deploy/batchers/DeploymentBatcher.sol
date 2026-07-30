@@ -1380,6 +1380,9 @@ contract DeploymentBatcherPhase2Module {
         IOVault4626(params.vault).transferOwnership(params.owner);
         IOVaultWrapper4626(params.wrapper).transferOwnership(protocolTreasury);
         IShareOFT4626(params.shareOFT).transferOwnership(protocolTreasury);
+        // ODA-508-L8: the gauge is Ownable2Step — this NOMINATES the treasury. Deploy
+        // choreography: `protocolTreasury` must call `acceptOwnership()` on the gauge to
+        // complete the handoff; until then this batcher remains the owner of record.
         ITradeFeeCollector4626(params.gaugeController).transferOwnership(protocolTreasury);
         ICCALaunchArm(params.ccaLaunchArm).transferOwnership(protocolTreasury);
         IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);

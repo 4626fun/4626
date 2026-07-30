@@ -673,12 +673,16 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice Get the current price per share (1e18 scale)
+     * @dev FIX: ODA-508-I9 — align with the vault's ERC-4626 virtual-offset formula
+     *      (`(totalAssets + 1) * 1e18 / (totalSupply + 10 ** _decimalsOffset())`,
+     *      `_decimalsOffset() = 3`) so a UI/integrator reading the wrapper sees the same
+     *      PPS the vault reports for identical state.
      */
     function pricePerShare() external view returns (uint256) {
         uint256 totalAssets = vault.totalAssets();
         uint256 totalSupply = vault.totalSupply();
         if (totalSupply == 0) return 1e18;
-        return (totalAssets * 1e18) / totalSupply;
+        return ((totalAssets + 1) * 1e18) / (totalSupply + 1000);
     }
 
     /**

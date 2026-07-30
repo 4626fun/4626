@@ -120,17 +120,15 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     /// @notice Replay guard: nonce commitments already consumed.
     mapping(bytes32 => bool) public usedNonceCommit;
 
-    /// @notice Replay guard: walletAddrCommits already consumed in an epoch.
-    /// @dev walletAddrCommit binds (wallet, twitterCreditNullifier), so a single
-    ///      twitter credit can only be used once per epoch even if the wallet
-    ///      reuses different nonces.
-    mapping(uint64 => mapping(bytes32 => bool)) public usedWalletCommit;
-
     /// @notice GLOBAL replay guard for points-burn nullifiers. Once a spend
     ///         row is consumed by an AMOE entry, it can never back another
     ///         entry, in any epoch, ever. This matches the off-chain semantic
     ///         that one `(signup_id, source='amoe_entry_spend', source_id)`
     ///         points row backs exactly one AMOE entry.
+    /// @dev    Multi-entry in the same epoch is allowed: each entry needs its
+    ///         own spend row / nullifier. `walletAddrCommit` remains a public
+    ///         input (wallet + twitter-credit binding in the circuit) but is
+    ///         not an on-chain once-per-epoch replay key.
     mapping(bytes32 => bool) public usedPointsBurnNullifier;
 
     /// @notice Monotonic entry id counter.
@@ -189,7 +187,6 @@ contract LotteryAmoeRouter is ReentrancyGuard {
     error RootMismatch();
     error InvalidProof();
     error NonceReplayed();
-    error WalletCreditReplayed();
     error PointsBurnReplayed();
     error PointsLedgerEpochNotPublished();
     error PointsLedgerRootMismatch();
@@ -473,10 +470,13 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         }
 
         // 5. Replay guards.
+        //    Multi-entry same epoch is allowed when each submission has a
+        //    fresh nonceCommit and a fresh pointsBurnNullifier (distinct
+        //    off-chain spend rows). walletAddrCommit is still bound into the
+        //    proof / event for identity, but is not once-per-epoch gated.
         bytes32 nonceCommit = bytes32(pubInputs[2]);
         if (usedNonceCommit[nonceCommit]) revert NonceReplayed();
         bytes32 walletCommit = bytes32(pubInputs[0]);
-        if (usedWalletCommit[epoch][walletCommit]) revert WalletCreditReplayed();
         bytes32 pointsBurnNullifier = bytes32(pubInputs[7]);
         if (usedPointsBurnNullifier[pointsBurnNullifier]) revert PointsBurnReplayed();
 
@@ -485,7 +485,6 @@ contract LotteryAmoeRouter is ReentrancyGuard {
 
         // 7. Effects.
         usedNonceCommit[nonceCommit] = true;
-        usedWalletCommit[epoch][walletCommit] = true;
         usedPointsBurnNullifier[pointsBurnNullifier] = true;
         unchecked {
             entryId = ++nextEntryId;
@@ -509,7 +508,7 @@ contract LotteryAmoeRouter is ReentrancyGuard {
         //    `LotteryManager4626.processAmoeEntry` returns 0 on several
         //    "silent skip" branches (inactive coin, sub-`minSwapAmount` value,
         //    lottery currently inactive). Because step 7 above has already
-        //    burned the nonce / wallet / points-burn nullifiers, a 0 return
+        //    burned the nonce / points-burn nullifiers, a 0 return
         //    would lose the user's entry permanently with no replay path.
         //    Revert in that case so the proof + nullifiers stay un-consumed
         //    (state is rolled back atomically) and the user can resubmit

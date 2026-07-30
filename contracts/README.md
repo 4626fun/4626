@@ -158,7 +158,7 @@ Reused bytecode (under `shared/`): CCA launch strategy, linear vesting, burn str
 
 Deployment orchestration lives in `shared/deploy/batchers/`. `DeploymentBatcher` phase 1 branches on `VaultKind` (salts, core module, bytecode ids) and persists `vaultKind` in `phase1SplitStates` (included in `phase1ParamsHash`). Phase 2 reads that stored kind and wires gauge asset tokens via `setCreatorCoin` (creator) or `setAgentToken` (agent). Legacy on-chain split state written before `vaultKind` was added decodes as `Creator` (enum default `0`).
 
-Bytecode epoch ops: the v1.16.0 bytecode-store epoch manifest and re-seed runbook are tracked in the private ops repo.
+Bytecode epoch ops: `deployments/base/v1.16.0-bytecode-manifest.json` + `docs/_internal/deployment-releases-legacy/v1.16.0-bytecode-epoch.md` (store re-seed via `./script/seed-v1160-bytecode-store.sh`).
 
 V4 tax hook pool configuration is applied through `CCALaunchArm.setOracleConfig` during phase 2 — there is no separate `TaxHookConfigurator` helper contract in-tree.
 

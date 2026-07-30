@@ -38,12 +38,20 @@ library AjnaVaultLibrary {
         if (remainingBufferAssets < minBufferAssets) revert BufferRatioViolated();
     }
 
-    function lpToAssets(IAjnaPool pool, uint256 bucketIndex, uint256 lpAmount) internal view returns (uint256) {
+    /// @notice Convert an LP amount to quote-token assets for a lender.
+    /// @dev ODA-519-1: Ajna voids only LP with `depositTime <= bankruptcyTime`. Post-bankruptcy
+    ///      LP in the same bucket remains fully redeemable — do not zero the whole bucket forever.
+    function lpToAssets(IAjnaPool pool, uint256 bucketIndex, uint256 lpAmount, address lender)
+        internal
+        view
+        returns (uint256)
+    {
         if (lpAmount == 0) return 0;
 
-        // ODA-466-11: bankrupt buckets have worthless pre-bankruptcy LP.
         (uint256 bucketLpTotal,, uint256 bankruptcyTime, uint256 bucketDeposit,) = pool.bucketInfo(bucketIndex);
-        if (bankruptcyTime != 0) return 0;
+        (, uint256 depositTime) = pool.lenderInfo(bucketIndex, lender);
+        // ODA-466-11 / ODA-519-1: only this lender's pre-bankruptcy LP is worthless.
+        if (bankruptcyTime != 0 && depositTime != 0 && depositTime <= bankruptcyTime) return 0;
         if (bucketLpTotal == 0 || bucketDeposit == 0) return 0;
 
         return (lpAmount * bucketDeposit) / bucketLpTotal;
@@ -51,7 +59,7 @@ library AjnaVaultLibrary {
 
     function bucketAssets(IAjnaPool pool, uint256 bucketIndex, address lender) internal view returns (uint256 assets) {
         (uint256 lpAmount,) = pool.lenderInfo(bucketIndex, lender);
-        return lpToAssets(pool, bucketIndex, lpAmount);
+        return lpToAssets(pool, bucketIndex, lpAmount, lender);
     }
 
     function burnableLp(uint256 trackedLp, uint256 requestedLp) internal pure returns (uint256) {

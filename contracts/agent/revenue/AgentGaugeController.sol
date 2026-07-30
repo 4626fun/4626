@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -45,7 +46,7 @@ interface Ive4626VoterRewardsDistributor {
  *      - 0% treasury (default)
  *      V4 sell-tax WETH is buyback'd to ◆ via keeper-quoted `processWETHFeesWithRoute` (no buyFeeBps).
  */
-contract AgentGaugeController is Ownable, ReentrancyGuard {
+contract AgentGaugeController is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ================================
@@ -58,6 +59,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Timelock for emergency withdrawals and stranded-WETH write-downs
     ///         (ODA-508-6 creator-lane parity / ODA-508-2).
     uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
+
+    /// @notice ODA-508-L5: with less remaining gas than this (e.g. a 2,300-gas
+    /// `.transfer()/.send()` stipend), `receive()` keeps the ETH raw instead of wrapping.
+    uint256 private constant MIN_WRAP_GAS = 10_000;
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -91,6 +96,19 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @dev FIX: ODA-508-3 — never cleared by the revoke path, so revoke-then-set routes
     ///      through the timelock instead of the immediate first-set branch.
     bool public lotteryManagerInitialized;
+
+    /// @notice FIX: ODA-508-L4 — delay before an oracle change or a new swap-router
+    ///         allowlisting can execute; converts the instant owner pivot that defeats
+    ///         `PendingWethFeesProtected` into an observable 1-day action.
+    uint256 public constant CONFIG_UPDATE_TIMELOCK = 1 days;
+
+    address public pendingOracle;
+    uint256 public pendingOracleAt;
+    /// @notice One-way flag: true once a non-zero oracle has ever been set (first set stays
+    ///         immediate so deploy wiring is unaffected).
+    bool public oracleInitialized;
+    /// @notice Router → timestamp after which its allowlisting can execute (0 = none pending).
+    mapping(address => uint256) public pendingRouterAllowlist;
 
     /// @notice Agent's treasury wallet
     address public agentTreasury;
@@ -254,6 +272,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     event ThresholdUpdated(uint256 newThreshold);
     event SwapConfigUpdated(uint256 slippageBps);
     event OracleSet(address indexed oracle);
+    /// @notice ODA-508-L4.
+    event OracleUpdateQueued(address indexed oracle, uint256 executeAfter);
+    /// @notice ODA-508-L4.
+    event OracleUpdateCancelled(address indexed oracle);
+    /// @notice ODA-508-L4.
+    event RouterAllowlistQueued(address indexed router, uint256 executeAfter);
     event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
     event ve4626VoterRewardsDistributorUpdated(address indexed distributor);
 
@@ -323,6 +347,15 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error KeeperCooldownActive();
     /// @dev ODA-508-L9 — oracle-floor math assumes 18-decimal units.
     error Non18DecimalAgentToken(address token, uint8 tokenDecimals);
+
+    /// @notice ODA-508-L4.
+    error NoPendingOracleUpdate();
+    /// @notice ODA-508-L4.
+    error OracleUpdateTooEarly(uint256 executeAfter);
+    /// @notice ODA-508-L4.
+    error NoPendingRouterAllowlist();
+    /// @notice ODA-508-L4.
+    error RouterAllowlistTooEarly(uint256 executeAfter);
 
     // ================================
     // CONSTRUCTOR
@@ -471,6 +504,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      */
     receive() external payable {
         if (msg.value == 0) return;
+
+        // FIX: ODA-508-L5 — a 2,300-gas stipend (`.transfer()/.send()`, the pattern the tax
+        // hook uses per the docblock above) cannot pay for the WETH wrap + two SSTOREs + an
+        // event, so those sends used to revert outright. Keep the ETH raw instead; it is
+        // recoverable via the native-ETH branch of `executeEmergencyWithdraw` (ODA-508-6).
+        if (gasleft() < MIN_WRAP_GAS) return;
 
         // Wrap ETH to WETH
         IWETH(WETH).deposit{value: msg.value}();
@@ -821,6 +860,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /**
      * @notice Pay jackpot to lottery winner in ShareOFT (◆)
      * @dev Only callable by lottery manager; reverts when reserve is insufficient (M-02).
+     *      ODA-508-L10 (accepted residual): while `lotteryManager == address(0)` the jackpot
+     *      is frozen — `payJackpot` is unreachable and `JackpotReserveProtected` blocks the
+     *      emergency path. That freeze is the intended custody trade of ODA-508-3: the owner
+     *      lifts it by queuing a new manager via `setLotteryManager` +
+     *      `executeLotteryManagerUpdate` (≤ `LOTTERY_MANAGER_UPDATE_TIMELOCK`), never
+     *      instantly, so a compromised owner key cannot drain the reserve in one transaction.
      * @param winner Winner's address
      * @param amount Amount of ShareOFT to pay
      */
@@ -1034,22 +1079,80 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Allowlist a router for WETH→◆ buyback calldata execution.
+     * @dev FIX: ODA-508-L4 — additions queue for `CONFIG_UPDATE_TIMELOCK` (an instant router
+     *      pivot plus an oracle pivot is the WETH-drain path); removals stay immediate so a
+     *      compromised router can be kicked without delay.
      */
     function setAllowedSwapRouter(address router, bool allowed) external onlyOwner {
         if (router == address(0)) revert ZeroAddress();
-        allowedSwapRouters[router] = allowed;
-        emit SwapRouterAllowlistUpdated(router, allowed);
+        if (!allowed) {
+            allowedSwapRouters[router] = false;
+            pendingRouterAllowlist[router] = 0;
+            emit SwapRouterAllowlistUpdated(router, false);
+            return;
+        }
+        if (allowedSwapRouters[router]) return;
+        uint256 executeAfter = block.timestamp + CONFIG_UPDATE_TIMELOCK;
+        pendingRouterAllowlist[router] = executeAfter;
+        emit RouterAllowlistQueued(router, executeAfter);
+    }
+
+    /**
+     * @notice Execute a queued router allowlisting after the timelock.
+     */
+    function executeRouterAllowlist(address router) external onlyOwner {
+        uint256 executeAfter = pendingRouterAllowlist[router];
+        if (executeAfter == 0) revert NoPendingRouterAllowlist();
+        if (block.timestamp < executeAfter) revert RouterAllowlistTooEarly(executeAfter);
+        pendingRouterAllowlist[router] = 0;
+        allowedSwapRouters[router] = true;
+        emit SwapRouterAllowlistUpdated(router, true);
     }
 
     /**
      * @notice Set the oracle for price-based slippage protection
      * @param _oracle AgentOracle address
+     * @dev FIX: ODA-508-L4 — the first-ever set stays immediate (deploy wiring, no WETH at
+     *      risk yet); subsequent changes queue for `CONFIG_UPDATE_TIMELOCK` so a malicious
+     *      oracle substitution is observable before it can clear the fail-closed check.
      */
     function setOracle(address _oracle) external onlyOwner {
         // ODA-424-L10: disallow zero; disable slippage via `setOracleConfig(_, false)`.
         if (_oracle == address(0)) revert ZeroAddress();
+        if (!oracleInitialized) {
+            oracle = IOracle4626(_oracle);
+            oracleInitialized = true;
+            emit OracleSet(_oracle);
+            return;
+        }
+        pendingOracle = _oracle;
+        pendingOracleAt = block.timestamp + CONFIG_UPDATE_TIMELOCK;
+        emit OracleUpdateQueued(_oracle, pendingOracleAt);
+    }
+
+    /**
+     * @notice Execute a queued oracle change after the timelock.
+     */
+    function executeOracleUpdate() external onlyOwner {
+        address _oracle = pendingOracle;
+        uint256 executeAfter = pendingOracleAt;
+        if (_oracle == address(0) || executeAfter == 0) revert NoPendingOracleUpdate();
+        if (block.timestamp < executeAfter) revert OracleUpdateTooEarly(executeAfter);
+        pendingOracle = address(0);
+        pendingOracleAt = 0;
         oracle = IOracle4626(_oracle);
         emit OracleSet(_oracle);
+    }
+
+    /**
+     * @notice Cancel a queued oracle change.
+     */
+    function cancelOracleUpdate() external onlyOwner {
+        address _oracle = pendingOracle;
+        if (_oracle == address(0) || pendingOracleAt == 0) revert NoPendingOracleUpdate();
+        pendingOracle = address(0);
+        pendingOracleAt = 0;
+        emit OracleUpdateCancelled(_oracle);
     }
 
     /**
@@ -1069,6 +1172,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /// @notice Ownable renounce disabled — bricks config + emergency response (ODA-424-L8).
+    /// @dev FIX: ODA-508-L8 — ownership transfers are two-step (Ownable2Step), so a mistyped
+    ///      target is a harmless nomination, not an irreversible loss of config + emergency
+    ///      response. Deploy flow: the batcher's `transferOwnership(protocolTreasury)`
+    ///      nominates; the treasury completes the handoff with `acceptOwnership()`.
     function renounceOwnership() public pure override {
         revert OwnershipRenounceDisabled();
     }

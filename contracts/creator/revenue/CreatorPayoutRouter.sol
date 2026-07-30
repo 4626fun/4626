@@ -148,6 +148,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     event EmergencyWithdrawQueued(address indexed token, uint256 amount, address indexed to, uint256 executeAfter);
     event EmergencyWithdrawCancelled(address indexed token, uint256 amount, address indexed to);
     event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
+    event ShareOftSwept(uint256 shareOftAmount, uint256 vaultSharesQueued);
 
     // ================================
     // ERRORS
@@ -177,6 +178,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     );
     error NoPendingEmergencyWithdraw();
     error EmergencyWithdrawTooEarly(uint256 executeAfter);
+    error NoShareOftToSweep();
 
     modifier onlyOwnerOrKeeper() {
         if (msg.sender != owner() && msg.sender != keeper) revert NotAuthorized();
@@ -243,18 +245,20 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the Uniswap V3 swap path for a non-creator-coin payout token into ShareOFT.
+     * @dev FIX ODA-520-H2/M4 — do not grant a standing unlimited `swapRouter` allowance.
+     *      `_convertAndQueue` approves exactly `amountIn` per call and resets to 0 after.
      */
     function setSwapPath(address tokenIn, bytes calldata path) external onlyOwner {
         if (tokenIn == address(0)) revert ZeroAddress();
         if (tokenIn == address(creatorCoin) || tokenIn == address(shareOFT)) revert InvalidPath(tokenIn);
-        if (path.length < 43) revert InvalidPath(tokenIn);
+        // Uniswap V3 path: token(20) + N*(fee(3)+token(20)) => length = 20 + 23*hops, hops >= 1.
+        if (path.length < 43 || (path.length - 20) % 23 != 0) revert InvalidPath(tokenIn);
 
         address start = _readAddress(path, 0);
         address end = _readAddress(path, path.length - 20);
         if (start != tokenIn || end != address(shareOFT)) revert InvalidPath(tokenIn);
 
         swapPathToShareOFT[tokenIn] = path;
-        IERC20(tokenIn).forceApprove(swapRouter, type(uint256).max);
 
         emit SwapPathSet(tokenIn, path);
     }
@@ -262,14 +266,16 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     /// @dev FIX: L-3 — a compromised keeper can route arbitrary calldata to any approved
     ///      target (`_convertViaExternalAndQueue` uses caller-controlled `swapCallData`).
     ///      Block owner-error/compromise from ever allowlisting this contract's own
-    ///      custody surfaces (self, vault, wrapper, burn stream, or the managed tokens)
-    ///      as a target, since a call routed to any of those could move funds outside
-    ///      the swap-then-queue accounting this contract relies on. Canonical DEX
-    ///      routers only.
+    ///      custody surfaces (self, vault, wrapper, burn stream, managed tokens, WETH,
+    ///      protocolRewards, or the canonical `swapRouter` that holds/receives approvals)
+    ///      as a target/spender. Canonical third-party DEX aggregators only.
+    /// @dev FIX ODA-520-H2 — omit `swapRouter`/`weth`/`protocolRewards` from the blocklist
+    ///      previously enabled a cross-token drain via standing V3 allowances.
     function _requireSafeExternalSwapAddress(address addr) internal view {
         if (
             addr == address(this) || addr == vault || addr == wrapper || addr == burnStream
-                || addr == address(creatorCoin) || addr == address(shareOFT)
+                || addr == address(creatorCoin) || addr == address(shareOFT) || addr == swapRouter || addr == weth
+                || addr == protocolRewards
         ) {
             revert InvalidExternalSwapAddress(addr);
         }
@@ -289,15 +295,31 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         emit ExternalSwapSpenderApprovalSet(spender, approved);
     }
 
+    /// @dev FIX ODA-520-L5 — reconfiguration must not refund accrued keeper spend. Only
+    ///      initialize the window on first configure (`windowStart == 0`). When spend is
+    ///      already accrued, re-anchor `windowStart` so a shorter window cannot
+    ///      idle-reset and clear the ledger under new parameters.
     function setKeeperExternalSpendCap(address tokenIn, uint256 cap, uint64 windowSeconds) external onlyOwner {
         if (tokenIn == address(0)) revert ZeroAddress();
         if (cap > 0 && windowSeconds == 0) revert InvalidKeeperSpendWindow(windowSeconds);
 
         KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
+        if (spendCap.windowStart == 0) {
+            spendCap.windowStart = uint64(block.timestamp);
+            spendCap.spentInWindow = 0;
+        } else {
+            // Apply idle-clear under current params before changing them. Otherwise a
+            // reconfigure after the idle window elapsed would re-anchor and resurrect
+            // stale `spentInWindow` against the new window.
+            if (spendCap.window > 0 && block.timestamp >= uint256(spendCap.windowStart) + uint256(spendCap.window)) {
+                spendCap.spentInWindow = 0;
+            }
+            if (spendCap.spentInWindow > 0) {
+                spendCap.windowStart = uint64(block.timestamp);
+            }
+        }
         spendCap.cap = cap;
         spendCap.window = windowSeconds;
-        spendCap.windowStart = uint64(block.timestamp);
-        spendCap.spentInWindow = 0;
 
         emit KeeperExternalSpendCapUpdated(tokenIn, cap, windowSeconds);
     }
@@ -447,12 +469,29 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         return claimable;
     }
 
+    /// @notice Queue any residual ShareOFT held outside a measured swap delta into the burn stream.
+    /// @dev FIX ODA-520-L3 — ShareOFT arriving via dust/direct transfer had no exit path:
+    ///      convert paths reject `tokenIn == shareOFT`, emergency withdraw protects it, and
+    ///      unwrap only consumes measured swap deltas.
+    function sweepShareOFT() external onlyOwnerOrKeeper nonReentrant returns (uint256 sharesQueued) {
+        uint256 bal = shareOFT.balanceOf(address(this));
+        if (bal == 0) revert NoShareOftToSweep();
+        sharesQueued = _unwrapShareOftAndQueue(bal);
+        emit ShareOftSwept(bal, sharesQueued);
+    }
+
     function _convertAndQueue(address tokenIn, uint256 amountIn, uint256 minOut)
         internal
         returns (uint256 tokenOut, uint256 sharesQueued)
     {
         if (tokenIn == address(0)) revert ZeroAddress();
         if (amountIn == 0) revert ZeroAmount();
+
+        // FIX ODA-520-H1 — when a spend cap is configured, enforce it on the V3 /
+        // direct-deposit venue too. Unset caps are a no-op here so harvest keepers stay
+        // operational; external venue remains fail-closed. Deploy/treasury setup seeds
+        // caps so production keepers are still bounded when configured.
+        _consumeKeeperExternalSpend(tokenIn, amountIn, false);
 
         if (tokenIn == address(creatorCoin)) {
             // Direct deposit: minOut is unused (no swap).
@@ -471,6 +510,10 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         IERC20 inToken = IERC20(tokenIn);
         if (inToken.balanceOf(address(this)) < amountIn) revert ZeroAmount();
 
+        // FIX ODA-520-H2/M4 — per-call allowance; never leave a standing max approve.
+        inToken.forceApprove(swapRouter, 0);
+        inToken.forceApprove(swapRouter, amountIn);
+
         uint256 shareBefore = shareOFT.balanceOf(address(this));
         ISwapRouterV3(swapRouter).exactInput(
             ISwapRouterV3.ExactInputParams({
@@ -481,6 +524,8 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
                 amountOutMinimum: minOut
             })
         );
+        inToken.forceApprove(swapRouter, 0);
+
         tokenOut = shareOFT.balanceOf(address(this)) - shareBefore;
         if (tokenOut < minOut) revert MinOutNotMet(minOut, tokenOut);
 
@@ -501,7 +546,8 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (amountIn == 0 || minOut == 0) revert ZeroAmount();
         if (!approvedExternalSwapTargets[swapTarget]) revert ExternalSwapTargetNotApproved(swapTarget);
         if (!approvedExternalSwapSpenders[spender]) revert ExternalSwapSpenderNotApproved(spender);
-        _consumeKeeperExternalSpend(tokenIn, amountIn);
+        // External venue (arbitrary calldata) remains fail-closed without a configured cap.
+        _consumeKeeperExternalSpend(tokenIn, amountIn, true);
 
         IERC20 inToken = IERC20(tokenIn);
         uint256 tokenInBefore = inToken.balanceOf(address(this));
@@ -521,8 +567,13 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (address(this).balance != ethBefore) revert ExternalSwapEthChanged();
 
         uint256 tokenInAfter = inToken.balanceOf(address(this));
-        if (tokenInBefore - tokenInAfter > amountIn) {
-            revert ExternalSwapOverspent(tokenIn, tokenInBefore - tokenInAfter, amountIn);
+        // Fail closed with a diagnosable error when tokenIn increases (refund/rebase) or
+        // when spent exceeds the declared amountIn — avoid bare underflow panic.
+        if (tokenInAfter < tokenInBefore) {
+            uint256 spent = tokenInBefore - tokenInAfter;
+            if (spent > amountIn) {
+                revert ExternalSwapOverspent(tokenIn, spent, amountIn);
+            }
         }
 
         uint256 shareAfter = shareOFT.balanceOf(address(this));
@@ -533,30 +584,45 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         emit ExternalSwapAndQueued(tokenIn, swapTarget, spender, amountIn, tokenOut, sharesQueued);
     }
 
-    function _consumeKeeperExternalSpend(address tokenIn, uint256 amountIn) internal {
+    /// @dev FIX ODA-520-L5 — idle-gated window. Accrued spend clears only after a full
+    ///      `window` elapses since `windowStart`, and every successful spend slides
+    ///      `windowStart` to `block.timestamp`. That blocks:
+    ///      (1) the old fixed-boundary 2× burst (spend at windowEnd-1 and again at windowEnd), and
+    ///      (2) leaky-bucket mid-window refill that could approach 2× cap inside one nominal window.
+    /// @param requireConfigured When true (external venue), an unset cap/window reverts.
+    ///        When false (V3 / direct-deposit), an unset cap is a no-op so keepers can
+    ///        harvest without mandatory spend-cap wiring.
+    function _consumeKeeperExternalSpend(address tokenIn, uint256 amountIn, bool requireConfigured) internal {
         if (msg.sender != keeper || keeper == address(0)) return;
 
         KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
         uint256 cap = spendCap.cap;
         uint64 window = spendCap.window;
         if (cap == 0 || window == 0) {
-            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, 0, cap, 0);
+            if (requireConfigured) {
+                revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, 0, cap, 0);
+            }
+            return;
         }
 
         uint256 windowStart = spendCap.windowStart;
-        uint256 windowEnd = windowStart + window;
-        if (windowStart == 0 || block.timestamp >= windowEnd) {
-            spendCap.windowStart = uint64(block.timestamp);
-            spendCap.spentInWindow = 0;
-            windowEnd = block.timestamp + window;
+        uint256 spent = spendCap.spentInWindow;
+        if (windowStart == 0 || block.timestamp >= windowStart + window) {
+            spent = 0;
         }
 
-        uint256 newSpent = spendCap.spentInWindow + amountIn;
+        uint256 newSpent = spent + amountIn;
         if (newSpent > cap) {
-            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, spendCap.spentInWindow, cap, windowEnd);
+            uint256 retryAt =
+                (windowStart == 0 || block.timestamp >= windowStart + window)
+                    ? block.timestamp + window
+                    : windowStart + window;
+            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, spent, cap, retryAt);
         }
+
         spendCap.spentInWindow = newSpent;
-        emit KeeperExternalSpendTracked(tokenIn, amountIn, newSpent, cap, windowEnd);
+        spendCap.windowStart = uint64(block.timestamp);
+        emit KeeperExternalSpendTracked(tokenIn, amountIn, newSpent, cap, block.timestamp + window);
     }
 
     function _queueCreatorCoinDeposit(uint256 creatorAmount) internal returns (uint256 sharesQueued) {
@@ -589,10 +655,12 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     }
 
     function _claimProtocolRewards(uint256 amount) internal {
+        // Primary: withdraw(address,uint256) = 0xf3fef3a3
         (bool ok,) = protocolRewards.call(abi.encodeWithSelector(bytes4(0xf3fef3a3), address(this), amount));
         if (!ok) {
-            (ok,) =
-                protocolRewards.call(abi.encodeWithSelector(bytes4(0x9f1d9267), address(this), address(this), amount));
+            // Fallback: Zora ProtocolRewards withdrawFor(address,uint256) = 0xdb518db2
+            // (previous 0x9f1d9267 was withdrawFor(address,address,uint256) — wrong arity).
+            (ok,) = protocolRewards.call(abi.encodeWithSelector(bytes4(0xdb518db2), address(this), amount));
         }
         if (!ok) revert ProtocolRewardsClaimFailed();
     }

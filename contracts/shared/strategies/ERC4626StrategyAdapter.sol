@@ -111,6 +111,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     event AjnaBucketMoved(uint256 indexed fromIndex, uint256 indexed toIndex, uint256 fromBucketLp, uint256 toBucketLp);
     event AjnaBucketMovedToBuffer(uint256 indexed fromIndex, uint256 pulledAssets, uint256 burnedBucketLp);
     event AjnaBucketsDrained(uint256 bucketsProcessed, uint256 residualBuckets);
+    /// @notice ODA-519-12: inner deposit deferred (paused/cap/revert) — assets left idle.
+    event InnerDepositDeferred(uint256 amount, bytes reason);
 
     // ================================
     // MODIFIERS
@@ -223,10 +225,15 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         uint256 sharesHeld = ERC4626_VAULT.balanceOf(address(this));
         if (sharesHeld == 0) return idle;
 
-        try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 assetsFromShares) {
+        // ODA-519-11: prefer tax-aware previewRedeem (Ajna overrides it); fall back to convertToAssets.
+        try ERC4626_VAULT.previewRedeem(sharesHeld) returns (uint256 assetsFromShares) {
             return idle + assetsFromShares;
         } catch {
-            return idle;
+            try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 assetsFromShares) {
+                return idle + assetsFromShares;
+            } catch {
+                return idle;
+            }
         }
     }
 
@@ -257,16 +264,22 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         uint256 toDeposit = idle > desiredIdle ? idle - desiredIdle : 0;
 
         if (toDeposit > 0) {
-            ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
-            try ERC4626_VAULT.deposit(toDeposit, address(this)) returns (uint256 shares) {
-                // ODA-466 low: reject zero-share mints (donation/rounding edge cases).
-                if (shares == 0) {
+            // ODA-519-12: clamp to inner maxDeposit and soft-fail like rebalance (don't brick lane deposits).
+            try ERC4626_VAULT.maxDeposit(address(this)) returns (uint256 maxIn) {
+                if (toDeposit > maxIn) toDeposit = maxIn;
+            } catch {}
+            if (toDeposit > 0) {
+                ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
+                try ERC4626_VAULT.deposit(toDeposit, address(this)) returns (uint256 shares) {
+                    // ODA-466 low: treat zero-share mints as deferred (idle), not hard revert.
+                    if (shares == 0) {
+                        ASSET.forceApprove(address(ERC4626_VAULT), 0);
+                        emit InnerDepositDeferred(toDeposit, bytes("zero-share mint"));
+                    }
+                } catch (bytes memory reason) {
                     ASSET.forceApprove(address(ERC4626_VAULT), 0);
-                    revert InnerDepositFailed();
+                    emit InnerDepositDeferred(toDeposit, reason);
                 }
-            } catch {
-                ASSET.forceApprove(address(ERC4626_VAULT), 0);
-                revert InnerDepositFailed();
             }
         }
 
@@ -326,8 +339,45 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
     function harvest() external override onlyVault returns (uint256 profit) {
         // The outer lane vault accounts for gains via totalAssets() deltas in `report()`.
+        // ODA-519-7: refresh the valuation window on harvest so idle strategies do not soft-lock.
+        _syncValuationSnapshotBestEffort();
         profit = 0;
         emit StrategyHarvest(profit);
+    }
+
+    /// @notice Permissionless valuation liveness heartbeat (ODA-519-7).
+    /// @dev Advances only the timestamp when current PPS is in-band. Does **not** ratchet
+    ///      `lastValuationAssetsPerShare` — a permissionless PPS write would allow compounding
+    ///      in-band manipulations across repeated syncs. Use `forceSyncValuation` / strategy ops
+    ///      to advance the trusted PPS baseline (ODA-519-8).
+    function syncValuation() external {
+        (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
+        if (!ok) return;
+
+        // No ERC-4626 share exposure: keep PPS at 0 and refresh liveness.
+        if (currentAssetsPerShare == 0) {
+            lastValuationAssetsPerShare = 0;
+            lastValuationTimestamp = block.timestamp;
+            emit ValuationSnapshotSynced(0, block.timestamp);
+            return;
+        }
+
+        uint256 snapshot = lastValuationAssetsPerShare;
+        // Bootstrap with exposure requires a privileged path.
+        if (snapshot == 0) return;
+        if (!_isWithinValuationBounds(snapshot, currentAssetsPerShare)) return;
+
+        lastValuationTimestamp = block.timestamp;
+        emit ValuationSnapshotSynced(snapshot, block.timestamp);
+    }
+
+    /// @notice Owner escape hatch to re-arm the valuation snapshot after a genuine regime change.
+    function forceSyncValuation() external onlyOwner {
+        (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
+        if (!ok) return;
+        lastValuationAssetsPerShare = currentAssetsPerShare;
+        lastValuationTimestamp = block.timestamp;
+        emit ValuationSnapshotSynced(currentAssetsPerShare, block.timestamp);
     }
 
     function rebalance() external override onlyVault {
@@ -446,7 +496,19 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             if (lpAmount == 0) continue;
 
             try ops.moveToBuffer(idx, lpAmount) {
-                processed++;
+                // ODA-519-15: partial Ajna redemptions must count as residual, not clean exits.
+                uint256 remainingLp;
+                try ops.bucketLp(idx) returns (uint256 lpLeft) {
+                    remainingLp = lpLeft;
+                } catch {
+                    residualBuckets++;
+                    continue;
+                }
+                if (remainingLp > 0) {
+                    residualBuckets++;
+                } else {
+                    processed++;
+                }
             } catch {
                 residualBuckets++;
             }
@@ -550,7 +612,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
      * @dev The allowed valuation drift scales by full elapsed windows since the last trusted snapshot.
      */
     function setValuationGuard(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow) external onlyOwner {
-        if (maxIncreaseBps > 10_000 || maxDecreaseBps > 10_000) revert InvalidBps();
+        // ODA-519-18: 10_000 fully disables the guard — require a strict ceiling.
+        if (maxIncreaseBps >= 10_000 || maxDecreaseBps >= 10_000) revert InvalidBps();
         if (checkWindow == 0) revert InvalidWindow();
 
         valuationMaxIncreaseBps = maxIncreaseBps;
@@ -588,10 +651,15 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         if (sharesHeld == 0) return (true, 0);
 
         uint256 assetsFromShares;
-        try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 convertedAssets) {
-            assetsFromShares = convertedAssets;
+        // ODA-519-11: tax-aware preview first.
+        try ERC4626_VAULT.previewRedeem(sharesHeld) returns (uint256 previewedAssets) {
+            assetsFromShares = previewedAssets;
         } catch {
-            return (false, 0);
+            try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 convertedAssets) {
+                assetsFromShares = convertedAssets;
+            } catch {
+                return (false, 0);
+            }
         }
 
         assetsPerShare = Math.mulDiv(assetsFromShares, 1e18, sharesHeld);
@@ -624,6 +692,13 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     function _syncValuationSnapshotBestEffort() internal {
         (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
         if (!ok) return;
+
+        uint256 snapshot = lastValuationAssetsPerShare;
+        // ODA-519-8: do not re-anchor an out-of-band PPS (clears a tripped guard).
+        // Bootstrap (snapshot == 0) and zero-exposure still sync normally.
+        if (snapshot != 0 && currentAssetsPerShare != 0 && !_isWithinValuationBounds(snapshot, currentAssetsPerShare)) {
+            return;
+        }
 
         lastValuationAssetsPerShare = currentAssetsPerShare;
         lastValuationTimestamp = block.timestamp;

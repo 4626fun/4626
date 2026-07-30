@@ -1254,7 +1254,7 @@ contract AmoePlonkVerifier {
             // this loop a prover could submit non-canonical encodings
             // (x + k*q) that are field-equivalent to a canonical value but
             // hash to different raw bytes, defeating the router's
-            // raw-bytes replay maps (usedNonceCommit, usedWalletCommit,
+            // raw-bytes replay maps (usedNonceCommit,
             // usedPointsBurnNullifier). Reject any signal >= q before it
             // is used in the transcript.
             //

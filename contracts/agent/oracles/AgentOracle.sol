@@ -26,10 +26,9 @@ import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
  *      Remotes: store price for lottery/gauge.
  *
  * @dev MANIPULATION RESISTANCE:
- *      - Tick capping limits price movement per observation
- *      - Auto-tuning adjusts cap based on frequency
- *      - TWAP smooths out flash loan attacks
- *      - Chainlink provides trusted ETH/USD baseline
+ *      - V2/V3 TWAPs smooth out flash loan attacks
+ *      - Chainlink feeds provide the trusted USD baseline
+ *      - Remote updates are deviation-clamped stepwise
  *
  * @dev USE CASES:
  *      - GaugeController: Swap slippage protection
@@ -55,6 +54,11 @@ contract AgentOracle is OApp, IOracle4626 {
 
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
+
+    /// @notice Minimum Uniswap V3 pool liquidity accepted for oracle configuration.
+    /// @dev Rejects dust / spoof pools that would poison CCA / mesh launch floors.
+    uint128 public constant MIN_V3_ORACLE_LIQUIDITY = 1e12;
+
     /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
     uint256 public constant SEQUENCER_GRACE_PERIOD = 3600; // 1 hour
 
@@ -63,6 +67,15 @@ contract AgentOracle is OApp, IOracle4626 {
 
     /// @notice Minimum TWAP duration accepted by public price update functions
     uint32 public constant MIN_TWAP_DURATION = 1800; // 30 minutes
+
+    /// @notice Minimum cooldown accepted for privileged price updates.
+    uint32 public constant MIN_PRICE_UPDATE_COOLDOWN = 30;
+
+    /// @notice Cap cross-chain symbol updates to a short display-safe length.
+    uint256 public constant MAX_ASSET_SYMBOL_LENGTH = 32;
+
+    /// @notice Reject V2 TWAPs whose realized/extrapolated window drifts too far past the request.
+    uint32 private constant V2_TWAP_MAX_WINDOW_MULTIPLIER = 2;
 
     /// @notice Maximum allowed price deviation per update (20%)
     uint256 public constant MAX_PRICE_DEVIATION = 0.2e18;
@@ -151,6 +164,9 @@ contract AgentOracle is OApp, IOracle4626 {
     ///      back to `chainlinkFeed`; other quote tokens fail closed instead of being
     ///      silently priced as ETH or USD.
     address public quoteUsdFeed;
+
+    /// @notice Optional per-feed staleness overrides. Zero falls back to `MAX_STALENESS`.
+    mapping(address => uint256) public feedMaxStaleness;
 
     /// @notice Default V2 TWAP duration (seconds)
     uint32 public v2TwapDuration = DEFAULT_TWAP_DURATION;
@@ -243,6 +259,10 @@ contract AgentOracle is OApp, IOracle4626 {
     event SequencerUptimeFeedSet(address indexed feed);
     event ReferenceQuoteTokenSet(address indexed token);
     event ReferenceQuoteTokenLocked(address indexed token);
+    event FeedMaxStalenessSet(address indexed feed, uint256 maxStaleness);
+    event RemotePriceUpdateClamped(
+        uint32 indexed srcEid, int256 candidatePrice, int256 appliedPrice, uint256 candidateTimestamp
+    );
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAssetPriceWithFees.
     event RemotePriceUpdateSkipped(uint32 indexed srcEid, int256 candidatePrice, uint256 candidateTimestamp, string reason);
@@ -259,6 +279,7 @@ contract AgentOracle is OApp, IOracle4626 {
     error V2NotConfigured();
     error NeedMoreObservations();
     error InvalidV3Pool();
+    error V3PoolLiquidityTooLow(uint128 liquidity, uint128 minimum);
     error InvalidV2Pair();
     error UnsupportedDecimals();
     error StalePrice();
@@ -267,6 +288,7 @@ contract AgentOracle is OApp, IOracle4626 {
     error InvalidReferenceQuoteToken(address expected, address actual);
     error ReferenceQuoteTokenIsLocked();
     error ReferenceQuoteTokenUnset();
+    error NoLaneMatchesReferenceQuoteToken();
     error MissingQuoteUsdFeed(address quoteToken);
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
@@ -279,6 +301,8 @@ contract AgentOracle is OApp, IOracle4626 {
     error HubOnly();
     error RemoteOnly();
     error StaleObservationWindow();
+    error InvalidMaxStaleness();
+    error RenounceOwnershipDisabled();
     // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
 
     // ================================
@@ -347,10 +371,21 @@ contract AgentOracle is OApp, IOracle4626 {
         emit QuoteUsdFeedSet(_feed);
     }
 
+    /// @notice Override the freshness threshold for a specific Chainlink-style feed.
+    function setFeedMaxStaleness(address feed, uint256 maxStaleness) external onlyOwner {
+        if (feed == address(0)) revert ZeroAddress();
+        if (maxStaleness == 0) revert InvalidMaxStaleness();
+        feedMaxStaleness[feed] = maxStaleness;
+        emit FeedMaxStalenessSet(feed, maxStaleness);
+    }
+
     /// @notice Irreversibly lock the current reference quote token.
     /// @dev Prevents post-init quote-token drift in production deployments.
     function lockReferenceQuoteToken() external onlyOwner {
         if (referenceQuoteToken == address(0)) revert ReferenceQuoteTokenUnset();
+        if (v3QuoteToken != referenceQuoteToken && v2QuoteToken != referenceQuoteToken) {
+            revert NoLaneMatchesReferenceQuoteToken();
+        }
         referenceQuoteTokenLocked = true;
         emit ReferenceQuoteTokenLocked(referenceQuoteToken);
     }
@@ -384,6 +419,11 @@ contract AgentOracle is OApp, IOracle4626 {
         address t1 = IUniswapV3Pool(_pool).token1();
         bool ok = (t0 == _agentToken && t1 == _quoteToken) || (t0 == _quoteToken && t1 == _agentToken);
         if (!ok) revert InvalidV3Pool();
+
+        uint128 poolLiquidity = IUniswapV3Pool(_pool).liquidity();
+        if (poolLiquidity < MIN_V3_ORACLE_LIQUIDITY) {
+            revert V3PoolLiquidityTooLow(poolLiquidity, MIN_V3_ORACLE_LIQUIDITY);
+        }
 
         uint8 creatorDec = IERC20Metadata(_agentToken).decimals();
         uint8 usdDec = IERC20Metadata(_quoteToken).decimals();
@@ -422,6 +462,8 @@ contract AgentOracle is OApp, IOracle4626 {
         address t1 = IUniswapV2Pair(_pair).token1();
         bool ok = (t0 == _agentToken && t1 == _quoteToken) || (t0 == _quoteToken && t1 == _agentToken);
         if (!ok) revert InvalidV2Pair();
+        (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast) = IUniswapV2Pair(_pair).getReserves();
+        if (reserve0 == 0 || reserve1 == 0 || blockTimestampLast == 0) revert InvalidV2Pair();
 
         uint8 agentDec = IERC20Metadata(_agentToken).decimals();
         uint8 quoteDec = IERC20Metadata(_quoteToken).decimals();
@@ -435,7 +477,7 @@ contract AgentOracle is OApp, IOracle4626 {
         v2TwapDuration = _twapDuration;
         v2PairConfigured = true;
 
-        (uint256 cumulativePrice, uint32 ts) = _currentV2CumulativeAssetPerQuote();
+        (uint256 cumulativePrice, uint32 ts,) = _currentV2CumulativeAssetPerQuote();
         v2PriceCumulativeLast = cumulativePrice;
         v2ObservationTimestamp = ts;
 
@@ -450,7 +492,8 @@ contract AgentOracle is OApp, IOracle4626 {
     function recordV2Observation() external {
         if (!v2PairConfigured) revert V2NotConfigured();
         if (msg.sender != owner() && !isSwapRecorder[msg.sender]) revert Unauthorized();
-        (uint256 cumulativePrice, uint32 ts) = _currentV2CumulativeAssetPerQuote();
+        if (v2ObservationTimestamp != 0 && block.timestamp - v2ObservationTimestamp < MIN_TWAP_DURATION) return;
+        (uint256 cumulativePrice, uint32 ts,) = _currentV2CumulativeAssetPerQuote();
         v2PriceCumulativeLast = cumulativePrice;
         v2ObservationTimestamp = ts;
         emit V2ObservationRecorded(cumulativePrice, ts);
@@ -482,7 +525,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Set price update cooldown
      */
     function setPriceUpdateCooldown(uint32 cooldown) external onlyOwner {
-        require(cooldown <= 300, "Max 5 minutes");
+        if (cooldown < MIN_PRICE_UPDATE_COOLDOWN || cooldown > 300) revert InvalidDuration();
         priceUpdateCooldown = cooldown;
     }
 
@@ -515,6 +558,7 @@ contract AgentOracle is OApp, IOracle4626 {
     }
 
     function _getPrice() internal view returns (int256 price, uint256 timestamp) {
+        if (!_sequencerIsUp()) return (0, 0);
         if (assetPriceUSD > 0 && assetPriceTimestamp > 0) {
             if (block.timestamp - assetPriceTimestamp < MAX_STALENESS) {
                 return (assetPriceUSD, assetPriceTimestamp);
@@ -599,7 +643,7 @@ contract AgentOracle is OApp, IOracle4626 {
 
         assetPriceUSD = _price;
         assetPriceTimestamp = _timestamp;
-        if (bytes(_symbol).length > 0) {
+        if (bytes(_symbol).length > 0 && bytes(_symbol).length <= MAX_ASSET_SYMBOL_LENGTH) {
             assetSymbol = _symbol;
         }
 
@@ -904,9 +948,21 @@ contract AgentOracle is OApp, IOracle4626 {
      * @return price Agent per ETH in 1e18
      */
     function getAssetEthTWAP(uint32 duration) public view returns (uint256 price) {
+        if (duration < MIN_TWAP_DURATION) revert InvalidDuration();
+
+        if (v2PairConfigured) {
+            uint256 agentPerQuote18 = getV2AssetQuoteTWAP(duration);
+            price = _assetPerEthFromAgentPerQuote(agentPerQuote18, v2QuoteToken);
+            return price;
+        }
+
+        if (v3PoolConfigured) {
+            uint256 quotePerAgent18 = _getV3QuotePerAsset18(duration);
+            price = _assetPerEthFromQuotePerAsset(quotePerAgent18, v3QuoteToken);
+            return price;
+        }
+
         revert V4NotConfigured();
-        int24 twapTick = getTWAPTick(duration);
-        price = tickToPrice(twapTick);
     }
 
     // ================================
@@ -919,7 +975,7 @@ contract AgentOracle is OApp, IOracle4626 {
      */
     function getV3TWAPTick(uint32 duration) public view returns (int24 twapTick) {
         if (!v3PoolConfigured) revert V3NotConfigured();
-        if (duration == 0) revert InvalidDuration();
+        if (duration < MIN_TWAP_DURATION) revert InvalidDuration();
 
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = duration;
@@ -943,22 +999,7 @@ contract AgentOracle is OApp, IOracle4626 {
      */
     function getAssetUsdTWAP(uint32 duration) public view returns (uint256 priceUsd18) {
         if (!v3PoolConfigured) revert V3NotConfigured();
-
-        int24 twapTick = getV3TWAPTick(duration);
-
-        // Quote USDC amount for 1 CREATOR (10^creatorDecimals units)
-        uint256 baseAmount = 10 ** uint256(v3AgentDecimals);
-        uint256 quoteAmount = _getQuoteAtTick(twapTick, uint128(baseAmount), v3AgentToken, v3QuoteToken);
-
-        // Scale USDC decimals to 1e18
-        if (v3QuoteDecimals < 18) {
-            priceUsd18 = quoteAmount * (10 ** uint256(18 - v3QuoteDecimals));
-        } else if (v3QuoteDecimals == 18) {
-            priceUsd18 = quoteAmount;
-        } else {
-            // guarded by setV3Pool() but keep safe
-            priceUsd18 = quoteAmount / (10 ** uint256(v3QuoteDecimals - 18));
-        }
+        priceUsd18 = _getV3QuotePerAsset18(duration);
     }
 
     // ================================
@@ -1031,12 +1072,16 @@ contract AgentOracle is OApp, IOracle4626 {
      */
     function getV2AssetQuoteTWAP(uint32 duration) public view returns (uint256 agentPerQuote18) {
         if (!v2PairConfigured) revert V2NotConfigured();
-        if (duration == 0) revert InvalidDuration();
+        if (duration < MIN_TWAP_DURATION) revert InvalidDuration();
         if (v2ObservationTimestamp == 0) revert NeedMoreObservations();
 
-        (uint256 currentCumulative, uint32 currentTs) = _currentV2CumulativeAssetPerQuote();
+        (uint256 currentCumulative, uint32 currentTs, uint32 idleGap) = _currentV2CumulativeAssetPerQuote();
+        if (uint256(idleGap) > uint256(duration) * V2_TWAP_MAX_WINDOW_MULTIPLIER) revert StaleObservationWindow();
         uint32 timeElapsed = currentTs - v2ObservationTimestamp;
         if (timeElapsed < duration) revert NeedMoreObservations();
+        if (uint256(timeElapsed) > uint256(duration) * V2_TWAP_MAX_WINDOW_MULTIPLIER) {
+            revert StaleObservationWindow();
+        }
 
         uint256 avgUQ112x112 = (currentCumulative - v2PriceCumulativeLast) / uint256(timeElapsed);
         // Raw V2 cumulative price is a raw-token-unit ratio (agent wei per quote wei).
@@ -1053,7 +1098,11 @@ contract AgentOracle is OApp, IOracle4626 {
     /**
      * @dev Compute current cumulative Agent/quote price from V2 pair cumulatives plus current block extrapolation.
      */
-    function _currentV2CumulativeAssetPerQuote() internal view returns (uint256 cumulativePrice, uint32 blockTimestamp) {
+    function _currentV2CumulativeAssetPerQuote()
+        internal
+        view
+        returns (uint256 cumulativePrice, uint32 blockTimestamp, uint32 idleGap)
+    {
         IUniswapV2Pair pair = IUniswapV2Pair(v2Pair);
         blockTimestamp = uint32(block.timestamp % 2 ** 32);
 
@@ -1063,6 +1112,7 @@ contract AgentOracle is OApp, IOracle4626 {
 
         if (blockTimestampLast != blockTimestamp) {
             uint32 timeElapsed = blockTimestamp - blockTimestampLast;
+            idleGap = timeElapsed;
             if (reserve0 > 0 && reserve1 > 0) {
                 uint256 price0 = (uint256(reserve1) << 112) / uint256(reserve0); // token1 per token0
                 uint256 price1 = (uint256(reserve0) << 112) / uint256(reserve1); // token0 per token1
@@ -1186,7 +1236,10 @@ contract AgentOracle is OApp, IOracle4626 {
 
         (uint256 quoteUsd18, uint256 updatedAt, bool ok) = _readFeedPrice18(resolvedFeed);
         if (!ok || quoteUsd18 == 0) {
-            if (updatedAt != 0 && block.timestamp > updatedAt && block.timestamp - updatedAt > MAX_STALENESS) {
+            if (
+                updatedAt != 0 && block.timestamp > updatedAt
+                    && block.timestamp - updatedAt > _maxFeedStaleness(resolvedFeed)
+            ) {
                 revert StalePrice();
             }
             revert InvalidPrice();
@@ -1225,6 +1278,7 @@ contract AgentOracle is OApp, IOracle4626 {
         if (!v3PoolConfigured) revert V3NotConfigured();
         uint32 dur = twapDuration == 0 ? v3TwapDuration : twapDuration;
         if (dur < MIN_TWAP_DURATION) revert InvalidDuration();
+        if (!_sequencerIsUp()) revert SequencerDown();
         if (assetPriceTimestamp > 0 && block.timestamp - assetPriceTimestamp < priceUpdateCooldown) {
             revert PriceUpdateCooldown();
         }
@@ -1275,6 +1329,7 @@ contract AgentOracle is OApp, IOracle4626 {
         bytes calldata options,
         uint256[] calldata fees
     ) external payable returns (MessagingReceipt[] memory receipts) {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (assetPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
         require(dstEids.length > 0, "No destinations");
@@ -1320,6 +1375,7 @@ contract AgentOracle is OApp, IOracle4626 {
         // Defense-in-depth: even if peers are configured for outbound sends on the hub,
         // only accept price updates that originate from the canonical hub/Base EID.
         if (origin.srcEid != BASE_EID) revert InvalidOriginEid(origin.srcEid);
+        if (peers[origin.srcEid] != bytes32(0) && origin.sender != peers[origin.srcEid]) revert Unauthorized();
 
         (int256 price, uint256 timestamp, string memory symbol) = abi.decode(payload, (int256, uint256, string));
 
@@ -1345,21 +1401,15 @@ contract AgentOracle is OApp, IOracle4626 {
             uint256 newP = uint256(price);
             uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
             if (deviation > MAX_PRICE_DEVIATION) {
-                // If we are still fresh, keep strict deviation guard.
-                // If already stale, accept authenticated hub price to recover liveness.
-                if (block.timestamp - assetPriceTimestamp <= MAX_STALENESS) {
-                    // Step-wise convergence: clamp toward hub value by one max-deviation
-                    // step so remotes keep progressing even after packet loss/censorship.
-                    uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
-                    if (maxStep == 0) maxStep = 1;
-                    if (newP > oldP) {
-                        newP = oldP + maxStep;
-                    } else {
-                        newP = oldP > maxStep ? oldP - maxStep : 1;
-                    }
-                    price = int256(newP);
-                    emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "deviation_clamped");
+                uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
+                if (maxStep == 0) maxStep = 1;
+                if (newP > oldP) {
+                    newP = oldP + maxStep;
+                } else {
+                    newP = oldP > maxStep ? oldP - maxStep : 1;
                 }
+                emit RemotePriceUpdateClamped(origin.srcEid, price, int256(newP), safeTimestamp);
+                price = int256(newP);
             }
         }
 
@@ -1367,7 +1417,7 @@ contract AgentOracle is OApp, IOracle4626 {
         assetPriceTimestamp = safeTimestamp;
 
         // Update symbol if different (for multi-creator support)
-        if (bytes(symbol).length > 0) {
+        if (bytes(symbol).length > 0 && bytes(symbol).length <= MAX_ASSET_SYMBOL_LENGTH) {
             assetSymbol = symbol;
         }
 
@@ -1405,17 +1455,33 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Check if price is fresh
      */
     function isPriceFresh() external view returns (bool) {
-        return assetPriceUSD > 0 && block.timestamp - assetPriceTimestamp < MAX_STALENESS;
+        return _sequencerIsUp() && assetPriceUSD > 0 && block.timestamp - assetPriceTimestamp < MAX_STALENESS;
     }
 
     /// @dev Chainlink sequencer feeds return 0 when the sequencer is up, 1 when down.
     function _sequencerIsUp() internal view returns (bool) {
         address feed = sequencerUptimeFeed;
         if (feed == address(0)) return true;
-        (, int256 answer, uint256 startedAt, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
+        uint80 roundId;
+        int256 answer;
+        uint256 startedAt;
+        uint256 updatedAt;
+        uint80 answeredInRound;
+        try IChainlinkFeed(feed).latestRoundData() returns (
+            uint80 _roundId, int256 _answer, uint256 _startedAt, uint256 _updatedAt, uint80 _answeredInRound
+        ) {
+            roundId = _roundId;
+            answer = _answer;
+            startedAt = _startedAt;
+            updatedAt = _updatedAt;
+            answeredInRound = _answeredInRound;
+        } catch {
+            return false;
+        }
+        if (roundId == 0 || answeredInRound < roundId) return false;
+        if (updatedAt == 0 || startedAt == 0) return false;
         if (updatedAt > block.timestamp) return false;
         if (answer != 0) return false;
-        if (startedAt == 0) return false;
         if (startedAt > block.timestamp) return false;
         if (block.timestamp - startedAt <= SEQUENCER_GRACE_PERIOD) return false;
         return true;
@@ -1433,15 +1499,12 @@ contract AgentOracle is OApp, IOracle4626 {
     ///      `referenceQuoteToken` is pinned. A pinned quote token without a feed fails
     ///      closed with `MissingQuoteUsdFeed`.
     function _convertQuoteToUsd18(uint256 amountQuote18, address quoteToken) internal view returns (uint256 usd18) {
-        address feed = quoteUsdFeed;
-        if (feed == address(0) && quoteToken == BASE_WETH) {
-            feed = chainlinkFeed;
-        }
+        if (!_sequencerIsUp()) revert SequencerDown();
+        address feed = _resolveQuoteUsdFeedForToken(quoteToken);
         if (feed == address(0)) {
             if (referenceQuoteToken != address(0)) revert MissingQuoteUsdFeed(quoteToken);
             return amountQuote18; // legacy USD-stable quote (e.g. USDC)
         }
-        if (!_sequencerIsUp()) revert SequencerDown();
         (uint256 quoteUsd18, uint256 updatedAt, bool ok) = _readFeedPrice18(feed);
         if (!ok || quoteUsd18 == 0) {
             if (updatedAt != 0 && block.timestamp > updatedAt && block.timestamp - updatedAt > MAX_STALENESS) {
@@ -1454,9 +1517,13 @@ contract AgentOracle is OApp, IOracle4626 {
 
     function _resolveQuoteUsdFeed() internal view returns (address feed) {
         if (!v2PairConfigured) return chainlinkFeed;
+        return _resolveQuoteUsdFeedForToken(v2QuoteToken);
+    }
+
+    function _resolveQuoteUsdFeedForToken(address quoteToken) internal view returns (address feed) {
         if (quoteUsdFeed != address(0)) return quoteUsdFeed;
         // Only fallback to ETH/USD when the quote token is Base WETH.
-        if (v2QuoteToken == BASE_WETH) return chainlinkFeed;
+        if (quoteToken == BASE_WETH) return chainlinkFeed;
         return address(0);
     }
 
@@ -1477,8 +1544,11 @@ contract AgentOracle is OApp, IOracle4626 {
             return (0, 0, false);
         }
         if (answer <= 0) return (0, roundUpdatedAt, false);
+        if (_feedAnswerTouchesBounds(feed, answer)) return (0, roundUpdatedAt, false);
         if (roundUpdatedAt > block.timestamp) return (0, roundUpdatedAt, false);
-        if (block.timestamp - roundUpdatedAt > MAX_STALENESS) return (0, roundUpdatedAt, false);
+        uint256 maxStaleness = feedMaxStaleness[feed];
+        if (maxStaleness == 0) maxStaleness = MAX_STALENESS;
+        if (block.timestamp - roundUpdatedAt > maxStaleness) return (0, roundUpdatedAt, false);
         if (answeredInRound < roundId) return (0, roundUpdatedAt, false);
 
         uint8 feedDecimals;
@@ -1496,6 +1566,104 @@ contract AgentOracle is OApp, IOracle4626 {
             price18 = unsignedAnswer;
         }
         return (price18, roundUpdatedAt, true);
+    }
+
+    function _getV3QuotePerAsset18(uint32 duration) internal view returns (uint256 quotePerAsset18) {
+        int24 twapTick = getV3TWAPTick(duration);
+        uint256 baseAmount = 10 ** uint256(v3AgentDecimals);
+        if (v3QuoteDecimals > 18) revert UnsupportedDecimals();
+        uint256 scaledBaseAmount = baseAmount * (10 ** uint256(18 - v3QuoteDecimals));
+        quotePerAsset18 = _getQuoteAtTick(twapTick, uint128(scaledBaseAmount), v3AgentToken, v3QuoteToken);
+    }
+
+    function _assetPerEthFromAgentPerQuote(uint256 agentPerQuote18, address quoteToken)
+        internal
+        view
+        returns (uint256 assetPerEth18)
+    {
+        if (agentPerQuote18 == 0) revert InvalidPrice();
+        uint256 quotePerEth18 = _quotePerEth18(quoteToken);
+        assetPerEth18 = Math.mulDiv(agentPerQuote18, quotePerEth18, 1e18);
+    }
+
+    function _assetPerEthFromQuotePerAsset(uint256 quotePerAsset18, address quoteToken)
+        internal
+        view
+        returns (uint256 assetPerEth18)
+    {
+        if (quotePerAsset18 == 0) revert InvalidPrice();
+        uint256 quotePerEth18 = _quotePerEth18(quoteToken);
+        assetPerEth18 = Math.mulDiv(quotePerEth18, 1e18, quotePerAsset18);
+    }
+
+    function _quotePerEth18(address quoteToken) internal view returns (uint256 quotePerEth18) {
+        if (quoteToken == BASE_WETH) return 1e18;
+        if (!_sequencerIsUp()) revert SequencerDown();
+        if (chainlinkFeed == address(0)) revert ZeroAddress();
+
+        (uint256 ethUsd18, uint256 ethUpdatedAt, bool ethOk) = _readFeedPrice18(chainlinkFeed);
+        if (!ethOk || ethUsd18 == 0) {
+            if (
+                ethUpdatedAt != 0 && block.timestamp > ethUpdatedAt
+                    && block.timestamp - ethUpdatedAt > _maxFeedStaleness(chainlinkFeed)
+            ) {
+                revert StalePrice();
+            }
+            revert InvalidPrice();
+        }
+
+        // Mirror `_convertQuoteToUsd18`: explicit quote feed → WETH uses ETH/USD → legacy
+        // USD-stable 1:1 only when no reference quote token is pinned.
+        address feed = _resolveQuoteUsdFeedForToken(quoteToken);
+        if (feed == address(0)) {
+            if (referenceQuoteToken != address(0)) revert MissingQuoteUsdFeed(quoteToken);
+            return ethUsd18;
+        }
+
+        (uint256 quoteUsd18, uint256 quoteUpdatedAt, bool quoteOk) = _readFeedPrice18(feed);
+        if (!quoteOk || quoteUsd18 == 0) {
+            if (
+                quoteUpdatedAt != 0 && block.timestamp > quoteUpdatedAt
+                    && block.timestamp - quoteUpdatedAt > _maxFeedStaleness(feed)
+            ) {
+                revert StalePrice();
+            }
+            revert InvalidPrice();
+        }
+
+        quotePerEth18 = Math.mulDiv(ethUsd18, 1e18, quoteUsd18);
+    }
+
+    function _feedAnswerTouchesBounds(address feed, int256 answer) internal view returns (bool) {
+        address aggregator;
+        try IChainlinkAggregatorProxy(feed).aggregator() returns (address _aggregator) {
+            aggregator = _aggregator;
+        } catch {
+            return false;
+        }
+        if (aggregator == address(0)) return false;
+
+        int256 minAnswer;
+        int256 maxAnswer;
+        try IChainlinkAggregatorBounds(aggregator).minAnswer() returns (int192 _minAnswer) {
+            minAnswer = int256(_minAnswer);
+        } catch {
+            return false;
+        }
+        try IChainlinkAggregatorBounds(aggregator).maxAnswer() returns (int192 _maxAnswer) {
+            maxAnswer = int256(_maxAnswer);
+        } catch {
+            return false;
+        }
+
+        return answer <= minAnswer || answer >= maxAnswer;
+    }
+
+    function _maxFeedStaleness(address feed) internal view returns (uint256 maxStaleness) {
+        maxStaleness = feedMaxStaleness[feed];
+        if (maxStaleness == 0) {
+            maxStaleness = MAX_STALENESS;
+        }
     }
 
     function _hasRecentObservationWindow(uint32 duration) internal view returns (bool) {
@@ -1517,6 +1685,10 @@ contract AgentOracle is OApp, IOracle4626 {
         uint32 realizedWindow = currentTs - oldObs.blockTimestamp;
         return realizedWindow >= MIN_TWAP_DURATION;
     }
+
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceOwnershipDisabled();
+    }
 }
 
 /**
@@ -1536,4 +1708,13 @@ interface IUniswapV2Pair {
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
     function price0CumulativeLast() external view returns (uint256);
     function price1CumulativeLast() external view returns (uint256);
+}
+
+interface IChainlinkAggregatorProxy {
+    function aggregator() external view returns (address);
+}
+
+interface IChainlinkAggregatorBounds {
+    function minAnswer() external view returns (int192);
+    function maxAnswer() external view returns (int192);
 }
