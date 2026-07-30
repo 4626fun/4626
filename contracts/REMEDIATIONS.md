@@ -53,3 +53,15 @@ Synced from private `main` `b6ce81ce4`.
 - **ODA-430 F6/F7/F12 (`b50c9230f`):** `Registry4626GuardLib` extracted for EIP-170 headroom — factory authorize auto-pins the live `extcodehash` (unset only) and call-site verification re-checks the pin; clearing a pin while authorized reverts. Per-token `liveRebindEnabledFor` scoped live rebind (global flag retained for fleet-wide emergencies). `RemoteOFTPeerFlavorConflict`: address and bytes32 peer flavors are mutually exclusive per (token, eid). New pin file: `contracts/shared/core/Registry4626GuardLib.sol`.
 - **Peer hardening (`906260676`):** GuardLib blocks the bytes32-peer one-shot bypass via address truncation.
 - Catch-up log for files already resynced in pin `1e61fb3b8` (no log entry at the time): LeftClaw **#508 second pass** L-4/L-5/L-8/L-10/I-1/I-9 (`AgentGaugeController`, `CreatorGaugeController`, `AgentOVaultWrapper`, `DeploymentBatcher`; private #924); impaired `buyDebt` claim-book credit fix in `OVaultStrategiesModule`; Yearn-parity display surface via pin PRs #2–#4 (`apiVersion`, PPS checkpoint ring + `apyBps`, `positionOf`/`withdrawalEta`; `MODULE_STORAGE_VERSION` v6 → v8).
+
+## 2026-07-30 ERC-4626 peer-protocol gaps + ViewLib extract
+
+Synced from private `main` `f562819fc` (private #936).
+
+- **G-2:** risk-config delay decreases schedule under the current delay (floor already present).
+- **G-3:** fee/cap decreases execute immediately when risk-reducing; blocked while another risk config is pending.
+- **G-4:** optional `maxRebalanceDeviationBps` envelope on tend/rebalance (`MODULE_STORAGE_VERSION` v8 → v9).
+- **G-5:** `maxWithdraw` quotes idle + best-effort per-strategy `IERC4626.maxWithdraw` (capped), not raw NAV — lives in `OVaultViewLib` after the v1.21.0 EIP-170 extract.
+- **New pin files:** `OVaultViewLib`, `OVaultLiquidityLib`, `OVaultAdminModule`, `OVaultStrategiesModule`, `IOVaultModuleIdentity`, `IOVault4626`, `IShareOFT4626`.
+- Also catches ShareOFT / LotteryManager import deps that drifted with the ViewLib host surface.
+- G-1 (impairment reinstate) and G-7 (`updateDebt` unrealized-loss gate) were already on private `main` before this pin tip.

@@ -2,11 +2,11 @@
 
 Public slim pin for One Dollar Audit / LeftClaw.
 
-- Private: `wenakita/4626` @ `b6ce81ce4` (working tree sync)
+- Private: `wenakita/4626` @ `f562819fc` (peer-gap #936 + OVaultViewLib)
 - Public branch: `audit/oda-v1200-greenfield-candidate`
 - Immutable tag (strategies+revenue): `audit/oda-2026-07-28-strategies-revenue`
 - Prior immutable tags: `audit/oda-2026-07-28-oracles` @ `c19bc8e`, `audit/oda-2026-07-28-agent-lane` @ `0c47be2`
-- Scope: prior agent-lane + oracles + **refreshed Charm/Ajna/adapter** + strategy interfaces + **CreatorPayoutRouter / CreatorCoinPolicyController** + **LeftClaw #508/#509 remediations** (gauge fee-collector, agent-lane measured accounting)
+- Scope: prior pin + **ERC-4626 peer-protocol gaps G-2…G-5** + **OVaultViewLib / Admin+Strategies modules** (EIP-170 view extract)
 
 Do not treat this branch as a full monorepo mirror.
 

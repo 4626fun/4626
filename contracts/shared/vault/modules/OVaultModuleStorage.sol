@@ -258,6 +258,11 @@ abstract contract OVaultModuleStorage {
     ///      stays single-sourced (array lengths can't reference library constants).
     mapping(uint64 => PpsCheckpoint) internal ppsCheckpoints;
     uint64 internal ppsCheckpointWrites;
+
+    // ---------------------------------------------------------------------
+    // Rebalance NAV envelope (appended; storage v9) — gap-analysis G-4
+    // ---------------------------------------------------------------------
+    uint16 internal maxRebalanceDeviationBps;
 }
 
 // slither-disable-end uninitialized-state

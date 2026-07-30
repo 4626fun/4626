@@ -591,13 +591,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Deploy shared lottery manager
      * @param _registry Registry4626 address
      * @param owner_ Owner address
+     * @param adminModule_ Pre-deployed `LotteryManager4626AdminModule` (keeps LM initcode ≤ EIP-3860)
      */
-    constructor(address _registry, address owner_)
+    constructor(address _registry, address owner_, address adminModule_)
         OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
         Ownable(owner_)
     {
         if (owner_ == address(0)) revert ZeroAddress();
         if (_registry == address(0)) revert ZeroAddress();
+        if (adminModule_ == address(0)) revert ZeroAddress();
 
         registry = IRegistry4626Lottery(_registry);
 
@@ -640,7 +642,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         vrfMaxSponsoredPerOriginPerEpoch = DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
         callbackMaxSponsoredPerBuyerPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH;
         callbackMaxSponsoredPerOriginPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
-        _adminModule = address(new LotteryManager4626AdminModule(_registry, owner_));
+        _adminModule = adminModule_;
     }
 
     // ================================
