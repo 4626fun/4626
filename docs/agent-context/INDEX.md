@@ -30,6 +30,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | [wallet-relay-owner-install.md](./archives/wallet-relay-owner-install.md) | — | Relay, owner-install |
 | [infra-ops.md](./archives/infra-ops.md) | [core](./archives/infra-ops-core.md) · [ops](./archives/infra-ops-ops.md) · [prefs](./archives/infra-ops-prefs.md) | Supabase, Vercel, Railway, Solana |
 | [tribe-run.md](./archives/tribe-run.md) | — | Tribe.run token launch, `4626fun/4626` public face, sponsor badge, permissionless swaps |
+| [royco-dawn-comparison.md](./archives/royco-dawn-comparison.md) | — | Royco Dawn risk tranching vs OVault/impairment (learn-only) |
 | [ui-shipped-preferences.md](./archives/ui-shipped-preferences.md) | — | **Reference only — excluded from index** |
 | [historical-audits.md](./archives/historical-audits.md) | — | Retired epoch history |
 
@@ -58,6 +59,7 @@ Tiered context budget for Cursor agents. Reduces always-on token load while pres
 | Share-mesh LZ wire / Pipe A blocked messages | `oft-chain-config.md` + `ops:verify-share-mesh-lz` |
 | Supabase migration, feature flags | `infra-ops-ops.md` |
 | Tribe.run, sponsor badge, `4626fun/4626` public repo | `tribe-run.md` |
+| Royco, Dawn, tranche, senior/junior, YDM, risk tranching | `royco-dawn-comparison.md` |
 
 **Search tip:** Cursor Grep often returns zero hits — use shell `rg` scoped to `frontend/src`, `frontend/server`, or `contracts/`.
 
