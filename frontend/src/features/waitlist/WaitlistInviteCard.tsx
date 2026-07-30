@@ -43,7 +43,7 @@ export function WaitlistInviteCard({
   if (loading && !referralCode) {
     return (
       <div
-        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
+        className="rounded-xl bg-white/[0.03] px-4 py-3 backdrop-blur-md"
         data-testid="waitlist-invite-card"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -57,7 +57,7 @@ export function WaitlistInviteCard({
   if (unavailable || !inviteUrl || !referralCode) {
     return (
       <div
-        className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
+        className="rounded-xl bg-white/[0.03] px-4 py-3 backdrop-blur-md"
         data-testid="waitlist-invite-card"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -72,7 +72,7 @@ export function WaitlistInviteCard({
 
   return (
     <div
-      className="rounded-xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06] backdrop-blur-md"
+      className="rounded-xl bg-white/[0.03] px-4 py-3 backdrop-blur-md"
       data-testid="waitlist-invite-card"
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -87,8 +87,8 @@ export function WaitlistInviteCard({
           onClick={() => void handleCopy()}
           aria-label="Copy referral link"
           className={cn(
-            'inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 transition',
-            'hover:border-[rgb(var(--brand-gold)/0.35)] hover:text-[rgb(var(--brand-gold))]',
+            'inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-zinc-300 transition',
+            'hover:bg-[rgb(var(--brand-gold)/0.14)] hover:text-[rgb(var(--brand-gold))]',
             'active:scale-[0.96]',
           )}
         >

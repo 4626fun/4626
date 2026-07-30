@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from 'react'
@@ -127,22 +126,6 @@ type WaitlistFlowProps = {
   onClearWalletSession?: () => void
 }
 
-// A single soft ambient glow (border ring + one diffuse halo) reads calmer
-// and more premium than stacking several concentric glow radii.
-const WAITLIST_PANEL_STYLE = {
-  background: 'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
-  boxShadow:
-    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.14), 0 0 44px 2px rgb(var(--brand-primary) / 0.14)',
-} as const
-
-const WAITLIST_PANEL_SUCCESS_STYLE: CSSProperties = {
-  background: WAITLIST_PANEL_STYLE.background,
-  boxShadow:
-    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(52, 211, 153, 0.26), 0 0 44px 2px rgba(52, 211, 153, 0.18)',
-}
-
-type BeamCardAccent = 'default' | 'success'
-
 // A recent member in the social-proof avatar stack. `label` is the hover name
 // (Zora handle / basename / short address); `href` links to their profile.
 type WaitlistAvatar = {
@@ -151,24 +134,10 @@ type WaitlistAvatar = {
   href: string | null
 }
 
-// Card shell — static brand-tinted ring (no rotating beam; keeps focus on content).
-function BeamCard({
-  children,
-  className,
-  accent = 'default',
-}: {
-  children: ReactNode
-  className?: string
-  accent?: BeamCardAccent
-}) {
-  return (
-    <div
-      className={cn('relative rounded-2xl transition-shadow duration-500 ease-out', className)}
-      style={accent === 'success' ? WAITLIST_PANEL_SUCCESS_STYLE : WAITLIST_PANEL_STYLE}
-    >
-      {children}
-    </div>
-  )
+// Borderless form surface — content floats directly on the page canvas;
+// hierarchy comes from spacing and the primary CTA instead of a boxed card.
+function WaitlistFormSurface({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('relative', className)}>{children}</div>
 }
 
 // The circular image/gradient disc shared by interactive and placeholder dots.
@@ -1887,7 +1856,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
               ) : null}
 
               {showEmailSignupForm ? (
-                <BeamCard className="p-5 sm:p-6" accent={otpSubmitPhase === 'verified' ? 'success' : 'default'}>
+                <WaitlistFormSurface>
                   <AnimatePresence mode="wait" initial={false} custom={signupDirection}>
                     {step === 'email' ? (
                       <motion.form
@@ -1944,7 +1913,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                               onChange={(event) => setEmail(event.target.value)}
                               placeholder="name@example.com"
                               disabled={emailBusy || !privyReadyLatched}
-                              className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 pr-10 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] focus:shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.14)] disabled:opacity-60"
+                              className="block h-12 w-full rounded-full border border-transparent bg-white/[0.05] px-5 pr-10 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.16)] disabled:opacity-60"
                             />
                             <AnimatePresence>
                               {isValidEmail(email) && !emailBusy ? (
@@ -2106,14 +2075,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                       </motion.form>
                     )}
                   </AnimatePresence>
-                </BeamCard>
+                </WaitlistFormSurface>
               ) : !walletSignInPending ? (
-                <BeamCard className="p-6 text-center sm:p-8">
+                <WaitlistFormSurface className="py-6 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <PixelWaveLoader name="wave-lr" size={18} color="rgba(255,255,255,0.85)" />
                     <p className="text-sm text-zinc-400">Restoring your waitlist session…</p>
                   </div>
-                </BeamCard>
+                </WaitlistFormSurface>
               ) : null}
               </WaitlistJoinPanel>
               </motion.div>

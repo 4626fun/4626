@@ -106,7 +106,7 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
               initial={false}
               animate={
                 isSuccess && !reduceMotion
-                  ? { scale: [1, 1.06, 1], borderColor: 'rgba(52, 211, 153, 0.65)' }
+                  ? { scale: [1, 1.06, 1] }
                   : { scale: 1 }
               }
               transition={
@@ -115,16 +115,16 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
                   : { duration: 0.15 }
               }
               className={cn(
-                'relative flex h-14 flex-1 items-center justify-center rounded-[10px] border text-xl font-semibold tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] transition-[border-color,box-shadow,background-color,color] duration-200',
+                'relative flex h-14 flex-1 items-center justify-center rounded-[10px] text-xl font-semibold tabular-nums transition-[box-shadow,background-color,color] duration-200',
                 isSuccess
-                  ? 'border-emerald-400/70 bg-emerald-400/[0.16] text-emerald-50'
+                  ? 'bg-emerald-400/[0.18] text-emerald-50'
                   : isError
-                    ? 'border-rose-400/50 bg-rose-400/[0.08] text-rose-100'
+                    ? 'bg-rose-400/[0.12] text-rose-100'
                     : isActive
-                      ? 'border-[rgb(var(--brand-primary)/0.85)] bg-[rgb(var(--brand-primary)/0.08)] text-white shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.18),inset_0_1px_0_rgb(255_255_255/0.06)]'
+                      ? 'bg-[rgb(var(--brand-primary)/0.10)] text-white shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.18)]'
                       : isFilled
-                        ? 'border-white/20 bg-white/[0.05] text-white'
-                        : 'border-white/10 bg-white/[0.02] text-white',
+                        ? 'bg-white/[0.08] text-white'
+                        : 'bg-white/[0.04] text-white',
                 disabled && !isSuccess && 'opacity-60',
               )}
             >

@@ -21,7 +21,7 @@ function MiniRow({
     <div
       className={cn(
         'grid grid-cols-[2.25rem_1fr_auto] items-center gap-2 px-3 py-2',
-        isMe && 'rounded-lg bg-[rgb(var(--brand-gold)/0.08)] ring-1 ring-[rgb(var(--brand-gold)/0.2)]',
+        isMe && 'rounded-lg bg-[rgb(var(--brand-gold)/0.10)]',
       )}
     >
       <span
@@ -87,7 +87,7 @@ export function WaitlistMiniLeaderboard({
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] backdrop-blur-md">
+      <div className="overflow-hidden rounded-xl bg-white/[0.03] backdrop-blur-md">
         {loading && topRows.length === 0 ? (
           <div className="space-y-2 px-3 py-4" aria-hidden>
             {Array.from({ length: 3 }).map((_, i) => (

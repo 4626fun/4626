@@ -17,8 +17,8 @@ function StatCard({ label, value, emphasize = false, loading = false }: StatCard
       className={cn(
         'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-2 py-3 backdrop-blur-md',
         emphasize
-          ? 'bg-[rgb(var(--brand-gold)/0.08)] ring-1 ring-[rgb(var(--brand-gold)/0.22)]'
-          : 'bg-white/[0.03] ring-1 ring-white/[0.06]',
+          ? 'bg-[rgb(var(--brand-gold)/0.08)]'
+          : 'bg-white/[0.03]',
       )}
     >
       <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -50,7 +50,7 @@ export function WaitlistStatsRow({
 }: {
   points: number | null
   rank: number | null
-  /** Invite contribution points (existing economy); labeled Invite pts in HQ. */
+  /** Invite contribution points (existing economy); labeled "From invites" in HQ. */
   referrals: number | null
   loading?: boolean
   unavailable?: boolean
@@ -58,7 +58,7 @@ export function WaitlistStatsRow({
   if (unavailable && !loading) {
     return (
       <div
-        className="rounded-xl bg-white/[0.03] px-4 py-3 text-center text-sm text-zinc-500 ring-1 ring-white/[0.06]"
+        className="rounded-xl bg-white/[0.03] px-4 py-3 text-center text-sm text-zinc-500"
         data-testid="waitlist-stats-row"
         aria-label="Your waitlist stats"
       >
@@ -81,7 +81,7 @@ export function WaitlistStatsRow({
         loading={loading}
       />
       <StatCard
-        label="Invite pts"
+        label="From invites"
         value={referrals != null ? formatWholeNumber(referrals) : '—'}
         loading={loading}
       />
