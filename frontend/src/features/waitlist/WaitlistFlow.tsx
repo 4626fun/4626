@@ -1870,34 +1870,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         exit="exit"
                         transition={stepTransition}
                       >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <label
-                              htmlFor="waitlist-email"
-                              className="block text-xs font-medium tracking-wide text-zinc-400"
-                            >
-                              Email address
-                            </label>
-                            <a
-                              href="https://privy.io"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] tracking-wide text-zinc-600 transition hover:text-zinc-400"
-                            >
-                              Secured by
-                              <img
-                                src="/brands/privy-symbol-white.svg"
-                                alt=""
-                                aria-hidden="true"
-                                width={9}
-                                height={12}
-                                className="h-3 w-auto opacity-70"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                              Privy
-                            </a>
-                          </div>
+                        <div>
+                          <label htmlFor="waitlist-email" className="sr-only">
+                            Email address
+                          </label>
                           <div className="relative">
                             <input
                               ref={emailInputRef}

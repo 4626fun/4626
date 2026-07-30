@@ -99,9 +99,31 @@ export function WaitlistJoinPanel({
 
       <motion.p
         variants={item}
-        className="text-center text-[11px] leading-relaxed text-zinc-600"
+        className="flex items-center justify-center gap-1.5 text-center text-[11px] leading-relaxed text-zinc-600"
       >
         Creator vaults on Base.
+        <span aria-hidden="true" className="text-zinc-700">
+          ·
+        </span>
+        <a
+          href="https://privy.io"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 transition hover:text-zinc-400"
+        >
+          Secured by
+          <img
+            src="/brands/privy-symbol-white.svg"
+            alt=""
+            aria-hidden="true"
+            width={9}
+            height={12}
+            className="h-3 w-auto opacity-70"
+            loading="lazy"
+            decoding="async"
+          />
+          Privy
+        </a>
       </motion.p>
     </motion.div>
   )
