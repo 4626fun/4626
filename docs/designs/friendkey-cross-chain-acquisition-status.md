@@ -7,6 +7,9 @@
 
 This page is the live address and role pin. The design brief remains the narrative; verify contracts on explorers before relying on any secondary copy.
 
+**Contracts (public pin):** [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/) — multi-id wrap + Across buy/sell adapters (no legacy single-id sources in this pin).  
+**Redacted deployment pins:** [`deployments/base/friendkey-oerc1155.json`](../../deployments/base/friendkey-oerc1155.json), [`deployments/robinhood/friendkey-oerc1155.json`](../../deployments/robinhood/friendkey-oerc1155.json).
+
 Bridging rails (Across fills, LayerZero delivery) complete asynchronously after the user’s Robinhood transaction. On Base, buy+wrap in the Across destination handler and sink receive → sell are atomic units that revert together on failure.
 
 ## Live addresses
@@ -97,7 +100,37 @@ Redeem and seamless sell are different destinations for the same wrap send. Sell
 - LayerZero Base ↔ Robinhood pathway configured with confirmations `[15, 15]` and optional DVN threshold 3-of-5.
 - Wrap `underlying()` points at the AlfaClub FriendKey collection on Base.
 
+## Operator notes (wire correctly)
+
+### LayerZero peers — left-padded `bytes32`
+
+Peers must be encoded as left-padded address bytes:
+
+`bytes32(uint256(uint160(addr)))` → e.g. `0x000000000000000000000000a1fac792d1643f9178fcaff61b5e08b3eae01155`
+
+Do **not** right-pad via `cast --to-bytes32 <address>` (that yields a different value and breaks the pathway). Deployment pins record `peerEncoding: bytes32(uint256(uint160(wrap))) left-padded`.
+
+### BuyExecutor `defaultLzOptions`
+
+Across fill simulation / destination execution requires BuyExecutor `defaultLzOptions` set to:
+
+`0x000301001101000000000000000000000000000493e0`
+
+That encodes **300,000 gas** for `lzReceive` on the Robinhood spoke. Without it, the buy+wrap destination call can fail under fill simulation even when the rest of the path is wired.
+
+## Live buy proof
+
+One-key buy of **#1659** Robinhood → Base wrap completed for recipient `0xB05Cf01231cF2fF99499682E64D3780d57c80FdD`:
+
+| Field | Value |
+|-------|--------|
+| Token id | `1659` |
+| Key amount | `1` |
+| Result | Robinhood wrap balance `1`; Base hub escrow `1` |
+| Robinhood deposit tx | [`0x29dd30b8…0f820`](https://robinhoodchain.blockscout.com/tx/0x29dd30b8502460460c15f7091a347d1aa74b24e8790f2411ed7b27330d10f820) |
+
 ## Metadata and NFT rendering
+
 
 | Surface | Status |
 |---------|--------|
@@ -114,6 +147,8 @@ Wallet and explorer media for the omnichain wrap use the OpenSea-compatible IPFS
 **Later / not claimed here:** additional spoke chains beyond Robinhood for hold/redeem; payment adapters on those chains; secondary-market (e.g. Sudoswap) routing as an onchain dependency; alternate stablecoins or payment bridges; deposit / wallet UX packaging.
 
 ## Verify
+
+Sources: [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/).
 
 - Base wrap (hub): [Basescan](https://basescan.org/address/0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155) — `isHub() == true`
 - Robinhood wrap (spoke): [Blockscout](https://robinhoodchain.blockscout.com/address/0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155) — `isHub() == false`

@@ -1,0 +1,14 @@
+{
+  "status": "pinned",
+  "tokenImageCid": "bafkreia6d3w4lcq3b6t6jqtjaxrprub3a6ewvrzjblc3kujam4pthvpeou",
+  "collectionImageCid": "bafybeigbbmxh7zxztkuh7xbe32gejtws6pizjglx5ayflce6y6b4pdg7sm",
+  "tokenMetadataCid": "bafkreidgl52oyplecrkzdocdvruorcgi6b7kyzpe62wbosws3nrxlkdy7i",
+  "collectionMetadataCid": "bafkreieeqqxndcflkzfzw2m622hljytb5pnrhnnavbhlfhuhswhgkrmyua",
+  "uriDirCid": "bafybeihqzhnnvdsvfokhecbr7hbfxfouqdq6jk37nyy6l4oig4bp5hpg5y",
+  "uriTemplate": "ipfs://bafybeihqzhnnvdsvfokhecbr7hbfxfouqdq6jk37nyy6l4oig4bp5hpg5y/{id}.json",
+  "uri1659Exact": "ipfs://bafkreidgl52oyplecrkzdocdvruorcgi6b7kyzpe62wbosws3nrxlkdy7i",
+  "contractURI": "ipfs://bafkreieeqqxndcflkzfzw2m622hljytb5pnrhnnavbhlfhuhswhgkrmyua",
+  "note": "Chain-agnostic copy: Base hub + any peered LayerZero spoke. setURI(uriTemplate); setContractURI(contractURI). Seed allowlist 1659.",
+  "uriLive": "ipfs://bafkreidgl52oyplecrkzdocdvruorcgi6b7kyzpe62wbosws3nrxlkdy7i",
+  "uriNote": "Live on-chain uri is exact token JSON (no {id} substitution in current OZ build)."
+}

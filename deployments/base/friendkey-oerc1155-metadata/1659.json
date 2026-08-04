@@ -1,0 +1,28 @@
+{
+  "name": "AKITA FriendKey #1659",
+  "description": "1:1 omnichain representation of AlfaClub FriendKey #1659. Underlying keys are escrowed on Base in the LayerZero wrap; bridge to any peered chain, or redeem back to Base to hold or sell the underlying key.",
+  "image": "ipfs://bafkreia6d3w4lcq3b6t6jqtjaxrprub3a6ewvrzjblc3kujam4pthvpeou",
+  "external_url": "https://basescan.org/token/0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F?a=1659",
+  "attributes": [
+    {
+      "trait_type": "Token ID",
+      "value": "1659"
+    },
+    {
+      "trait_type": "Room",
+      "value": "AKITA"
+    },
+    {
+      "trait_type": "Underlying",
+      "value": "0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F"
+    },
+    {
+      "trait_type": "Hub",
+      "value": "Base"
+    },
+    {
+      "trait_type": "Representation",
+      "value": "LayerZero OERC1155"
+    }
+  ]
+}

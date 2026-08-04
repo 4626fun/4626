@@ -1,0 +1,87 @@
+{
+  "name": "friendkey-oerc1155",
+  "chain": "base",
+  "chainId": 8453,
+  "lzEid": 30184,
+  "status": "live",
+  "contract": "FriendKeyOERC1155",
+  "collectionName": "AlfaClub FriendKey",
+  "underlying": "0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F",
+  "allowlistSeed": [
+    1659
+  ],
+  "legacyWrap": "0xa1fa929f4d925bf1881657389b2ed7817ef31659",
+  "legacyWrapNote": "FriendKey1659OERC1155 single-id vanity wrap \u2014 migration-only until drained",
+  "create2Deployer": "0x7E3898Eb0Aee0DCAC5C0ccCd88ab94575f48a2D6",
+  "bytecodeStore": "0x75FA60e7e01CACda736952E9AC8D5c30B61F117E",
+  "registry": "0x777968CB7F302f3d02C094b119a67DCA9E0b4626",
+  "owner": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+  "initCodeHash": "0xe2088a895478a021e04000f2bba1894774aac5c23ac7177d150d45243d4c6c3c",
+  "codeId": "0x8b819caddee103e4b9d376789f6a758fb58a34cbd15bb1ca1e2a26e07843bb49",
+  "salt": "0x01e084b03923ccf9210052c22a40bf7edf3948bb3e21ce0f5776afcdef125775",
+  "predictedAddress": "0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155",
+  "address": "0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155",
+  "wrap": "0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155",
+  "vanity": {
+    "prefix": "a1fa",
+    "suffix": "1155",
+    "pattern": "0xa1fa\u20261155",
+    "matchedAddress": "0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155"
+  },
+  "notes": "Live multi-id FriendKeyOERC1155 Base hub. First spoke=Robinhood; other chains = peer-only until a payment rail is added. RH Across buy/sell adapters wired. Legacy 0xa1fa\u20261659 remains for migration.",
+  "peers": {
+    "robinhood": {
+      "eid": 30416,
+      "peer": "0x000000000000000000000000a1fac792d1643f9178fcaff61b5e08b3eae01155",
+      "wrap": "0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155"
+    }
+  },
+  "tokenNameTemplate": "{RoomName} FriendKey #{id}",
+  "tokenName1659": "AKITA FriendKey #1659",
+  "metadata": {
+    "uriTemplate": "ipfs://bafybeihqzhnnvdsvfokhecbr7hbfxfouqdq6jk37nyy6l4oig4bp5hpg5y/{id}.json",
+    "contractURI": "ipfs://bafkreieeqqxndcflkzfzw2m622hljytb5pnrhnnavbhlfhuhswhgkrmyua",
+    "uriDirCid": "bafybeihqzhnnvdsvfokhecbr7hbfxfouqdq6jk37nyy6l4oig4bp5hpg5y",
+    "collectionMetadataCid": "bafkreieeqqxndcflkzfzw2m622hljytb5pnrhnnavbhlfhuhswhgkrmyua",
+    "tokenMetadataCid1659": "bafkreidgl52oyplecrkzdocdvruorcgi6b7kyzpe62wbosws3nrxlkdy7i",
+    "tokenImageCid1659": "bafkreia6d3w4lcq3b6t6jqtjaxrprub3a6ewvrzjblc3kujam4pthvpeou",
+    "collectionImageCid": "bafybeigbbmxh7zxztkuh7xbe32gejtws6pizjglx5ayflce6y6b4pdg7sm",
+    "uriLive": "ipfs://bafkreidgl52oyplecrkzdocdvruorcgi6b7kyzpe62wbosws3nrxlkdy7i",
+    "uriNote": "OZ ERC1155 build does not substitute {id}; live setURI is exact #1659 JSON CID. uriDirCid retained for future multi-id layout."
+  },
+  "deployedAt": "2026-08-04T10:01:06Z",
+  "buyExecutor": "0x157aFfd665C81a72579762EaEEe00070B1327Ab4",
+  "sellExecutor": "0x08FCB9E40fa042B27C9b680d2e359E76Eebf7b4f",
+  "sinkFactory": "0x61De09Cb8CcAa249E6273Baeb904EAfA78CDAC70",
+  "spokePool": "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+  "uln": {
+    "pathway": "base\u2194robinhood",
+    "confirmations": [
+      15,
+      15
+    ],
+    "optionalDvnCount": 5,
+    "optionalDvnThreshold": 3,
+    "applied": true,
+    "ready": true,
+    "hashes": {
+      "base": {
+        "sendHash": "0xd87645b6d5bac2776e8be34b6d286c3e4f6eec4ed2dc887327497a177c945df8",
+        "receiveHash": "0x90ff059369426d4c5892d471360d63471ffaf900bec4479f0580fec56d54425b"
+      },
+      "robinhood": {
+        "sendHash": "0xfc4d5c158d65a292d54d205cf375b1a82cb784a93d75604436adc899f2caa338",
+        "receiveHash": "0xea0e9fca25462a56bd0b8cc6e901730ca2d995b2558f489d3085a978d02f0983"
+      }
+    }
+  },
+  "peerEncoding": "bytes32(uint256(uint160(wrap))) left-padded",
+  "buyExecutorDefaultLzOptions": "0x000301001101000000000000000000000000000493e0",
+  "liveBuyProof": {
+    "recipient": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
+    "tokenId": 1659,
+    "keyAmount": 1,
+    "robinhoodDepositTx": "0x29dd30b8502460460c15f7091a347d1aa74b24e8790f2411ed7b27330d10f820",
+    "result": "RH wrap balance 1, Base hub escrow 1"
+  }
+}
