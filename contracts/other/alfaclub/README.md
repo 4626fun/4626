@@ -15,7 +15,6 @@ Public pin of the live **AlfaClub FriendKey** multi-id omnichain ERC-1155 wrap a
 |------|---------|--------|
 | Wrap | `0xA1FaC792D1643F9178FcAFF61b5e08B3EAe01155` | Base + Robinhood |
 
-Legacy single-id wrap `0xa1fa929f4d925bf1881657389b2ed7817ef31659` is **migration-only** (drain / re-wrap onto the multi-id address).
 
 ## Layout
 
