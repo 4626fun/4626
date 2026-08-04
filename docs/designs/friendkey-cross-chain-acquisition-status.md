@@ -7,7 +7,7 @@
 
 This page is the live address and role pin. The design brief remains the narrative; verify contracts on explorers before relying on any secondary copy.
 
-**Contracts (public pin):** [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/) — multi-id wrap + Across buy/sell adapters (no legacy single-id sources in this pin).  
+**Contracts (public pin):** [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/) — multi-id wrap + Across buy/sell adapters.  
 **Redacted deployment pins:** [`deployments/base/friendkey-oerc1155.json`](../../deployments/base/friendkey-oerc1155.json), [`deployments/robinhood/friendkey-oerc1155.json`](../../deployments/robinhood/friendkey-oerc1155.json).
 
 Bridging rails (Across fills, LayerZero delivery) complete asynchronously after the user’s Robinhood transaction. On Base, buy+wrap in the Across destination handler and sink receive → sell are atomic units that revert together on failure.
@@ -30,11 +30,6 @@ Bridging rails (Across fills, LayerZero delivery) complete asynchronously after 
 
 Chain ids: Base `8453`, Robinhood `4663`.
 
-### Migration-only (previous single-id wrap)
-
-| Component | Address | Notes |
-|-----------|---------|-------|
-| Legacy wrap | [`0xa1fa929f4d925bf1881657389b2ed7817ef31659`](https://basescan.org/address/0xa1fa929f4d925bf1881657389b2ed7817ef31659) | Prior `#1659`-only wrap. Holders redeem to Base, then re-wrap on the live collection address above. |
 
 ## Collection model
 
@@ -86,7 +81,7 @@ Redeem and seamless sell are different destinations for the same wrap send. Sell
 
 ### Seamless sell
 
-1. One-time setup (not each sell): permissionless `SellSinkFactory.deploySink(user)` on Base (new factory; legacy sinks do not apply).
+1. One-time setup (not each sell): permissionless `SellSinkFactory.deploySink(user)` on Base (use SinkFactory only).
 2. User calls `wrap.send` on Robinhood to the predicted Base sink for that user.
 3. Hub unlocks FriendKey into the sink; the sink’s receive hook calls SellExecutor, which sells on the curve and deposits USDC→USDG via Across to the same user address on Robinhood.
 4. No separate Base approval or sell transaction is required for the seamless path.
@@ -155,4 +150,3 @@ Sources: [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/).
 - BuyExecutor: [Basescan](https://basescan.org/address/0x157aFfd665C81a72579762EaEEe00070B1327Ab4)
 - SellExecutor: [Basescan](https://basescan.org/address/0x08FCB9E40fa042B27C9b680d2e359E76Eebf7b4f)
 - SellSinkFactory: [Basescan](https://basescan.org/address/0x61De09Cb8CcAa249E6273Baeb904EAfA78CDAC70)
-- Legacy wrap (migration only): [Basescan](https://basescan.org/address/0xa1fa929f4d925bf1881657389b2ed7817ef31659)
