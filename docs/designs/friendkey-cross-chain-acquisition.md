@@ -1,7 +1,8 @@
 # FriendKey Cross-Chain Acquisition
 
 **Status:** Design (Phase 1) — deployments live; see [Deployment status](./friendkey-cross-chain-acquisition-status.md)  
-**Scope:** FriendKey token id **1659** only
+**Collection:** AlfaClub FriendKey  
+**Seed scope:** FriendKey token id **1659** (`AKITA FriendKey #1659`)
 
 ## Summary
 
@@ -15,15 +16,15 @@ Settlement remains on **Base** against the existing FriendKey curve. The buyer r
 | **Settlement** | Existing Base `buyShares` / `sellShares` path (USDC) |
 | **Payment rail** | Across (USDG ↔ USDC) |
 | **Delivery rail** | LayerZero omnichain ERC-1155 wrap |
-| **AlfaClub change required** | None to FriendKey contracts for Phase 1 |
-| **New surface** | Base buy/sell executors + omnichain wrap (+ per-user sell sinks) |
+| **AlfaClub change required** | None to FriendKey contracts |
+| **New surface** | Base buy/sell executors + multi-id omnichain wrap (+ per-user sell sinks) |
 | **Live pins** | [Deployment status](./friendkey-cross-chain-acquisition-status.md) |
 
 ## Why this matters
 
 Robinhood Chain brings a large retail distribution surface and native **USDG**. FriendKey liquidity and price discovery already live on Base. Bridging those two without a custom mint path preserves AlfaClub’s economics while making keys reachable where users already hold stablecoin.
 
-Phase 1 is intentionally narrow: one token id, buy + redeem + seamless sell, one payment rail—so the trust story stays simple.
+The wrap is one **AlfaClub FriendKey** collection (multi-id capable; seed allowlist `1659`). Robinhood is the first spoke and the USDG payment lane; additional non-Base chains can be peered later for hold/redeem without a new wrap contract.
 
 ## User experience
 
@@ -85,18 +86,18 @@ Across fills and LayerZero delivery complete asynchronously after the user’s R
 
 | Component | Where | Role |
 |-----------|-------|------|
-| Purchase handler (BuyExecutor) | Base | Receives Across fills; buys FriendKey #1659; starts the wrap |
+| Purchase handler (BuyExecutor) | Base | Receives Across fills; buys allowlisted FriendKey ids; starts the wrap |
 | SellExecutor + SellSinkFactory | Base | Seamless sell via per-user CREATE2 sink; Across USDC→USDG |
-| Omnichain wrap | Base + Robinhood (same address on both) | Escrows real keys on Base; mints/burns the Robinhood representation |
+| Omnichain wrap | Base + Robinhood (same address on both) | Escrows real keys on Base; mints/burns spoke representations |
 
 ### Wrap model
 
-One deployment pattern, one address on every chain:
+One deployment pattern, one address on every peered chain:
 
-- **Base** — Lockbox for the real FriendKey (`0xAF0B…FA9F`, id `1659`). Holds underlying inventory when supply is represented elsewhere. Users on Base continue to hold the native FriendKey; they do not need a second Base-side token.
-- **Robinhood** — Representation ERC-1155 at that same address. Minted when keys arrive; burned when returned to Base for unlock or sell.
+- **Base** — Lockbox for the real FriendKey (`0xAF0B…FA9F`). Holds underlying inventory when supply is represented elsewhere. Users on Base continue to hold the native FriendKey; they do not need a second Base-side token.
+- **Robinhood (and future spokes)** — Representation ERC-1155 at that same address. Minted when keys arrive; burned when returned to Base for unlock or sell.
 
-No separate “adapter” product surface: the Base instance *is* the lockbox; the Robinhood instance *is* what users hold.
+No separate “adapter” product surface: the Base instance *is* the lockbox; each spoke instance *is* what users hold on that chain. USDG buy/sell adapters are Robinhood-specific payment lanes.
 
 ### Why Across for payment and LayerZero for keys
 
@@ -110,12 +111,12 @@ Other aggregators (e.g. Relay, LI.FI) may appear later as **wallet UX shells**. 
 
 ## Trust and security
 
-- **No FriendKey admin rights required.** Phase 1 uses the public purchase and sell paths on Base; we do not request mint, upgrade, or curve-parameter control.
-- **Fixed asset scope.** Underlying collection and token id `1659` are hardcoded in the purchase and seamless-sell paths.
+- **No FriendKey admin rights required.** Uses the public purchase and sell paths on Base; we do not request mint, upgrade, or curve-parameter control.
+- **Allowlisted asset scope.** Underlying collection is immutable on the wrap; token ids must be allowlisted before buy/sell/wrap.
 - **USDC-only settlement on Base.** The buy handler accepts Base USDC from the Across SpokePool only—not arbitrary callers or tokens.
 - **Atomic buy + wrap.** If wrap initiation fails after purchase intent, the whole destination execution reverts (no silent half-fills in our handler).
 - **Seamless sell via sink.** Unlock into the user’s CREATE2 sink triggers sell + Across in the receive path; no separate Base approval for the seamless flow.
-- **1:1 inventory.** Robinhood supply is backed by escrowed FriendKey on Base; burns unlock.
+- **1:1 inventory.** Spoke supply is backed by escrowed FriendKey on Base; burns unlock.
 
 Live SpokePool, executor, and wrap addresses are pinned in the [deployment status](./friendkey-cross-chain-acquisition-status.md).
 
@@ -131,19 +132,24 @@ Live SpokePool, executor, and wrap addresses are pinned in the [deployment statu
 
 ## Metadata and NFT rendering
 
-The Robinhood wrap is a standard ERC-1155 representation, but wallet-native media is not live yet: wrap `uri(1659)` is empty on the current deployment. The intended cutover pins OpenSea-compatible JSON and image on IPFS and exposes them via wrap `uri` / `contractURI` (requires a metadata-capable wrap follow-on). Until then, do not expect explorers or wallets to render NFT artwork for the wrap. Details: [deployment status](./friendkey-cross-chain-acquisition-status.md#metadata-and-nft-rendering).
+The Robinhood (and future spoke) wrap is a standard ERC-1155 representation with OpenSea-compatible IPFS metadata:
 
-## Phase 1 boundaries
+- Collection: **AlfaClub FriendKey** via `contractURI`
+- Seed token: **AKITA FriendKey #1659** via `uri(1659)`
 
-**In scope:** Robinhood → Base buy of FriendKey #1659 with USDG; wrap delivery back to Robinhood; redeem path via the wrap; seamless sell to USDG via per-user sink.
+Details and explorer links: [deployment status](./friendkey-cross-chain-acquisition-status.md#metadata-and-nft-rendering).
 
-**Out of scope for Phase 1:** additional token ids; secondary-market (e.g. Sudoswap) routing; alternate stablecoins; alternate payment bridges as onchain dependencies; deposit / wallet UX packaging; metadata wrap redeploy.
+## Boundaries
+
+**In scope:** Robinhood → Base buy of allowlisted FriendKey ids (seed `#1659`) with USDG; wrap delivery back to Robinhood; redeem path via the wrap; seamless sell to USDG via per-user sink; IPFS metadata on the wrap.
+
+**Out of scope for this surface:** secondary-market (e.g. Sudoswap) routing; alternate stablecoins; alternate payment bridges as onchain dependencies; deposit / wallet UX packaging; claiming live payment adapters on chains other than Robinhood.
 
 ## Coordination ask
 
-For Phase 1 we do **not** need AlfaClub contract changes. Helpful alignment:
+We do **not** need AlfaClub contract changes. Helpful alignment:
 
 1. Confirmation that public `buyShares` / `sellShares` for id `1659` remain the intended purchase and sell surfaces.
-2. Awareness that Robinhood holders will see a **bridged representation** (same id semantics, different contract address on Robinhood) backed 1:1 by Base escrow.
+2. Awareness that holders outside Base see a **bridged representation** (same id semantics, different contract address per spoke) backed 1:1 by Base escrow.
 3. Awareness that seamless sell routes through the wrap → per-user Base sink, not a second mint authority.
-4. Optional: preferred public naming / room framing for #1659, and a canonical room image for the metadata cutover (we can match your language and art).
+4. Optional: preferred public naming / room framing for additional ids as they are allowlisted.
