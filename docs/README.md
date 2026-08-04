@@ -5,3 +5,4 @@ Public documentation source for 4626. Published site: [docs.4626.fun](https://do
 ## Design notes
 
 - [FriendKey Cross-Chain Acquisition](./designs/friendkey-cross-chain-acquisition.md)
+- [AlfaClub FriendKey — Cross-Chain Acquisition Status](./designs/friendkey-cross-chain-acquisition-status.md)
