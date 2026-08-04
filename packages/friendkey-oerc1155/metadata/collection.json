@@ -1,0 +1,7 @@
+{
+  "name": "AlfaClub FriendKey",
+  "description": "1:1 LayerZero-bridged representations of AlfaClub FriendKey outside Base. Underlying ERC-1155 inventory is escrowed on Base at 0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F; the same collection address is deployed on each peered spoke.",
+  "image": "ipfs://bafybeigbbmxh7zxztkuh7xbe32gejtws6pizjglx5ayflce6y6b4pdg7sm",
+  "external_link": "https://alfaclub.app",
+  "collaborators": []
+}

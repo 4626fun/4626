@@ -1,0 +1,19 @@
+[profile.default]
+src = "contracts"
+script = "script"
+out = "out"
+libs = ["node_modules", "lib"]
+solc_version = "0.8.24"
+evm_version = "cancun"
+via_ir = true
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+fs_permissions = [
+    { access = "read", path = "./out" },
+    { access = "read", path = "./deployments" }
+]
+
+[rpc_endpoints]
+base = "${BASE_RPC_URL}"
+robinhood = "${ROBINHOOD_RPC_URL}"
