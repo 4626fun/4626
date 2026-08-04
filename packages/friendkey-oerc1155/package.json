@@ -1,0 +1,30 @@
+{
+  "name": "@4626fun/friendkey-oerc1155",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-contained deploy kit for AlfaClub FriendKey omnichain ERC-1155 (Base hub + Robinhood spoke)",
+  "type": "module",
+  "scripts": {
+    "build": "forge build",
+    "compute-initcode": "forge script script/ComputeFriendKeyOERC1155InitCodeHash.s.sol",
+    "pin-metadata": "tsx scripts/pin-friendkey-metadata-ipfs.ts",
+    "configure-uln": "tsx scripts/configure-friendkey-uln.ts",
+    "buy": "tsx scripts/friendkey-across-deposit.ts",
+    "sell": "tsx scripts/friendkey-seamless-sell.ts"
+  },
+  "dependencies": {
+    "@layerzerolabs/lz-evm-messagelib-v2": "^3.0.159",
+    "@layerzerolabs/lz-evm-protocol-v2": "^3.0.159",
+    "@layerzerolabs/lz-evm-v1-0.7": "^3.0.159",
+    "@layerzerolabs/oapp-evm": "^0.4.1",
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^16.4.7",
+    "forge-std": "github:foundry-rs/forge-std#v1.9.4",
+    "solidity-bytes-utils": "^0.8.4",
+    "tsx": "^4.19.2",
+    "viem": "^2.23.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

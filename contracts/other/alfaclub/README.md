@@ -25,6 +25,10 @@ alfaclub/
 └── across/         BuyExecutor, SellExecutor, SellSink, SellSinkFactory
 ```
 
+## Deploy kit
+
+Self-contained Foundry + ops package: [`packages/friendkey-oerc1155/`](../../../packages/friendkey-oerc1155/) (also published as a GitHub Release asset).
+
 ## Source of truth
 
 Live addresses, peers, ULN, metadata CIDs, and buy proof:

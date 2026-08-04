@@ -1,0 +1,11 @@
+{
+  "name": "@4626fun/friendkey-oerc1155-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Ops scripts for FriendKey OERC1155 (deps live on package root)",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "viem": "^2.23.2"
+  }
+}

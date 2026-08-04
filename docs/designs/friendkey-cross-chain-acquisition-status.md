@@ -10,6 +10,9 @@ This page is the live address and role pin. The design brief remains the narrati
 **Contracts (public pin):** [`contracts/other/alfaclub/`](../../contracts/other/alfaclub/) — multi-id wrap + Across buy/sell adapters.  
 **Redacted deployment pins:** [`deployments/base/friendkey-oerc1155.json`](../../deployments/base/friendkey-oerc1155.json), [`deployments/robinhood/friendkey-oerc1155.json`](../../deployments/robinhood/friendkey-oerc1155.json).
 
+**Deploy kit:** [`packages/friendkey-oerc1155/`](../../packages/friendkey-oerc1155/) (+ GitHub Release asset `friendkey/oerc1155-deploy-v1`).
+
+
 Bridging rails (Across fills, LayerZero delivery) complete asynchronously after the user’s Robinhood transaction. On Base, buy+wrap in the Across destination handler and sink receive → sell are atomic units that revert together on failure.
 
 ## Live addresses
