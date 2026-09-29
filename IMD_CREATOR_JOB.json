@@ -1,0 +1,69 @@
+{
+  "objective": "Public source pin: https://github.com/4626fun/4626/tree/1d539958d0029596398f370d70d90abfa5f08c68. Start in an empty workspace; do NOT clone/import this large repository. Download only the four pinned files named in step 1. Audit CreatorOVault, CreatorOVaultWrapper and CreatorShareOFT as one accounting system. Use only the exact snapshot in IMD_CREATOR_VAULTS_ARCHIVE.b64. Decoded ZIP SHA-256: 5fe22f0051ea176b88f0d36147efd60890e39b211ed9aab83783cdf476d8fa2e. Follow IMD_CREATOR_VAULTS_REVIEW.md and extracted imd-creator-vaults/BRIEF.md. Ignore the older root contracts tree. Run bash IMD_CREATOR_BOOTSTRAP.sh to materialize and install the verified snapshot; the root foundry.toml points at it. Keep all 109 upstream files and original test/configuration bytes unchanged after extraction. Prioritize vault/wrapper/global OFT backing, normalization and dust, losses and recovery claims, asynchronous exits/cooldowns, strategy valuation/rebalance failures, mint/burn authority, authenticated LayerZero messages/replay/retry, fee routing and module storage/reentrancy. Add cross-contract stateful invariants and executable regressions. Different reviewer/seat must review the new tests and findings; disclose if unavailable. Report concrete failing inputs, expected versus actual behavior, severity/prerequisites, exact commands/exit codes/settings, coverage gaps and source hashes. Baseline: 538 successful test executions (535 distinct), zero failures/skips. No deployment, transactions or production fixes. Physical shorts and Ajna-core remediation are outside scope. Deliver actual added tests with report.",
+  "shape": "chain",
+  "references": [
+    "solidity-security-review",
+    "defi-native"
+  ],
+  "steps": [
+    {
+      "skill": "refine-project",
+      "paths": [
+        "IMD_CREATOR_VAULTS_ARCHIVE.b64",
+        "IMD_CREATOR_VAULTS_REVIEW.md",
+        "IMD_CREATOR_BOOTSTRAP.sh",
+        "foundry.toml",
+        "imd-creator-vaults"
+      ],
+      "objective": "Bootstrap only; do not change the implementation. From https://raw.githubusercontent.com/4626fun/4626/1d539958d0029596398f370d70d90abfa5f08c68/ download exactly IMD_CREATOR_VAULTS_ARCHIVE.b64, IMD_CREATOR_VAULTS_REVIEW.md, IMD_CREATOR_BOOTSTRAP.sh and foundry.toml to matching root paths. Do not clone the repo (exceeds IMD import-size limit). Run bash IMD_CREATOR_BOOTSTRAP.sh, verify all 109 source manifest hashes, and run the complete baseline via the root foundry.toml or from imd-creator-vaults. Preserve exact source, existing tests and configuration. Commit the materialized source/tooling for subsequent steps; never commit node_modules, lib dependency checkouts, caches or out. Report failures honestly.",
+      "acceptanceCriteria": [
+        "Decoded archive and every manifest entry match the pinned hashes.",
+        "Run the complete supplied baseline including rebalance; record exit code and per-suite results."
+      ]
+    },
+    {
+      "skill": "write-foundry-tests",
+      "paths": [
+        "imd-creator-vaults/test/imd"
+      ],
+      "objective": "Read the brief. Add cross-contract stateful invariants and adversarial regression tests using the real scoped vault/wrapper/OFT contracts. Cover loss/recovery, async exits, dust/backing and authenticated message models. Do not alter upstream source, existing tests or harness configuration. Report defects with concrete failing sequences; do not weaken assertions for acceptance.",
+      "acceptanceCriteria": [
+        "Meaningful multi-user stateful handlers; disclose call/revert coverage and integration-model assumptions.",
+        "Every finding includes an executable reproduction with expected and actual behavior."
+      ]
+    },
+    {
+      "skill": "adversarial-review",
+      "objective": "Independently review the original scoped code and tests written by the preceding seat. Read BRIEF.md. Reproduce/refute findings; inspect whether invariants are vacuous and whether tests cover backing, recovery, async lifecycle and OFT messaging. Write no files. Record your identity and independence; disclose if not achieved."
+    },
+    {
+      "skill": "research-report",
+      "objective": "Consolidate the preceding tests and independent review into artifacts/report.md. Deliver the actual new test/imd files in artifacts/imd-tests.zip with README and hashes. Explicitly record test writer/reviewer identities and independence, confirmed/refuted/unresolved claims, actual commands/exit codes/settings, remaining gaps and fix proposals. Reverify all original manifest hashes. No production edits.",
+      "outputs": [
+        {
+          "name": "report",
+          "path": "artifacts/report.md",
+          "mediaType": "text/markdown"
+        },
+        {
+          "name": "tests",
+          "path": "artifacts/imd-tests.zip",
+          "mediaType": "application/zip"
+        }
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "report",
+      "path": "artifacts/report.md",
+      "mediaType": "text/markdown"
+    },
+    {
+      "name": "tests",
+      "path": "artifacts/imd-tests.zip",
+      "mediaType": "application/zip"
+    }
+  ],
+  "github": true
+}

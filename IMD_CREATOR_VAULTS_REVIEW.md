@@ -8,7 +8,15 @@
 - 109 source/support files verified against upstream Git blob hashes and SHA-256.
 - Baseline: **538 successful test executions, 0 failures, 0 skipped**, including rebalance and accounting invariants. This includes three tests repeated under an additional optimizer profile (535 distinct tests).
 
+## IMD import limit and validated request
+
+The full organization repository exceeds IMD's 200 MB code-import limit (API returned 422: repository 460 MB). **Leave the repository-import field empty.** Instead, use [IMD_CREATOR_JOB.json](IMD_CREATOR_JOB.json) as the `input` for `job.open`: it starts empty and fetches only four immutable package files from public commit `1d539958d0029596398f370d70d90abfa5f08c68`.
+
+The four-step request was validated with `POST /requests/quote`: HTTP 201, status `quoted`, price 0.5 IMD on Ethereum. No payment or `/submit` call was made. Quotes expire after ten minutes; create a fresh quote with a new requestKey when ready. The JSON contains no wallet credential or bearer token. A wallet must complete the required payment signatures before any job can start.
+
 ## Ready-to-paste IMD request
+
+Start in an empty workspace. Do not clone/import the complete repository. Download only `IMD_CREATOR_VAULTS_ARCHIVE.b64`, `IMD_CREATOR_VAULTS_REVIEW.md`, `IMD_CREATOR_BOOTSTRAP.sh` and `foundry.toml` from `https://raw.githubusercontent.com/4626fun/4626/1d539958d0029596398f370d70d90abfa5f08c68/`.
 
 Audit CreatorOVault, CreatorOVaultWrapper and CreatorShareOFT together using only the snapshot in IMD_CREATOR_VAULTS_ARCHIVE.b64 from this branch of https://github.com/4626fun/4626. Pin the public commit before starting. Decode the ZIP and verify SHA-256 `5fe22f0051ea176b88f0d36147efd60890e39b211ed9aab83783cdf476d8fa2e`. Run `bash IMD_CREATOR_BOOTSTRAP.sh`, then follow imd-creator-vaults/BRIEF.md. The older root contracts tree is outside this review. The root foundry.toml is a verifier harness pointing at the extracted package.
 
